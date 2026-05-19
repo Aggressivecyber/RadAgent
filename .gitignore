@@ -1,0 +1,9 @@
+学习/
+__pycache__/
+*.pyc
+.ruff_cache/
+.env
+*.egg-info/
+dist/
+build/
+*.o
