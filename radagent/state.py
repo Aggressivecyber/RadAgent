@@ -1,5 +1,5 @@
 import operator
-from typing import Annotated, Any
+from typing import Annotated
 
 from typing_extensions import TypedDict
 from langchain_core.messages import AnyMessage
@@ -9,7 +9,7 @@ from radagent.schemas import (
     AnomalyCheck,
     BuildResult,
     ControlState,
-    SimulationParams,
+    SimulationPlan,
     SimulationResult,
 )
 
@@ -17,9 +17,9 @@ from radagent.schemas import (
 class RadAgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     user_input: str
-    sim_params: SimulationParams
+    sim_plan: SimulationPlan
     build: BuildResult
-    result: SimulationResult
+    results: Annotated[list[SimulationResult], operator.add]
     anomaly: Annotated[list[AnomalyCheck], operator.add]
     report: str
     control: ControlState

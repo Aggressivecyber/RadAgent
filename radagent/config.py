@@ -14,9 +14,13 @@ DEEPSEEK_MODEL = "deepseek-chat"
 GEANT4_INSTALL = Path("/usr/local/geant4")
 GEANT4_SOURCE_SCRIPT = "/etc/profile.d/geant4.sh"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
-WORK_DIR = Path("/tmp/radagent_work")
+WORKSPACE_DIR = Path(__file__).parent.parent / "workspace"
 
 # Build
 CMAKE_TIMEOUT = 120
 RUN_TIMEOUT = 300
 MAX_RETRIES = 3
+
+# Logging
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_LEVEL = "DEBUG"
