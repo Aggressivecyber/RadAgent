@@ -9,6 +9,8 @@
 #include "G4SystemOfUnits.hh"
 #include "Randomize.hh"
 
+#include <algorithm>
+
 namespace B1
 {
 
@@ -18,6 +20,8 @@ PrimaryGeneratorAction::PrimaryGeneratorAction()
   fParticleGun = new G4ParticleGun(n_particle);
 
 $PARTICLE_DEFINITION_CODE
+$ENERGY_SPECTRUM_CODE
+$DIRECTION_MODE_CODE
   fParticleGun->SetParticleMomentumDirection(G4ThreeVector($BEAM_DIRECTION_X, $BEAM_DIRECTION_Y, $BEAM_DIRECTION_Z));
   fParticleGun->SetParticleEnergy($PARTICLE_ENERGY * MeV);
 }
@@ -29,6 +33,38 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction()
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
 {
+  // Ion lazy init (GetIon only works after G4RunManager::Initialize)
+  if (fIonNeedsInit) {
+    auto ionTable = G4ParticleTable::GetParticleTable()->GetIonTable();
+    fParticleGun->SetParticleDefinition(ionTable->GetIon(fIonZ, fIonA));
+    fIonNeedsInit = false;
+  }
+
+  // Energy spectrum sampling (CDF inverse transform)
+  if (fUseSpectrum && fEnergyCDF.size() > 1) {
+    G4double r = G4UniformRand();
+    auto it = std::lower_bound(fEnergyCDF.begin(), fEnergyCDF.end(), r);
+    size_t idx = std::distance(fEnergyCDF.begin(), it);
+    if (idx > 0) idx--;
+    if (idx >= fEnergyValues.size()) idx = fEnergyValues.size() - 1;
+    fParticleGun->SetParticleEnergy(fEnergyValues[idx] * MeV);
+  }
+
+  // Direction sampling
+  if (fIsotropic) {
+    G4double cosTheta = 2.0 * G4UniformRand() - 1.0;
+    G4double sinTheta = std::sqrt(1.0 - cosTheta * cosTheta);
+    G4double phi = 2.0 * CLHEP::pi * G4UniformRand();
+    fParticleGun->SetParticleMomentumDirection(
+      G4ThreeVector(sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta));
+  } else if (fHemisphere) {
+    G4double cosTheta = G4UniformRand();
+    G4double sinTheta = std::sqrt(1.0 - cosTheta * cosTheta);
+    G4double phi = 2.0 * CLHEP::pi * G4UniformRand();
+    fParticleGun->SetParticleMomentumDirection(
+      G4ThreeVector(sinTheta * std::cos(phi), sinTheta * std::sin(phi), -cosTheta));
+  }
+
   G4double envSizeXY = 0;
   G4double envSizeZ = 0;
 

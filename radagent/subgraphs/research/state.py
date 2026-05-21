@@ -26,5 +26,6 @@ class ResearchState(TypedDict):
     search_results: str
     sim_plan: SimulationPlan | None
     parse_error: str
+    gate_feedback: str
     unresolved_materials: list[str]
     unresolved_particles: list[str]

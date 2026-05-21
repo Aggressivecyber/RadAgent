@@ -346,6 +346,7 @@ MATERIAL_ALIASES: dict[str, str] = {
     "钙": "G4_Ca", "calcium": "G4_Ca",
     "钪": "G4_Sc", "scandium": "G4_Sc",
     "钛": "G4_Ti", "titanium": "G4_Ti", "ti": "G4_Ti",
+    "钛合金": "G4_TI6AL4V", "tc4": "G4_TI6AL4V", "ti6al4v": "G4_TI6AL4V",
     "钒": "G4_V", "vanadium": "G4_V",
     "铬": "G4_Cr", "chromium": "G4_Cr",
     "锰": "G4_Mn", "manganese": "G4_Mn",
@@ -480,6 +481,28 @@ MATERIAL_ALIASES: dict[str, str] = {
     "碳化硅": "G4_SiC", "sic": "G4_SiC", "silicon_carbide": "G4_SiC",
     "氮化镓": "G4_GaN", "gan": "G4_GaN", "gallium_nitride": "G4_GaN",
     "氯化钠": "G4_NaCl", "nacl": "G4_NaCl", "sodium_chloride": "G4_NaCl", "食盐": "G4_NaCl",
+    "低密度聚乙烯": "G4_LDPE", "ldpe": "G4_LDPE",
+    "高密度聚乙烯": "G4_HDPE", "hdpe": "G4_HDPE",
+    "超高分子量聚乙烯": "G4_UHMWPE", "uhmwpe": "G4_UHMWPE",
+    "kevlar49": "G4_KEVLAR49", "凯夫拉49": "G4_KEVLAR49",
+    "聚酰亚胺": "G4_POLYIMIDE", "kapton": "G4_POLYIMIDE", "聚酰亚胺薄膜": "G4_POLYIMIDE",
+    "peek": "G4_PEEK", "聚醚醚酮": "G4_PEEK",
+    "聚四氟乙烯": "G4_PTFE", "ptfe": "G4_PTFE", "特氟龙": "G4_PTFE", "teflon": "G4_PTFE",
+    "铝合金2024": "G4_AL2024", "al2024": "G4_AL2024",
+    "铝合金7075": "G4_AL7075", "al7075": "G4_AL7075",
+    "tc4": "G4_TI6AL4V", "ti6al4v": "G4_TI6AL4V",
+    "不锈钢304": "G4_SS304", "ss304": "G4_SS304", "304钢": "G4_SS304",
+    "不锈钢316": "G4_SS316", "ss316": "G4_SS316", "316钢": "G4_SS316",
+    "inconel": "G4_INCONEL718", "inconel718": "G4_INCONEL718", "高温合金": "G4_INCONEL718",
+    "碳纤维": "G4_CF_EPOXY", "碳纤维复合材料": "G4_CF_EPOXY", "carbon_fiber": "G4_CF_EPOXY",
+    "玻璃纤维": "G4_GF_EPOXY", "玻璃纤维复合材料": "G4_GF_EPOXY", "glass_fiber": "G4_GF_EPOXY",
+    "氢化锂": "G4_LITHIUM_HYDRIDE", "lih": "G4_LITHIUM_HYDRIDE", "lithium_hydride": "G4_LITHIUM_HYDRIDE",
+    "含硼聚乙烯": "G4_BORON_POLYETHYLENE", "硼聚乙烯": "G4_BORON_POLYETHYLENE",
+    "含钨聚乙烯": "G4_TUNGSTEN_POLYETHYLENE", "钨聚乙烯": "G4_TUNGSTEN_POLYETHYLENE",
+    "氘化锂": "G4_LiD", "lid": "G4_LiD", "lithium_deuteride": "G4_LiD",
+    "锂6氢化物": "G4_Li6H", "li6h": "G4_Li6H",
+    "重水": "G4_D2O", "d2o": "G4_D2O", "heavy_water": "G4_D2O",
+    "硼10聚乙烯": "G4_B10_POLYETHYLENE", "b10聚乙烯": "G4_B10_POLYETHYLENE",
 }
 
 
@@ -513,9 +536,173 @@ ELEMENT_ALIASES: dict[str, str] = {
 }
 
 
-# ─── 运行时自定义材料（由 define_custom 节点动态填充）───
-# 初始为空，查不到 NIST 材料时由 LLM 生成定义并注册
-CUSTOM_MATERIALS: dict[str, dict] = {}
+# ─── 航天材料知识库 ───
+# 用于自动生成 Geant4 C++ 材料定义代码
+# 格式: elements 为 (Z, symbol, atom_count) 或 (Z, symbol, atom_count, A) 表示同位素
+CUSTOM_MATERIALS: dict[str, dict] = {
+    # ── 聚合物类 ──
+    "G4_LDPE": {
+        "description": "低密度聚乙烯 Low-Density Polyethylene (LDPE, C₂H₄)n",
+        "type": "compound",
+        "density_g_cm3": 0.925,
+        "elements": [(1, "H", 4), (6, "C", 2)],
+    },
+    "G4_HDPE": {
+        "description": "高密度聚乙烯 High-Density Polyethylene (HDPE, C₂H₄)n",
+        "type": "compound",
+        "density_g_cm3": 0.96,
+        "elements": [(1, "H", 4), (6, "C", 2)],
+    },
+    "G4_UHMWPE": {
+        "description": "超高分子量聚乙烯 UHMWPE (C₂H₄)n",
+        "type": "compound",
+        "density_g_cm3": 0.935,
+        "elements": [(1, "H", 4), (6, "C", 2)],
+    },
+    "G4_KEVLAR49": {
+        "description": "Kevlar-49 芳纶纤维 (C₁₄H₁₀N₂O₂)n",
+        "type": "compound",
+        "density_g_cm3": 1.44,
+        "elements": [(1, "H", 10), (6, "C", 14), (7, "N", 2), (8, "O", 2)],
+    },
+    "G4_EPDM": {
+        "description": "三元乙丙橡胶 EPDM (C₂H₄+CH₂=CH-CH₃)",
+        "type": "compound",
+        "density_g_cm3": 0.86,
+        "elements": [(1, "H", 6), (6, "C", 2)],
+    },
+    "G4_POLYIMIDE": {
+        "description": "聚酰亚胺 Polyimide/Kapton (C₂₂H₁₀N₂O₅)n",
+        "type": "compound",
+        "density_g_cm3": 1.42,
+        "elements": [(1, "H", 10), (6, "C", 22), (7, "N", 2), (8, "O", 5)],
+    },
+    "G4_PEEK": {
+        "description": "聚醚醚酮 PEEK (C₁₉H₁₂O₃)n",
+        "type": "compound",
+        "density_g_cm3": 1.32,
+        "elements": [(1, "H", 12), (6, "C", 19), (8, "O", 3)],
+    },
+    "G4_PTFE": {
+        "description": "聚四氟乙烯 PTFE/Teflon (C₂F₄)n",
+        "type": "compound",
+        "density_g_cm3": 2.20,
+        "elements": [(6, "C", 2), (9, "F", 4)],
+    },
+    # ── 航天合金类 ──
+    "G4_AL2024": {
+        "description": "铝合金 2024-T3 (Al-Cu-Mg)",
+        "type": "compound",
+        "density_g_cm3": 2.78,
+        "elements": [(13, "Al", 93), (29, "Cu", 4), (12, "Mg", 1)],
+    },
+    "G4_AL7075": {
+        "description": "铝合金 7075-T6 (Al-Zn-Mg-Cu)",
+        "type": "compound",
+        "density_g_cm3": 2.81,
+        "elements": [(13, "Al", 89), (30, "Zn", 5), (12, "Mg", 2), (29, "Cu", 1)],
+    },
+    "G4_TI6AL4V": {
+        "description": "钛合金 Ti-6Al-4V",
+        "type": "compound",
+        "density_g_cm3": 4.43,
+        "elements": [(22, "Ti", 6), (13, "Al", 6), (23, "V", 4)],
+    },
+    "G4_SS304": {
+        "description": "不锈钢 304 (Fe-Cr-Ni)",
+        "type": "compound",
+        "density_g_cm3": 7.93,
+        "elements": [(26, "Fe", 70), (24, "Cr", 19), (28, "Ni", 8)],
+    },
+    "G4_SS316": {
+        "description": "不锈钢 316L (Fe-Cr-Ni-Mo)",
+        "type": "compound",
+        "density_g_cm3": 7.99,
+        "elements": [(26, "Fe", 65), (24, "Cr", 17), (28, "Ni", 12), (42, "Mo", 2)],
+    },
+    "G4_INCONEL718": {
+        "description": "高温合金 Inconel 718 (Ni-Cr-Fe-Nb-Mo)",
+        "type": "compound",
+        "density_g_cm3": 8.19,
+        "elements": [(28, "Ni", 52), (24, "Cr", 19), (26, "Fe", 18), (41, "Nb", 5), (42, "Mo", 3)],
+    },
+    # ── 复合材料 ──
+    "G4_CF_EPOXY": {
+        "description": "碳纤维/环氧树脂复合材料 Carbon Fiber/Epoxy",
+        "type": "compound",
+        "density_g_cm3": 1.55,
+        "elements": [(6, "C", 16), (1, "H", 14), (8, "O", 2)],
+    },
+    "G4_GF_EPOXY": {
+        "description": "玻璃纤维/环氧树脂复合材料 Glass Fiber/Epoxy",
+        "type": "compound",
+        "density_g_cm3": 1.85,
+        "elements": [(14, "Si", 1), (8, "O", 3), (6, "C", 16), (1, "H", 14)],
+    },
+    # ── 航天特殊材料 ──
+    "G4_LITHIUM_HYDRIDE": {
+        "description": "氢化锂 LiH (中子屏蔽)",
+        "type": "compound",
+        "density_g_cm3": 0.78,
+        "elements": [(3, "Li", 1), (1, "H", 1)],
+    },
+    "G4_BORON_POLYETHYLENE": {
+        "description": "含硼聚乙烯 (5% B₄C + PE, 中子屏蔽)",
+        "type": "compound",
+        "density_g_cm3": 1.10,
+        "elements": [(1, "H", 18), (6, "C", 8), (5, "B", 2)],
+    },
+    "G4_TUNGSTEN_POLYETHYLENE": {
+        "description": "含钨聚乙烯 (W + PE, 伽马+中子屏蔽)",
+        "type": "compound",
+        "density_g_cm3": 3.50,
+        "elements": [(74, "W", 1), (1, "H", 4), (6, "C", 2)],
+    },
+    # ── 同位素材料 ──
+    "G4_LiD": {
+        "description": "氘化锂 LiD (Li-7 + D, 中子屏蔽)",
+        "type": "compound",
+        "density_g_cm3": 0.82,
+        "elements": [(3, "Li", 1, 7), (1, "H", 1, 2)],
+    },
+    "G4_Li6H": {
+        "description": "锂-6氢化物 Li-6H (强中子吸收)",
+        "type": "compound",
+        "density_g_cm3": 0.76,
+        "elements": [(3, "Li", 1, 6), (1, "H", 1)],
+    },
+    "G4_D2O": {
+        "description": "重水 D₂O (氘-2代替氢)",
+        "type": "compound",
+        "density_g_cm3": 1.106,
+        "elements": [(1, "H", 2, 2), (8, "O", 1)],
+    },
+    "G4_B10_POLYETHYLENE": {
+        "description": "B-10 富集含硼聚乙烯 (B-10 + PE, 强中子吸收)",
+        "type": "compound",
+        "density_g_cm3": 1.10,
+        "elements": [(1, "H", 18), (6, "C", 8), (5, "B", 2, 10)],
+    },
+    # ── 半导体 ──
+    "G4_SiC": {
+        "description": "碳化硅 SiC",
+        "type": "compound",
+        "density_g_cm3": 3.21,
+        "elements": [(14, "Si", 1), (6, "C", 1)],
+    },
+    "G4_GaN": {
+        "description": "氮化镓 GaN",
+        "type": "compound",
+        "density_g_cm3": 6.15,
+        "elements": [(31, "Ga", 1), (7, "N", 1)],
+    },
+    "G4_NaCl": {
+        "description": "氯化钠 NaCl",
+        "type": "compound",
+        "density_g_cm3": 2.16,
+        "elements": [(11, "Na", 1), (17, "Cl", 1)],
+    },
+}
 
 
 PARTICLES: dict[str, str] = {
@@ -551,18 +738,31 @@ CUSTOM_PARTICLES: dict[str, dict] = {
 # 粒子别名 → 自定义粒子名
 PARTICLE_ALIASES: dict[str, str] = {
     "铁离子": "Fe_ion", "fe_ion": "Fe_ion", "iron_ion": "Fe_ion",
+    "fe": "Fe_ion", "铁": "Fe_ion", "fe56": "Fe_ion", "铁56": "Fe_ion",
     "氧离子": "O_ion", "o_ion": "O_ion", "oxygen_ion": "O_ion",
+    "o": "O_ion", "氧": "O_ion", "o16": "O_ion", "氧16": "O_ion",
     "碳离子": "C_ion", "c_ion": "C_ion", "carbon_ion": "C_ion",
+    "c": "C_ion", "碳": "C_ion", "c12": "C_ion", "碳12": "C_ion",
     "硅离子": "Si_ion", "si_ion": "Si_ion", "silicon_ion": "Si_ion",
+    "si": "Si_ion", "硅": "Si_ion", "si28": "Si_ion", "硅28": "Si_ion",
     "铝离子": "Al_ion", "al_ion": "Al_ion", "aluminum_ion": "Al_ion",
+    "al": "Al_ion", "铝": "Al_ion", "al27": "Al_ion",
     "钙离子": "Ca_ion", "ca_ion": "Ca_ion", "calcium_ion": "Ca_ion",
+    "ca": "Ca_ion", "钙": "Ca_ion", "ca40": "Ca_ion",
     "钛离子": "Ti_ion", "ti_ion": "Ti_ion", "titanium_ion": "Ti_ion",
+    "ti": "Ti_ion", "钛": "Ti_ion", "ti48": "Ti_ion",
     "铬离子": "Cr_ion", "cr_ion": "Cr_ion", "chromium_ion": "Cr_ion",
+    "cr": "Cr_ion", "铬": "Cr_ion", "cr52": "Cr_ion",
     "锰离子": "Mn_ion", "mn_ion": "Mn_ion", "manganese_ion": "Mn_ion",
+    "mn": "Mn_ion", "锰": "Mn_ion", "mn55": "Mn_ion",
     "钴离子": "Co_ion", "co_ion": "Co_ion", "cobalt_ion": "Co_ion",
+    "co": "Co_ion", "钴": "Co_ion", "co59": "Co_ion",
     "镍离子": "Ni_ion", "ni_ion": "Ni_ion", "nickel_ion": "Ni_ion",
+    "ni": "Ni_ion", "镍": "Ni_ion", "ni58": "Ni_ion",
     "铜离子": "Cu_ion", "cu_ion": "Cu_ion", "copper_ion": "Cu_ion",
+    "cu": "Cu_ion", "铜": "Cu_ion", "cu63": "Cu_ion",
     "锌离子": "Zn_ion", "zn_ion": "Zn_ion", "zinc_ion": "Zn_ion",
+    "zn": "Zn_ion", "锌": "Zn_ion", "zn64": "Zn_ion",
 }
 
 
@@ -606,13 +806,23 @@ def lookup_material(name: str) -> tuple[str, float]:
 
 
 def is_custom_material(g4_name: str) -> bool:
-    """判断是否为自定义材料（需要生成 C++ 定义代码）"""
-    return g4_name in CUSTOM_MATERIALS
+    """判断是否为自定义材料（需要生成 C++ 定义代码）。
+    G4_ 前缀且在 NIST 库中 → 不是自定义材料，用 FindOrBuildMaterial。
+    否则 → 需要生成 C++ 定义。
+    """
+    if g4_name in G4_MATERIALS:
+        return False
+    if g4_name in CUSTOM_MATERIALS:
+        return True
+    # 非 NIST 也非预注册 → 也不算自定义材料（将在运行时失败）
+    return False
 
 
-def _generate_isotope_cpp(z: int, symbol: str, a: int) -> list[str]:
-    """为同位素生成 G4Isotope + G4Element C++ 代码"""
-    var = f"{symbol}{a}"
+def _generate_isotope_cpp(z: int, symbol: str, a: int, prefix: str = "") -> list[str]:
+    """为同位素生成 G4Isotope + G4Element C++ 代码。
+    prefix 用于避免不同材料中同位素变量名冲突。
+    """
+    var = f"{prefix}_{symbol}{a}" if prefix else f"{symbol}{a}"
     return [
         f'  auto iso_{var} = new G4Isotope("{var}", {z}, {a});',
         f'  auto ele_{var} = new G4Element("{symbol}-{a}", "{symbol}", 1);',
@@ -630,6 +840,8 @@ def generate_custom_material_cpp(g4_name: str) -> str | None:
         return None
 
     mat = CUSTOM_MATERIALS[g4_name]
+    # 材料名前缀，用于避免变量名冲突
+    prefix = g4_name.replace("G4_", "")
     lines = [f'  // {mat["description"]}']
     density_val = mat["density_g_cm3"]
     lines.append(f'  G4double {g4_name}_dens = {density_val} * g/cm3;')
@@ -641,7 +853,7 @@ def generate_custom_material_cpp(g4_name: str) -> str | None:
         for elem in elems:
             if len(elem) >= 4:
                 z, symbol, _, a = elem[:4]
-                lines.extend(_generate_isotope_cpp(z, symbol, a))
+                lines.extend(_generate_isotope_cpp(z, symbol, a, prefix))
 
         # 材料定义
         lines.append(f'  auto {g4_name}_mat = new G4Material("{g4_name}", {g4_name}_dens, {len(elems)});')
@@ -651,7 +863,8 @@ def generate_custom_material_cpp(g4_name: str) -> str | None:
             count = elem[2]
             if len(elem) >= 4:
                 z, symbol, _, a = elem[:4]
-                lines.append(f'  {g4_name}_mat->AddElement(ele_{symbol}{a}, {count});')
+                var = f"{prefix}_{symbol}{a}"
+                lines.append(f'  {g4_name}_mat->AddElement(ele_{var}, {count});')
             else:
                 z = elem[0]
                 lines.append(f'  {g4_name}_mat->AddElement(nist->FindOrBuildElement({z}), {count});')
@@ -661,6 +874,8 @@ def generate_custom_material_cpp(g4_name: str) -> str | None:
 
 def lookup_particle(name: str) -> str:
     """查找粒子的 Geant4 名称"""
+    import re
+
     key = name.strip().lower()
     result = PARTICLES.get(key)
     if result:
@@ -669,9 +884,27 @@ def lookup_particle(name: str) -> str:
     alias = PARTICLE_ALIASES.get(key)
     if alias:
         return alias
+    # 模糊匹配
     for k, v in PARTICLES.items():
         if key in k.lower():
             return v
+
+    # 离子格式匹配: "碳-12离子" / "碳12" / "C-12" / "iron-56" / "铁56"
+    # 提取元素名部分（去掉 "-数字" 和 "离子" 后缀）
+    ion_match = re.match(r'^([a-zA-Z一-鿿]+?)[-]?\d*', key)
+    if ion_match:
+        element = ion_match.group(1)
+        # 检查别名
+        alias = PARTICLE_ALIASES.get(element)
+        if alias:
+            return alias
+        # 去掉 "离子" 后缀再试
+        element_no_ion = element.rstrip("离子")
+        if element_no_ion != element:
+            alias = PARTICLE_ALIASES.get(element_no_ion)
+            if alias:
+                return alias
+
     raise ValueError(f"未知粒子: '{name}'。请在 PARTICLES 或 CUSTOM_PARTICLES 中添加")
 
 
@@ -731,14 +964,15 @@ def is_custom_particle(name: str) -> bool:
 
 
 def generate_custom_particle_cpp(g4_name: str) -> str | None:
-    """为自定义粒子（离子）生成 C++ 代码片段，用于 PrimaryGeneratorAction"""
+    """为自定义粒子（离子）生成 C++ 代码片段，使用 lazy init 避免初始化顺序问题"""
     if g4_name not in CUSTOM_PARTICLES:
         return None
     p = CUSTOM_PARTICLES[g4_name]
     return (
-        f'  // {p["description"]}\n'
-        f'  auto ionTable = G4IonTable::GetInstance();\n'
-        f'  fParticleGun->SetParticleDefinition(ionTable->GetIon({p["Z"]}, {p["A"]}));'
+        f'  // {p["description"]} — lazy init in GeneratePrimaries\n'
+        f'  fIonNeedsInit = true;\n'
+        f'  fIonZ = {p["Z"]};\n'
+        f'  fIonA = {p["A"]};'
     )
 
 
@@ -756,4 +990,7 @@ def _do_recommend_physics(particle: str, energy_MeV: float) -> str:
         return "QGSP_BIC"
     if particle == "neutron":
         return "QGSP_BERT"
+    # 重离子 (自定义粒子) — 高能用 FTFP_BERT，低能用 QGSP_BIC
+    if particle in CUSTOM_PARTICLES:
+        return "FTFP_BERT" if energy_MeV > 1000 else "QGSP_BIC"
     return "QBBC"

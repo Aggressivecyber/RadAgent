@@ -14,6 +14,11 @@ from radagent.schemas import (
 )
 
 
+def _last_value(old, new):
+    """Reducer: 新值覆盖旧值，无新值时保留旧值"""
+    return new if new is not None else old
+
+
 class RadAgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     user_input: str
@@ -24,4 +29,5 @@ class RadAgentState(TypedDict):
     figure_paths: dict
     report: str
     control: ControlState
-    parse_error: str
+    parse_error: Annotated[str, _last_value]
+    gate_feedback: str

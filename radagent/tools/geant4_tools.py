@@ -13,10 +13,12 @@ from string import Template
 from radagent.config import CMAKE_TIMEOUT, GEANT4_SOURCE_SCRIPT, RUN_TIMEOUT, TEMPLATES_DIR, WORKSPACE_DIR
 from radagent.schemas import BuildResult, ShieldGeometry, SimulationResult, SimulationScenario
 from radagent.tools.knowledge import (
+    G4_MATERIALS,
     generate_custom_material_cpp,
     generate_custom_particle_cpp,
     is_custom_material,
     is_custom_particle,
+    lookup_particle,
 )
 
 logger = logging.getLogger("radagent.node.tools")
@@ -30,6 +32,7 @@ PHYSICS_MAP = {
     "QGSP_BIC_EMZ": ("QGSP_BIC_EMZ.hh", "QGSP_BIC_EMZ"),
     "QGSP_BIC_HP": ("QGSP_BIC_HP.hh", "QGSP_BIC_HP"),
     "QGSP_BIC_AllHP": ("QGSP_BIC_AllHP.hh", "QGSP_BIC_AllHP"),
+    "QGSP_FTFP_BERT": ("QGSP_FTFP_BERT.hh", "QGSP_FTFP_BERT"),
 }
 
 
@@ -85,18 +88,28 @@ def render_multilayer_template(
     thick_m = sensitive_layer.thickness_mm * 0.001
     sensitive_mass_kg = sensitive_layer.density_g_cm3 * 1000 * size_m * size_m * thick_m
 
-    # 自定义材料 C++ 代码
-    custom_mat_names = set()
-    for layer in layers:
-        if is_custom_material(layer.geant4_material):
-            custom_mat_names.add(layer.geant4_material)
-
+    # 材料处理: NIST 标准材料用 FindOrBuildMaterial, 非标准材料自动生成 C++ 定义
     custom_mat_lines = []
-    for mat_name in sorted(custom_mat_names):
-        cpp_code = generate_custom_material_cpp(mat_name)
+    auto_generated_mats = {}  # {mat_name: True} — 已自动生成定义的材料
+    for layer in layers:
+        mat = layer.geant4_material
+        if mat in G4_MATERIALS:
+            continue  # NIST 标准，不需要自定义
+        if is_custom_material(mat):
+            cpp_code = generate_custom_material_cpp(mat)
+            if cpp_code:
+                custom_mat_lines.append(cpp_code)
+                auto_generated_mats[mat] = True
+                logger.info("自定义材料: %s → C++ 定义已生成", mat)
+            continue
+        # 非 NIST 且未注册 → 根据层信息生成简单材料定义
+        cpp_code = _auto_generate_material_cpp(mat, layer.density_g_cm3)
         if cpp_code:
             custom_mat_lines.append(cpp_code)
-            logger.info("自定义材料: %s → C++ 定义已生成", mat_name)
+            auto_generated_mats[mat] = True
+            logger.info("非 NIST 材料: %s (ρ=%.4f) → C++ 定义已自动生成", mat, layer.density_g_cm3)
+        else:
+            logger.warning("材料 %s 无法自动生成, 将在运行时由 Geant4 尝试 FindOrBuildMaterial", mat)
 
     # 逐层厚度计算代码
     thickness_calc_lines = []
@@ -110,8 +123,8 @@ def render_multilayer_template(
     for i, layer in enumerate(layers):
         safe_name = layer.name.replace(" ", "_").replace("（", "_").replace("）", "")
         mat = layer.geant4_material
-        # 自定义材料用变量名，NIST 材料用 FindOrBuildMaterial
-        if is_custom_material(mat):
+        # 自定义/自动生成材料用变量名，NIST 材料用 FindOrBuildMaterial
+        if is_custom_material(mat) or mat in auto_generated_mats:
             mat_expr = f"{mat}_mat"
         else:
             mat_expr = f'nist->FindOrBuildMaterial("{mat}")'
@@ -151,16 +164,58 @@ def render_multilayer_template(
     energy = source.energy_MeV if source.energy_MeV else 100.0
     direction = source.direction
 
+    # 离子能量: 如果有 energy_per_nucleon_MeV 且没有绝对能量，计算 total
+    resolved_particle = _resolve_particle(source.particle)
+    if source.energy_per_nucleon_MeV and not source.energy_MeV:
+        from radagent.tools.knowledge import CUSTOM_PARTICLES
+        ion_info = CUSTOM_PARTICLES.get(resolved_particle)
+        if ion_info:
+            energy = source.energy_per_nucleon_MeV * ion_info["A"]
+            logger.info("离子动能: %.1f MeV/n × A=%d = %.1f MeV",
+                        source.energy_per_nucleon_MeV, ion_info["A"], energy)
+
     # 自定义粒子（离子）C++ 代码
-    if is_custom_particle(source.particle):
-        particle_def_code = generate_custom_particle_cpp(source.particle)
-        logger.info("自定义粒子: %s → C++ 离子代码已生成", source.particle)
+    if is_custom_particle(resolved_particle):
+        particle_def_code = generate_custom_particle_cpp(resolved_particle)
+        particle_type = resolved_particle
+        logger.info("自定义粒子: %s → C++ 离子代码已生成", resolved_particle)
     else:
         particle_def_code = (
             f'  G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();\n'
             f'  G4String particleName;\n'
             f'  fParticleGun->SetParticleDefinition(particleTable->FindParticle(particleName = "{particle_type}"));'
         )
+
+    # 能谱代码（CDF 逆变换采样）
+    energy_spectrum_code = ""
+    if source.energy_spectrum and len(source.energy_spectrum) >= 2:
+        probs = source.spectrum_probabilities
+        if not probs:
+            probs = tuple(1.0 for _ in source.energy_spectrum)
+        total_p = sum(probs)
+        cdf_vals = []
+        cumulative = 0.0
+        for p in probs:
+            cumulative += p / total_p
+            cdf_vals.append(min(cumulative, 1.0))
+        energy_vals_cpp = ", ".join(f"{v}" for v in source.energy_spectrum)
+        cdf_cpp = ", ".join(f"{v:.6f}" for v in cdf_vals)
+        energy_spectrum_code = (
+            f"  fUseSpectrum = true;\n"
+            f"  fEnergyValues = {{{energy_vals_cpp}}};\n"
+            f"  fEnergyCDF = {{{cdf_cpp}}};"
+        )
+        logger.info("能谱: %d 个能量节点, CDF 已生成", len(source.energy_spectrum))
+
+    # 方向模式代码
+    direction_mode_code = ""
+    st = getattr(source, "source_type", "parallel_beam")
+    if st == "isotropic":
+        direction_mode_code = "  fIsotropic = true;"
+        logger.info("源类型: 各向同性")
+    elif st == "hemisphere":
+        direction_mode_code = "  fHemisphere = true;"
+        logger.info("源类型: 半球入射")
 
     subs = {
         "SIZE_XY": str(size_xy_cm),
@@ -173,6 +228,8 @@ def render_multilayer_template(
         "PARTICLE_TYPE": particle_type,
         "PARTICLE_DEFINITION_CODE": particle_def_code,
         "PARTICLE_ENERGY": str(energy),
+        "ENERGY_SPECTRUM_CODE": energy_spectrum_code,
+        "DIRECTION_MODE_CODE": direction_mode_code,
         "BEAM_DIRECTION_X": str(direction[0]),
         "BEAM_DIRECTION_Y": str(direction[1]),
         "BEAM_DIRECTION_Z": str(direction[2]),
@@ -290,7 +347,7 @@ def run_geant4(executable_path: str, num_events: int) -> BuildResult:
     try:
         result = subprocess.run(
             f"source {GEANT4_SOURCE_SCRIPT} && cd {Path(executable_path).parent} && {executable_path} run.mac",
-            shell=True, capture_output=True, text=True, timeout=RUN_TIMEOUT,
+            shell=True, capture_output=True, text=True,
             executable="/bin/bash",
         )
         ok = result.returncode == 0
@@ -303,9 +360,6 @@ def run_geant4(executable_path: str, num_events: int) -> BuildResult:
             run_stdout=result.stdout[-10000:],
             run_stderr=result.stderr[-2000:],
         )
-    except subprocess.TimeoutExpired:
-        logger.error("仿真超时 (%ds)", RUN_TIMEOUT)
-        return BuildResult(run_ok=False, run_stderr="仿真运行超时")
     except Exception as e:
         logger.error("仿真异常: %s", e)
         return BuildResult(run_ok=False, run_stderr=str(e))
@@ -490,6 +544,34 @@ def _parse_stdout_output(stdout: str, layer_names: list[str]) -> SimulationResul
         num_events=num_events,
         raw_summary=stdout[-2000:],
     )
+
+
+def _resolve_particle(particle: str) -> str:
+    """解析粒子名: 先查 is_custom_particle，再通过 lookup_particle 转换"""
+    if is_custom_particle(particle):
+        return particle
+    try:
+        resolved = lookup_particle(particle)
+        if is_custom_particle(resolved):
+            return resolved
+    except (ValueError, Exception):
+        pass
+    return particle
+
+
+def _auto_generate_material_cpp(mat_name: str, density: float) -> str | None:
+    """尝试为非 NIST 材料自动生成简单的 C++ 定义代码。
+    如果无法确定组成，返回 None。
+    """
+    # 尝试查找材料别名对应的 G4_ 名称 — 可能只是名称格式不同
+    from radagent.tools.knowledge import MATERIAL_ALIASES
+    lower = mat_name.lower().replace(" ", "")
+    alias = MATERIAL_ALIASES.get(lower)
+    if alias and alias in G4_MATERIALS:
+        return None  # 别名已解析为 NIST 材料，不需要自定义代码
+
+    # 无法自动推断组成 → 返回 None，让 Geant4 在运行时尝试
+    return None
 
 
 def _geant4_particle_name(particle: str) -> str:

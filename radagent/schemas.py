@@ -40,6 +40,7 @@ class ParticleSource:
     """粒子源"""
     particle: str                # proton | electron | gamma | neutron | alpha
     energy_MeV: float | None = None
+    energy_per_nucleon_MeV: float | None = None  # 离子用: 400 MeV/n
     energy_spectrum: tuple[float, ...] | None = None
     spectrum_probabilities: tuple[float, ...] | None = None
     source_type: str = "parallel_beam"  # parallel_beam | point | isotropic
@@ -101,3 +102,14 @@ class ControlState:
     retry_count: int = 0
     max_retries: int = 3
     approved: bool = False
+
+
+@dataclass(frozen=True)
+class GateResult:
+    """门禁评估结果"""
+    gate_name: str             # "research_gate" / "sim_gate" / "report_gate"
+    passed: bool
+    scores: dict = field(default_factory=dict)  # {"完整性": 8, "物理合理性": 7, ...}
+    total_score: float = 0.0
+    issues: tuple[str, ...] = ()
+    suggestions: tuple[str, ...] = ()

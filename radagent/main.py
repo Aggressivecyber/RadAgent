@@ -1,10 +1,35 @@
 """RadG4-Agent CLI 入口"""
 
+import sys
+
 from langgraph.types import Command
 
 from radagent.graph import build_graph
 from radagent.log import init_session_log, log_info, get_session_dir
 from radagent.schemas import BuildResult, ControlState
+
+# pipe 模式下自动确认（stdin 内容已被初始输入消耗完）
+_IS_PIPE = not sys.stdin.isatty()
+
+
+def _read_user_input() -> str:
+    """读取用户输入（支持多行）"""
+    if _IS_PIPE:
+        return sys.stdin.read().strip()
+
+    print("  （多行输入，以空行结束）")
+    lines = []
+    while True:
+        try:
+            line = input()
+        except EOFError:
+            break
+        if line.strip() == "" and lines:
+            break
+        if line.strip():
+            lines.append(line.strip())
+
+    return "\n".join(lines)
 
 
 def main():
@@ -17,7 +42,8 @@ def main():
     graph = build_graph()
     config = {"configurable": {"thread_id": "radagent-v1"}}
 
-    user_input = input("\n请描述辐照仿真需求:\n> ").strip()
+    print("\n请描述辐照仿真需求:")
+    user_input = _read_user_input()
     if not user_input:
         print("再见！")
         return
@@ -35,6 +61,7 @@ def main():
         "report": "",
         "control": ControlState(),
         "parse_error": "",
+        "gate_feedback": "",
     }
 
     print(f"\n--- 开始处理 (日志: {session_dir}) ---\n")
@@ -76,6 +103,12 @@ def _print_node_update(node_name: str, output: dict):
         if err:
             print(f"  [调研错误] {err[:200]}")
 
+    elif node_name == "research_gate":
+        err = output.get("parse_error", "")
+        if not err:
+            print(f"  [门禁 ✓] 调研质量通过")
+        # 门禁失败时会在 _handle_interrupt 中展示详情
+
     elif node_name == "parameterize":
         build = output.get("build")
         if build and build.source_dir:
@@ -96,6 +129,14 @@ def _print_node_update(node_name: str, output: dict):
             if err:
                 print(f"  [编译失败] {err[:200]}")
 
+    elif node_name == "sim_gate":
+        err = output.get("parse_error", "")
+        if err:
+            print(f"  [门禁 ✗] 仿真结果不达标")
+            print(f"    {err[:300]}")
+        else:
+            print(f"  [门禁 ✓] 仿真结果通过")
+
     elif node_name == "analyze":
         fig_paths = output.get("figure_paths", {})
         anomaly = output.get("anomaly", [])
@@ -106,6 +147,14 @@ def _print_node_update(node_name: str, output: dict):
         for a in anomaly:
             if a.status != "normal":
                 print(f"  [异常] {a.status}: {a.details}")
+
+    elif node_name == "report_gate":
+        err = output.get("parse_error", "")
+        if err:
+            print(f"  [门禁 ✗] 报告质量不达标")
+            print(f"    {err[:300]}")
+        else:
+            print(f"  [门禁 ✓] 报告质量通过")
 
     elif node_name == "generate_report":
         report = output.get("report", "")
@@ -138,11 +187,36 @@ def _handle_interrupt(graph, config, snapshot) -> bool:
             else:
                 print(str(message)[:1500])
 
-            decision = input("\n输入 'yes' 确认，或输入修改意见: ").strip()
-            if decision.lower() == "yes":
+            if _IS_PIPE:
+                print("\n[pipe 模式] 自动确认")
+                decision = "yes"
+            else:
+                decision = input("\n输入 'yes' 确认，或输入修改意见: ").strip()
+
+            if decision.lower() == "yes" or not decision:
                 resume_value = {"action": "confirm"}
             else:
-                resume_value = {"action": "modify", "feedback": decision or "请重新设计"}
+                resume_value = {"action": "modify", "feedback": decision}
+
+        elif info.get("type") == "gate_warning":
+            # 门禁警告：展示问题和建议，让用户决定
+            gate_name = info.get("gate_name", "unknown")
+            print(f"\n{'=' * 50}")
+            print(f"门禁警告 [{gate_name}]")
+            print("=" * 50)
+            message = info.get("message", "")
+            print(message[:2000])
+
+            if _IS_PIPE:
+                print("\n[pipe 模式] 自动继续")
+                decision = "continue"
+            else:
+                decision = input("\n输入 'continue' 继续，或输入修改意见回退: ").strip().lower()
+
+            if decision == "continue" or decision == "yes" or not decision:
+                resume_value = {"action": "continue"}
+            else:
+                resume_value = {"action": "modify", "feedback": decision}
 
         else:
             # human_review: 报告审核
@@ -152,11 +226,16 @@ def _handle_interrupt(graph, config, snapshot) -> bool:
             preview = info.get("report_preview", "")
             print(f"\n{preview}...\n")
 
-            decision = input("输入 'yes' 批准，或输入反馈意见: ").strip()
-            if decision.lower() == "yes":
+            if _IS_PIPE:
+                print("[pipe 模式] 自动批准")
+                decision = "yes"
+            else:
+                decision = input("输入 'yes' 批准，或输入反馈意见: ").strip()
+
+            if decision.lower() == "yes" or not decision:
                 resume_value = {"approved": True, "feedback": ""}
             else:
-                resume_value = {"approved": False, "feedback": decision or "请重新分析"}
+                resume_value = {"approved": False, "feedback": decision}
 
         log_info("main", f"用户决定: {decision}")
 

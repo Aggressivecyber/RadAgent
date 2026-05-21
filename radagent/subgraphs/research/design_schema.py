@@ -134,10 +134,14 @@ def design_schema(state: ResearchState) -> Command[Literal["design_schema", "def
         log_node_exit(_NODE, "design_schema (重试)", update)
         return Command(update=update, goto="design_schema")
 
+    # 优先使用用户指定的横截面尺寸
+    user_size = intent.get("size_xy_cm")
+    size_xy = float(user_size) if user_size else float(design.get("size_xy_cm", 10.0))
+
     geometry = ShieldGeometry(
         name=design.get("geometry_name", "航天器屏蔽结构"),
         layers=tuple(layers),
-        size_xy_cm=float(design.get("size_xy_cm", 10.0)),
+        size_xy_cm=size_xy,
         sensitive_volume=design.get("sensitive_volume", ""),
     )
 
@@ -153,8 +157,8 @@ def design_schema(state: ResearchState) -> Command[Literal["design_schema", "def
 
     orbit = OrbitEnvironment(
         orbit_name=orbit_name,
-        altitude_km=float(orbit_data.get("altitude_km", 500)),
-        inclination_deg=float(orbit_data.get("inclination_deg", 0)),
+        altitude_km=float(orbit_data.get("altitude_km") or 0),
+        inclination_deg=float(orbit_data.get("inclination_deg") or 0),
         reference=f"基于 {orbit_name} 轨道参考数据",
     )
 
