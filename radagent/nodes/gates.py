@@ -8,16 +8,12 @@ from typing import Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import Command, interrupt
 
-from radagent.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from radagent.log import log_node_entry, log_node_exit, log_info, log_error, log_llm_call
 from radagent.schemas import ControlState, GateResult
 from radagent.state import RadAgentState
+from radagent.tools.model_router import get_premium_llm
 
-try:
-    from langchain_openai import ChatOpenAI
-    llm = ChatOpenAI(model=DEEPSEEK_MODEL, base_url=DEEPSEEK_BASE_URL, api_key=DEEPSEEK_API_KEY, temperature=0)
-except Exception:
-    llm = None
+llm = get_premium_llm()
 
 logger = logging.getLogger("radagent.node.tools")
 

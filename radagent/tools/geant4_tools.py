@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from string import Template
 
-from radagent.config import CMAKE_TIMEOUT, GEANT4_SOURCE_SCRIPT, RUN_TIMEOUT, TEMPLATES_DIR, WORKSPACE_DIR
+from radagent.config import CMAKE_TIMEOUT, GEANT4_SOURCE_SCRIPT, TEMPLATES_DIR, WORKSPACE_DIR
 from radagent.schemas import BuildResult, ShieldGeometry, SimulationResult, SimulationScenario
 from radagent.tools.knowledge import (
     G4_MATERIALS,

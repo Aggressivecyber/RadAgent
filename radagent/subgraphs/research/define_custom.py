@@ -6,7 +6,6 @@ from typing import Literal
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
-from radagent.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from radagent.log import log_node_entry, log_node_exit, log_info, log_error, log_llm_call
 from radagent.schemas import ShieldGeometry, ShieldLayer
 from radagent.subgraphs.research.state import ResearchState
@@ -16,12 +15,9 @@ from radagent.tools.knowledge import (
     register_custom_particle,
     try_lookup_material,
 )
+from radagent.tools.model_router import get_light_llm
 
-try:
-    from langchain_openai import ChatOpenAI
-    llm = ChatOpenAI(model=DEEPSEEK_MODEL, base_url=DEEPSEEK_BASE_URL, api_key=DEEPSEEK_API_KEY, temperature=0)
-except Exception:
-    llm = None
+llm = get_light_llm()
 
 _NODE = "define_custom"
 

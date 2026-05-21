@@ -6,19 +6,15 @@ from typing import Literal
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
-from radagent.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from radagent.log import log_node_entry, log_node_exit, log_info, log_error
 from radagent.schemas import ParticleSource, SimulationScenario
 from radagent.tools.knowledge import recommend_physics, try_lookup_particle
+from radagent.tools.model_router import get_light_llm
 from radagent.tools.orbit_query import query_radiation_environment
 from radagent.tools.web_search import search_parameter_recommendation
 from radagent.subgraphs.research.state import ResearchState
 
-try:
-    from langchain_openai import ChatOpenAI
-    llm = ChatOpenAI(model=DEEPSEEK_MODEL, base_url=DEEPSEEK_BASE_URL, api_key=DEEPSEEK_API_KEY, temperature=0)
-except Exception:
-    llm = None
+llm = get_light_llm()
 
 _NODE = "research_params"
 
