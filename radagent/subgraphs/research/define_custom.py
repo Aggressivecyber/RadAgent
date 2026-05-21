@@ -9,7 +9,7 @@ from langgraph.types import Command
 from radagent.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from radagent.log import log_node_entry, log_node_exit, log_info, log_error, log_llm_call
 from radagent.schemas import ShieldGeometry, ShieldLayer
-from radagent.subgraphs.state import ResearchState
+from radagent.subgraphs.research.state import ResearchState
 from radagent.tools.knowledge import (
     register_custom_element,
     register_custom_material,

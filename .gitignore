@@ -7,4 +7,5 @@ __pycache__/
 dist/
 build/
 *.o
-workspace/*
+workspace/
+logs/

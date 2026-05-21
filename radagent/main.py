@@ -4,18 +4,16 @@ from langgraph.types import Command
 
 from radagent.graph import build_graph
 from radagent.log import init_session_log, log_info, get_session_dir
-from radagent.schemas import BuildResult, ControlState, SimulationResult
+from radagent.schemas import BuildResult, ControlState
 
 
 def main():
     print("=" * 60)
-    print("RadG4-Agent — 辐照仿真智能体")
-    print("输入自然语言描述，自动完成 Geant4 仿真和报告生成")
+    print("  RadG4-Agent — 航天辐照仿真智能体")
+    print("  输入自然语言，自动完成 Geant4 仿真与报告生成")
     print("=" * 60)
 
-    # 初始化日志
     session_dir = init_session_log()
-
     graph = build_graph()
     config = {"configurable": {"thread_id": "radagent-v1"}}
 
@@ -26,83 +24,152 @@ def main():
 
     log_info("main", f"用户输入: {user_input}")
 
-    # 初始状态
     initial_state = {
         "messages": [],
         "user_input": user_input,
-        "sim_params": None,
+        "sim_plan": None,
         "build": BuildResult(),
-        "result": SimulationResult(),
+        "results": [],
         "anomaly": [],
+        "figure_paths": {},
         "report": "",
         "control": ControlState(),
         "parse_error": "",
     }
 
-    print(f"\n--- 开始处理 (日志: {session_dir}) ---")
+    print(f"\n--- 开始处理 (日志: {session_dir}) ---\n")
 
-    # 第一次运行 — 会在 human_review 的 interrupt 处暂停
+    # 阶段 1: 流式执行，处理子图中的 interrupt（confirm_params）
+    _run_stream(graph, initial_state, config)
+
+    # 阶段 2: 处理剩余 interrupt（human_review）
+    state_snapshot = graph.get_state(config)
+    while state_snapshot.next:
+        if not _handle_interrupt(graph, config, state_snapshot):
+            break
+        state_snapshot = graph.get_state(config)
+
+    print("\n完成！")
+
+
+def _run_stream(graph, initial_state, config):
+    """流式执行主图，实时打印节点进展"""
     try:
         for event in graph.stream(initial_state, config=config, stream_mode="updates"):
-            for node_name, node_output in event.items():
-                if node_name == "parse_intent":
-                    params = node_output.get("sim_params")
-                    if params:
-                        print(f"\n参数提取完成:")
-                        print(f"   粒子: {params.particle.particle} {params.particle.energy_MeV} MeV")
-                        print(f"   材料: {params.material.name} ({params.material.geant4_name})")
-                        print(f"   厚度: {params.material.thickness_um} um")
-                elif node_name == "parameterize":
-                    print(f"  -> 模板渲染完成")
-                elif node_name == "build_and_run":
-                    build = node_output.get("build")
-                    if build:
-                        status = "成功" if build.run_ok else "失败"
-                        print(f"  -> 仿真执行: {status}")
-                elif node_name == "analyze":
-                    result = node_output.get("result")
-                    if result and result.num_events > 0:
-                        print(f"  -> 结果: 剂量={result.total_dose_Gy:.4e}")
-                elif node_name == "generate_report":
-                    report = node_output.get("report", "")
-                    print(f"\n报告已生成 ({len(report)} 字)")
+            for node_name, output in event.items():
+                _print_node_update(node_name, output)
     except Exception as e:
         log_info("main", f"流执行错误: {e}")
         print(f"\n错误: {e}")
-        return
 
-    # 处理 interrupt — 等待用户审核
-    state_snapshot = graph.get_state(config)
-    while state_snapshot.next:
-        print("\n" + "=" * 40)
-        print("报告审核")
 
-        if state_snapshot.tasks:
-            for task in state_snapshot.tasks:
-                if hasattr(task, "interrupts") and task.interrupts:
-                    info = task.interrupts[0].value
-                    preview = info.get("report_preview", "")
-                    print(f"\n报告预览:\n{preview}...\n")
+def _print_node_update(node_name: str, output: dict):
+    """根据节点类型打印进展信息"""
+    if node_name == "research":
+        plan = output.get("sim_plan")
+        if plan:
+            geo = plan.geometry
+            print(f"  [调研完成] 结构: {geo.name}, {len(geo.layers)} 层")
+            for s in plan.scenarios:
+                print(f"    场景: {s.name} ({s.source.particle} {s.source.energy_MeV} MeV, {s.num_events} events)")
+        err = output.get("parse_error")
+        if err:
+            print(f"  [调研错误] {err[:200]}")
 
-        decision = input("输入 'yes' 批准，或输入反馈意见要求重新分析: ").strip().lower()
+    elif node_name == "parameterize":
+        build = output.get("build")
+        if build and build.source_dir:
+            print(f"  [模板渲染] {build.source_dir}")
 
-        if decision == "yes":
-            resume_value = {"approved": True, "feedback": ""}
+    elif node_name == "build_and_run":
+        build = output.get("build")
+        results = output.get("results", [])
+        if build:
+            if build.compile_ok:
+                print(f"  [编译] 成功")
+            if build.run_ok and results:
+                for r in results:
+                    print(f"  [场景] {r.scenario_name}: "
+                          f"剂量={r.total_dose_Gy:.4e} Gy, "
+                          f"峰值层={r.peak_layer or 'N/A'}")
+            err = build.compile_error
+            if err:
+                print(f"  [编译失败] {err[:200]}")
+
+    elif node_name == "analyze":
+        fig_paths = output.get("figure_paths", {})
+        anomaly = output.get("anomaly", [])
+        if fig_paths:
+            print(f"  [可视化] 生成 {len(fig_paths)} 张图:")
+            for key, path in fig_paths.items():
+                print(f"    {key}: {path}")
+        for a in anomaly:
+            if a.status != "normal":
+                print(f"  [异常] {a.status}: {a.details}")
+
+    elif node_name == "generate_report":
+        report = output.get("report", "")
+        print(f"\n  [报告] 已生成 ({len(report)} 字)")
+
+    elif node_name == "human_review":
+        pass  # 在 _handle_interrupt 中处理
+
+
+def _handle_interrupt(graph, config, snapshot) -> bool:
+    """处理 interrupt（confirm_params 或 human_review），返回 True 表示继续"""
+    if not snapshot.tasks:
+        return False
+
+    for task in snapshot.tasks:
+        if not hasattr(task, "interrupts") or not task.interrupts:
+            continue
+
+        info = task.interrupts[0].value
+
+        # 区分确认类型
+        if info.get("type") == "plan_confirmation":
+            # confirm_params: 显示仿真计划
+            print("\n" + "=" * 50)
+            print("仿真计划确认")
+            print("=" * 50)
+            message = info.get("message", "")
+            if isinstance(message, str):
+                print(message[:1500])
+            else:
+                print(str(message)[:1500])
+
+            decision = input("\n输入 'yes' 确认，或输入修改意见: ").strip()
+            if decision.lower() == "yes":
+                resume_value = {"action": "confirm"}
+            else:
+                resume_value = {"action": "modify", "feedback": decision or "请重新设计"}
+
         else:
-            resume_value = {"approved": False, "feedback": decision or "请重新分析"}
+            # human_review: 报告审核
+            print("\n" + "=" * 50)
+            print("报告审核")
+            print("=" * 50)
+            preview = info.get("report_preview", "")
+            print(f"\n{preview}...\n")
 
-        log_info("main", f"用户审核决定: {decision}")
+            decision = input("输入 'yes' 批准，或输入反馈意见: ").strip()
+            if decision.lower() == "yes":
+                resume_value = {"approved": True, "feedback": ""}
+            else:
+                resume_value = {"approved": False, "feedback": decision or "请重新分析"}
+
+        log_info("main", f"用户决定: {decision}")
 
         try:
             graph.invoke(Command(resume=resume_value), config=config)
         except Exception as e:
             log_info("main", f"恢复执行错误: {e}")
             print(f"错误: {e}")
-            break
+            return False
 
-        state_snapshot = graph.get_state(config)
+        return True
 
-    print("\n完成！")
+    return False
 
 
 if __name__ == "__main__":

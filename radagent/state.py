@@ -21,6 +21,7 @@ class RadAgentState(TypedDict):
     build: BuildResult
     results: Annotated[list[SimulationResult], operator.add]
     anomaly: Annotated[list[AnomalyCheck], operator.add]
+    figure_paths: dict
     report: str
     control: ControlState
     parse_error: str

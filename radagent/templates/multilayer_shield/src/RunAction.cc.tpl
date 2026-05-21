@@ -67,9 +67,9 @@ void RunAction::AddLayerEdep(const G4String& layerName, G4double edep)
 
 void RunAction::EndOfRunAction(const G4Run* run)
 {
-  // 关闭文件
-  if (fEventFile.is_open()) fEventFile.close();
-  if (fStepFile.is_open()) fStepFile.close();
+  // 关闭文件（确保 flush）
+  if (fEventFile.is_open()) { fEventFile.flush(); fEventFile.close(); }
+  if (fStepFile.is_open()) { fStepFile.flush(); fStepFile.close(); }
 
   G4int nofEvents = run->GetNumberOfEvent();
   if (nofEvents == 0) return;
@@ -79,12 +79,11 @@ void RunAction::EndOfRunAction(const G4Run* run)
   if (!G4Threading::IsMasterThread()) return;
 
   // 合并所有线程的 CSV 文件到最终输出
-  // 扫描当前目录下所有 radagent_*_t*.csv 文件
+  // 使用 istreambuf_iterator 显式读取，避免 rdbuf() 在 getline 后位置异常
   {
     std::ofstream out("radagent_events.csv");
     out << "event_id,initial_particle,initial_energy_MeV,total_edep_MeV,"
         << "num_steps,final_kinetic_MeV,num_secondaries\n";
-    // 合并 worker 线程 (t0..t255) + master 线程 (t-1)
     for (G4int t = -1; t < 256; ++t) {
       std::ostringstream path;
       path << "radagent_events_t" << t << ".csv";
@@ -92,10 +91,13 @@ void RunAction::EndOfRunAction(const G4Run* run)
       if (in.good()) {
         std::string header;
         std::getline(in, header);
-        out << in.rdbuf();
+        out << std::string((std::istreambuf_iterator<char>(in)),
+                           std::istreambuf_iterator<char>());
       }
       std::filesystem::remove(path.str());
     }
+    out.flush();
+    out.close();
   }
 
   {
@@ -109,10 +111,13 @@ void RunAction::EndOfRunAction(const G4Run* run)
       if (in.good()) {
         std::string header;
         std::getline(in, header);
-        out << in.rdbuf();
+        out << std::string((std::istreambuf_iterator<char>(in)),
+                           std::istreambuf_iterator<char>());
       }
       std::filesystem::remove(path.str());
     }
+    out.flush();
+    out.close();
   }
 
   // 输出汇总信息

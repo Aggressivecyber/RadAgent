@@ -340,6 +340,175 @@ def _extract_snapshot(state: dict[str, Any]) -> dict[str, Any]:
     return snapshot
 
 
+# ---------------------------------------------------------------------------
+# 状态查看 — 可从任意终端调用
+# ---------------------------------------------------------------------------
+
+# 管线节点顺序（用于判定进度百分比）
+_PIPELINE_STEPS: list[str] = [
+    "parse_intent", "design_schema", "research_params", "confirm_params",
+    "parameterize", "build_and_run", "analyze", "generate_report", "human_review",
+]
+
+
+def get_status() -> dict[str, Any]:
+    """返回当前管线运行状态。
+
+    从 pipeline.log 解析最新事件，判断：
+    - 当前在哪个节点
+    - 进度百分比
+    - 是否卡住（节点重试次数）
+    - 最近错误
+    - 运行时长
+
+    可在程序运行时从另一个终端调用::
+
+        python -c "from radagent.log import get_status; import json; print(json.dumps(get_status(), ensure_ascii=False, indent=2))"
+    """
+    from radagent.config import LOG_DIR
+
+    result: dict[str, Any] = {
+        "running": False,
+        "session_dir": None,
+        "current_node": None,
+        "progress_pct": 0,
+        "retries": {},
+        "last_error": None,
+        "elapsed_sec": 0,
+    }
+
+    # 找最新会话目录
+    if not LOG_DIR.exists():
+        return result
+
+    sessions = sorted(LOG_DIR.glob("session_*"))
+    if not sessions:
+        return result
+
+    latest = sessions[-1]
+    result["session_dir"] = str(latest)
+
+    pipeline_log = latest / "pipeline.log"
+    if not pipeline_log.exists():
+        return result
+
+    lines = pipeline_log.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        return result
+
+    # 解析日志行
+    current_node = None
+    last_entry_time: datetime | None = None
+    last_exit_time: datetime | None = None
+    session_start_time: datetime | None = None
+    node_retries: dict[str, int] = {}
+    last_error_msg: str | None = None
+
+    for line in lines:
+        # 时间戳解析
+        time_str = line[:23].strip()
+        try:
+            ts = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S.%f")
+        except (ValueError, IndexError):
+            continue
+
+        if "=== 会话开始 ===" in line:
+            session_start_time = ts
+            continue
+
+        if "=== 节点进入 ===" in line:
+            # 格式: ... [INFO] [node_name] === 节点进入 ===
+            # 节点名在第二个 [] 中
+            node = _extract_node_name(line)
+            if node:
+                current_node = node
+                last_entry_time = ts
+                result["running"] = True
+
+        elif "=== 节点退出 →" in line:
+            node = _extract_node_name(line)
+            if node:
+                last_exit_time = ts
+                if "(重试)" in line:
+                    node_retries[node] = node_retries.get(node, 0) + 1
+
+        elif "ERROR:" in line:
+            err_idx = line.find("ERROR: ")
+            if err_idx >= 0:
+                last_error_msg = line[err_idx + 7:][:200]
+
+    # 组装结果
+    result["current_node"] = current_node
+    result["retries"] = node_retries
+    result["last_error"] = last_error_msg
+
+    # 进度百分比
+    if current_node and current_node in _PIPELINE_STEPS:
+        idx = _PIPELINE_STEPS.index(current_node)
+        result["progress_pct"] = round((idx + 1) / len(_PIPELINE_STEPS) * 100)
+
+    # 运行时长
+    if session_start_time and last_entry_time:
+        result["elapsed_sec"] = int((last_entry_time - session_start_time).total_seconds())
+
+    # 判断是否卡住（某节点重试 >= 3 次）
+    stuck_nodes = [n for n, cnt in node_retries.items() if cnt >= 3]
+    if stuck_nodes:
+        result["stuck"] = True
+        result["stuck_nodes"] = stuck_nodes
+    else:
+        result["stuck"] = False
+
+    return result
+
+
+def _extract_node_name(line: str) -> str | None:
+    """从日志行提取节点名。格式: ... [INFO] [node_name] ..."""
+    # 跳过第一个 []（日志级别），提取第二个 []
+    parts = line.split("]")
+    if len(parts) >= 3:
+        # parts[0] = "2026-05-22 03:59:14.158 [INFO"
+        # parts[1] = " [parse_intent"
+        candidate = parts[1].strip().lstrip("[")
+        if candidate in _NODE_ORDER or candidate in ("main",):
+            return candidate
+        # 也可能是子图内部节点
+        if candidate:
+            return candidate
+    return None
+
+
+def print_status() -> None:
+    """打印格式化的状态摘要到终端。"""
+    status = get_status()
+    if not status["running"] and status["current_node"] is None:
+        print("无运行中的会话")
+        return
+
+    node = status["current_node"] or "?"
+    pct = status["progress_pct"]
+    elapsed = status["elapsed_sec"]
+    mins, secs = divmod(elapsed, 60)
+
+    bar_len = 30
+    filled = int(bar_len * pct / 100)
+    bar = "#" * filled + "-" * (bar_len - filled)
+
+    print(f"状态: {'运行中' if status['running'] else '已停止'}")
+    print(f"进度: [{bar}] {pct}%  当前节点: {node}")
+    print(f"耗时: {mins}m {secs}s  会话: {status['session_dir']}")
+
+    if status.get("stuck"):
+        print(f"警告: 节点卡住 {status['stuck_nodes']} (重试次数过多)")
+
+    if status["retries"]:
+        retry_str = ", ".join(f"{n}={c}次" for n, c in status["retries"].items())
+        print(f"重试: {retry_str}")
+
+    if status["last_error"]:
+        print(f"最后错误: {status['last_error'][:150]}")
+
+
 def _summarize_update(update: dict[str, Any]) -> str:
     """将 Command.update 摘要为一行字符串。"""
     parts = []

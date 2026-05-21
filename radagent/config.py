@@ -14,6 +14,7 @@ DEEPSEEK_MODEL = "deepseek-chat"
 GEANT4_INSTALL = Path("/usr/local/geant4")
 GEANT4_SOURCE_SCRIPT = "/etc/profile.d/geant4.sh"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+DATA_DIR = Path(__file__).parent / "data"
 WORKSPACE_DIR = Path(__file__).parent.parent / "workspace"
 
 # Build

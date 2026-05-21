@@ -2,6 +2,7 @@
 
 import csv
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -257,13 +258,27 @@ def build_geant4(source_dir: str) -> BuildResult:
         return BuildResult(source_dir=source_dir, compile_ok=False, compile_error=str(e))
 
 
+def _auto_thread_count() -> int:
+    """自动检测 CPU 核心数并选择合理的线程数"""
+    total = os.cpu_count() or 4
+    if total <= 2:
+        return total
+    if total <= 8:
+        return max(1, total - 1)
+    return total - 2
+
+
 def run_geant4(executable_path: str, num_events: int) -> BuildResult:
-    """运行 Geant4 仿真（batch mode）"""
+    """运行 Geant4 仿真（batch mode，多线程）"""
     if not executable_path or not Path(executable_path).exists():
         logger.error("可执行文件不存在: %s", executable_path)
         return BuildResult(run_ok=False, run_stderr=f"可执行文件不存在: {executable_path}")
 
+    n_threads = _auto_thread_count()
+    logger.info("CPU 核心数: %d, 使用线程数: %d", os.cpu_count() or 0, n_threads)
+
     macro_content = (
+        f"/run/numberOfThreads {n_threads}\n"
         f"/run/initialize\n"
         f"/tracking/storeTrajectory 1\n"
         f"/run/beamOn {num_events}\n"

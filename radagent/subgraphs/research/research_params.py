@@ -12,7 +12,7 @@ from radagent.schemas import ParticleSource, SimulationScenario
 from radagent.tools.knowledge import recommend_physics
 from radagent.tools.orbit_query import query_radiation_environment
 from radagent.tools.web_search import search_parameter_recommendation
-from radagent.subgraphs.state import ResearchState
+from radagent.subgraphs.research.state import ResearchState
 
 try:
     from langchain_openai import ChatOpenAI

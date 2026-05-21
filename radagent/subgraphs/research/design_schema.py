@@ -9,7 +9,7 @@ from langgraph.types import Command, interrupt
 from radagent.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from radagent.log import log_node_entry, log_node_exit, log_info, log_error, log_llm_call
 from radagent.schemas import OrbitEnvironment, ShieldGeometry, ShieldLayer
-from radagent.subgraphs.state import ResearchState
+from radagent.subgraphs.research.state import ResearchState
 from radagent.tools.knowledge import try_lookup_material
 
 try:
@@ -49,16 +49,48 @@ _NODE = "design_schema"
 
 
 def _strip_markdown(content: str) -> str:
+    """从 LLM 输出中提取 JSON。处理多种 markdown 包裹格式。"""
+    import re
+    # 情况 1: 以 ``` 开头
     if content.startswith("```"):
         content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        return content
+    # 情况 2: 中间有 ```json ... ``` 包裹
+    m = re.search(r"```(?:json)?\s*\n?(.*?)```", content, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    # 情况 3: 找最外层 { ... }
+    first = content.find("{")
+    last = content.rfind("}")
+    if first >= 0 and last > first:
+        return content[first:last + 1]
     return content
+
+
+# 设计解析最大重试次数（防止无限循环）
+_MAX_DESIGN_RETRIES = 3
+_retry_count = 0
 
 
 def design_schema(state: ResearchState) -> Command[Literal["design_schema", "define_custom", "research_params"]]:
     """LLM 设计多层屏蔽几何 + 轨道环境，未找到的材料交由 define_custom 处理"""
+    global _retry_count
     log_node_entry(_NODE, state)
 
     intent = state.get("intent_data", {})
+    parse_error = state.get("parse_error", "")
+
+    # 检测重试
+    if parse_error and "设计解析失败" in parse_error:
+        _retry_count += 1
+        if _retry_count > _MAX_DESIGN_RETRIES:
+            log_error(_NODE, f"设计解析重试超过 {_MAX_DESIGN_RETRIES} 次，终止")
+            _retry_count = 0
+            update = {"parse_error": f"设计解析失败 {_MAX_DESIGN_RETRIES} 次，请重新描述需求"}
+            log_node_exit(_NODE, "__end__", update)
+            return Command(update=update, goto="__end__")
+    else:
+        _retry_count = 0
 
     prompt = DESIGN_PROMPT.format(intent=json.dumps(intent, ensure_ascii=False))
     response = llm.invoke([HumanMessage(content=prompt)])

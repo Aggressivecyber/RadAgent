@@ -6,12 +6,12 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from radagent.subgraphs.state import ResearchState
-from radagent.subgraphs.parse_intent import parse_intent
-from radagent.subgraphs.design_schema import design_schema
-from radagent.subgraphs.define_custom import define_custom
-from radagent.subgraphs.research_params import research_params
-from radagent.subgraphs.confirm_params import confirm_params
+from radagent.subgraphs.research.state import ResearchState
+from radagent.subgraphs.research.parse_intent import parse_intent
+from radagent.subgraphs.research.design_schema import design_schema
+from radagent.subgraphs.research.define_custom import define_custom
+from radagent.subgraphs.research.research_params import research_params
+from radagent.subgraphs.research.confirm_params import confirm_params
 
 
 def build_research_subgraph():

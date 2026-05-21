@@ -6,7 +6,7 @@ from langgraph.types import Command, interrupt
 
 from radagent.log import log_node_entry, log_node_exit, log_info, log_error
 from radagent.schemas import SimulationPlan
-from radagent.subgraphs.state import ResearchState
+from radagent.subgraphs.research.state import ResearchState
 
 _NODE = "confirm_params"
 
