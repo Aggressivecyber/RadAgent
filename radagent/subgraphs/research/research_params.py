@@ -120,7 +120,7 @@ def _build_user_scenarios(user_scenarios: list[dict]) -> list[SimulationScenario
             else:
                 energy_total = energy_per_nuc
 
-        num_events = us.get("num_events", 100000)
+        num_events = us.get("num_events") or 100000
         physics = recommend_physics(particle, energy_total or 100)
         source_type = us.get("source_type", "parallel_beam")
 
@@ -205,7 +205,7 @@ def _improve_scenarios_from_gate(
                     particle = try_lookup_particle(raw_particle) or raw_particle
                     energy_per_nuc = item.get("energy_per_nucleon_MeV")
                     energy_total = item.get("energy_MeV")
-                    num_events = item.get("num_events", 100000)
+                    num_events = item.get("num_events") or 100000
                     physics = item.get("physics_list", "auto")
 
                     if energy_per_nuc and not energy_total:

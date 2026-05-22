@@ -233,7 +233,7 @@ def _llm_parse_scenarios(feedback: str, n_existing: int) -> list[SimulationScena
 
             energy_per_nuc = item.get("energy_per_nucleon_MeV")
             energy_total = item.get("energy_MeV")
-            num_events = item.get("num_events", 100000)
+            num_events = item.get("num_events") or 100000
             physics = item.get("physics_list", "auto")
 
             if energy_per_nuc and not energy_total:
