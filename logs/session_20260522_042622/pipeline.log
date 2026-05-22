@@ -1,0 +1,38 @@
+2026-05-22 04:26:22.238 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_042622
+2026-05-22 04:26:38.532 [INFO] [main] 用户输入: 10km 5铝板能防护器件吗
+2026-05-22 04:26:38.540 [INFO] [parse_intent] === 节点进入 ===  user_input=10km 5铝板能防护器件吗
+2026-05-22 04:26:39.386 [INFO] [parse_intent] LLM 调用完成 (14 → 272 chars)
+2026-05-22 04:26:39.386 [INFO] [parse_intent] 解析结果: orbit=None, layers=1 层, particles=None, missing=['轨道信息', '粒子类型', '任务时长', '任务用途']
+2026-05-22 04:26:39.386 [INFO] [parse_intent] === 节点退出 → design_schema ===
+2026-05-22 04:26:39.389 [INFO] [design_schema] === 节点进入 ===  user_input=10km 5铝板能防护器件吗
+2026-05-22 04:26:43.934 [INFO] [design_schema] LLM 调用完成 (748 → 795 chars)
+2026-05-22 04:26:43.934 [INFO] [design_schema] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 04:26:43.934 [INFO] [design_schema] 材料查找: 铝 → G4_Al (ρ=2.699)
+2026-05-22 04:26:43.934 [INFO] [design_schema] 材料查找: 聚酰亚胺 → G4_KAPTON (ρ=1.42)
+2026-05-22 04:26:43.934 [INFO] [design_schema] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 04:26:43.934 [INFO] [design_schema] 几何设计: LEO多层屏蔽结构_铝基, 4 层, 敏感体积=敏感体积
+2026-05-22 04:26:43.935 [INFO] [design_schema]   外层结构: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 04:26:43.935 [INFO] [design_schema]   中层屏蔽: 铝 (G4_Al) 5.0 mm [shield]
+2026-05-22 04:26:43.935 [INFO] [design_schema]   内层绝热: 聚酰亚胺 (G4_KAPTON) 1.0 mm [insulation]
+2026-05-22 04:26:43.935 [INFO] [design_schema]   敏感体积: 硅 (G4_Si) 2.0 mm [sensitive]
+2026-05-22 04:26:43.935 [INFO] [design_schema] 轨道: LEO (600.0 km, 45.0 deg)
+2026-05-22 04:26:43.935 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=LEO多层屏蔽结构_铝基
+2026-05-22 04:26:43.937 [INFO] [research_params] === 节点进入 ===  user_input=10km 5铝板能防护器件吗
+2026-05-22 04:26:43.937 [INFO] [research_params] 查询轨道辐射环境: LEO (600.0 km)
+2026-05-22 04:26:43.937 [INFO] [research_params] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 04:26:43.938 [INFO] [research_params] 搜索材料辐射特性: 铝合金, 铝, 聚酰亚胺, 硅
+2026-05-22 04:26:49.094 [INFO] [research_params] 搜索结果长度: 696 字符
+2026-05-22 04:26:49.094 [INFO] [research_params] 生成 6 个仿真场景:
+2026-05-22 04:26:49.094 [INFO] [research_params]   LEO 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 04:26:49.094 [INFO] [research_params]   LEO 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 04:26:49.094 [INFO] [research_params]   LEO 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 04:26:49.095 [INFO] [research_params]   LEO 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 04:26:49.095 [INFO] [research_params]   LEO 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 04:26:49.095 [INFO] [research_params]   LEO 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 04:26:49.095 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 04:26:49.097 [INFO] [confirm_params] === 节点进入 ===  user_input=10km 5铝板能防护器件吗
+2026-05-22 04:26:49.097 [INFO] [confirm_params] 仿真计划已构建: LEO多层屏蔽结构_铝基, 6 场景
+2026-05-22 04:27:57.689 [INFO] [main] 用户决定: yes
+2026-05-22 04:27:57.693 [INFO] [confirm_params] === 节点进入 ===  user_input=10km 5铝板能防护器件吗
+2026-05-22 04:27:57.694 [INFO] [confirm_params] 仿真计划已构建: LEO多层屏蔽结构_铝基, 6 场景
+2026-05-22 04:27:57.694 [INFO] [confirm_params] === 节点退出 → __end__ ===  sim_plan=已设置

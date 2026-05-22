@@ -1,0 +1,11 @@
+2026-05-22 06:15:10.938 [INFO] [parse_intent] === 节点进入 ===  user_input=模拟一颗500km高度、倾角51.6度（类似ISS轨道）的小卫星。屏蔽结构从外到内为：
+2026-05-22 06:15:11.926 [DEBUG] LLM prompt (43 chars):
+模拟一颗500km高度、倾角51.6度（类似ISS轨道）的小卫星。屏蔽结构从外到内为：
+2026-05-22 06:15:11.926 [DEBUG] LLM response (192 chars):
+{
+    "orbit": {"name": "LEO", "altitude_km": 500, "inclination_deg": 51.6},
+    "layers": null,
+    "particles": null,
+    "mission": null,
+    "missing": ["layers", "particles", "mission"]
+}

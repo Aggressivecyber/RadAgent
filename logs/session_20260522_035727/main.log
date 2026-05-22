@@ -1,0 +1,2 @@
+2026-05-22 03:57:27.543 [INFO] 用户输入: exit test
+2026-05-22 03:57:28.271 [INFO] 流执行错误: object of type 'NoneType' has no len()

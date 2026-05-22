@@ -1,0 +1,95 @@
+{
+  "user_input": "模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：1. 3mm铝合金舱体外壳2. 20mm聚乙烯辐射防护层3. 5mm凯夫拉结构层4. 模拟航天员组织的10cm水模体（敏感体积）需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：- 场景A：400MeV/n 碳-12离子- 场景B：600MeV/n 氧-16离子- 场景C：1000MeV/n 硅-28离子- 场景D：1000MeV/n 铁-56离子每个场景跑50万个事件。重点关注：1. 水模体中的总剂量和剂量当量2. 核碎片在屏蔽层中的产生3. 粒子是否穿透到敏感体积4. 各层对重离子的衰减效果横截面大小设为20cm x 20cm。",
+  "parse_error": "[调研门禁] 评分 30/50\n问题:\n  - 轨道参数中 altitude_km 为 0.0，且 proton_flux 和 electron_flux 均为 0，与 '深空' 轨道定义矛盾，无法反映真实深空辐射环境\n  - 所有场景的粒子能量均固定为 100 MeV，未使用能谱分布，无法模拟 GCR 的宽能谱特征（GCR 能量范围从 MeV 到 TeV）\n  - 场景名称声称是 '太阳极小期能谱' 和 '太阳极大期能谱'，但实际仅使用单能粒子，未体现太阳活动周期对能谱的影响\n  - 部分场景使用 QGSP_BIC 物理列表，部分使用 QBBC，但未说明为何对不同离子选择不同列表，且 QBBC 主要用于低能中子应用，不适用于高能 GCR 模拟\n  - 缺少电子、正电子、中子等次级粒子的模拟场景，而 GCR 在屏蔽中会产生大量次级中子\n  - notes 中引用 AE9/AP9 和 LEO 数据，但轨道设置为深空，数据来源与场景不匹配\n  - 水模体厚度 100 mm 作为敏感体积，但未定义剂量或通量输出量，无法评估屏蔽效果\n改进建议:\n  - 修正轨道参数：对于深空任务，应使用 GCR 和 SPE 通量模型（如 ISO 15390 或 CREME96），并设置合理的轨道高度和倾角\n  - 为每个粒子类型引入能谱分布（如使用 GCR 微分能谱公式），而非单能 100 MeV 粒子\n  - 统一物理列表选择：对于高能 GCR 模拟，推荐使用 FTFP_BERT 或 QGSP_BERT_HP，并确保包含电磁和强子过程\n  - 增加电子、正电子、中子场景，以评估次级辐射对舱内剂量的贡献\n  - 明确输出量（如水模体中的吸收剂量、剂量当量或通量），并添加剂量转换因子\n  - 更新 notes 中的引用，使用深空辐射环境模型（如 Badhwar-O'Neill 2014 或 CREME96）\n  - 考虑增加各向同性源或半球源，以模拟真实空间辐射的入射方向分布",
+  "sim_plan": {
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 12,
+    "scenarios": [
+      {
+        "name": "GCR质子-太阳极小期能谱",
+        "particle": "proton",
+        "energy_MeV": 100.0,
+        "num_events": 10000000
+      },
+      {
+        "name": "GCRα粒子-太阳极小期能谱",
+        "particle": "alpha",
+        "energy_MeV": 100.0,
+        "num_events": 5000000
+      },
+      {
+        "name": "GCR碳离子-太阳极小期能谱",
+        "particle": "C_ion",
+        "energy_MeV": 100.0,
+        "num_events": 2000000
+      },
+      {
+        "name": "GCR氧离子-太阳极小期能谱",
+        "particle": "O_ion",
+        "energy_MeV": 100.0,
+        "num_events": 2000000
+      },
+      {
+        "name": "GCR硅离子-太阳极小期能谱",
+        "particle": "Si28",
+        "energy_MeV": 100.0,
+        "num_events": 1000000
+      },
+      {
+        "name": "GCR铁离子-太阳极小期能谱",
+        "particle": "Fe56",
+        "energy_MeV": 100.0,
+        "num_events": 1000000
+      },
+      {
+        "name": "GCR质子-太阳极大期能谱",
+        "particle": "proton",
+        "energy_MeV": 100.0,
+        "num_events": 10000000
+      },
+      {
+        "name": "GCRα粒子-太阳极大期能谱",
+        "particle": "alpha",
+        "energy_MeV": 100.0,
+        "num_events": 5000000
+      },
+      {
+        "name": "GCR碳离子-太阳极大期能谱",
+        "particle": "C_ion",
+        "energy_MeV": 100.0,
+        "num_events": 2000000
+      },
+      {
+        "name": "GCR氧离子-太阳极大期能谱",
+        "particle": "O_ion",
+        "energy_MeV": 100.0,
+        "num_events": 2000000
+      },
+      {
+        "name": "GCR硅离子-太阳极大期能谱",
+        "particle": "Si28",
+        "energy_MeV": 100.0,
+        "num_events": 1000000
+      },
+      {
+        "name": "GCR铁离子-太阳极大期能谱",
+        "particle": "Fe56",
+        "energy_MeV": 100.0,
+        "num_events": 1000000
+      }
+    ]
+  },
+  "build": {
+    "source_dir": "",
+    "executable_path": "",
+    "compile_ok": false,
+    "run_ok": false,
+    "compile_error": ""
+  },
+  "control": {
+    "retry_count": 0,
+    "max_retries": 3,
+    "approved": false
+  }
+}

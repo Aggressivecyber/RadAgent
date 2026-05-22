@@ -1,0 +1,22 @@
+2026-05-22 06:54:12.234 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:54:12.235 [INFO] 仿真计划已构建: 深空C离子多层屏蔽结构, 1 场景
+2026-05-22 06:54:49.321 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:54:49.322 [INFO] 仿真计划已构建: 深空C离子多层屏蔽结构, 1 场景
+2026-05-22 06:54:49.322 [INFO] 用户修改: 仿真场景 (4 个):  - 场景A: C_ion 400 MeV/n (总能量 4800 MeV), 500000 events, FTFP_BERT  - 场景B: O_ion 600 MeV/n (总能量 9600 MeV), 500000 events, FTFP_BERT  - 场景C: Si_ion 1000 MeV/n (总能量 28000 MeV), 500000 events, FTFP_BERT  - 场景D: Fe_ion 1000 MeV/n (总能量 56000 MeV), 500000 events, FTFP_BERT
+2026-05-22 06:54:49.322 [INFO] [confirm_params] === 节点退出 → design_schema ===  parse_error=用户修改: 仿真场景 (4 个):  - 场景A: C_ion 400 MeV/n (总能量 4800 MeV), 500000 events, FTFP_BERT  - 场景B: O_ion 600
+2026-05-22 06:55:00.627 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:55:00.627 [INFO] 仿真计划已构建: 深空C离子多层屏蔽结构, 1 场景
+2026-05-22 06:55:21.178 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:55:21.178 [INFO] 仿真计划已构建: 深空C离子多层屏蔽结构, 1 场景
+2026-05-22 06:55:21.178 [INFO] 用户修改: 4个仿真场景 (4 个):  - 场景A: C_ion 400 MeV/n (总能量 4800 MeV), 500000 events, FTFP_BERT  - 场景B: O_ion 600 MeV/n (总能量 9600 MeV), 500000 events, FTFP_BERT  - 场景C: Si_ion 1000 MeV/n (总能量 28000 MeV), 500000 events, FTFP_BERT  - 场景D: Fe_ion 1000 MeV/n (总能量 56000 MeV), 500000 events, FTFP_BERT
+2026-05-22 06:55:21.178 [INFO] [confirm_params] === 节点退出 → design_schema ===  parse_error=用户修改: 4个仿真场景 (4 个):  - 场景A: C_ion 400 MeV/n (总能量 4800 MeV), 500000 events, FTFP_BERT  - 场景B: O_ion 6
+2026-05-22 06:55:28.422 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:55:28.422 [INFO] 仿真计划已构建: 深空C离子多层屏蔽结构, 1 场景
+2026-05-22 06:55:39.466 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:55:39.466 [INFO] 仿真计划已构建: 深空C离子多层屏蔽结构, 1 场景
+2026-05-22 06:55:39.466 [INFO] [confirm_params] === 节点退出 → __end__ ===  sim_plan=已设置
+2026-05-22 06:56:31.597 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:56:31.598 [INFO] 仿真计划已构建: 深空碳离子多层屏蔽结构, 1 场景
+2026-05-22 06:56:40.156 [INFO] [confirm_params] === 节点进入 ===  user_input=*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_K
+2026-05-22 06:56:40.157 [INFO] 仿真计划已构建: 深空碳离子多层屏蔽结构, 1 场景
+2026-05-22 06:56:40.157 [INFO] [confirm_params] === 节点退出 → __end__ ===  sim_plan=已设置

@@ -1,0 +1,31 @@
+{
+  "user_input": "10000米高空cmos正，5cm铝可以吗",
+  "parse_error": "设计解析失败: 根据用户提供的意图，当前仅指定了单层铝屏蔽（厚度50 mm），轨道高度为10 km（属于亚轨道或近地低空），缺少轨道名称、倾角、粒子类型、任务时长和用途描述。为满足“多层屏蔽几何”的设计要求，我将补充合理假设：轨道为低地球轨道（LEO），倾角取典型值（如51.6°），任务为短期科学探测（1年），粒子类型以电子和质子为主。在此基础上，设计一个三层屏蔽结构（从外到内），兼顾结构支撑、辐射屏蔽和敏感体积保护。\n\n以下是设计的JSON输出：\n\n```json\n{\n    \"geometry_name\": \"LEO多层屏蔽结构\",\n    \"layers\": [\n        {\n            \"name\": \"外层结构\",\n            \"material\": \"铝合金\",\n            \"thickness_mm\": 50,\n            \"role\": \"structure\"\n        },\n        {\n            \"name\": \"中层屏蔽\",\n            \"material\": \"聚乙烯\",\n            \"thickness_mm\": 20,\n            \"role\": \"shield\"\n        },\n        {\n            \"name\": \"内层敏感体积\",\n            \"material\": \"硅\",\n            \"thickness_mm\": 5,\n            \"role\": \"sensitive\"\n        }\n    ],\n    \"size_xy_cm\": 10.0,\n    \"sensitive_volume\": \"内层敏感体积\",\n    \"orbit\": {\n        \"name\": \"LEO\",\n        \"altitude_km\": 10,\n        \"inclination_deg\": 51.6\n    }\n}\n```\n\n**设计说明：**\n- **外层（铝合金，50 mm）**：用户明确指定了铝作为材料且厚度为50 mm，将其作为外层结构层，提供机械支撑和初级辐射屏蔽。\n- **中层（聚乙烯，20 mm）**：作为屏蔽层，聚乙烯富含氢，能有效衰减中子及次级辐射，弥补铝对高能粒子屏蔽的不足。\n- **内层（硅，5 mm）**：作为敏感体积，代表电子器件（如探测器芯片），厚度合理以模拟实际器件尺寸。\n- **轨道**：补充为LEO（低地球轨道），高度10 km（实际LEO通常>160 km，但用户指定10 km，故保留），倾角取典型值51.6°。\n- **尺寸**：保持用户指定的10.0 cm × 10.0 cm。",
+  "intent_data": {
+    "orbit": {
+      "name": null,
+      "altitude_km": 10,
+      "inclination_deg": null
+    },
+    "layers": [
+      {
+        "name": null,
+        "material": "铝",
+        "thickness_mm": 50,
+        "role": "shield"
+      }
+    ],
+    "particles": null,
+    "mission": {
+      "duration_years": null,
+      "purpose": null
+    },
+    "missing": [
+      "轨道名称",
+      "倾角",
+      "粒子类型",
+      "任务时长",
+      "用途描述"
+    ]
+  }
+}

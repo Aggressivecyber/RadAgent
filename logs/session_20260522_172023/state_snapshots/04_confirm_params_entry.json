@@ -1,0 +1,196 @@
+{
+  "user_input": "10km 用1cm铝板40um石墨防护20um的硅基器件",
+  "intent_data": {
+    "orbit": null,
+    "layers": [
+      {
+        "name": "铝板",
+        "material": "Al",
+        "thickness_mm": 10,
+        "role": "shield"
+      },
+      {
+        "name": "石墨",
+        "material": "C",
+        "thickness_mm": 0.04,
+        "role": "shield"
+      },
+      {
+        "name": "硅基器件",
+        "material": "Si",
+        "thickness_mm": 0.02,
+        "role": "sensitive"
+      }
+    ],
+    "particles": [],
+    "scenarios": [],
+    "mission": null,
+    "size_xy_cm": null,
+    "missing": [
+      "orbit",
+      "particles",
+      "scenarios",
+      "mission",
+      "size_xy_cm"
+    ]
+  },
+  "geometry": {
+    "name": "三层屏蔽结构_铝_石墨_硅",
+    "layers": [
+      {
+        "name": "铝板",
+        "material": "Al",
+        "geant4_material": "G4_Al",
+        "thickness_mm": 10.0,
+        "role": "shield"
+      },
+      {
+        "name": "石墨",
+        "material": "C",
+        "geant4_material": "G4_C",
+        "thickness_mm": 0.04,
+        "role": "shield"
+      },
+      {
+        "name": "硅基器件",
+        "material": "Si",
+        "geant4_material": "G4_Si",
+        "thickness_mm": 0.02,
+        "role": "sensitive"
+      }
+    ],
+    "sensitive_volume": "硅基器件"
+  },
+  "orbit": {
+    "name": "LEO",
+    "altitude_km": 600.0,
+    "inclination_deg": 51.6
+  },
+  "sim_plan": {
+    "geometry_name": "三层铝-石墨-硅屏蔽结构",
+    "orbit_name": "LEO",
+    "num_scenarios": 6,
+    "scenarios": [
+      {
+        "name": "LEO 质子 10.0 MeV",
+        "particle": "proton",
+        "energy_MeV": 10.0,
+        "num_events": 100000
+      },
+      {
+        "name": "LEO 质子 63.25 MeV",
+        "particle": "proton",
+        "energy_MeV": 63.25,
+        "num_events": 100000
+      },
+      {
+        "name": "LEO 质子 400.0 MeV",
+        "particle": "proton",
+        "energy_MeV": 400.0,
+        "num_events": 100000
+      },
+      {
+        "name": "LEO 电子 0.5 MeV",
+        "particle": "e-",
+        "energy_MeV": 0.5,
+        "num_events": 100000
+      },
+      {
+        "name": "LEO 电子 1.87 MeV",
+        "particle": "e-",
+        "energy_MeV": 1.87,
+        "num_events": 100000
+      },
+      {
+        "name": "LEO 电子 7.0 MeV",
+        "particle": "e-",
+        "energy_MeV": 7.0,
+        "num_events": 100000
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "LEO质子典型能谱_低能",
+      "particle": "proton",
+      "energy_MeV": 10,
+      "num_events": 100000,
+      "physics_list": "QGSP_BIC_HP"
+    },
+    {
+      "name": "LEO质子典型能谱_中能",
+      "particle": "proton",
+      "energy_MeV": 100,
+      "num_events": 100000,
+      "physics_list": "QGSP_BIC_HP"
+    },
+    {
+      "name": "LEO质子典型能谱_高能",
+      "particle": "proton",
+      "energy_MeV": 400,
+      "num_events": 100000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "LEO电子典型能谱_低能",
+      "particle": "e-",
+      "energy_MeV": 0.5,
+      "num_events": 100000,
+      "physics_list": "G4EmStandardPhysics_option4"
+    },
+    {
+      "name": "LEO电子典型能谱_中能",
+      "particle": "e-",
+      "energy_MeV": 2.0,
+      "num_events": 100000,
+      "physics_list": "G4EmStandardPhysics_option4"
+    },
+    {
+      "name": "LEO电子典型能谱_高能",
+      "particle": "e-",
+      "energy_MeV": 7.0,
+      "num_events": 100000,
+      "physics_list": "G4EmStandardPhysics_option4"
+    },
+    {
+      "name": "LEO质子验证_单能",
+      "particle": "proton",
+      "energy_MeV": 150,
+      "num_events": 50000,
+      "physics_list": "QGSP_BIC_HP"
+    },
+    {
+      "name": "LEO电子验证_单能",
+      "particle": "e-",
+      "energy_MeV": 1.0,
+      "num_events": 50000,
+      "physics_list": "G4EmStandardPhysics_option4"
+    }
+  ],
+  "orbit_env_data": {
+    "orbit": {
+      "altitude_km": 600.0,
+      "inclination_deg": 51.6
+    },
+    "model": "AE9/AP9 典型值 (LEO)",
+    "reference": "Ginet et al., Space Weather, 2013",
+    "data_source": "estimated",
+    "proton": {
+      "integral_flux_cm2_s": 50000.0,
+      "energy_range_MeV": [
+        10,
+        400
+      ],
+      "notes": "LEO 典型质子通量（南大西洋异常区）"
+    },
+    "electron": {
+      "integral_flux_cm2_s": 1000000.0,
+      "energy_range_MeV": [
+        0.5,
+        7
+      ],
+      "notes": "LEO 典型电子通量"
+    }
+  },
+  "search_results_length": 10
+}

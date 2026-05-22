@@ -1,0 +1,131 @@
+{
+  "user_input": "10km 5铝板能防护器件吗",
+  "intent_data": {
+    "orbit": null,
+    "layers": [
+      {
+        "name": null,
+        "material": "铝",
+        "thickness_mm": 5,
+        "role": "shield"
+      }
+    ],
+    "particles": null,
+    "mission": null,
+    "missing": [
+      "轨道信息",
+      "粒子类型",
+      "任务时长",
+      "任务用途"
+    ]
+  },
+  "geometry": {
+    "name": "LEO多层屏蔽结构_铝基",
+    "layers": [
+      {
+        "name": "外层结构",
+        "material": "铝合金",
+        "geant4_material": "G4_Al",
+        "thickness_mm": 3.0,
+        "role": "structure"
+      },
+      {
+        "name": "中层屏蔽",
+        "material": "铝",
+        "geant4_material": "G4_Al",
+        "thickness_mm": 5.0,
+        "role": "shield"
+      },
+      {
+        "name": "内层绝热",
+        "material": "聚酰亚胺",
+        "geant4_material": "G4_KAPTON",
+        "thickness_mm": 1.0,
+        "role": "insulation"
+      },
+      {
+        "name": "敏感体积",
+        "material": "硅",
+        "geant4_material": "G4_Si",
+        "thickness_mm": 2.0,
+        "role": "sensitive"
+      }
+    ],
+    "sensitive_volume": "敏感体积"
+  },
+  "orbit": {
+    "name": "LEO",
+    "altitude_km": 600.0,
+    "inclination_deg": 45.0
+  },
+  "scenarios": [
+    {
+      "name": "LEO 质子 10.0 MeV",
+      "particle": "proton",
+      "energy_MeV": 10.0,
+      "num_events": 100000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "LEO 质子 63.25 MeV",
+      "particle": "proton",
+      "energy_MeV": 63.25,
+      "num_events": 100000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "LEO 质子 400.0 MeV",
+      "particle": "proton",
+      "energy_MeV": 400.0,
+      "num_events": 100000,
+      "physics_list": "QGSP_BERT"
+    },
+    {
+      "name": "LEO 电子 0.5 MeV",
+      "particle": "e-",
+      "energy_MeV": 0.5,
+      "num_events": 100000,
+      "physics_list": "QBBC"
+    },
+    {
+      "name": "LEO 电子 1.87 MeV",
+      "particle": "e-",
+      "energy_MeV": 1.87,
+      "num_events": 100000,
+      "physics_list": "QBBC"
+    },
+    {
+      "name": "LEO 电子 7.0 MeV",
+      "particle": "e-",
+      "energy_MeV": 7.0,
+      "num_events": 100000,
+      "physics_list": "QBBC"
+    }
+  ],
+  "orbit_env_data": {
+    "orbit": {
+      "altitude_km": 600.0,
+      "inclination_deg": 45.0
+    },
+    "model": "AE9/AP9 典型值 (LEO)",
+    "reference": "Ginet et al., Space Weather, 2013",
+    "data_source": "estimated",
+    "proton": {
+      "integral_flux_cm2_s": 50000.0,
+      "energy_range_MeV": [
+        10,
+        400
+      ],
+      "notes": "LEO 典型质子通量（南大西洋异常区）"
+    },
+    "electron": {
+      "integral_flux_cm2_s": 1000000.0,
+      "energy_range_MeV": [
+        0.5,
+        7
+      ],
+      "notes": "LEO 典型电子通量"
+    }
+  },
+  "search_results_length": 696
+}

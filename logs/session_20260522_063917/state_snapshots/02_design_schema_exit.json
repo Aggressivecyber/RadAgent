@@ -1,0 +1,41 @@
+{
+  "geometry": {
+    "name": "深空载人舱段GCR重离子多层屏蔽结构",
+    "layers": [
+      {
+        "name": "铝合金舱体外壳",
+        "material": "Al",
+        "geant4_material": "G4_Al",
+        "thickness_mm": 3.0,
+        "role": "structure"
+      },
+      {
+        "name": "聚乙烯辐射防护层",
+        "material": "C2H4",
+        "geant4_material": "C2H4",
+        "thickness_mm": 20.0,
+        "role": "shield"
+      },
+      {
+        "name": "凯夫拉结构层",
+        "material": "Kevlar",
+        "geant4_material": "G4_KEVLAR",
+        "thickness_mm": 5.0,
+        "role": "structure"
+      },
+      {
+        "name": "水模体",
+        "material": "H2O",
+        "geant4_material": "H2O",
+        "thickness_mm": 100.0,
+        "role": "sensitive"
+      }
+    ],
+    "sensitive_volume": "水模体"
+  },
+  "orbit": {
+    "name": "深空",
+    "altitude_km": 0.0,
+    "inclination_deg": 0.0
+  }
+}

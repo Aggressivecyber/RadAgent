@@ -1,0 +1,17 @@
+{
+  "user_input": "*屏蔽结构（逐层材料、厚度）**：  - 第1层：铝合金舱体外壳（Aluminum, G4_Al），厚度 3.0 mm，密度 2.699 g/cm³，角色：[structure]  - 第2层：聚乙烯辐射防护层（Polyethylene, G4_POLYETHYLENE），厚度 20.0 mm，密度 0.94 g/cm³，角色：[shield]  - 第3层：凯夫拉结构层（Kevlar, G4_KEVLAR），厚度 5.0 mm，密度 1.44 g/cm³，角色：[structure]  - 第4层：水模体（Water, G4_WATER），厚度 100.0 mm，密度 1.0 g/cm³，角色：[sensitive]- **横截面**：20.0 cm × 20.0 cm- **敏感体积**：水模体（第4层）- **轨道环境**：深空（轨道高度 0.0 km，倾角 0.0 deg）- **仿真场景（粒子、能量、事件数）**：  - 场景A：C离子（C_ion），能量 4800 MeV，事件数 500,000",
+  "parse_error": "按照修改意见修改",
+  "sim_plan": {
+    "geometry_name": "深空C离子多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 1,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_MeV": 4800,
+        "num_events": 500000
+      }
+    ]
+  }
+}

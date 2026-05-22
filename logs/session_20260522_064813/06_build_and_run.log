@@ -1,0 +1,219 @@
+2026-05-22 06:48:40.015 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:40.015 [INFO] 开始并发执行 4 个仿真场景
+2026-05-22 06:48:40.034 [INFO]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:48:40.034 [INFO]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:48:40.035 [INFO]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:48:40.035 [INFO]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:48:45.034 [ERROR] ERROR:   [场景C] 运行失败: G4WT8 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Excep
+2026-05-22 06:48:45.034 [ERROR] ERROR: 场景失败: 场景C
+2026-05-22 06:48:46.056 [ERROR] ERROR:   [场景B] 运行失败: G4WT9 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT9 >  **** Track information is not available at this moment
+G4WT9 >  **** Step 
+2026-05-22 06:48:46.056 [ERROR] ERROR: 场景失败: 场景B
+2026-05-22 06:48:47.082 [ERROR] ERROR:   [场景D] 运行失败: G4WT7 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT7 >  **** Track information is not available at this moment
+G4WT7 >  **** Step 
+2026-05-22 06:48:47.082 [ERROR] ERROR: 场景失败: 场景D
+2026-05-22 06:48:48.105 [ERROR] ERROR:   [场景A] 运行失败: G4WT1 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT1 >  **** Track information is not available at this moment
+G4WT1 >  **** Step 
+2026-05-22 06:48:48.106 [ERROR] ERROR: 场景失败: 场景A
+2026-05-22 06:48:48.106 [INFO] [build_and_run] === 节点退出 → parameterize (重试) ===  control(retry=1)
+2026-05-22 06:48:52.922 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，仿真未执行，无任何输出结果。
+  - 结果为空：仿真结果数组为空，无事件数、剂量等任何数据。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量均为0，物理
+2026-05-22 06:48:52.923 [INFO] 开始并发执行 4 个仿真场景
+2026-05-22 06:48:52.945 [INFO]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:48:52.951 [INFO]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:48:52.951 [INFO]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:48:52.952 [INFO]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:48:58.088 [ERROR] ERROR:   [场景C] 运行失败: G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 >  **** Track information is not available at this moment
+G4WT12 >  **** St
+2026-05-22 06:48:58.088 [ERROR] ERROR: 场景失败: 场景C
+2026-05-22 06:48:59.118 [ERROR] ERROR:   [场景B] 运行失败: G4WT10 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT10 >  **** Track information is not available at this moment
+G4WT10 >  **** St
+2026-05-22 06:48:59.118 [ERROR] ERROR: 场景失败: 场景B
+2026-05-22 06:49:00.140 [ERROR] ERROR:   [场景A] 运行失败: G4WT0 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT0 >  **** Track information is not available at this moment
+G4WT0 >  **** Step 
+2026-05-22 06:49:00.140 [ERROR] ERROR: 场景失败: 场景A
+2026-05-22 06:49:01.170 [ERROR] ERROR:   [场景D] 运行失败: G4WT2 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT2 >  **** Track information is not available at this moment
+G4WT2 >  **** Step 
+2026-05-22 06:49:01.170 [ERROR] ERROR: 场景失败: 场景D
+2026-05-22 06:49:01.171 [INFO] [build_and_run] === 节点退出 → parameterize (重试) ===  control(retry=3)
+2026-05-22 06:49:01.172 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:49:01.176 [INFO] 开始并发执行 4 个仿真场景
+2026-05-22 06:49:01.202 [INFO]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:49:01.202 [INFO]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:49:01.206 [INFO]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:49:01.207 [INFO]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:49:09.481 [ERROR] ERROR:   [场景D] 运行失败: G4WT3 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT3 >  **** Track information is not available at this moment
+G4WT3 >  **** Step 
+2026-05-22 06:49:09.481 [ERROR] ERROR: 场景失败: 场景D
+2026-05-22 06:49:10.504 [ERROR] ERROR:   [场景B] 运行失败: G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 >  **** Track information is not available at this moment
+G4WT12 >  **** St
+2026-05-22 06:49:10.504 [ERROR] ERROR: 场景失败: 场景B
+2026-05-22 06:49:11.520 [ERROR] ERROR:   [场景C] 运行失败: G4WT13 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT13 >  **** Track information is not available at this moment
+G4WT13 >  **** St
+2026-05-22 06:49:11.520 [ERROR] ERROR: 场景失败: 场景C
+2026-05-22 06:49:12.544 [ERROR] ERROR:   [场景A] 运行失败: G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 >  **** Track information is not available at this moment
+G4WT12 >  **** St
+2026-05-22 06:49:12.545 [ERROR] ERROR: 场景失败: 场景A
+2026-05-22 06:49:12.546 [INFO] [build_and_run] === 节点退出 → sim_gate ===  build(compile=False, run=False) | results(0 scenarios)
+2026-05-22 06:49:12.547 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok为false，且未提供编译错误信息，无法确认失败原因。
+  - 运行失败：run_ok为false，仿真未执行，无任何输出结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量数据可供分析。
+  - 仿真计划与结果脱节：虽然仿真计划详细定义了深空载人火星飞船多层屏蔽结构及4种高能重离子场景，但实际未产生任
+2026-05-22 06:49:12.548 [INFO] 开始并发执行 4 个仿真场景
+2026-05-22 06:49:12.570 [INFO]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:49:12.571 [INFO]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:49:12.573 [INFO]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:49:12.576 [INFO]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:49:20.907 [ERROR] ERROR:   [场景C] 运行失败: G4WT2 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT2 >  **** Track information is not available at this moment
+G4WT2 >  **** Step 
+2026-05-22 06:49:20.907 [ERROR] ERROR: 场景失败: 场景C
+2026-05-22 06:49:21.931 [ERROR] ERROR:   [场景D] 运行失败: G4WT1 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT1 >  **** Track information is not available at this moment
+G4WT1 >  **** Step 
+2026-05-22 06:49:21.932 [ERROR] ERROR: 场景失败: 场景D
+2026-05-22 06:49:22.957 [ERROR] ERROR:   [场景B] 运行失败: G4WT3 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT3 >  **** Track information is not available at this moment
+G4WT3 >  **** Step 
+2026-05-22 06:49:22.957 [ERROR] ERROR: 场景失败: 场景B
+2026-05-22 06:49:23.985 [ERROR] ERROR:   [场景A] 运行失败: G4WT11 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT11 >  **** Track information is not available at this moment
+G4WT11 >  **** St
+2026-05-22 06:49:23.985 [ERROR] ERROR: 场景失败: 场景A
+2026-05-22 06:49:23.986 [INFO] [build_and_run] === 节点退出 → sim_gate ===  build(compile=False, run=False) | results(0 scenarios)

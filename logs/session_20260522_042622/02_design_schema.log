@@ -1,0 +1,76 @@
+2026-05-22 04:26:39.389 [INFO] [design_schema] === 节点进入 ===  user_input=10km 5铝板能防护器件吗
+2026-05-22 04:26:43.934 [DEBUG] LLM prompt (748 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": null, "layers": [{"name": null, "material": "铝", "thickness_mm": 5, "role": "shield"}], "particles": null, "mission": null, "missing": ["轨道信息", "粒子类型", "任务时长", "任务用途"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 04:26:43.934 [DEBUG] LLM response (795 chars):
+{
+    "geometry_name": "LEO多层屏蔽结构_铝基",
+    "layers": [
+        {
+            "name": "外层结构",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层屏蔽",
+            "material": "铝",
+            "thickness_mm": 5.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层绝热",
+            "material": "聚酰亚胺",
+            "thickness_mm": 1.0,
+            "role": "insulation"
+        },
+        {
+            "name": "敏感体积",
+            "material": "硅",
+            "thickness_mm": 2.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积",
+    "orbit": {
+        "name": "LEO",
+        "altitude_km": 600,
+        "inclination_deg": 45
+    }
+}
+2026-05-22 04:26:43.934 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 04:26:43.934 [INFO] 材料查找: 铝 → G4_Al (ρ=2.699)
+2026-05-22 04:26:43.934 [INFO] 材料查找: 聚酰亚胺 → G4_KAPTON (ρ=1.42)
+2026-05-22 04:26:43.934 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 04:26:43.934 [INFO] 几何设计: LEO多层屏蔽结构_铝基, 4 层, 敏感体积=敏感体积
+2026-05-22 04:26:43.934 [INFO]   外层结构: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 04:26:43.935 [INFO]   中层屏蔽: 铝 (G4_Al) 5.0 mm [shield]
+2026-05-22 04:26:43.935 [INFO]   内层绝热: 聚酰亚胺 (G4_KAPTON) 1.0 mm [insulation]
+2026-05-22 04:26:43.935 [INFO]   敏感体积: 硅 (G4_Si) 2.0 mm [sensitive]
+2026-05-22 04:26:43.935 [INFO] 轨道: LEO (600.0 km, 45.0 deg)
+2026-05-22 04:26:43.935 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=LEO多层屏蔽结构_铝基

@@ -1,0 +1,67 @@
+{
+  "build": {
+    "source_dir": "",
+    "executable_path": "",
+    "compile_ok": true,
+    "run_ok": true,
+    "compile_error": ""
+  },
+  "results": [
+    {
+      "scenario_name": "LEO质子典型能谱_高能",
+      "total_dose_Gy": 0.00017581,
+      "num_events": 100000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    },
+    {
+      "scenario_name": "LEO电子典型能谱_低能",
+      "total_dose_Gy": 1.11491e-05,
+      "num_events": 100000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    },
+    {
+      "scenario_name": "LEO质子典型能谱_中能",
+      "total_dose_Gy": 0.000403064,
+      "num_events": 100000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    },
+    {
+      "scenario_name": "LEO质子典型能谱_低能",
+      "total_dose_Gy": 0.000237947,
+      "num_events": 100000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    },
+    {
+      "scenario_name": "LEO电子验证_单能",
+      "total_dose_Gy": 1.12479e-05,
+      "num_events": 50000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    },
+    {
+      "scenario_name": "LEO电子典型能谱_中能",
+      "total_dose_Gy": 4.52957e-05,
+      "num_events": 100000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    },
+    {
+      "scenario_name": "LEO质子验证_单能",
+      "total_dose_Gy": 0.000148679,
+      "num_events": 50000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    },
+    {
+      "scenario_name": "LEO电子典型能谱_高能",
+      "total_dose_Gy": 0.000132801,
+      "num_events": 100000,
+      "peak_layer": "铝板",
+      "penetrated": true
+    }
+  ]
+}

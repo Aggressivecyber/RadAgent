@@ -1,0 +1,46 @@
+{
+  "user_input": "模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：\n1. 3mm铝合金舱体外壳\n2. 20mm聚乙烯辐射防护层\n3. 5mm凯夫拉结构层\n4. 模拟航天员组织的10cm水模体（敏感体积）\n需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：\n- 场景A：400MeV/n 碳-12离子\n- 场景B：600MeV/n 氧-16离子\n- 场景C：1000MeV/n 硅-28离子\n- 场景D：1000MeV/n 铁-56离子\n每个场景跑50万个事件。重点关注：\n1. 水模体中的总剂量和剂量当量\n2. 核碎片在屏蔽层中的产生\n3. 粒子是否穿透到敏感体积\n4. 各层对重离子的衰减效果\n横截面大小设为20cm x 20cm。",
+  "sim_plan": {
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 4,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_MeV": 4800,
+        "num_events": 500000
+      },
+      {
+        "name": "场景B",
+        "particle": "O_ion",
+        "energy_MeV": 9600,
+        "num_events": 500000
+      },
+      {
+        "name": "场景C",
+        "particle": "Si_ion",
+        "energy_MeV": 28000,
+        "num_events": 500000
+      },
+      {
+        "name": "场景D",
+        "particle": "Fe_ion",
+        "energy_MeV": 56000,
+        "num_events": 500000
+      }
+    ]
+  },
+  "build": {
+    "source_dir": "",
+    "executable_path": "",
+    "compile_ok": false,
+    "run_ok": false,
+    "compile_error": ""
+  },
+  "control": {
+    "retry_count": 0,
+    "max_retries": 3,
+    "approved": false
+  }
+}

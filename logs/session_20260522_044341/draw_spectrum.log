@@ -1,0 +1,3 @@
+2026-05-22 04:47:06.433 [INFO] [draw_spectrum] === 节点进入 ===
+2026-05-22 04:47:06.957 [INFO] 能谱图已保存: /home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV/build/figures/energy_spectrum.png
+2026-05-22 04:47:06.957 [INFO] [draw_spectrum] === 节点退出 → __end__ ===

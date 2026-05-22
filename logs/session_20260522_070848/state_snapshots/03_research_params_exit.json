@@ -1,0 +1,114 @@
+{
+  "scenarios": [
+    {
+      "name": "GCR质子-太阳极小期能谱",
+      "particle": "proton",
+      "energy_MeV": 100.0,
+      "num_events": 10000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCRα粒子-太阳极小期能谱",
+      "particle": "alpha",
+      "energy_MeV": 100.0,
+      "num_events": 5000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCR碳离子-太阳极小期能谱",
+      "particle": "C_ion",
+      "energy_MeV": 100.0,
+      "num_events": 2000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCR氧离子-太阳极小期能谱",
+      "particle": "O_ion",
+      "energy_MeV": 100.0,
+      "num_events": 2000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCR硅离子-太阳极小期能谱",
+      "particle": "Si28",
+      "energy_MeV": 100.0,
+      "num_events": 1000000,
+      "physics_list": "QBBC"
+    },
+    {
+      "name": "GCR铁离子-太阳极小期能谱",
+      "particle": "Fe56",
+      "energy_MeV": 100.0,
+      "num_events": 1000000,
+      "physics_list": "QBBC"
+    },
+    {
+      "name": "GCR质子-太阳极大期能谱",
+      "particle": "proton",
+      "energy_MeV": 100.0,
+      "num_events": 10000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCRα粒子-太阳极大期能谱",
+      "particle": "alpha",
+      "energy_MeV": 100.0,
+      "num_events": 5000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCR碳离子-太阳极大期能谱",
+      "particle": "C_ion",
+      "energy_MeV": 100.0,
+      "num_events": 2000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCR氧离子-太阳极大期能谱",
+      "particle": "O_ion",
+      "energy_MeV": 100.0,
+      "num_events": 2000000,
+      "physics_list": "QGSP_BIC"
+    },
+    {
+      "name": "GCR硅离子-太阳极大期能谱",
+      "particle": "Si28",
+      "energy_MeV": 100.0,
+      "num_events": 1000000,
+      "physics_list": "QBBC"
+    },
+    {
+      "name": "GCR铁离子-太阳极大期能谱",
+      "particle": "Fe56",
+      "energy_MeV": 100.0,
+      "num_events": 1000000,
+      "physics_list": "QBBC"
+    }
+  ],
+  "orbit_env_data": {
+    "orbit": {
+      "altitude_km": 0.0,
+      "inclination_deg": 0.0
+    },
+    "model": "AE9/AP9 典型值 (LEO)",
+    "reference": "Ginet et al., Space Weather, 2013",
+    "data_source": "estimated",
+    "proton": {
+      "integral_flux_cm2_s": 50000.0,
+      "energy_range_MeV": [
+        10,
+        400
+      ],
+      "notes": "LEO 典型质子通量（南大西洋异常区）"
+    },
+    "electron": {
+      "integral_flux_cm2_s": 1000000.0,
+      "energy_range_MeV": [
+        0.5,
+        7
+      ],
+      "notes": "LEO 典型电子通量"
+    }
+  },
+  "search_results_length": 774
+}

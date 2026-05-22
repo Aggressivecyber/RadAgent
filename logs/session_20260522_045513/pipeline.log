@@ -1,0 +1,17 @@
+2026-05-22 04:55:13.305 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_045513
+2026-05-22 04:55:13.305 [INFO] [analyze_data] === 节点进入 ===
+2026-05-22 04:55:25.201 [INFO] [analyze_data] 读取 4622398 步进, 100000 事件
+2026-05-22 04:55:25.629 [INFO] [analyze_data]   外层结构: total=6.9055e+05 MeV, steps=415780
+2026-05-22 04:55:25.630 [INFO] [analyze_data]   中层绝热屏蔽: total=3.8290e+02 MeV, steps=4768
+2026-05-22 04:55:25.630 [INFO] [analyze_data]   内层敏感体积: total=1.7808e+02 MeV, steps=1843
+2026-05-22 04:55:26.905 [INFO] [analyze_data] 异常检测: status=suspicious
+2026-05-22 04:55:26.905 [INFO] [analyze_data] === 节点退出 → draw_geometry ===
+2026-05-22 04:55:27.515 [INFO] [draw_geometry] === 节点进入 ===
+2026-05-22 04:55:27.879 [INFO] [draw_geometry] 器件示意图已保存: /home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV/build/figures/geometry_schematic.png
+2026-05-22 04:55:27.879 [INFO] [draw_geometry] === 节点退出 → draw_heatmap ===
+2026-05-22 04:55:27.879 [INFO] [draw_heatmap] === 节点进入 ===
+2026-05-22 04:55:28.541 [INFO] [draw_heatmap] 热力图已保存: /home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV/build/figures/energy_heatmap.png
+2026-05-22 04:55:28.541 [INFO] [draw_heatmap] === 节点退出 → draw_spectrum ===
+2026-05-22 04:55:28.541 [INFO] [draw_spectrum] === 节点进入 ===
+2026-05-22 04:55:28.963 [INFO] [draw_spectrum] 能谱图已保存: /home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV/build/figures/energy_spectrum.png
+2026-05-22 04:55:28.963 [INFO] [draw_spectrum] === 节点退出 → __end__ ===

@@ -1,0 +1,76 @@
+{
+  "geometry": {
+    "name": "LEO_7Layer_Shield_Comparison",
+    "layers": [
+      {
+        "name": "外层结构",
+        "material": "Al6061",
+        "geant4_material": "Al6061",
+        "thickness_mm": 2.0,
+        "role": "structure"
+      },
+      {
+        "name": "屏蔽层1",
+        "material": "材料1",
+        "geant4_material": "材料1",
+        "thickness_mm": 2.0,
+        "role": "shield"
+      },
+      {
+        "name": "屏蔽层2",
+        "material": "材料2",
+        "geant4_material": "材料2",
+        "thickness_mm": 2.0,
+        "role": "shield"
+      },
+      {
+        "name": "屏蔽层3",
+        "material": "材料3",
+        "geant4_material": "材料3",
+        "thickness_mm": 2.0,
+        "role": "shield"
+      },
+      {
+        "name": "屏蔽层4",
+        "material": "材料4",
+        "geant4_material": "材料4",
+        "thickness_mm": 2.0,
+        "role": "shield"
+      },
+      {
+        "name": "屏蔽层5",
+        "material": "材料5",
+        "geant4_material": "材料5",
+        "thickness_mm": 2.0,
+        "role": "shield"
+      },
+      {
+        "name": "屏蔽层6",
+        "material": "材料6",
+        "geant4_material": "材料6",
+        "thickness_mm": 2.0,
+        "role": "shield"
+      },
+      {
+        "name": "屏蔽层7",
+        "material": "材料7",
+        "geant4_material": "材料7",
+        "thickness_mm": 2.0,
+        "role": "shield"
+      },
+      {
+        "name": "敏感体积",
+        "material": "Si",
+        "geant4_material": "G4_Si",
+        "thickness_mm": 0.5,
+        "role": "sensitive"
+      }
+    ],
+    "sensitive_volume": "敏感体积"
+  },
+  "orbit": {
+    "name": "LEO",
+    "altitude_km": 600.0,
+    "inclination_deg": 30.0
+  }
+}

@@ -1,0 +1,50 @@
+2026-05-22 07:11:27.839 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：1. 3mm铝合金舱体外壳2. 20mm聚乙烯辐射防护层3. 5mm凯夫拉结构层4. 模拟航天员组织的10cm水模体（敏感体积）需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：- 场景A：400MeV/n 碳-12离子- 场景B：600MeV/n 氧-16离子- 场景C：1000MeV/n 硅-28离子- 场景D：1000M
+2026-05-22 07:11:27.839 [INFO] 开始并发执行 12 个仿真场景
+2026-05-22 07:11:27.854 [INFO]   [GCR碳离子-太阳极小期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071127_深空载人舱段多层屏蔽结构_C_ion100MeV
+2026-05-22 07:11:27.854 [INFO]   [GCR质子-太阳极小期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071127_深空载人舱段多层屏蔽结构_proton100MeV
+2026-05-22 07:11:27.855 [INFO]   [GCR氧离子-太阳极小期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071127_深空载人舱段多层屏蔽结构_O_ion100MeV
+2026-05-22 07:11:27.855 [INFO]   [GCRα粒子-太阳极小期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071127_深空载人舱段多层屏蔽结构_alpha100MeV
+2026-05-22 07:16:31.292 [ERROR] ERROR:   [GCR碳离子-太阳极小期能谱] 运行失败: 仿真运行超时
+2026-05-22 07:16:31.300 [INFO]   [GCR硅离子-太阳极小期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071631_深空载人舱段多层屏蔽结构_Si28100MeV
+2026-05-22 07:16:31.304 [ERROR] ERROR: 场景失败: GCR碳离子-太阳极小期能谱
+2026-05-22 07:16:31.867 [ERROR] ERROR:   [GCRα粒子-太阳极小期能谱] 运行失败: 仿真运行超时
+2026-05-22 07:16:31.868 [ERROR] ERROR: 场景失败: GCRα粒子-太阳极小期能谱
+2026-05-22 07:16:31.870 [INFO]   [GCR铁离子-太阳极小期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071631_深空载人舱段多层屏蔽结构_Fe56100MeV
+2026-05-22 07:16:32.205 [ERROR] ERROR:   [GCR氧离子-太阳极小期能谱] 运行失败: 仿真运行超时
+2026-05-22 07:16:32.205 [ERROR] ERROR: 场景失败: GCR氧离子-太阳极小期能谱
+2026-05-22 07:16:32.208 [INFO]   [GCR质子-太阳极大期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071632_深空载人舱段多层屏蔽结构_proton100MeV
+2026-05-22 07:16:32.387 [ERROR] ERROR:   [GCR质子-太阳极小期能谱] 运行失败: 仿真运行超时
+2026-05-22 07:16:32.387 [ERROR] ERROR: 场景失败: GCR质子-太阳极小期能谱
+2026-05-22 07:16:32.390 [INFO]   [GCRα粒子-太阳极大期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071632_深空载人舱段多层屏蔽结构_alpha100MeV
+2026-05-22 07:16:37.466 [ERROR] ERROR:   [GCR硅离子-太阳极小期能谱] 运行失败: G4WT10 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT10 >  **** Track information is not available at this moment
+G4WT10 >  **** St
+2026-05-22 07:16:37.467 [ERROR] ERROR: 场景失败: GCR硅离子-太阳极小期能谱
+2026-05-22 07:16:37.471 [INFO]   [GCR碳离子-太阳极大期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071637_深空载人舱段多层屏蔽结构_C_ion100MeV
+2026-05-22 07:16:38.492 [ERROR] ERROR:   [GCR铁离子-太阳极小期能谱] 运行失败: G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 >  **** Track information is not available at this moment
+G4WT12 >  **** St
+2026-05-22 07:16:38.498 [ERROR] ERROR: 场景失败: GCR铁离子-太阳极小期能谱
+2026-05-22 07:16:38.503 [INFO]   [GCR氧离子-太阳极大期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071638_深空载人舱段多层屏蔽结构_O_ion100MeV
+2026-05-22 07:17:18.927 [ERROR] ERROR:   [GCR质子-太阳极大期能谱] 运行失败: 
+2026-05-22 07:17:18.928 [ERROR] ERROR:   [GCRα粒子-太阳极大期能谱] 运行失败: 
+2026-05-22 07:17:18.929 [ERROR] ERROR:   [GCR碳离子-太阳极大期能谱] 运行失败: 
+2026-05-22 07:17:18.930 [ERROR] ERROR:   [GCR氧离子-太阳极大期能谱] 运行失败: 
+2026-05-22 07:17:18.936 [INFO]   [GCR硅离子-太阳极大期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071718_深空载人舱段多层屏蔽结构_Si28100MeV
+2026-05-22 07:17:18.937 [INFO]   [GCR铁离子-太阳极大期能谱] 渲染完成: /home/rylan/RadAgent/workspace/20260522_071718_深空载人舱段多层屏蔽结构_Fe56100MeV
+2026-05-22 07:17:19.940 [ERROR] ERROR:   [GCR铁离子-太阳极大期能谱] 编译失败: make[2]: *** [CMakeFiles/radg4_sim.dir/build.make:118: CMakeFiles/radg4_sim.dir/src/EventAction.cc.o] 中断
+make[2]: *** [CMakeFiles/radg4_sim.dir/build.make:90: CMakeFiles/radg4_sim.dir/src/ActionInitialization.cc.o] 中断
+make[2]: *** [CMakeFiles/radg4_sim.dir/build.make:146: CMakeFiles/radg4_sim.dir/sr
+2026-05-22 07:17:19.940 [ERROR] ERROR:   [GCR硅离子-太阳极大期能谱] 编译失败: make[2]: *** [CMakeFiles/radg4_sim.dir/build.make:104: CMakeFiles/radg4_sim.dir/src/DetectorConstruction.cc.o] 中断
+make[2]: *** [CMakeFiles/radg4_sim.dir/build.make:160: CMakeFiles/radg4_sim.dir/src/SteppingAction.cc.o] 中断
+make[2]: *** [CMakeFiles/radg4_sim.dir/build.make:76: CMakeFiles/radg4_sim.dir

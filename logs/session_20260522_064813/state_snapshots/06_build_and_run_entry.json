@@ -1,0 +1,47 @@
+{
+  "user_input": "模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：\n1. 3mm铝合金舱体外壳\n2. 20mm聚乙烯辐射防护层\n3. 5mm凯夫拉结构层\n4. 模拟航天员组织的10cm水模体（敏感体积）\n需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：\n- 场景A：400MeV/n 碳-12离子\n- 场景B：600MeV/n 氧-16离子\n- 场景C：1000MeV/n 硅-28离子\n- 场景D：1000MeV/n 铁-56离子\n每个场景跑50万个事件。重点关注：\n1. 水模体中的总剂量和剂量当量\n2. 核碎片在屏蔽层中的产生\n3. 粒子是否穿透到敏感体积\n4. 各层对重离子的衰减效果\n横截面大小设为20cm x 20cm。",
+  "parse_error": "[sim_gate] 评分 0/50\n问题:\n  - 编译失败：compile_ok为false，且未提供编译错误信息，无法确认失败原因。\n  - 运行失败：run_ok为false，仿真未执行，无任何输出结果。\n  - 结果为空：仿真结果数组为空，无任何事件数据或剂量数据可供分析。\n  - 仿真计划与结果脱节：虽然仿真计划详细定义了深空载人火星飞船多层屏蔽结构及4种高能重离子场景，但实际未产生任何仿真输出。\n  - 参考知识不匹配：提供的参考知识涉及Geant4应用开发示例（Hadr10、FissionFragment等），但未直接关联到当前仿真计划的物理列表（FTFP_BERT）或深空辐射屏蔽验证。\n改进建议:\n  - 检查编译环境：确认Geant4安装路径、库依赖及CMake配置是否正确，修复编译错误后重新编译。\n  - 检查运行配置：确保可执行文件路径正确，输入宏文件或参数设置无误，并检查是否有权限或资源限制导致运行中断。\n  - 验证仿真计划可执行性：确认粒子类型（如C_ion、O_ion）和能量（如4800 MeV）在FTFP_BERT物理列表下是否被支持，以及几何体定义（如20 cm x 20 cm尺寸、100 mm水模体）是否合理。\n  - 增加调试输出：在仿真代码中添加事件计数、能量沉积等中间输出，以便定位运行失败的具体步骤。\n  - 参考官方示例：建议参考Geant4示例中的extended/electromagnetic/TestEm系列或hadronic/Hadr00，验证基本编译和运行流程。",
+  "sim_plan": {
+    "geometry_name": "深空载人火星飞船多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 4,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_MeV": 4800,
+        "num_events": 500000
+      },
+      {
+        "name": "场景B",
+        "particle": "O_ion",
+        "energy_MeV": 9600,
+        "num_events": 500000
+      },
+      {
+        "name": "场景C",
+        "particle": "Si_ion",
+        "energy_MeV": 28000,
+        "num_events": 500000
+      },
+      {
+        "name": "场景D",
+        "particle": "Fe_ion",
+        "energy_MeV": 56000,
+        "num_events": 500000
+      }
+    ]
+  },
+  "build": {
+    "source_dir": "",
+    "executable_path": "",
+    "compile_ok": false,
+    "run_ok": false,
+    "compile_error": ""
+  },
+  "control": {
+    "retry_count": 3,
+    "max_retries": 3,
+    "approved": false
+  }
+}

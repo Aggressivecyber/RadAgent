@@ -1,0 +1,2 @@
+2026-05-22 04:13:18.657 [INFO] 用户输入: 10km高度5cm能防护吗
+2026-05-22 04:13:24.000 [INFO] 流执行错误: module 'spacepy.ae9ap9' has no attribute '_run_ae9ap9'

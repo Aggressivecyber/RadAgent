@@ -1,0 +1,3 @@
+2026-05-22 04:47:05.616 [INFO] [draw_geometry] === 节点进入 ===
+2026-05-22 04:47:05.937 [INFO] 器件示意图已保存: /home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV/build/figures/geometry_schematic.png
+2026-05-22 04:47:05.937 [INFO] [draw_geometry] === 节点退出 → draw_heatmap ===

@@ -1,0 +1,49 @@
+{
+  "user_input": "模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：\n1. 3mm铝合金舱体外壳\n2. 20mm聚乙烯辐射防护层\n3. 5mm凯夫拉结构层\n4. 模拟航天员组织的10cm水模体（敏感体积）\n需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：\n- 场景A：400MeV/n 碳-12离子\n- 场景B：600MeV/n 氧-16离子\n- 场景C：1000MeV/n 硅-28离子\n- 场景D：1000MeV/n 铁-56离子\n每个场景跑50万个事件。重点关注：\n1. 水模体中的总剂量和剂量当量\n2. 核碎片在屏蔽层中的产生\n3. 粒子是否穿透到敏感体积\n4. 各层对重离子的衰减效果\n横截面大小设为20cm x 20cm。",
+  "parse_error": "[sim_gate] 评分 0/50\n问题:\n  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。\n  - 运行失败：run_ok 为 false，且无标准输出或错误输出，仿真未执行。\n  - 结果为空：仿真结果数组为空，无任何事件或剂量数据可供分析。\n  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量设为0，不符合深空实际辐射环境。\n  - 场景中使用的粒子（C、O、Si、Fe离子）能量高达400-1000 MeV/n，但物理列表仅使用FTFP_BERT，未包含针对重离子核反应的必要模型（如QGSP_BIC_HP或INCL++），可能导致核碎片模拟不准确。\n  - 敏感体积（水模体）厚度达100 mm，但未定义任何剂量记录或能量沉积输出，无法评估穿透情况。\n改进建议:\n  - 修复编译错误，确保Geant4项目正确链接并生成可执行文件。\n  - 检查运行环境配置，确保输入文件、宏命令和资源路径正确。\n  - 在仿真计划中增加敏感体积的能量沉积或通量统计（如使用G4MultiFunctionalDetector或UserSteppingAction）。\n  - 根据实际深空任务（如火星转移轨道）更新辐射源模型，包括银河宇宙射线（GCR）能谱和太阳粒子事件（SPE）通量。\n  - 对于重离子模拟，建议使用更完整的物理列表（如QGSP_BIC_HP_EMZ或FTFP_INCLXX_HP），并启用核碎裂和电磁级联过程。\n  - 重新设计仿真场景，确保粒子能量、方向与屏蔽层几何匹配，并设置足够的事件数（当前50万事件对于重离子穿透统计可能不足）。",
+  "sim_plan": {
+    "geometry_name": "深空载人火星飞船多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 4,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_MeV": 4800,
+        "num_events": 500000
+      },
+      {
+        "name": "场景B",
+        "particle": "O_ion",
+        "energy_MeV": 9600,
+        "num_events": 500000
+      },
+      {
+        "name": "场景C",
+        "particle": "Si_ion",
+        "energy_MeV": 28000,
+        "num_events": 500000
+      },
+      {
+        "name": "场景D",
+        "particle": "Fe_ion",
+        "energy_MeV": 56000,
+        "num_events": 500000
+      }
+    ]
+  },
+  "build": {
+    "source_dir": "",
+    "executable_path": "",
+    "compile_ok": false,
+    "run_ok": false,
+    "compile_error": ""
+  },
+  "control": {
+    "retry_count": 0,
+    "max_retries": 3,
+    "approved": true
+  },
+  "report_length": 2492,
+  "report_preview": "好的，作为航天辐照仿真报告撰写专家，我将根据您提供的仿真参数和结果，生成一份专业、结构化的中文报告。\n\n---\n\n# 航天器辐照仿真报告\n\n## 1. 仿真配置\n\n- **屏蔽结构（逐层材料、厚度）**:\n    1.  **铝合金舱体外壳**: 材料: 铝合金 (G4_Al), 厚度: 3.0 mm, 密度: 2.699 g/cm³, 角色: [structure]\n    2.  **聚乙烯辐射防护层**: 材料: 聚乙烯 (G4_POLYETHYLENE), 厚度: 20.0 mm, 密度: 0.94 g/cm³, 角色: [shield]\n    3.  **凯夫拉结构层**: 材料: 凯夫拉 (G4_KEVLAR), 厚度: 5.0 mm, 密度: 1.44 g/cm³, 角色: [structure]\n    4.  **水模体**: 材料: 水 (G4_WATER), 厚度: 100.0 mm, 密度: 1.0 g/cm³, 角色: [sensitive]\n    - **几何尺寸**: 横截面: 20.0 cm x 20.0 cm\n    - **敏感体积**: 水模体"
+}

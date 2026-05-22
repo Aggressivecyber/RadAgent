@@ -1,0 +1,33 @@
+{
+  "sim_plan": {
+    "geometry_name": "深空载人火星任务多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 4,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_MeV": 4800,
+        "num_events": 500000
+      },
+      {
+        "name": "场景B",
+        "particle": "O_ion",
+        "energy_MeV": 9600,
+        "num_events": 500000
+      },
+      {
+        "name": "场景C",
+        "particle": "Si_ion",
+        "energy_MeV": 28000,
+        "num_events": 500000
+      },
+      {
+        "name": "场景D",
+        "particle": "Fe_ion",
+        "energy_MeV": 56000,
+        "num_events": 500000
+      }
+    ]
+  }
+}

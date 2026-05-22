@@ -1,0 +1,13 @@
+2026-05-22 04:29:11.809 [INFO] [research_params] === 节点进入 ===  user_input=10km高度5cm铝能防护吗
+2026-05-22 04:29:11.809 [INFO] 查询轨道辐射环境: LEO (10.0 km)
+2026-05-22 04:29:11.809 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 04:29:11.809 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 硅
+2026-05-22 04:29:15.420 [INFO] 搜索结果长度: 776 字符
+2026-05-22 04:29:15.421 [INFO] 生成 6 个仿真场景:
+2026-05-22 04:29:15.421 [INFO]   LEO 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 04:29:15.421 [INFO]   LEO 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 04:29:15.421 [INFO]   LEO 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 04:29:15.421 [INFO]   LEO 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 04:29:15.421 [INFO]   LEO 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 04:29:15.421 [INFO]   LEO 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 04:29:15.421 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)

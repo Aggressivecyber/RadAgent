@@ -1,0 +1,33 @@
+{
+  "sim_plan": {
+    "geometry_name": "深空载人飞船多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 4,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "碳-12",
+        "energy_MeV": 400,
+        "num_events": 500000
+      },
+      {
+        "name": "场景B",
+        "particle": "氧-16",
+        "energy_MeV": 600,
+        "num_events": 500000
+      },
+      {
+        "name": "场景C",
+        "particle": "硅-28",
+        "energy_MeV": 1000,
+        "num_events": 500000
+      },
+      {
+        "name": "场景D",
+        "particle": "铁-56",
+        "energy_MeV": 1000,
+        "num_events": 500000
+      }
+    ]
+  }
+}

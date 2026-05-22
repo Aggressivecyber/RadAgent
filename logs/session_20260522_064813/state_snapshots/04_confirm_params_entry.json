@@ -1,0 +1,175 @@
+{
+  "user_input": "模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：\n1. 3mm铝合金舱体外壳\n2. 20mm聚乙烯辐射防护层\n3. 5mm凯夫拉结构层\n4. 模拟航天员组织的10cm水模体（敏感体积）\n需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：\n- 场景A：400MeV/n 碳-12离子\n- 场景B：600MeV/n 氧-16离子\n- 场景C：1000MeV/n 硅-28离子\n- 场景D：1000MeV/n 铁-56离子\n每个场景跑50万个事件。重点关注：\n1. 水模体中的总剂量和剂量当量\n2. 核碎片在屏蔽层中的产生\n3. 粒子是否穿透到敏感体积\n4. 各层对重离子的衰减效果\n横截面大小设为20cm x 20cm。",
+  "intent_data": {
+    "orbit": {
+      "name": "深空",
+      "altitude_km": null,
+      "inclination_deg": null
+    },
+    "layers": [
+      {
+        "name": "铝合金舱体外壳",
+        "material": "铝合金",
+        "thickness_mm": 3,
+        "role": "structure"
+      },
+      {
+        "name": "聚乙烯辐射防护层",
+        "material": "聚乙烯",
+        "thickness_mm": 20,
+        "role": "shield"
+      },
+      {
+        "name": "凯夫拉结构层",
+        "material": "凯夫拉",
+        "thickness_mm": 5,
+        "role": "structure"
+      },
+      {
+        "name": "水模体",
+        "material": "水",
+        "thickness_mm": 100,
+        "role": "sensitive"
+      }
+    ],
+    "particles": [
+      "碳-12离子",
+      "氧-16离子",
+      "硅-28离子",
+      "铁-56离子"
+    ],
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "碳-12离子",
+        "energy_per_nucleon_MeV": 400,
+        "energy_MeV": null,
+        "num_events": 500000
+      },
+      {
+        "name": "场景B",
+        "particle": "氧-16离子",
+        "energy_per_nucleon_MeV": 600,
+        "energy_MeV": null,
+        "num_events": 500000
+      },
+      {
+        "name": "场景C",
+        "particle": "硅-28离子",
+        "energy_per_nucleon_MeV": 1000,
+        "energy_MeV": null,
+        "num_events": 500000
+      },
+      {
+        "name": "场景D",
+        "particle": "铁-56离子",
+        "energy_per_nucleon_MeV": 1000,
+        "energy_MeV": null,
+        "num_events": 500000
+      }
+    ],
+    "mission": {
+      "duration_years": null,
+      "purpose": "深空载人飞船前往火星"
+    },
+    "size_xy_cm": 20,
+    "missing": [
+      "mission.duration_years"
+    ]
+  },
+  "geometry": {
+    "name": "深空载人火星飞船多层屏蔽结构",
+    "layers": [
+      {
+        "name": "铝合金舱体外壳",
+        "material": "铝合金",
+        "geant4_material": "G4_Al",
+        "thickness_mm": 3.0,
+        "role": "structure"
+      },
+      {
+        "name": "聚乙烯辐射防护层",
+        "material": "聚乙烯",
+        "geant4_material": "G4_POLYETHYLENE",
+        "thickness_mm": 20.0,
+        "role": "shield"
+      },
+      {
+        "name": "凯夫拉结构层",
+        "material": "凯夫拉",
+        "geant4_material": "G4_KEVLAR",
+        "thickness_mm": 5.0,
+        "role": "structure"
+      },
+      {
+        "name": "水模体",
+        "material": "水",
+        "geant4_material": "G4_WATER",
+        "thickness_mm": 100.0,
+        "role": "sensitive"
+      }
+    ],
+    "sensitive_volume": "水模体"
+  },
+  "orbit": {
+    "name": "深空",
+    "altitude_km": 0.0,
+    "inclination_deg": 0.0
+  },
+  "scenarios": [
+    {
+      "name": "场景A",
+      "particle": "C_ion",
+      "energy_MeV": 4800,
+      "num_events": 500000,
+      "physics_list": "FTFP_BERT"
+    },
+    {
+      "name": "场景B",
+      "particle": "O_ion",
+      "energy_MeV": 9600,
+      "num_events": 500000,
+      "physics_list": "FTFP_BERT"
+    },
+    {
+      "name": "场景C",
+      "particle": "Si_ion",
+      "energy_MeV": 28000,
+      "num_events": 500000,
+      "physics_list": "FTFP_BERT"
+    },
+    {
+      "name": "场景D",
+      "particle": "Fe_ion",
+      "energy_MeV": 56000,
+      "num_events": 500000,
+      "physics_list": "FTFP_BERT"
+    }
+  ],
+  "orbit_env_data": {
+    "orbit": {
+      "altitude_km": 0.0,
+      "inclination_deg": 0.0
+    },
+    "model": "AE9/AP9 典型值 (LEO)",
+    "reference": "Ginet et al., Space Weather, 2013",
+    "data_source": "estimated",
+    "proton": {
+      "integral_flux_cm2_s": 50000.0,
+      "energy_range_MeV": [
+        10,
+        400
+      ],
+      "notes": "LEO 典型质子通量（南大西洋异常区）"
+    },
+    "electron": {
+      "integral_flux_cm2_s": 1000000.0,
+      "energy_range_MeV": [
+        0.5,
+        7
+      ],
+      "notes": "LEO 典型电子通量"
+    }
+  },
+  "search_results_length": 774
+}

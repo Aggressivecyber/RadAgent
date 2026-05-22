@@ -1,0 +1,241 @@
+2026-05-22 06:25:53.371 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:25:53.372 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:25:53.372 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:25:53.372 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 硅
+2026-05-22 06:25:57.673 [INFO] 搜索结果长度: 762 字符
+2026-05-22 06:25:57.673 [INFO] 自动生成 6 个场景:
+2026-05-22 06:25:57.673 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:25:57.673 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:25:57.673 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:25:57.673 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:25:57.673 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:25:57.673 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:25:57.673 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:26:02.077 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:26:02.078 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:26:02.078 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:26:02.078 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 铝合金
+2026-05-22 06:26:04.977 [INFO] 搜索结果长度: 821 字符
+2026-05-22 06:26:04.978 [INFO] 自动生成 6 个场景:
+2026-05-22 06:26:04.978 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:04.978 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:04.978 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:26:04.978 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:26:04.978 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:26:04.978 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:26:04.978 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:26:16.615 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=自定义定义解析失败: 好的，作为材料科学和核物理专家，我将为您提供“Al 7075-T6”和“HDPE”这两种材料的自定义定义，用于 Geant4 模拟。
+
+以下是详细的化学组成和粒子定义。
+
+### 1. 材料分析
+
+#### Al 7075-T6
+- **成分**: 这是一种高强度铝合金。其主要成分是铝（Al），并含有锌（Zn）作为主要合金元素，以及少量的镁（Mg）、铜（Cu）等。T6 表示固
+2026-05-22 06:26:16.616 [INFO] 查询轨道辐射环境: 深空 (400000.0 km)
+2026-05-22 06:26:16.616 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (GEO), proton={'integral_flux_cm2_s': 1000.0, 'energy_range_MeV': [10, 400], 'notes': 'GEO 质子通量（太阳质子事件为主）'}, electron={'integral_flux_cm2_s': 10000000.0, 'energy_range_MeV': [0.04, 7], 'notes': 'GEO 电子通量（外辐射带外缘）'}
+2026-05-22 06:26:16.617 [INFO] 搜索材料辐射特性: Al 7075-T6, HDPE, Kapton
+2026-05-22 06:26:19.855 [INFO] 搜索结果长度: 820 字符
+2026-05-22 06:26:19.856 [INFO] 自动生成 6 个场景:
+2026-05-22 06:26:19.856 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:19.856 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:19.856 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:26:19.856 [INFO]   深空 电子 0.04 MeV: e- 0.04 MeV, 100000 events, QBBC
+2026-05-22 06:26:19.856 [INFO]   深空 电子 0.53 MeV: e- 0.53 MeV, 100000 events, QBBC
+2026-05-22 06:26:19.856 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:26:19.856 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:26:23.581 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:26:23.581 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:26:23.582 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:26:23.582 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 硅
+2026-05-22 06:26:24.944 [INFO] 搜索结果长度: 798 字符
+2026-05-22 06:26:24.945 [INFO] 自动生成 6 个场景:
+2026-05-22 06:26:24.945 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:24.945 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:24.945 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:26:24.945 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:26:24.945 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:26:24.945 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:26:24.945 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:26:28.602 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:26:28.605 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:26:28.610 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:26:28.610 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 聚酰亚胺, 硅
+2026-05-22 06:26:32.806 [INFO] 搜索结果长度: 751 字符
+2026-05-22 06:26:32.809 [INFO] 自动生成 6 个场景:
+2026-05-22 06:26:32.810 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:32.810 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:32.810 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:26:32.810 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:26:32.810 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:26:32.810 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:26:32.810 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:26:36.428 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:26:36.428 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:26:36.428 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:26:36.428 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 铝合金, 硅
+2026-05-22 06:26:41.091 [INFO] 搜索结果长度: 856 字符
+2026-05-22 06:26:41.092 [INFO] 自动生成 6 个场景:
+2026-05-22 06:26:41.092 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:41.092 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:41.092 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:26:41.092 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:26:41.092 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:26:41.092 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:26:41.092 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:26:45.128 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:26:45.129 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:26:45.129 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:26:45.129 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 聚酰亚胺
+2026-05-22 06:26:47.248 [INFO] 搜索结果长度: 899 字符
+2026-05-22 06:26:47.248 [INFO] 自动生成 6 个场景:
+2026-05-22 06:26:47.248 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:47.248 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:26:47.248 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:26:47.249 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:26:47.249 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:26:47.249 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:26:47.249 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:26:59.421 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=自定义定义解析失败: 好的，作为材料科学和核物理专家，我将为您处理这个自定义材料的问题。
+
+根据您的要求，对于“铝合金6061-T6”，它不在Geant4 NIST数据库中，需要自定义。以下是其详细的化学组成和物理属性。
+
+**分析：**
+铝合金6061-T6是一种常见的沉淀硬化铝合金。其主要合金元素是镁和硅，形成Mg2Si相。T6状态表示固溶热处理后人工时效。其典型成分（重量百分比）如下：
+- 
+2026-05-22 06:26:59.421 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:26:59.421 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:26:59.421 [INFO] 搜索材料辐射特性: 铝合金6061-T6, 聚乙烯, 硅
+2026-05-22 06:27:01.656 [INFO] 搜索结果长度: 774 字符
+2026-05-22 06:27:01.656 [INFO] 自动生成 6 个场景:
+2026-05-22 06:27:01.656 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:01.656 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:01.656 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:27:01.656 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:27:01.657 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:27:01.657 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:27:01.657 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:27:05.772 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:27:05.773 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:27:05.773 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:27:05.773 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 硅
+2026-05-22 06:27:08.253 [INFO] 搜索结果长度: 776 字符
+2026-05-22 06:27:08.254 [INFO] 自动生成 6 个场景:
+2026-05-22 06:27:08.254 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:08.254 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:08.254 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:27:08.254 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:27:08.254 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:27:08.254 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:27:08.254 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:27:17.616 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=自定义定义解析失败: 好的，作为材料科学和核物理专家，我将为您处理“钛合金”的自定义定义。
+
+钛合金是一个统称，其成分根据具体牌号（如Ti-6Al-4V, Ti-6Al-2Sn-4Zr-2Mo等）而变化。由于您没有指定具体牌号，我将采用最通用、最典型的**Ti-6Al-4V (TC4)** 合金作为代表。这是航空航天和生物医学领域最常用的钛合金。
+
+**分析过程：**
+1.  **材料：钛合金 (
+2026-05-22 06:27:17.617 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:27:17.617 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:27:17.617 [INFO] 搜索材料辐射特性: 钛合金, 聚乙烯, 铝合金, 硅
+2026-05-22 06:27:22.629 [INFO] 搜索结果长度: 725 字符
+2026-05-22 06:27:22.629 [INFO] 自动生成 6 个场景:
+2026-05-22 06:27:22.629 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:22.629 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:22.629 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:27:22.629 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:27:22.629 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:27:22.629 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:27:22.629 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:27:26.626 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:27:26.628 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:27:26.628 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:27:26.628 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 聚酰亚胺, 铝合金, 硅
+2026-05-22 06:27:32.256 [INFO] 搜索结果长度: 751 字符
+2026-05-22 06:27:32.256 [INFO] 自动生成 6 个场景:
+2026-05-22 06:27:32.256 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:32.256 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:32.256 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:27:32.256 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:27:32.256 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:27:32.256 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:27:32.256 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:27:35.900 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:27:35.901 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:27:35.901 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:27:35.901 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 铝合金
+2026-05-22 06:27:38.540 [INFO] 搜索结果长度: 876 字符
+2026-05-22 06:27:38.540 [INFO] 自动生成 6 个场景:
+2026-05-22 06:27:38.540 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:38.541 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:38.541 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:27:38.541 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:27:38.541 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:27:38.541 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:27:38.541 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:27:42.739 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:27:42.739 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:27:42.739 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:27:42.739 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 铝合金
+2026-05-22 06:27:50.621 [INFO] 搜索结果长度: 917 字符
+2026-05-22 06:27:50.621 [INFO] 自动生成 6 个场景:
+2026-05-22 06:27:50.621 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:50.622 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:27:50.622 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:27:50.622 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:27:50.622 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:27:50.622 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:27:50.622 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:27:59.231 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=自定义定义解析失败: 好的，作为材料科学和核物理专家，我将为您处理“钛合金”的自定义定义。
+
+钛合金是一个统称，其成分根据具体牌号（如Ti-6Al-4V, Ti-6Al-2Sn-4Zr-2Mo等）差异很大。由于您没有指定具体牌号，我将采用最通用、最典型的**Ti-6Al-4V (TC4)** 作为代表。这是航空航天和生物医学领域最常用的α-β钛合金。
+
+**分析过程：**
+1.  **材料：钛合金
+2026-05-22 06:27:59.232 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:27:59.233 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:27:59.233 [INFO] 搜索材料辐射特性: 钛合金, 聚乙烯, 铝合金, 硅
+2026-05-22 06:28:02.914 [INFO] 搜索结果长度: 725 字符
+2026-05-22 06:28:02.914 [INFO] 自动生成 6 个场景:
+2026-05-22 06:28:02.914 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:28:02.914 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:28:02.915 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:28:02.915 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:28:02.915 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:28:02.915 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:28:02.915 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:28:14.793 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=自定义定义解析失败: 好的，作为材料科学和核物理专家，我将为您处理这个自定义材料请求。
+
+根据您的输入，需要自定义的材料是 **Al7075-T6**，没有未找到的粒子。
+
+以下是该材料的详细分析及对应的 JSON 输出。
+
+### 材料分析：Al7075-T6
+
+-   **材料名称**：Al7075-T6
+-   **材料类型**：铝合金（沉淀硬化型）
+-   **T6 状态**：表示固溶热处
+2026-05-22 06:28:14.794 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:28:14.794 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:28:14.794 [INFO] 搜索材料辐射特性: Al7075-T6, 聚乙烯, 聚酰亚胺, 硅
+2026-05-22 06:28:19.521 [INFO] 搜索结果长度: 692 字符
+2026-05-22 06:28:19.522 [INFO] 自动生成 6 个场景:
+2026-05-22 06:28:19.522 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:28:19.522 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:28:19.522 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:28:19.522 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:28:19.522 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:28:19.522 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:28:19.522 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)
+2026-05-22 06:28:24.007 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:28:24.008 [INFO] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:28:24.008 [INFO] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:28:24.008 [INFO] 搜索材料辐射特性: 铝合金, 聚乙烯, 铝合金
+2026-05-22 06:28:30.227 [INFO] 搜索结果长度: 175 字符
+2026-05-22 06:28:30.228 [INFO] 自动生成 6 个场景:
+2026-05-22 06:28:30.228 [INFO]   深空 质子 10.0 MeV: proton 10.0 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:28:30.228 [INFO]   深空 质子 63.25 MeV: proton 63.25 MeV, 100000 events, QGSP_BIC
+2026-05-22 06:28:30.228 [INFO]   深空 质子 400.0 MeV: proton 400.0 MeV, 100000 events, QGSP_BERT
+2026-05-22 06:28:30.228 [INFO]   深空 电子 0.5 MeV: e- 0.5 MeV, 100000 events, QBBC
+2026-05-22 06:28:30.228 [INFO]   深空 电子 1.87 MeV: e- 1.87 MeV, 100000 events, QBBC
+2026-05-22 06:28:30.228 [INFO]   深空 电子 7.0 MeV: e- 7.0 MeV, 100000 events, QBBC
+2026-05-22 06:28:30.228 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(6 items)

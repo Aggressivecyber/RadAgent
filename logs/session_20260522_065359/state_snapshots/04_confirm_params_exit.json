@@ -1,0 +1,15 @@
+{
+  "sim_plan": {
+    "geometry_name": "深空碳离子多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 1,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_MeV": 4800,
+        "num_events": 500000
+      }
+    ]
+  }
+}

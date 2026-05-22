@@ -1,0 +1,19 @@
+{
+  "user_input": "--- 开始处理 (日志: /home/rylan/RadAgent/logs/session_20260522_062135) ---错误: float() argument must be a string or a real number, not 'NoneType'完成！",
+  "intent_data": {
+    "orbit": null,
+    "layers": null,
+    "particles": null,
+    "scenarios": null,
+    "mission": null,
+    "size_xy_cm": null,
+    "missing": [
+      "轨道信息",
+      "层结构",
+      "粒子类型",
+      "场景参数",
+      "任务信息",
+      "横截面尺寸"
+    ]
+  }
+}

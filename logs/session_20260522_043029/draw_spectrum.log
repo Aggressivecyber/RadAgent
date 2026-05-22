@@ -1,0 +1,3 @@
+2026-05-22 04:31:05.892 [INFO] [draw_spectrum] === 节点进入 ===
+2026-05-22 04:31:06.083 [INFO] 能谱图已保存: /home/rylan/RadAgent/workspace/20260522_043051_亚轨道多层屏蔽结构_proton10MeV/build/figures/energy_spectrum.png
+2026-05-22 04:31:06.083 [INFO] [draw_spectrum] === 节点退出 → __end__ ===

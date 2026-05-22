@@ -1,0 +1,2 @@
+2026-05-22 04:12:11.736 [INFO] 用户输入: 10km能用5cm铝板防护器件吗
+2026-05-22 04:12:16.748 [INFO] 流执行错误: module 'spacepy.ae9ap9' has no attribute '_run_ae9ap9'

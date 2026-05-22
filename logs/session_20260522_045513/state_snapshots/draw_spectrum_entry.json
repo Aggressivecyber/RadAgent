@@ -1,0 +1,37 @@
+{
+  "sim_plan": {
+    "geometry_name": "LEO多层屏蔽结构-铝基防护",
+    "orbit_name": "LEO",
+    "num_scenarios": 1,
+    "scenarios": [
+      {
+        "name": "LEO 质子 10.0 MeV",
+        "particle": "proton",
+        "energy_MeV": 10.0,
+        "num_events": 100000
+      }
+    ]
+  },
+  "build": {
+    "source_dir": "/home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV",
+    "executable_path": "/home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV/build/radg4_sim",
+    "compile_ok": true,
+    "run_ok": true,
+    "compile_error": ""
+  },
+  "results": [
+    {
+      "scenario_name": "LEO 质子 10.0 MeV",
+      "total_dose_Gy": 2.37613e-06,
+      "num_events": 100000,
+      "peak_layer": "外层结构",
+      "penetrated": true
+    }
+  ],
+  "anomaly": [
+    {
+      "status": "suspicious",
+      "details": "敏感体积 '内层敏感体积' 未被命中"
+    }
+  ]
+}

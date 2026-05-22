@@ -1,0 +1,40 @@
+{
+  "intent_data": {
+    "orbit": {
+      "name": "深空",
+      "altitude_km": null,
+      "inclination_deg": null
+    },
+    "layers": [
+      {
+        "name": "外层",
+        "material": null,
+        "thickness_mm": null,
+        "role": "shield"
+      },
+      {
+        "name": "内层",
+        "material": null,
+        "thickness_mm": null,
+        "role": "shield"
+      }
+    ],
+    "particles": [],
+    "scenarios": [],
+    "mission": {
+      "duration_years": null,
+      "purpose": "深空载人飞船舱段"
+    },
+    "size_xy_cm": null,
+    "missing": [
+      "轨道高度",
+      "轨道倾角",
+      "各层材料",
+      "各层厚度",
+      "粒子类型",
+      "场景参数",
+      "任务时长",
+      "横截面尺寸"
+    ]
+  }
+}

@@ -1,0 +1,152 @@
+2026-05-22 06:55:53.497 [DEBUG] LLM prompt (500 chars):
+你是航天辐照仿真质量审核专家。评估以下仿真计划的多维度质量。
+
+仿真计划:
+{
+  "geometry": {
+    "name": "深空C离子多层屏蔽结构",
+    "layers": [
+      {
+        "name": "铝合金舱体外壳",
+        "material": "G4_Al",
+        "geant4_material": "G4_Al",
+        "density_g_cm3": 2.699,
+        "thickness_mm": 3.0,
+        "role": "structure"
+      },
+      {
+        "name": "聚乙烯辐射防护层",
+        "material": "G4_POLYETHYLENE",
+        "geant4_material": "G4_POLYETHYLENE",
+        "density_g_cm3": 0.94,
+        "thickness_mm": 20.0,
+        "role": "shie
+2026-05-22 06:55:53.497 [DEBUG] LLM response (1129 chars):
+{
+  "pass": false,
+  "scores": {
+    "完整性": 6,
+    "物理合理性": 4,
+    "材料有效性": 8,
+    "场景覆盖": 2,
+    "Geant4可执行性": 5
+  },
+  "issues": [
+    "轨道参数矛盾：轨道名称为'深空'，但altitude_km=0.0、inclination_deg=0.0且质子/电子通量均为0，实际为地球表面或静止轨道参数，与'深空'不符",
+    "场景覆盖严重不足：仅包含C离子一种粒子，未覆盖深空环境中主要的质子、电子、α粒子及银河宇宙射线(GCR)成分",
+    "物理合理性存疑：C离子能量4800 MeV（约400 MeV/nucleon）对于深空环境并非典型能量，且未提供能谱分布，单一能量无法代表真实环境",
+    "physics_list选择不当：FTFP_BERT推荐用于医疗和空间应用，但针对4800 MeV的C离子，应使用更适用于重离子的QGSP_BERT或QBBC等列表",
+    "水模体厚度100mm作为敏感体积，对于4800 MeV C离子的射程可能不足，无法完全沉积能量，影响剂量评估准确性",
+    "notes中引用AE9/AP9和LEO轨道数据，与仿真计划中的'深空'轨道矛盾，数据来源与仿真场景不匹配",
+    "未定义能量谱和概率分布，使用单能平行束无法模拟真实空间辐射环境"
+  ],
+  "suggestions": [
+    "修正轨道参数：明确深空轨道定义（如日心距离、行星际空间等），或根据实际任务轨道设置正确的altitude、inclination和粒子通量",
+    "增加辐射粒子种类：至少应包含质子（1-1000 MeV）、电子（0.1-10 MeV）、α粒子和重离子（如Fe、C等），并采用能谱分布而非单能",
+    "使用合适的physics_list：对于重离子模拟，建议使用QGSP_BERT_HP或QBBC，并考虑启用核碎裂模型",
+    "验证水模体厚度：根据C离子在材料中的射程计算，确保敏感体积能完全吸收或记录能量沉积",
+    "统一数据来源：删除或修正notes中与深空环境矛盾的AE9/AP9和LEO引用，改用GCR模型（如ISO 15390）或太阳粒子事件模型",
+    "增加场景多样性：至少设置2-3个典型场景（如太阳极小期GCR、太阳极大期GCR、太阳粒子事件），每个场景包含多种粒子和能谱",
+    "考虑使用Geant4的General Particle Source (GPS)功能定义复杂的能谱和角分布"
+  ]
+}
+2026-05-22 06:56:24.524 [DEBUG] LLM prompt (500 chars):
+你是航天辐照仿真质量审核专家。评估以下仿真计划的多维度质量。
+
+仿真计划:
+{
+  "geometry": {
+    "name": "深空C离子多层屏蔽结构",
+    "layers": [
+      {
+        "name": "铝合金舱体外壳",
+        "material": "G4_Al",
+        "geant4_material": "G4_Al",
+        "density_g_cm3": 2.699,
+        "thickness_mm": 3.0,
+        "role": "structure"
+      },
+      {
+        "name": "聚乙烯辐射防护层",
+        "material": "G4_POLYETHYLENE",
+        "geant4_material": "G4_POLYETHYLENE",
+        "density_g_cm3": 0.94,
+        "thickness_mm": 20.0,
+        "role": "shie
+2026-05-22 06:56:24.524 [DEBUG] LLM response (934 chars):
+{
+  "pass": false,
+  "scores": {
+    "完整性": 6,
+    "物理合理性": 5,
+    "材料有效性": 8,
+    "场景覆盖": 2,
+    "Geant4可执行性": 7
+  },
+  "issues": [
+    "场景覆盖严重不足：仅模拟了4800 MeV的C离子，未包含深空环境中主要的质子、电子、α粒子及银河宇宙射线(GCR)中的其他重离子成分",
+    "轨道参数矛盾：标注为'深空'但altitude_km=0.0（地面），且proton_flux和electron_flux均为0，与深空环境不符",
+    "物理合理性存疑：4800 MeV的C离子能量极高，但仅使用FTFP_BERT物理列表，未考虑核碎裂模型（如QGSP_BERT_HP或QBBC）对重离子次级产物的影响",
+    "能量谱缺失：未提供能量谱分布，单能平行束无法代表深空连续能谱环境",
+    "notes中引用AE9/AP9（LEO模型）与'深空'轨道矛盾，AE9/AP9适用于近地轨道而非深空",
+    "水模体厚度100mm作为敏感体积，对于4800 MeV C离子可能不足以完全阻止，能量沉积计算可能不完整"
+  ],
+  "suggestions": [
+    "补充深空环境主要粒子类型：质子（1-1000 MeV）、α粒子、Fe离子等GCR成分，并采用连续能谱分布",
+    "修正轨道参数：深空轨道应设置altitude_km为深空值（如>20000 km或星际空间），并基于GCR模型（如ISO 15390或CREME96）设置粒子通量",
+    "考虑使用更合适的物理列表：对于重离子高能模拟，建议使用QGSP_BERT_HP或QBBC以包含核碎裂过程",
+    "增加能量谱信息：使用GPS的spectrum功能定义连续能谱，或提供多个能量点的离散模拟",
+    "移除或修正notes中错误的AE9/AP9引用，改用深空辐射环境模型（如GCR模型）",
+    "评估水模体厚度是否足够：对于4800 MeV C离子，建议检查射程并适当增加敏感体积厚度或使用分段探测器"
+  ]
+}
+2026-05-22 06:56:47.639 [DEBUG] LLM prompt (500 chars):
+你是航天辐照仿真质量审核专家。评估以下仿真计划的多维度质量。
+
+仿真计划:
+{
+  "geometry": {
+    "name": "深空碳离子多层屏蔽结构",
+    "layers": [
+      {
+        "name": "第1层",
+        "material": "G4_Al",
+        "geant4_material": "G4_Al",
+        "density_g_cm3": 2.699,
+        "thickness_mm": 3.0,
+        "role": "structure"
+      },
+      {
+        "name": "第2层",
+        "material": "G4_POLYETHYLENE",
+        "geant4_material": "G4_POLYETHYLENE",
+        "density_g_cm3": 0.94,
+        "thickness_mm": 20.0,
+        "role": "shield"
+     
+2026-05-22 06:56:47.639 [DEBUG] LLM response (911 chars):
+{
+  "pass": false,
+  "scores": {
+    "完整性": 8,
+    "物理合理性": 6,
+    "材料有效性": 10,
+    "场景覆盖": 2,
+    "Geant4可执行性": 7
+  },
+  "issues": [
+    "场景覆盖严重不足：深空环境主要辐射粒子包括质子、电子、α粒子及重离子，但仿真计划仅包含碳离子（C_ion）一个场景，未覆盖质子、电子等主要成分。",
+    "轨道参数矛盾：轨道名称为'深空'，但altitude_km=0.0、inclination_deg=0.0，且proton_flux和electron_flux均为0，这实际上对应的是地面或真空环境，而非深空轨道。",
+    "物理合理性存疑：碳离子能量4800 MeV（约400 MeV/nucleon）在深空环境中并非典型能量，且未提供能谱分布，单能平行束假设过于简化。",
+    "notes中引用AE9/AP9典型值(LEO)与轨道名称'深空'矛盾，AE9/AP9是地球辐射带模型，不适用于深空。",
+    "敏感体积（第4层水）厚度100mm，对于4800 MeV碳离子可能不足以完全阻止，需确认能量沉积计算目的。"
+  ],
+  "suggestions": [
+    "增加质子、电子、α粒子等深空主要辐射粒子的仿真场景，并考虑不同能量范围。",
+    "修正轨道参数：若为深空，应移除地球轨道参数（altitude, inclination），并设置合理的粒子通量或使用GCR能谱模型。",
+    "考虑使用能谱分布（如GCR能谱）替代单能平行束，或至少增加多个能量点。",
+    "更新notes中的引用来源，使用深空辐射环境模型（如CREME96、GCR模型）而非AE9/AP9。",
+    "确认敏感体积厚度是否足够，或明确仿真目的（如剂量计算、LET谱、单粒子效应等）。",
+    "考虑使用更适用于高能重离子的physics list（如QGSP_BERT_HP或QBBC），FTFP_BERT在>1 GeV时虽可用但非最优。"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "intent_data": {
+    "orbit": {
+      "name": "深空",
+      "altitude_km": 0.0,
+      "inclination_deg": 0.0
+    },
+    "layers": [
+      {
+        "name": "第1层",
+        "material": "G4_Al",
+        "thickness_mm": 3.0,
+        "role": "structure"
+      },
+      {
+        "name": "第2层",
+        "material": "G4_POLYETHYLENE",
+        "thickness_mm": 20.0,
+        "role": "shield"
+      },
+      {
+        "name": "第3层",
+        "material": "G4_KEVLAR",
+        "thickness_mm": 5.0,
+        "role": "structure"
+      },
+      {
+        "name": "第4层",
+        "material": "G4_WATER",
+        "thickness_mm": 100.0,
+        "role": "sensitive"
+      }
+    ],
+    "particles": [
+      "C_ion"
+    ],
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_per_nucleon_MeV": null,
+        "energy_MeV": 4800,
+        "num_events": 500000
+      }
+    ],
+    "mission": {
+      "duration_years": null,
+      "purpose": null
+    },
+    "size_xy_cm": 20.0,
+    "missing": [
+      "mission.duration_years",
+      "mission.purpose"
+    ]
+  }
+}

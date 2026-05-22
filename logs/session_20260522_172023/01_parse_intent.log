@@ -1,0 +1,38 @@
+2026-05-22 17:21:09.075 [INFO] [parse_intent] === 节点进入 ===  user_input=10km 用1cm铝板40um石墨防护20um的硅基器件
+2026-05-22 17:21:11.262 [DEBUG] LLM prompt (28 chars):
+10km 用1cm铝板40um石墨防护20um的硅基器件
+2026-05-22 17:21:11.262 [DEBUG] LLM response (455 chars):
+{
+    "orbit": null,
+    "layers": [
+        {"name": "铝板", "material": "Al", "thickness_mm": 10, "role": "shield"},
+        {"name": "石墨", "material": "C", "thickness_mm": 0.04, "role": "shield"},
+        {"name": "硅基器件", "material": "Si", "thickness_mm": 0.02, "role": "sensitive"}
+    ],
+    "particles": [],
+    "scenarios": [],
+    "mission": null,
+    "size_xy_cm": null,
+    "missing": ["orbit", "particles", "scenarios", "mission", "size_xy_cm"]
+}
+2026-05-22 17:21:11.263 [INFO] 解析结果: orbit=None, layers=3 层, particles=[], scenarios=0 个, size_xy_cm=None, missing=['orbit', 'particles', 'scenarios', 'mission', 'size_xy_cm']
+2026-05-22 17:21:11.263 [INFO] [parse_intent] === 节点退出 → design_schema ===
+2026-05-22 17:23:39.501 [INFO] [parse_intent] === 节点进入 ===  user_input=10km 用1cm铝板40um石墨防护20um的硅基器件
+2026-05-22 17:23:41.549 [DEBUG] LLM prompt (28 chars):
+10km 用1cm铝板40um石墨防护20um的硅基器件
+2026-05-22 17:23:41.549 [DEBUG] LLM response (455 chars):
+{
+    "orbit": null,
+    "layers": [
+        {"name": "铝板", "material": "Al", "thickness_mm": 10, "role": "shield"},
+        {"name": "石墨", "material": "C", "thickness_mm": 0.04, "role": "shield"},
+        {"name": "硅基器件", "material": "Si", "thickness_mm": 0.02, "role": "sensitive"}
+    ],
+    "particles": [],
+    "scenarios": [],
+    "mission": null,
+    "size_xy_cm": null,
+    "missing": ["orbit", "particles", "scenarios", "mission", "size_xy_cm"]
+}
+2026-05-22 17:23:41.549 [INFO] 解析结果: orbit=None, layers=3 层, particles=[], scenarios=0 个, size_xy_cm=None, missing=['orbit', 'particles', 'scenarios', 'mission', 'size_xy_cm']
+2026-05-22 17:23:41.549 [INFO] [parse_intent] === 节点退出 → design_schema ===

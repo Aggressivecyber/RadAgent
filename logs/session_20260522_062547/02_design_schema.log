@@ -1,0 +1,1144 @@
+2026-05-22 06:25:49.487 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+2026-05-22 06:25:53.368 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:25:53.368 [DEBUG] LLM response (645 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "硅",
+            "thickness_mm": 0.5,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:25:53.368 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:25:53.368 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:25:53.368 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:25:53.368 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:25:53.368 [INFO]   外层: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:25:53.368 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:25:53.368 [INFO]   内层: 硅 (G4_Si) 0.5 mm [sensitive]
+2026-05-22 06:25:53.369 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:25:53.369 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:25:57.678 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 1. 3mm铝合金舱体外壳
+2026-05-22 06:26:02.074 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:26:02.074 [DEBUG] LLM response (644 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 5.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 30.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "shield"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:26:02.074 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:26:02.074 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:26:02.074 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:26:02.075 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:26:02.075 [INFO]   外层: 铝合金 (G4_Al) 5.0 mm [structure]
+2026-05-22 06:26:02.075 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 30.0 mm [shield]
+2026-05-22 06:26:02.075 [INFO]   内层: 铝合金 (G4_Al) 3.0 mm [shield]
+2026-05-22 06:26:02.075 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:26:02.075 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:26:04.986 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 2. 20mm聚乙烯辐射防护层
+2026-05-22 06:26:09.984 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:26:09.984 [DEBUG] LLM response (662 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "Al 7075-T6",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "HDPE",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "Kapton",
+            "thickness_mm": 1.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 400.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": 400000.0,
+        "inclination_deg": 0.0
+    }
+}
+2026-05-22 06:26:09.985 [INFO] 材料未找到: Al 7075-T6 → 待自定义生成
+2026-05-22 06:26:09.985 [INFO] 材料未找到: HDPE → 待自定义生成
+2026-05-22 06:26:09.985 [INFO] 材料查找: Kapton → G4_KAPTON (ρ=1.42)
+2026-05-22 06:26:09.985 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:26:09.985 [INFO]   外层: Al 7075-T6 (Al 7075-T6) 3.0 mm [structure]
+2026-05-22 06:26:09.985 [INFO]   中层: HDPE (HDPE) 50.0 mm [shield]
+2026-05-22 06:26:09.985 [INFO]   内层: Kapton (G4_KAPTON) 1.0 mm [sensitive]
+2026-05-22 06:26:09.985 [INFO] 轨道: 深空 (400000.0 km, 0.0 deg)
+2026-05-22 06:26:09.985 [INFO] [design_schema] === 节点退出 → define_custom ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:26:19.865 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 3. 5mm凯夫拉结构层
+2026-05-22 06:26:23.578 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:26:23.578 [DEBUG] LLM response (645 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 5.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 30.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "硅",
+            "thickness_mm": 2.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:26:23.579 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:26:23.579 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:26:23.579 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:26:23.579 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:26:23.579 [INFO]   外层: 铝合金 (G4_Al) 5.0 mm [structure]
+2026-05-22 06:26:23.579 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 30.0 mm [shield]
+2026-05-22 06:26:23.579 [INFO]   内层: 硅 (G4_Si) 2.0 mm [sensitive]
+2026-05-22 06:26:23.579 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:26:23.579 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:26:24.954 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 4. 模拟航天员组织的10cm水模体（敏感体积）
+2026-05-22 06:26:28.597 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:26:28.597 [DEBUG] LLM response (794 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 5.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 30.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "聚酰亚胺",
+            "thickness_mm": 2.0,
+            "role": "insulation"
+        },
+        {
+            "name": "敏感体积",
+            "material": "硅",
+            "thickness_mm": 1.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:26:28.598 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:26:28.598 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:26:28.598 [INFO] 材料查找: 聚酰亚胺 → G4_KAPTON (ρ=1.42)
+2026-05-22 06:26:28.600 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:26:28.600 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 4 层, 敏感体积=敏感体积
+2026-05-22 06:26:28.600 [INFO]   外层: 铝合金 (G4_Al) 5.0 mm [structure]
+2026-05-22 06:26:28.600 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 30.0 mm [shield]
+2026-05-22 06:26:28.600 [INFO]   内层: 聚酰亚胺 (G4_KAPTON) 2.0 mm [insulation]
+2026-05-22 06:26:28.601 [INFO]   敏感体积: 硅 (G4_Si) 1.0 mm [sensitive]
+2026-05-22 06:26:28.601 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:26:28.601 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:26:32.826 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+2026-05-22 06:26:36.419 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:26:36.422 [DEBUG] LLM response (792 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 5.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 30.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "敏感体积",
+            "material": "硅",
+            "thickness_mm": 1.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:26:36.422 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:26:36.423 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:26:36.423 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:26:36.423 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:26:36.423 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 4 层, 敏感体积=敏感体积
+2026-05-22 06:26:36.423 [INFO]   外层: 铝合金 (G4_Al) 5.0 mm [structure]
+2026-05-22 06:26:36.423 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 30.0 mm [shield]
+2026-05-22 06:26:36.423 [INFO]   内层: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:26:36.423 [INFO]   敏感体积: 硅 (G4_Si) 1.0 mm [sensitive]
+2026-05-22 06:26:36.423 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:26:36.423 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:26:41.099 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: - 场景A：400MeV/n 碳-12离子
+2026-05-22 06:26:45.125 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:26:45.125 [DEBUG] LLM response (640 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 5.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 30.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "聚酰亚胺",
+            "thickness_mm": 2.0,
+            "role": "shield"
+        }
+    ],
+    "size_xy_cm": 200.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": 0,
+        "inclination_deg": 0
+    }
+}
+2026-05-22 06:26:45.125 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:26:45.125 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:26:45.125 [INFO] 材料查找: 聚酰亚胺 → G4_KAPTON (ρ=1.42)
+2026-05-22 06:26:45.126 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:26:45.126 [INFO]   外层: 铝合金 (G4_Al) 5.0 mm [structure]
+2026-05-22 06:26:45.126 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 30.0 mm [shield]
+2026-05-22 06:26:45.126 [INFO]   内层: 聚酰亚胺 (G4_KAPTON) 2.0 mm [shield]
+2026-05-22 06:26:45.126 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:26:45.126 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:26:47.253 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: - 场景B：600MeV/n 氧-16离子
+2026-05-22 06:26:50.864 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:26:50.864 [DEBUG] LLM response (652 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金6061-T6",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "硅",
+            "thickness_mm": 0.5,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:26:50.865 [INFO] 材料未找到: 铝合金6061-T6 → 待自定义生成
+2026-05-22 06:26:50.865 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:26:50.865 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:26:50.865 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:26:50.865 [INFO]   外层: 铝合金6061-T6 (铝合金6061-T6) 3.0 mm [structure]
+2026-05-22 06:26:50.865 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:26:50.865 [INFO]   内层: 硅 (G4_Si) 0.5 mm [sensitive]
+2026-05-22 06:26:50.865 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:26:50.865 [INFO] [design_schema] === 节点退出 → define_custom ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:27:01.664 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: - 场景C：1000MeV/n 硅-28离子
+2026-05-22 06:27:05.769 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:27:05.769 [DEBUG] LLM response (645 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 5.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 30.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "硅",
+            "thickness_mm": 2.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:27:05.769 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:05.769 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:27:05.769 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:27:05.770 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:27:05.770 [INFO]   外层: 铝合金 (G4_Al) 5.0 mm [structure]
+2026-05-22 06:27:05.770 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 30.0 mm [shield]
+2026-05-22 06:27:05.770 [INFO]   内层: 硅 (G4_Si) 2.0 mm [sensitive]
+2026-05-22 06:27:05.770 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:27:05.770 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:27:08.291 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: - 场景D：1000MeV/n 铁-56离子
+2026-05-22 06:27:12.219 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:27:12.220 [DEBUG] LLM response (795 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "钛合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层屏蔽层",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "铝合金",
+            "thickness_mm": 2.0,
+            "role": "structure"
+        },
+        {
+            "name": "敏感体积",
+            "material": "硅",
+            "thickness_mm": 1.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:27:12.220 [INFO] 材料未找到: 钛合金 → 待自定义生成
+2026-05-22 06:27:12.220 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:27:12.220 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:12.220 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:27:12.220 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 4 层, 敏感体积=敏感体积
+2026-05-22 06:27:12.220 [INFO]   外层: 钛合金 (钛合金) 3.0 mm [structure]
+2026-05-22 06:27:12.220 [INFO]   中层屏蔽层: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:27:12.220 [INFO]   内层: 铝合金 (G4_Al) 2.0 mm [structure]
+2026-05-22 06:27:12.220 [INFO]   敏感体积: 硅 (G4_Si) 1.0 mm [sensitive]
+2026-05-22 06:27:12.220 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:27:12.221 [INFO] [design_schema] === 节点退出 → define_custom ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:27:22.639 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 每个场景跑50万个事件。重点关注：
+2026-05-22 06:27:26.619 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:27:26.619 [DEBUG] LLM response (940 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层屏蔽",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层屏蔽",
+            "material": "聚酰亚胺",
+            "thickness_mm": 10.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层结构",
+            "material": "铝合金",
+            "thickness_mm": 2.0,
+            "role": "structure"
+        },
+        {
+            "name": "敏感体积",
+            "material": "硅",
+            "thickness_mm": 1.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:27:26.620 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:26.620 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:27:26.620 [INFO] 材料查找: 聚酰亚胺 → G4_KAPTON (ρ=1.42)
+2026-05-22 06:27:26.621 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:26.621 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:27:26.621 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 5 层, 敏感体积=敏感体积
+2026-05-22 06:27:26.621 [INFO]   外层: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:27:26.621 [INFO]   中层屏蔽: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:27:26.621 [INFO]   内层屏蔽: 聚酰亚胺 (G4_KAPTON) 10.0 mm [shield]
+2026-05-22 06:27:26.622 [INFO]   内层结构: 铝合金 (G4_Al) 2.0 mm [structure]
+2026-05-22 06:27:26.622 [INFO]   敏感体积: 硅 (G4_Si) 1.0 mm [sensitive]
+2026-05-22 06:27:26.622 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:27:26.622 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:27:32.261 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 1. 水模体中的总剂量和剂量当量
+2026-05-22 06:27:35.899 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:27:35.899 [DEBUG] LLM response (647 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "铝合金",
+            "thickness_mm": 2.0,
+            "role": "structure"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:27:35.899 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:35.899 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:27:35.899 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:35.899 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:27:35.899 [INFO]   外层: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:27:35.899 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:27:35.899 [INFO]   内层: 铝合金 (G4_Al) 2.0 mm [structure]
+2026-05-22 06:27:35.899 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:27:35.899 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:27:38.545 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 2. 核碎片在屏蔽层中的产生
+2026-05-22 06:27:42.737 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:27:42.737 [DEBUG] LLM response (644 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 5.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 30.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "shield"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:27:42.737 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:42.737 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:27:42.737 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:42.737 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:27:42.737 [INFO]   外层: 铝合金 (G4_Al) 5.0 mm [structure]
+2026-05-22 06:27:42.737 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 30.0 mm [shield]
+2026-05-22 06:27:42.737 [INFO]   内层: 铝合金 (G4_Al) 3.0 mm [shield]
+2026-05-22 06:27:42.737 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:27:42.737 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:27:50.626 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 3. 粒子是否穿透到敏感体积
+2026-05-22 06:27:54.409 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:27:54.409 [DEBUG] LLM response (794 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "钛合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层屏蔽",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "铝合金",
+            "thickness_mm": 2.0,
+            "role": "structure"
+        },
+        {
+            "name": "敏感体积",
+            "material": "硅",
+            "thickness_mm": 1.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:27:54.409 [INFO] 材料未找到: 钛合金 → 待自定义生成
+2026-05-22 06:27:54.409 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:27:54.409 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:27:54.409 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:27:54.410 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 4 层, 敏感体积=敏感体积
+2026-05-22 06:27:54.410 [INFO]   外层: 钛合金 (钛合金) 3.0 mm [structure]
+2026-05-22 06:27:54.410 [INFO]   中层屏蔽: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:27:54.410 [INFO]   内层: 铝合金 (G4_Al) 2.0 mm [structure]
+2026-05-22 06:27:54.410 [INFO]   敏感体积: 硅 (G4_Si) 1.0 mm [sensitive]
+2026-05-22 06:27:54.410 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:27:54.410 [INFO] [design_schema] === 节点退出 → define_custom ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:28:02.923 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 4. 各层对重离子的衰减效果
+2026-05-22 06:28:08.020 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:28:08.020 [DEBUG] LLM response (794 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "Al7075-T6",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "聚酰亚胺",
+            "thickness_mm": 2.0,
+            "role": "insulation"
+        },
+        {
+            "name": "敏感体积",
+            "material": "硅",
+            "thickness_mm": 1.0,
+            "role": "sensitive"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": 0,
+        "inclination_deg": 0
+    }
+}
+2026-05-22 06:28:08.020 [INFO] 材料未找到: Al7075-T6 → 待自定义生成
+2026-05-22 06:28:08.021 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:28:08.021 [INFO] 材料查找: 聚酰亚胺 → G4_KAPTON (ρ=1.42)
+2026-05-22 06:28:08.021 [INFO] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 06:28:08.021 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 4 层, 敏感体积=敏感体积
+2026-05-22 06:28:08.021 [INFO]   外层: Al7075-T6 (Al7075-T6) 3.0 mm [structure]
+2026-05-22 06:28:08.021 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:28:08.021 [INFO]   内层: 聚酰亚胺 (G4_KAPTON) 2.0 mm [insulation]
+2026-05-22 06:28:08.021 [INFO]   敏感体积: 硅 (G4_Si) 1.0 mm [sensitive]
+2026-05-22 06:28:08.021 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:28:08.021 [INFO] [design_schema] === 节点退出 → define_custom ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:28:19.531 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  parse_error=用户修改: 横截面大小设为20cm x 20cm。
+2026-05-22 06:28:24.004 [DEBUG] LLM prompt (993 chars):
+你是航天器屏蔽结构设计专家。根据用户意图设计多层屏蔽几何。
+
+用户意图: {"orbit": {"name": "深空", "altitude_km": null, "inclination_deg": null}, "layers": [{"name": "外层", "material": null, "thickness_mm": null, "role": "shield"}, {"name": "内层", "material": null, "thickness_mm": null, "role": "shield"}], "particles": [], "scenarios": [], "mission": {"duration_years": null, "purpose": "深空载人飞船舱段"}, "size_xy_cm": null, "missing": ["轨道高度", "轨道倾角", "各层材料", "各层厚度", "粒子类型", "场景参数", "任务时长", "横截面尺寸"]}
+
+请设计多层屏蔽结构（从外到内），返回 JSON:
+{
+    "geometry_name": "结构名称",
+    "layers": [
+        {"name": "层名", "material": "材料", "thickness_mm": 厚度, "role": "shield/insulation/structure/sensitive"}
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "敏感体积层名",
+    "orbit": {
+        "name": "LEO/MEO/GEO/HEO/深空",
+        "altitude_km": 高度,
+        "inclination_deg": 倾角
+    }
+}
+
+设计原则:
+- 根据用户意图合理选择材料和层数，满足屏蔽/绝热/结构/敏感体积的功能需求，如果用户明确提到某些材料、敏感体积或具体层数以及厚度参数请优先使用
+- 外层: 结构材料 (铝合金/钛合金)
+- 中层: 绝热/屏蔽材料 (聚乙烯/聚酰亚胺)
+- 内层: 电子器件/敏感体积 (硅/砷化镓)
+- 每层需有合理厚度 (mm)
+
+2026-05-22 06:28:24.004 [DEBUG] LLM response (647 chars):
+{
+    "geometry_name": "深空载人舱段多层屏蔽结构",
+    "layers": [
+        {
+            "name": "外层",
+            "material": "铝合金",
+            "thickness_mm": 3.0,
+            "role": "structure"
+        },
+        {
+            "name": "中层",
+            "material": "聚乙烯",
+            "thickness_mm": 50.0,
+            "role": "shield"
+        },
+        {
+            "name": "内层",
+            "material": "铝合金",
+            "thickness_mm": 2.0,
+            "role": "structure"
+        }
+    ],
+    "size_xy_cm": 10.0,
+    "sensitive_volume": "内层",
+    "orbit": {
+        "name": "深空",
+        "altitude_km": null,
+        "inclination_deg": null
+    }
+}
+2026-05-22 06:28:24.005 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:28:24.005 [INFO] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:28:24.005 [INFO] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:28:24.005 [INFO] 几何设计: 深空载人舱段多层屏蔽结构, 3 层, 敏感体积=内层
+2026-05-22 06:28:24.005 [INFO]   外层: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:28:24.005 [INFO]   中层: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 06:28:24.005 [INFO]   内层: 铝合金 (G4_Al) 2.0 mm [structure]
+2026-05-22 06:28:24.005 [INFO] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:28:24.005 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构

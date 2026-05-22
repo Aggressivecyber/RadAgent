@@ -1,0 +1,20 @@
+2026-05-22 04:13:05.069 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_041305
+2026-05-22 04:13:18.657 [INFO] [main] 用户输入: 10km高度5cm能防护吗
+2026-05-22 04:13:18.680 [INFO] [parse_intent] === 节点进入 ===  user_input=10km高度5cm能防护吗
+2026-05-22 04:13:19.837 [INFO] [parse_intent] LLM 调用完成 (13 → 325 chars)
+2026-05-22 04:13:19.837 [INFO] [parse_intent] 解析结果: orbit={'name': None, 'altitude_km': 10, 'inclination_deg': None}, layers=1 层, particles=None, missing=['轨道名称', '倾角', '层名', '材料', '粒子类型', '任务时长', '用途描述']
+2026-05-22 04:13:19.837 [INFO] [parse_intent] === 节点退出 → design_schema ===
+2026-05-22 04:13:19.838 [INFO] [design_schema] === 节点进入 ===  user_input=10km高度5cm能防护吗
+2026-05-22 04:13:23.994 [INFO] [design_schema] LLM 调用完成 (859 → 654 chars)
+2026-05-22 04:13:23.994 [INFO] [design_schema] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 04:13:23.994 [INFO] [design_schema] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 04:13:23.994 [INFO] [design_schema] 材料查找: 硅 → G4_Si (ρ=2.33)
+2026-05-22 04:13:23.994 [INFO] [design_schema] 几何设计: 临近空间多层屏蔽结构, 3 层, 敏感体积=内层敏感体积
+2026-05-22 04:13:23.994 [INFO] [design_schema]   外层结构: 铝合金 (G4_Al) 2.0 mm [structure]
+2026-05-22 04:13:23.995 [INFO] [design_schema]   中层屏蔽: 聚乙烯 (G4_POLYETHYLENE) 50.0 mm [shield]
+2026-05-22 04:13:23.995 [INFO] [design_schema]   内层敏感体积: 硅 (G4_Si) 1.0 mm [sensitive]
+2026-05-22 04:13:23.995 [INFO] [design_schema] 轨道: LEO (10.0 km, 51.6 deg)
+2026-05-22 04:13:23.995 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=临近空间多层屏蔽结构
+2026-05-22 04:13:23.998 [INFO] [research_params] === 节点进入 ===  user_input=10km高度5cm能防护吗
+2026-05-22 04:13:23.998 [INFO] [research_params] 查询轨道辐射环境: LEO (10.0 km)
+2026-05-22 04:13:24.000 [INFO] [main] 流执行错误: module 'spacepy.ae9ap9' has no attribute '_run_ae9ap9'

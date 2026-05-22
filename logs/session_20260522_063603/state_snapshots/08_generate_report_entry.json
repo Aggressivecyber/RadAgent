@@ -1,0 +1,47 @@
+{
+  "user_input": "模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：1. 3mm铝合金舱体外壳2. 20mm聚乙烯辐射防护层3. 5mm凯夫拉结构层4. 模拟航天员组织的10cm水模体（敏感体积）需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：- 场景A：400MeV/n 碳-12离子- 场景B：600MeV/n 氧-16离子- 场景C：1000MeV/n 硅-28离子- 场景D：1000MeV/n 铁-56离子每个场景跑50万个事件。重点关注：1. 水模体中的总剂量和剂量当量2. 核碎片在屏蔽层中的产生3. 粒子是否穿透到敏感体积4. 各层对重离子的衰减效果横截面大小设为20cm x 20cm。INPUT_EOF",
+  "parse_error": "[research_gate] 评分 35/50\n问题:\n  - 场景覆盖严重不足：仅包含4种高能重离子（C、O、Si、Fe），完全缺失深空环境中占主导地位的质子、α粒子、电子及次级中子，无法代表真实深空辐射环境\n  - 轨道参数矛盾：标注为'深空'轨道，但altitude_km=0.0、inclination_deg=0.0、proton_flux=0、electron_flux=0，实际为无效轨道参数，且notes中引用AE9/AP9 LEO数据与深空场景不匹配\n  - 物理列表选择不当：FTFP_BERT在1 GeV/n以上与默认相同，但场景中最高能量达1000 MeV/n（Fe离子），且缺少对重离子核碎片化过程至关重要的QGSP_BERT_HP或包含ABLA模型的列表\n  - 水模体厚度不合理：100 mm水等效厚度作为敏感体积，对于1 GeV/n的重离子，其射程远超此厚度，无法完全沉积能量，导致剂量计算不准确\n  - 缺少次级粒子输运设置：未指定次级粒子（中子、质子、π介子等）的截断能量或生产阈值，可能影响碎片化产物的精确模拟\n  - 未定义能量谱：所有场景使用单能平行束，未采用深空环境中真实的GCR能谱分布（如Nymmik模型或ISO 15390标准），降低了结果的代表性\n改进建议:\n  - 补充质子（100 MeV-10 GeV）、α粒子（100 MeV/n-10 GeV/n）及电子（0.1-10 MeV）场景，覆盖GCR和太阳粒子事件的主要成分\n  - 修正轨道参数：深空环境应设置altitude_km为深空值（如-1或特定任务轨道），并基于GCR模型（如BADHAS或CREME96）提供质子/离子通量谱\n  - 更换物理列表为QGSP_BERT_HP或FTFP_BERT_HP，并考虑添加ABLA模型以改进重离子核碎裂和次级中子模拟\n  - 将水模体厚度增加至300-500 mm，或根据任务设计采用多层组织等效材料（如ICRU球），确保高能离子能量完全沉积\n  - 设置次级粒子生产阈值（如0.1 mm），并启用中子HP模型以精确模拟低能中子输运\n  - 采用GCR能谱分布（如ISO 15390或GCR模型）替代单能束，或至少增加多个能量点以覆盖GCR能谱范围（100 MeV/n至10 GeV/n）\n  - 增加验证场景：使用已知基准实验（如HIMAC或NASA的GCR模拟器数据）验证物理列表和几何模型的准确性",
+  "sim_plan": {
+    "geometry_name": "深空载人火星任务多层屏蔽结构",
+    "orbit_name": "深空",
+    "num_scenarios": 4,
+    "scenarios": [
+      {
+        "name": "场景A",
+        "particle": "C_ion",
+        "energy_MeV": 4800,
+        "num_events": 500000
+      },
+      {
+        "name": "场景B",
+        "particle": "O_ion",
+        "energy_MeV": 9600,
+        "num_events": 500000
+      },
+      {
+        "name": "场景C",
+        "particle": "Si_ion",
+        "energy_MeV": 28000,
+        "num_events": 500000
+      },
+      {
+        "name": "场景D",
+        "particle": "Fe_ion",
+        "energy_MeV": 56000,
+        "num_events": 500000
+      }
+    ]
+  },
+  "build": {
+    "source_dir": "",
+    "executable_path": "",
+    "compile_ok": false,
+    "run_ok": false,
+    "compile_error": ""
+  },
+  "control": {
+    "retry_count": 3,
+    "max_retries": 3,
+    "approved": false
+  }
+}

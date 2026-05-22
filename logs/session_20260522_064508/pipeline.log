@@ -1,0 +1,197 @@
+2026-05-22 06:45:08.550 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_064508
+2026-05-22 06:45:08.568 [INFO] [main] 用户输入: 模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 场景D：1000MeV/n 铁-56离子
+每个场景跑50万个事件。重点关注：
+1. 水模体中的总剂量和剂量当量
+2. 核碎片在屏蔽层中的产生
+3. 粒子是否穿透到敏感体积
+4. 各层对重离子的衰减效果
+横截面大小设为20cm x 20cm。
+2026-05-22 06:45:08.570 [INFO] [parse_intent] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:11.024 [INFO] [parse_intent] LLM 调用完成 (320 → 1160 chars)
+2026-05-22 06:45:11.024 [INFO] [parse_intent] 解析结果: orbit={'name': '深空', 'altitude_km': None, 'inclination_deg': None}, layers=4 层, particles=['碳-12离子', '氧-16离子', '硅-28离子', '铁-56离子'], scenarios=4 个, size_xy_cm=20, missing=['轨道高度', '轨道倾角', '任务时长']
+2026-05-22 06:45:11.024 [INFO] [parse_intent] === 节点退出 → design_schema ===
+2026-05-22 06:45:11.026 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:12.550 [INFO] [design_schema] LLM 调用完成 (1624 → 799 chars)
+2026-05-22 06:45:12.550 [INFO] [design_schema] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:45:12.550 [INFO] [design_schema] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:45:12.550 [INFO] [design_schema] 材料查找: 凯夫拉 → G4_KEVLAR (ρ=1.44)
+2026-05-22 06:45:12.550 [INFO] [design_schema] 材料查找: 水 → G4_WATER (ρ=1.0)
+2026-05-22 06:45:12.550 [INFO] [design_schema] 几何设计: 深空载人舱段多层屏蔽结构, 4 层, 敏感体积=水模体
+2026-05-22 06:45:12.550 [INFO] [design_schema]   铝合金舱体外壳: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:45:12.550 [INFO] [design_schema]   聚乙烯辐射防护层: 聚乙烯 (G4_POLYETHYLENE) 20.0 mm [shield]
+2026-05-22 06:45:12.551 [INFO] [design_schema]   凯夫拉结构层: 凯夫拉 (G4_KEVLAR) 5.0 mm [structure]
+2026-05-22 06:45:12.551 [INFO] [design_schema]   水模体: 水 (G4_WATER) 100.0 mm [sensitive]
+2026-05-22 06:45:12.551 [INFO] [design_schema] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:45:12.551 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人舱段多层屏蔽结构
+2026-05-22 06:45:12.553 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:12.553 [INFO] [research_params] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:45:12.553 [INFO] [research_params] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:45:12.553 [INFO] [research_params] 搜索材料辐射特性: 铝合金, 聚乙烯, 凯夫拉, 水
+2026-05-22 06:45:16.872 [INFO] [research_params] 搜索结果长度: 774 字符
+2026-05-22 06:45:16.874 [INFO] [research_params] 离子能量: 400 MeV/n × A=12 = 4800 MeV
+2026-05-22 06:45:16.875 [INFO] [research_params] 离子能量: 600 MeV/n × A=16 = 9600 MeV
+2026-05-22 06:45:16.875 [INFO] [research_params] 离子能量: 1000 MeV/n × A=28 = 28000 MeV
+2026-05-22 06:45:16.875 [INFO] [research_params] 离子能量: 1000 MeV/n × A=56 = 56000 MeV
+2026-05-22 06:45:16.875 [INFO] [research_params] 使用用户指定的 4 个场景:
+2026-05-22 06:45:16.875 [INFO] [research_params]   场景A: C_ion 400 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:45:16.875 [INFO] [research_params]   场景B: O_ion 600 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:45:16.875 [INFO] [research_params]   场景C: Si_ion 1000 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:45:16.875 [INFO] [research_params]   场景D: Fe_ion 1000 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:45:16.875 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(4 items)
+2026-05-22 06:45:16.878 [INFO] [confirm_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:16.879 [INFO] [confirm_params] 仿真计划已构建: 深空载人舱段多层屏蔽结构, 4 场景
+2026-05-22 06:45:16.880 [INFO] [main] 用户决定: yes
+2026-05-22 06:45:16.883 [INFO] [confirm_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:16.884 [INFO] [confirm_params] 仿真计划已构建: 深空载人舱段多层屏蔽结构, 4 场景
+2026-05-22 06:45:16.884 [INFO] [confirm_params] === 节点退出 → __end__ ===  sim_plan=已设置
+2026-05-22 06:45:16.887 [INFO] [research_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:31.550 [INFO] [gate] LLM 调用完成 (500 → 1166 chars)
+2026-05-22 06:45:31.550 [INFO] [research_gate] 评分: 30/50, 通过=False
+2026-05-22 06:45:31.552 [INFO] [main] 用户决定: continue
+2026-05-22 06:45:31.554 [INFO] [research_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:43.918 [INFO] [gate] LLM 调用完成 (500 → 1074 chars)
+2026-05-22 06:45:43.918 [INFO] [research_gate] 评分: 30/50, 通过=False
+2026-05-22 06:45:43.918 [INFO] [research_gate] 用户选择继续，放行到 parameterize
+2026-05-22 06:45:43.918 [INFO] [research_gate] === 节点退出 → parameterize ===
+2026-05-22 06:45:43.919 [INFO] [parameterize] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:43.920 [INFO] [parameterize] 计划验证通过: 深空载人舱段多层屏蔽结构 [铝合金舱体外壳(G4_Al 3.0mm), 聚乙烯辐射防护层(G4_POLYETHYLENE 20.0mm), 凯夫拉结构层(G4_KEVLAR 5.0mm), 水模体(G4_WATER 100.0mm)]
+2026-05-22 06:45:43.920 [INFO] [parameterize] 场景数: 4, 横截面: 20.0 cm
+2026-05-22 06:45:43.920 [INFO] [parameterize] === 节点退出 → build_and_run ===
+2026-05-22 06:45:43.920 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:43.921 [INFO] [build_and_run] 开始并发执行 4 个仿真场景
+2026-05-22 06:45:43.943 [INFO] [build_and_run]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:45:43.945 [INFO] [build_and_run]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:45:43.947 [INFO] [build_and_run]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:45:43.947 [INFO] [build_and_run]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:45:46.462 [ERROR] [build_and_run] ERROR:   [场景C] 编译失败: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_Si_ion28000MeV/src/PrimaryGeneratorAction.cc: In constructor ‘B1::PrimaryGeneratorAction::PrimaryGeneratorAction()’:
+/home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_Si_ion28000MeV/src/PrimaryGeneratorAction.cc:21:31: error: ‘Get
+2026-05-22 06:45:46.464 [ERROR] [build_and_run] ERROR: 场景失败: 场景C
+2026-05-22 06:45:47.350 [ERROR] [build_and_run] ERROR:   [场景B] 编译失败: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_O_ion9600MeV/src/PrimaryGeneratorAction.cc: In constructor ‘B1::PrimaryGeneratorAction::PrimaryGeneratorAction()’:
+/home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_O_ion9600MeV/src/PrimaryGeneratorAction.cc:21:31: error: ‘GetInst
+2026-05-22 06:45:47.351 [ERROR] [build_and_run] ERROR: 场景失败: 场景B
+2026-05-22 06:45:47.503 [ERROR] [build_and_run] ERROR:   [场景A] 编译失败: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_C_ion4800MeV/src/PrimaryGeneratorAction.cc: In constructor ‘B1::PrimaryGeneratorAction::PrimaryGeneratorAction()’:
+/home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_C_ion4800MeV/src/PrimaryGeneratorAction.cc:21:31: error: ‘GetInst
+2026-05-22 06:45:47.503 [ERROR] [build_and_run] ERROR: 场景失败: 场景A
+2026-05-22 06:45:47.757 [ERROR] [build_and_run] ERROR:   [场景D] 编译失败: /home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_Fe_ion56000MeV/src/PrimaryGeneratorAction.cc: In constructor ‘B1::PrimaryGeneratorAction::PrimaryGeneratorAction()’:
+/home/rylan/RadAgent/workspace/20260522_064543_深空载人舱段多层屏蔽结构_Fe_ion56000MeV/src/PrimaryGeneratorAction.cc:21:31: error: ‘Get
+2026-05-22 06:45:47.757 [ERROR] [build_and_run] ERROR: 场景失败: 场景D
+2026-05-22 06:45:47.758 [INFO] [build_and_run] === 节点退出 → parameterize (重试) ===  control(retry=1)
+2026-05-22 06:45:47.759 [INFO] [parameterize] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:47.760 [INFO] [parameterize] 计划验证通过: 深空载人舱段多层屏蔽结构 [铝合金舱体外壳(G4_Al 3.0mm), 聚乙烯辐射防护层(G4_POLYETHYLENE 20.0mm), 凯夫拉结构层(G4_KEVLAR 5.0mm), 水模体(G4_WATER 100.0mm)]
+2026-05-22 06:45:47.760 [INFO] [parameterize] 场景数: 4, 横截面: 20.0 cm
+2026-05-22 06:45:47.760 [INFO] [sim_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:45:47.760 [INFO] [parameterize] === 节点退出 → build_and_run ===
+2026-05-22 06:45:51.801 [INFO] [gate] LLM 调用完成 (500 → 321 chars)
+2026-05-22 06:45:51.801 [INFO] [sim_gate] 评分: 0/50, 通过=False
+2026-05-22 06:45:51.801 [INFO] [sim_gate] 门禁失败，回退到 parameterize (重试 2/3)
+2026-05-22 06:45:51.801 [INFO] [sim_gate] === 节点退出 → parameterize ===
+2026-05-22 06:45:51.803 [INFO] [main] 恢复执行错误: At key 'parse_error': Can receive only one value per step. Use an Annotated key to handle multiple values.
+For troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/INVALID_CONCURRENT_GRAPH_UPDATE

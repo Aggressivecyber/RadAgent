@@ -1,0 +1,18 @@
+2026-05-22 06:21:35.340 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_062135
+2026-05-22 06:22:01.652 [INFO] [main] 用户输入: 模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  1. 3mm铝合金舱体外壳  2. 20mm聚乙烯辐射防护层  3. 5mm凯夫拉结构层  4. 模拟航天员组织的10cm水模体（敏感体积）  需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：  - 场景A：400MeV/n 碳-12离子  - 场景B：600MeV/n 氧-16离子  - 场景C：1000MeV/n 硅-28离子  - 场景D：1000MeV/n 铁-56离子  每个场景跑50万个事件。重点关注：  1. 水模体中的总剂量和剂量当量  2. 核碎片在屏蔽层中的产生  3. 粒子是否穿透到敏感体积  4. 各层对重离子的衰减效果  横截面大小设为20cm x 20cm。
+2026-05-22 06:22:01.659 [INFO] [parse_intent] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  1. 3mm铝合金舱体外壳  2. 20mm聚乙烯辐射防护层  3. 5mm凯夫拉结构层  4. 模拟航天员组织的10cm水模体（敏感体积）  需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：  - 场景A：400MeV/n 碳-12离子  - 场景B：600MeV/n 氧-16离子  - 场景C：1000MeV/n 硅
+2026-05-22 06:22:03.781 [INFO] [parse_intent] LLM 调用完成 (335 → 1146 chars)
+2026-05-22 06:22:03.781 [INFO] [parse_intent] 解析结果: orbit={'name': '深空', 'altitude_km': None, 'inclination_deg': None}, layers=4 层, particles=['碳-12离子', '氧-16离子', '硅-28离子', '铁-56离子'], scenarios=4 个, size_xy_cm=20, missing=['mission.duration_years']
+2026-05-22 06:22:03.781 [INFO] [parse_intent] === 节点退出 → design_schema ===
+2026-05-22 06:22:03.783 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：  1. 3mm铝合金舱体外壳  2. 20mm聚乙烯辐射防护层  3. 5mm凯夫拉结构层  4. 模拟航天员组织的10cm水模体（敏感体积）  需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：  - 场景A：400MeV/n 碳-12离子  - 场景B：600MeV/n 氧-16离子  - 场景C：1000MeV/n 硅
+2026-05-22 06:22:05.268 [INFO] [design_schema] LLM 调用完成 (1610 → 799 chars)
+2026-05-22 06:22:05.268 [INFO] [design_schema] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:22:05.268 [INFO] [design_schema] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:22:05.268 [INFO] [design_schema] 材料查找: 凯夫拉 → G4_KEVLAR (ρ=1.44)
+2026-05-22 06:22:05.268 [INFO] [design_schema] 材料查找: 水 → G4_WATER (ρ=1.0)
+2026-05-22 06:22:05.269 [INFO] [design_schema] 几何设计: 深空载人舱段多层屏蔽结构, 4 层, 敏感体积=水模体
+2026-05-22 06:22:05.269 [INFO] [design_schema]   铝合金舱体外壳: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:22:05.269 [INFO] [design_schema]   聚乙烯辐射防护层: 聚乙烯 (G4_POLYETHYLENE) 20.0 mm [shield]
+2026-05-22 06:22:05.269 [INFO] [design_schema]   凯夫拉结构层: 凯夫拉 (G4_KEVLAR) 5.0 mm [structure]
+2026-05-22 06:22:05.269 [INFO] [design_schema]   水模体: 水 (G4_WATER) 100.0 mm [sensitive]
+2026-05-22 06:22:05.270 [INFO] [main] 流执行错误: float() argument must be a string or a real number, not 'NoneType'

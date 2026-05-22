@@ -1,0 +1,2 @@
+2026-05-22 17:08:07.174 [INFO] 用户输入: 近地轨道过渡阶段，对比 7 种屏蔽材料在俘获质子/电子 + GCR  复合辐射场下的剂量削减效率与质量效率，输出材料优选排序
+2026-05-22 17:09:04.441 [INFO] 流执行错误: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'

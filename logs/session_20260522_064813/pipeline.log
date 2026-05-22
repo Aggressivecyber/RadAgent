@@ -1,0 +1,625 @@
+2026-05-22 06:48:13.672 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_064813
+2026-05-22 06:48:13.689 [INFO] [main] 用户输入: 模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 场景D：1000MeV/n 铁-56离子
+每个场景跑50万个事件。重点关注：
+1. 水模体中的总剂量和剂量当量
+2. 核碎片在屏蔽层中的产生
+3. 粒子是否穿透到敏感体积
+4. 各层对重离子的衰减效果
+横截面大小设为20cm x 20cm。
+2026-05-22 06:48:13.692 [INFO] [parse_intent] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:16.082 [INFO] [parse_intent] LLM 调用完成 (320 → 1142 chars)
+2026-05-22 06:48:16.082 [INFO] [parse_intent] 解析结果: orbit={'name': '深空', 'altitude_km': None, 'inclination_deg': None}, layers=4 层, particles=['碳-12离子', '氧-16离子', '硅-28离子', '铁-56离子'], scenarios=4 个, size_xy_cm=20, missing=['mission.duration_years']
+2026-05-22 06:48:16.082 [INFO] [parse_intent] === 节点退出 → design_schema ===
+2026-05-22 06:48:16.083 [INFO] [design_schema] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:17.680 [INFO] [design_schema] LLM 调用完成 (1606 → 801 chars)
+2026-05-22 06:48:17.680 [INFO] [design_schema] 材料查找: 铝合金 → G4_Al (ρ=2.699)
+2026-05-22 06:48:17.680 [INFO] [design_schema] 材料查找: 聚乙烯 → G4_POLYETHYLENE (ρ=0.94)
+2026-05-22 06:48:17.680 [INFO] [design_schema] 材料查找: 凯夫拉 → G4_KEVLAR (ρ=1.44)
+2026-05-22 06:48:17.681 [INFO] [design_schema] 材料查找: 水 → G4_WATER (ρ=1.0)
+2026-05-22 06:48:17.681 [INFO] [design_schema] 几何设计: 深空载人火星飞船多层屏蔽结构, 4 层, 敏感体积=水模体
+2026-05-22 06:48:17.681 [INFO] [design_schema]   铝合金舱体外壳: 铝合金 (G4_Al) 3.0 mm [structure]
+2026-05-22 06:48:17.681 [INFO] [design_schema]   聚乙烯辐射防护层: 聚乙烯 (G4_POLYETHYLENE) 20.0 mm [shield]
+2026-05-22 06:48:17.681 [INFO] [design_schema]   凯夫拉结构层: 凯夫拉 (G4_KEVLAR) 5.0 mm [structure]
+2026-05-22 06:48:17.681 [INFO] [design_schema]   水模体: 水 (G4_WATER) 100.0 mm [sensitive]
+2026-05-22 06:48:17.681 [INFO] [design_schema] 轨道: 深空 (0.0 km, 0.0 deg)
+2026-05-22 06:48:17.681 [INFO] [design_schema] === 节点退出 → research_params ===  geometry=深空载人火星飞船多层屏蔽结构
+2026-05-22 06:48:17.683 [INFO] [research_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:17.683 [INFO] [research_params] 查询轨道辐射环境: 深空 (0.0 km)
+2026-05-22 06:48:17.684 [INFO] [research_params] 轨道环境结果: model=AE9/AP9 典型值 (LEO), proton={'integral_flux_cm2_s': 50000.0, 'energy_range_MeV': [10, 400], 'notes': 'LEO 典型质子通量（南大西洋异常区）'}, electron={'integral_flux_cm2_s': 1000000.0, 'energy_range_MeV': [0.5, 7], 'notes': 'LEO 典型电子通量'}
+2026-05-22 06:48:17.684 [INFO] [research_params] 搜索材料辐射特性: 铝合金, 聚乙烯, 凯夫拉, 水
+2026-05-22 06:48:20.507 [INFO] [research_params] 搜索结果长度: 774 字符
+2026-05-22 06:48:20.509 [INFO] [research_params] 离子能量: 400 MeV/n × A=12 = 4800 MeV
+2026-05-22 06:48:20.509 [INFO] [research_params] 离子能量: 600 MeV/n × A=16 = 9600 MeV
+2026-05-22 06:48:20.509 [INFO] [research_params] 离子能量: 1000 MeV/n × A=28 = 28000 MeV
+2026-05-22 06:48:20.509 [INFO] [research_params] 离子能量: 1000 MeV/n × A=56 = 56000 MeV
+2026-05-22 06:48:20.509 [INFO] [research_params] 使用用户指定的 4 个场景:
+2026-05-22 06:48:20.509 [INFO] [research_params]   场景A: C_ion 400 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:48:20.509 [INFO] [research_params]   场景B: O_ion 600 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:48:20.510 [INFO] [research_params]   场景C: Si_ion 1000 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:48:20.510 [INFO] [research_params]   场景D: Fe_ion 1000 MeV/n, 500000 events, FTFP_BERT
+2026-05-22 06:48:20.510 [INFO] [research_params] === 节点退出 → confirm_params ===  scenarios(4 items)
+2026-05-22 06:48:20.512 [INFO] [confirm_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:20.513 [INFO] [confirm_params] 仿真计划已构建: 深空载人火星飞船多层屏蔽结构, 4 场景
+2026-05-22 06:48:20.515 [INFO] [main] 用户决定: yes
+2026-05-22 06:48:20.518 [INFO] [confirm_params] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:20.518 [INFO] [confirm_params] 仿真计划已构建: 深空载人火星飞船多层屏蔽结构, 4 场景
+2026-05-22 06:48:20.519 [INFO] [confirm_params] === 节点退出 → __end__ ===  sim_plan=已设置
+2026-05-22 06:48:20.521 [INFO] [research_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:31.022 [INFO] [gate] LLM 调用完成 (500 → 994 chars)
+2026-05-22 06:48:31.022 [INFO] [research_gate] 评分: 30/50, 通过=False
+2026-05-22 06:48:31.023 [INFO] [main] 用户决定: continue
+2026-05-22 06:48:31.024 [INFO] [research_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:40.013 [INFO] [gate] LLM 调用完成 (500 → 927 chars)
+2026-05-22 06:48:40.013 [INFO] [research_gate] 评分: 36/50, 通过=False
+2026-05-22 06:48:40.013 [INFO] [research_gate] 用户选择继续，放行到 parameterize
+2026-05-22 06:48:40.013 [INFO] [research_gate] === 节点退出 → parameterize ===
+2026-05-22 06:48:40.014 [INFO] [parameterize] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:40.014 [INFO] [parameterize] 计划验证通过: 深空载人火星飞船多层屏蔽结构 [铝合金舱体外壳(G4_Al 3.0mm), 聚乙烯辐射防护层(G4_POLYETHYLENE 20.0mm), 凯夫拉结构层(G4_KEVLAR 5.0mm), 水模体(G4_WATER 100.0mm)]
+2026-05-22 06:48:40.015 [INFO] [parameterize] 场景数: 4, 横截面: 20.0 cm
+2026-05-22 06:48:40.015 [INFO] [parameterize] === 节点退出 → build_and_run ===
+2026-05-22 06:48:40.015 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:40.015 [INFO] [build_and_run] 开始并发执行 4 个仿真场景
+2026-05-22 06:48:40.034 [INFO] [build_and_run]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:48:40.035 [INFO] [build_and_run]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:48:40.035 [INFO] [build_and_run]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:48:40.036 [INFO] [build_and_run]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064840_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:48:45.034 [ERROR] [build_and_run] ERROR:   [场景C] 运行失败: G4WT8 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Excep
+2026-05-22 06:48:45.034 [ERROR] [build_and_run] ERROR: 场景失败: 场景C
+2026-05-22 06:48:46.056 [ERROR] [build_and_run] ERROR:   [场景B] 运行失败: G4WT9 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT9 >  **** Track information is not available at this moment
+G4WT9 >  **** Step 
+2026-05-22 06:48:46.056 [ERROR] [build_and_run] ERROR: 场景失败: 场景B
+2026-05-22 06:48:47.082 [ERROR] [build_and_run] ERROR:   [场景D] 运行失败: G4WT7 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT7 >  **** Track information is not available at this moment
+G4WT7 >  **** Step 
+2026-05-22 06:48:47.082 [ERROR] [build_and_run] ERROR: 场景失败: 场景D
+2026-05-22 06:48:48.105 [ERROR] [build_and_run] ERROR:   [场景A] 运行失败: G4WT1 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT1 >  **** Track information is not available at this moment
+G4WT1 >  **** Step 
+2026-05-22 06:48:48.106 [ERROR] [build_and_run] ERROR: 场景失败: 场景A
+2026-05-22 06:48:48.106 [INFO] [build_and_run] === 节点退出 → parameterize (重试) ===  control(retry=1)
+2026-05-22 06:48:48.108 [INFO] [parameterize] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:48.108 [INFO] [sim_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:48:48.108 [INFO] [parameterize] 计划验证通过: 深空载人火星飞船多层屏蔽结构 [铝合金舱体外壳(G4_Al 3.0mm), 聚乙烯辐射防护层(G4_POLYETHYLENE 20.0mm), 凯夫拉结构层(G4_KEVLAR 5.0mm), 水模体(G4_WATER 100.0mm)]
+2026-05-22 06:48:48.109 [INFO] [parameterize] 场景数: 4, 横截面: 20.0 cm
+2026-05-22 06:48:48.109 [INFO] [parameterize] === 节点退出 → build_and_run ===
+2026-05-22 06:48:52.921 [INFO] [gate] LLM 调用完成 (500 → 689 chars)
+2026-05-22 06:48:52.921 [INFO] [sim_gate] 评分: 0/50, 通过=False
+2026-05-22 06:48:52.921 [INFO] [sim_gate] 门禁失败，回退到 parameterize (重试 2/3)
+2026-05-22 06:48:52.921 [INFO] [sim_gate] === 节点退出 → parameterize ===
+2026-05-22 06:48:52.922 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，仿真未执行，无任何输出结果。
+  - 结果为空：仿真结果数组为空，无事件数、剂量等任何数据。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量均为0，物理
+2026-05-22 06:48:52.922 [INFO] [parameterize] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，仿真未执行，无任何输出结果。
+  - 结果为空：仿真结果数组为空，无事件数、剂量等任何数据。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量均为0，物理
+2026-05-22 06:48:52.923 [INFO] [parameterize] 计划验证通过: 深空载人火星飞船多层屏蔽结构 [铝合金舱体外壳(G4_Al 3.0mm), 聚乙烯辐射防护层(G4_POLYETHYLENE 20.0mm), 凯夫拉结构层(G4_KEVLAR 5.0mm), 水模体(G4_WATER 100.0mm)]
+2026-05-22 06:48:52.923 [INFO] [parameterize] 场景数: 4, 横截面: 20.0 cm
+2026-05-22 06:48:52.923 [INFO] [parameterize] === 节点退出 → build_and_run ===
+2026-05-22 06:48:52.923 [INFO] [build_and_run] 开始并发执行 4 个仿真场景
+2026-05-22 06:48:52.945 [INFO] [build_and_run]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:48:52.951 [INFO] [build_and_run]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:48:52.951 [INFO] [build_and_run]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:48:52.952 [INFO] [build_and_run]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064852_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:48:58.088 [ERROR] [build_and_run] ERROR:   [场景C] 运行失败: G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 >  **** Track information is not available at this moment
+G4WT12 >  **** St
+2026-05-22 06:48:58.088 [ERROR] [build_and_run] ERROR: 场景失败: 场景C
+2026-05-22 06:48:59.118 [ERROR] [build_and_run] ERROR:   [场景B] 运行失败: G4WT10 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT10 >  **** Track information is not available at this moment
+G4WT10 >  **** St
+2026-05-22 06:48:59.118 [ERROR] [build_and_run] ERROR: 场景失败: 场景B
+2026-05-22 06:49:00.140 [ERROR] [build_and_run] ERROR:   [场景A] 运行失败: G4WT0 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT0 >  **** Track information is not available at this moment
+G4WT0 >  **** Step 
+2026-05-22 06:49:00.140 [ERROR] [build_and_run] ERROR: 场景失败: 场景A
+2026-05-22 06:49:01.170 [ERROR] [build_and_run] ERROR:   [场景D] 运行失败: G4WT2 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT2 >  **** Track information is not available at this moment
+G4WT2 >  **** Step 
+2026-05-22 06:49:01.170 [ERROR] [build_and_run] ERROR: 场景失败: 场景D
+2026-05-22 06:49:01.171 [INFO] [build_and_run] === 节点退出 → parameterize (重试) ===  control(retry=3)
+2026-05-22 06:49:01.172 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:49:01.174 [INFO] [sim_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:49:01.174 [INFO] [parameterize] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+- 
+2026-05-22 06:49:01.178 [INFO] [parameterize] 计划验证通过: 深空载人火星飞船多层屏蔽结构 [铝合金舱体外壳(G4_Al 3.0mm), 聚乙烯辐射防护层(G4_POLYETHYLENE 20.0mm), 凯夫拉结构层(G4_KEVLAR 5.0mm), 水模体(G4_WATER 100.0mm)]
+2026-05-22 06:49:01.178 [INFO] [parameterize] 场景数: 4, 横截面: 20.0 cm
+2026-05-22 06:49:01.178 [INFO] [build_and_run] 开始并发执行 4 个仿真场景
+2026-05-22 06:49:01.179 [INFO] [parameterize] === 节点退出 → build_and_run ===
+2026-05-22 06:49:01.202 [INFO] [build_and_run]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:49:01.204 [INFO] [build_and_run]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:49:01.206 [INFO] [build_and_run]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:49:01.207 [INFO] [build_and_run]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064901_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:49:09.481 [ERROR] [build_and_run] ERROR:   [场景D] 运行失败: G4WT3 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT3 >  **** Track information is not available at this moment
+G4WT3 >  **** Step 
+2026-05-22 06:49:09.481 [ERROR] [build_and_run] ERROR: 场景失败: 场景D
+2026-05-22 06:49:10.491 [INFO] [gate] LLM 调用完成 (500 → 826 chars)
+2026-05-22 06:49:10.491 [INFO] [sim_gate] 评分: 0/50, 通过=False
+2026-05-22 06:49:10.491 [ERROR] [sim_gate] ERROR: 门禁失败且已重试 3 次，跳转到报告生成
+2026-05-22 06:49:10.491 [INFO] [sim_gate] === 节点退出 → generate_report ===
+2026-05-22 06:49:10.504 [ERROR] [build_and_run] ERROR:   [场景B] 运行失败: G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 >  **** Track information is not available at this moment
+G4WT12 >  **** St
+2026-05-22 06:49:10.504 [ERROR] [build_and_run] ERROR: 场景失败: 场景B
+2026-05-22 06:49:11.520 [ERROR] [build_and_run] ERROR:   [场景C] 运行失败: G4WT13 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT13 >  **** Track information is not available at this moment
+G4WT13 >  **** St
+2026-05-22 06:49:11.520 [ERROR] [build_and_run] ERROR: 场景失败: 场景C
+2026-05-22 06:49:12.545 [ERROR] [build_and_run] ERROR:   [场景A] 运行失败: G4WT12 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT12 >  **** Track information is not available at this moment
+G4WT12 >  **** St
+2026-05-22 06:49:12.545 [ERROR] [build_and_run] ERROR: 场景失败: 场景A
+2026-05-22 06:49:12.546 [INFO] [build_and_run] === 节点退出 → sim_gate ===  build(compile=False, run=False) | results(0 scenarios)
+2026-05-22 06:49:12.547 [INFO] [build_and_run] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok为false，且未提供编译错误信息，无法确认失败原因。
+  - 运行失败：run_ok为false，仿真未执行，无任何输出结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量数据可供分析。
+  - 仿真计划与结果脱节：虽然仿真计划详细定义了深空载人火星飞船多层屏蔽结构及4种高能重离子场景，但实际未产生任
+2026-05-22 06:49:12.548 [INFO] [build_and_run] 开始并发执行 4 个仿真场景
+2026-05-22 06:49:12.551 [INFO] [generate_report] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok为false，且未提供编译错误信息，无法确认失败原因。
+  - 运行失败：run_ok为false，仿真未执行，无任何输出结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量数据可供分析。
+  - 仿真计划与结果脱节：虽然仿真计划详细定义了深空载人火星飞船多层屏蔽结构及4种高能重离子场景，但实际未产生任
+2026-05-22 06:49:12.551 [INFO] [sim_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok为false，且未提供编译错误信息，无法确认失败原因。
+  - 运行失败：run_ok为false，仿真未执行，无任何输出结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量数据可供分析。
+  - 仿真计划与结果脱节：虽然仿真计划详细定义了深空载人火星飞船多层屏蔽结构及4种高能重离子场景，但实际未产生任
+2026-05-22 06:49:12.553 [INFO] [generate_report] 调用 LLM 生成报告 (203 场景, 0 结果)
+2026-05-22 06:49:12.570 [INFO] [build_and_run]   [场景D] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_Fe_ion56000MeV
+2026-05-22 06:49:12.571 [INFO] [build_and_run]   [场景A] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_C_ion4800MeV
+2026-05-22 06:49:12.573 [INFO] [build_and_run]   [场景C] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_Si_ion28000MeV
+2026-05-22 06:49:12.576 [INFO] [build_and_run]   [场景B] 渲染完成: /home/rylan/RadAgent/workspace/20260522_064912_深空载人火星飞船多层屏蔽结构_O_ion9600MeV
+2026-05-22 06:49:20.907 [ERROR] [build_and_run] ERROR:   [场景C] 运行失败: G4WT2 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT2 >  **** Track information is not available at this moment
+G4WT2 >  **** Step 
+2026-05-22 06:49:20.907 [ERROR] [build_and_run] ERROR: 场景失败: 场景C
+2026-05-22 06:49:21.931 [ERROR] [build_and_run] ERROR:   [场景D] 运行失败: G4WT1 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT1 >  **** Track information is not available at this moment
+G4WT1 >  **** Step 
+2026-05-22 06:49:21.932 [ERROR] [build_and_run] ERROR: 场景失败: 场景D
+2026-05-22 06:49:22.015 [INFO] [gate] LLM 调用完成 (500 → 771 chars)
+2026-05-22 06:49:22.015 [INFO] [sim_gate] 评分: 0/50, 通过=False
+2026-05-22 06:49:22.015 [ERROR] [sim_gate] ERROR: 门禁失败且已重试 3 次，跳转到报告生成
+2026-05-22 06:49:22.015 [INFO] [sim_gate] === 节点退出 → generate_report ===
+2026-05-22 06:49:22.957 [ERROR] [build_and_run] ERROR:   [场景B] 运行失败: G4WT3 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT3 >  **** Track information is not available at this moment
+G4WT3 >  **** Step 
+2026-05-22 06:49:22.958 [ERROR] [build_and_run] ERROR: 场景失败: 场景B
+2026-05-22 06:49:23.316 [INFO] [generate_report] LLM 调用完成 (591 → 2614 chars)
+2026-05-22 06:49:23.317 [INFO] [generate_report] 报告生成完成 (2614 字)
+2026-05-22 06:49:23.317 [INFO] [generate_report] === 节点退出 → human_review ===  report(2614 chars)
+2026-05-22 06:49:23.985 [ERROR] [build_and_run] ERROR:   [场景A] 运行失败: G4WT11 > 
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0101
+      issued by : G4ParticleGun::SetParticleDefinition()
+Null pointer is given.
+*** Fatal Exception *** core dump ***
+G4WT11 >  **** Track information is not available at this moment
+G4WT11 >  **** St
+2026-05-22 06:49:23.985 [ERROR] [build_and_run] ERROR: 场景失败: 场景A
+2026-05-22 06:49:23.986 [INFO] [build_and_run] === 节点退出 → sim_gate ===  build(compile=False, run=False) | results(0 scenarios)
+2026-05-22 06:49:23.988 [INFO] [generate_report] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok = false，且未提供编译错误信息（compile_error为空），无法确认具体失败原因。
+  - 运行失败：run_ok = false，且无标准输出和错误输出，仿真未产生任何结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量信息可评估。
+  - 仿真计划中引用的轨道数据（AE9/AP9典型值
+2026-05-22 06:49:23.988 [INFO] [sim_gate] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok = false，且未提供编译错误信息（compile_error为空），无法确认具体失败原因。
+  - 运行失败：run_ok = false，且无标准输出和错误输出，仿真未产生任何结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量信息可评估。
+  - 仿真计划中引用的轨道数据（AE9/AP9典型值
+2026-05-22 06:49:23.988 [INFO] [human_review] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok = false，且未提供编译错误信息（compile_error为空），无法确认具体失败原因。
+  - 运行失败：run_ok = false，且无标准输出和错误输出，仿真未产生任何结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量信息可评估。
+  - 仿真计划中引用的轨道数据（AE9/AP9典型值
+2026-05-22 06:49:23.989 [INFO] [generate_report] 调用 LLM 生成报告 (203 场景, 0 结果)
+2026-05-22 06:49:29.212 [INFO] [gate] LLM 调用完成 (500 → 891 chars)
+2026-05-22 06:49:29.212 [INFO] [sim_gate] 评分: 0/50, 通过=False
+2026-05-22 06:49:29.213 [ERROR] [sim_gate] ERROR: 门禁失败且已重试 3 次，跳转到报告生成
+2026-05-22 06:49:29.213 [INFO] [sim_gate] === 节点退出 → generate_report ===
+2026-05-22 06:49:33.486 [INFO] [generate_report] LLM 调用完成 (591 → 2164 chars)
+2026-05-22 06:49:33.486 [INFO] [generate_report] 报告生成完成 (2164 字)
+2026-05-22 06:49:33.486 [INFO] [generate_report] === 节点退出 → human_review ===  report(2164 chars)
+2026-05-22 06:49:33.489 [INFO] [main] 用户决定: yes
+2026-05-22 06:49:33.491 [INFO] [human_review] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok = false，且未提供编译错误信息（compile_error为空），无法确认具体失败原因。
+  - 运行失败：run_ok = false，且无标准输出和错误输出，仿真未产生任何结果。
+  - 结果为空：仿真结果数组为空，无任何事件数据或剂量信息可评估。
+  - 仿真计划中引用的轨道数据（AE9/AP9典型值
+2026-05-22 06:49:33.491 [INFO] [human_review] 用户批准报告
+2026-05-22 06:49:33.491 [INFO] [human_review] === 节点退出 → __end__ ===  control(retry=0)
+2026-05-22 06:49:33.493 [INFO] [human_review] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，且无标准输出或错误输出，仿真未执行。
+  - 结果为空：仿真结果数组为空，无任何事件或剂量数据可供分析。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量
+2026-05-22 06:49:33.493 [INFO] [generate_report] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，且无标准输出或错误输出，仿真未执行。
+  - 结果为空：仿真结果数组为空，无任何事件或剂量数据可供分析。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量
+2026-05-22 06:49:33.494 [INFO] [generate_report] 调用 LLM 生成报告 (203 场景, 0 结果)
+2026-05-22 06:49:43.581 [INFO] [generate_report] LLM 调用完成 (591 → 2492 chars)
+2026-05-22 06:49:43.581 [INFO] [generate_report] 报告生成完成 (2492 字)
+2026-05-22 06:49:43.582 [INFO] [generate_report] === 节点退出 → human_review ===  report(2492 chars)
+2026-05-22 06:49:43.584 [INFO] [main] 用户决定: yes
+2026-05-22 06:49:43.585 [INFO] [human_review] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，且无标准输出或错误输出，仿真未执行。
+  - 结果为空：仿真结果数组为空，无任何事件或剂量数据可供分析。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量
+2026-05-22 06:49:43.585 [INFO] [human_review] 用户批准报告
+2026-05-22 06:49:43.586 [INFO] [human_review] === 节点退出 → __end__ ===  control(retry=0)
+2026-05-22 06:49:43.587 [INFO] [human_review] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，且无标准输出或错误输出，仿真未执行。
+  - 结果为空：仿真结果数组为空，无任何事件或剂量数据可供分析。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量
+2026-05-22 06:49:43.588 [INFO] [main] 用户决定: yes
+2026-05-22 06:49:43.589 [INFO] [human_review] === 节点进入 ===  user_input=模拟一艘前往火星的深空载人飞船舱段。屏蔽结构从外到内为：
+1. 3mm铝合金舱体外壳
+2. 20mm聚乙烯辐射防护层
+3. 5mm凯夫拉结构层
+4. 模拟航天员组织的10cm水模体（敏感体积）
+需要评估银河宇宙射线(GCR)重离子的辐射危害，模拟以下粒子场景：
+- 场景A：400MeV/n 碳-12离子
+- 场景B：600MeV/n 氧-16离子
+- 场景C：1000MeV/n 硅-28离子
+-   parse_error=[sim_gate] 评分 0/50
+问题:
+  - 编译失败：compile_ok 为 false，且未提供编译错误信息，无法确认构建是否成功。
+  - 运行失败：run_ok 为 false，且无标准输出或错误输出，仿真未执行。
+  - 结果为空：仿真结果数组为空，无任何事件或剂量数据可供分析。
+  - 仿真计划中引用的轨道数据（AE9/AP9 LEO）与场景名称（深空）矛盾，且质子/电子通量
+2026-05-22 06:49:43.590 [INFO] [human_review] 用户批准报告
+2026-05-22 06:49:43.590 [INFO] [human_review] === 节点退出 → __end__ ===  control(retry=0)

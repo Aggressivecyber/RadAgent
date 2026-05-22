@@ -1,0 +1,34 @@
+{
+  "geometry": {
+    "name": "LEO多层屏蔽结构-铝基防护",
+    "layers": [
+      {
+        "name": "外层结构",
+        "material": "铝",
+        "geant4_material": "G4_Al",
+        "thickness_mm": 50.0,
+        "role": "shield"
+      },
+      {
+        "name": "中层绝热屏蔽",
+        "material": "聚酰亚胺",
+        "geant4_material": "G4_KAPTON",
+        "thickness_mm": 5.0,
+        "role": "insulation"
+      },
+      {
+        "name": "内层敏感体积",
+        "material": "硅",
+        "geant4_material": "G4_Si",
+        "thickness_mm": 2.0,
+        "role": "sensitive"
+      }
+    ],
+    "sensitive_volume": "内层敏感体积"
+  },
+  "orbit": {
+    "name": "LEO",
+    "altitude_km": 10000.0,
+    "inclination_deg": 60.0
+  }
+}

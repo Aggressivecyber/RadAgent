@@ -1,0 +1,34 @@
+{
+  "geometry": {
+    "name": "亚轨道铝基多层屏蔽体",
+    "layers": [
+      {
+        "name": "外层结构壳",
+        "material": "铝合金",
+        "geant4_material": "G4_Al",
+        "thickness_mm": 50.0,
+        "role": "structure"
+      },
+      {
+        "name": "中层绝热屏蔽层",
+        "material": "聚酰亚胺",
+        "geant4_material": "G4_KAPTON",
+        "thickness_mm": 10.0,
+        "role": "insulation"
+      },
+      {
+        "name": "内层敏感体积",
+        "material": "硅",
+        "geant4_material": "G4_Si",
+        "thickness_mm": 5.0,
+        "role": "sensitive"
+      }
+    ],
+    "sensitive_volume": "内层敏感体积"
+  },
+  "orbit": {
+    "name": "LEO",
+    "altitude_km": 10.0,
+    "inclination_deg": 0.0
+  }
+}
