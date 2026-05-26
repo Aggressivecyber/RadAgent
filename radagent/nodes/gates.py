@@ -180,15 +180,21 @@ def _gate_fail(
         f"改进建议:\n{suggestions_text}"
     )
 
-    if control.retry_count >= control.max_retries:
+    next_retry = control.retry_count + 1
+
+    if next_retry > control.max_retries:
         log_error(gate_name, f"门禁失败且已重试 {control.max_retries} 次，跳转到报告生成")
         return Command(update={"parse_error": error_msg}, goto="generate_report")
 
-    log_info(gate_name, f"门禁失败，转到 revise 节点 (重试 {control.retry_count + 1}/{control.max_retries})")
+    log_info(gate_name, f"门禁失败，转到 revise 节点 (重试 {next_retry}/{control.max_retries})")
     return Command(update={
         "parse_error": error_msg,
         "gate_feedback": error_msg,
         "gate_feedback_source": gate_name,
+        "control": ControlState(
+            retry_count=next_retry,
+            max_retries=control.max_retries,
+        ),
     }, goto="revise")
 
 
