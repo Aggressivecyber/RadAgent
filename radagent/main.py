@@ -34,6 +34,40 @@ def _read_user_input() -> str:
     return "\n".join(lines)
 
 
+def _select_user(memory: MemoryStore):
+    """交互式用户选择/创建"""
+    from radagent.memory.models import User
+    # 列出已有用户
+    users = memory.list_users()
+    if users:
+        print("\n已有用户:")
+        for i, u in enumerate(users, 1):
+            proj_count = len(memory.list_projects(u.id))
+            print(f"  {i}. {u.display_name}  ({proj_count} 个项目)")
+        print(f"  {len(users) + 1}. 新建用户")
+        print()
+        choice = input("选择用户 (编号或名称): ").strip()
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(users):
+                return users[idx]
+        # 按名称查找
+        for u in users:
+            if u.id == choice or u.display_name == choice:
+                return u
+        # 非空输入 → 新建
+        if choice:
+            return memory.get_or_create_user(choice, choice)
+        # 空输入 → 默认用户
+        return memory.get_or_create_user(DEFAULT_USER)
+
+    # 无已有用户
+    name = input("\n请输入用户名 (回车使用 default): ").strip()
+    if not name:
+        name = DEFAULT_USER
+    return memory.get_or_create_user(name, name)
+
+
 def main():
     print("=" * 60)
     print("  RadG4-Agent — 航天辐照仿真智能体")
@@ -42,7 +76,13 @@ def main():
 
     session_dir = init_session_log()
     memory = MemoryStore(MEMORY_DB)
-    user = memory.get_or_create_user(DEFAULT_USER)
+
+    # pipe 模式跳过用户选择
+    if _IS_PIPE:
+        user = memory.get_or_create_user(DEFAULT_USER)
+    else:
+        user = _select_user(memory)
+
     graph = build_graph()
 
     # ── 项目选择 ──────────────────────────────────────────────

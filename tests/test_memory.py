@@ -32,6 +32,14 @@ class TestUser:
         u = store.get_or_create_user("bob")
         assert u.display_name == "bob"
 
+    def test_list_users(self, store):
+        store.get_or_create_user("u1", "Alice")
+        store.get_or_create_user("u2", "Bob")
+        users = store.list_users()
+        assert len(users) == 2
+        ids = {u.id for u in users}
+        assert ids == {"u1", "u2"}
+
 
 class TestProject:
     def test_create_project(self, store):

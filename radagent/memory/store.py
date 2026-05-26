@@ -59,6 +59,10 @@ class MemoryStore:
         self._log("create_user", user_id)
         return User(id=user_id, display_name=display_name or user_id, created_at=now)
 
+    def list_users(self) -> list[User]:
+        rows = self._conn.execute("SELECT * FROM users ORDER BY created_at").fetchall()
+        return [User(**dict(r)) for r in rows]
+
     # ── 项目 ──────────────────────────────────────────────────
 
     def create_project(self, user_id: str, user_input: str) -> Project:
