@@ -5,6 +5,7 @@ import sqlite3
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from radagent.state import RadAgentState
 from radagent.subgraphs.research.research import build_research_subgraph
@@ -16,6 +17,20 @@ from radagent.nodes.report import generate_report, human_review
 from radagent.nodes.gates import sim_gate, report_gate
 
 logger = logging.getLogger("radagent.node.tools")
+
+_SCHEMA_ALLOWLIST = {
+    ("radagent.schemas", "ShieldLayer"),
+    ("radagent.schemas", "ShieldGeometry"),
+    ("radagent.schemas", "OrbitEnvironment"),
+    ("radagent.schemas", "ParticleSource"),
+    ("radagent.schemas", "SimulationScenario"),
+    ("radagent.schemas", "SimulationPlan"),
+    ("radagent.schemas", "BuildResult"),
+    ("radagent.schemas", "SimulationResult"),
+    ("radagent.schemas", "AnomalyCheck"),
+    ("radagent.schemas", "ControlState"),
+    ("radagent.schemas", "GateResult"),
+}
 
 
 def build_graph() -> StateGraph:
@@ -51,7 +66,8 @@ def build_graph() -> StateGraph:
     from radagent.config import CHECKPOINT_DB
     CHECKPOINT_DB.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(CHECKPOINT_DB), check_same_thread=False)
-    checkpointer = SqliteSaver(conn)
+    serde = JsonPlusSerializer(allowed_msgpack_modules=_SCHEMA_ALLOWLIST)
+    checkpointer = SqliteSaver(conn, serde=serde)
     graph = builder.compile(checkpointer=checkpointer)
     logger.info("主图编译完成")
 
