@@ -25,6 +25,14 @@ MAX_RETRIES = 3
 LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_LEVEL = "DEBUG"
 
+# Memory (L2+L3)
+MEMORY_DIR = Path(__file__).parent / "memory"
+MEMORY_DB = MEMORY_DIR / "store.db"
+CHECKPOINT_DB = MEMORY_DIR / "checkpoints.db"
+
+# Default user
+DEFAULT_USER = os.environ.get("RADAGENT_USER", "default")
+
 # ─── 模型路由：三档 ──────────────────────────────────────────
 # light  → 快速提取（意图解析、参数解析、反馈解析）
 # standard → 通用推理（屏蔽设计、场景生成、报告生成）

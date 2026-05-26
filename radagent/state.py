@@ -27,7 +27,10 @@ class RadAgentState(TypedDict):
     results: Annotated[list[SimulationResult], operator.add]
     anomaly: Annotated[list[AnomalyCheck], operator.add]
     figure_paths: dict
+    analysis_data: dict
     report: str
     control: ControlState
     parse_error: Annotated[str, _last_value]
     gate_feedback: str
+    gate_feedback_source: str
+    simulation_id: str        # L3 simulation record ID

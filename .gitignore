@@ -9,3 +9,6 @@ build/
 *.o
 .gitignore
 CLAUDE.md
+radagent/memory/checkpoints.db
+radagent/memory/store.db
+logs/

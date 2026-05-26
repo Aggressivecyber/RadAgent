@@ -27,5 +27,6 @@ class ResearchState(TypedDict):
     sim_plan: SimulationPlan | None
     parse_error: str
     gate_feedback: str
+    qc_retry_count: int
     unresolved_materials: list[str]
     unresolved_particles: list[str]

@@ -26,12 +26,16 @@ _NODE_ORDER: dict[str, int] = {
     "parse_intent": 1,
     "design_schema": 2,
     "research_params": 3,
-    "confirm_params": 4,
-    "parameterize": 5,
-    "build_and_run": 6,
-    "analyze": 7,
-    "generate_report": 8,
-    "human_review": 9,
+    "research_qc": 4,
+    "revise": 5,
+    "confirm_params": 6,
+    "parameterize": 7,
+    "build_and_run": 8,
+    "sim_gate": 9,
+    "analyze": 10,
+    "report_gate": 11,
+    "generate_report": 12,
+    "human_review": 13,
 }
 
 # 全局会话状态
@@ -346,8 +350,9 @@ def _extract_snapshot(state: dict[str, Any]) -> dict[str, Any]:
 
 # 管线节点顺序（用于判定进度百分比）
 _PIPELINE_STEPS: list[str] = [
-    "parse_intent", "design_schema", "research_params", "confirm_params",
-    "parameterize", "build_and_run", "analyze", "generate_report", "human_review",
+    "parse_intent", "design_schema", "research_params", "research_qc",
+    "confirm_params", "parameterize", "build_and_run", "sim_gate",
+    "analyze", "report_gate", "generate_report", "human_review",
 ]
 
 

@@ -1,14 +1,16 @@
 """RadG4-Agent CLI 入口"""
 
+import json
 import sys
 
 from langgraph.types import Command
 
 from radagent.graph import build_graph
 from radagent.log import init_session_log, log_info, get_session_dir
+from radagent.memory import MemoryStore
+from radagent.config import MEMORY_DB, DEFAULT_USER
 from radagent.schemas import BuildResult, ControlState
 
-# pipe 模式下自动确认（stdin 内容已被初始输入消耗完）
 _IS_PIPE = not sys.stdin.isatty()
 
 
@@ -39,43 +41,129 @@ def main():
     print("=" * 60)
 
     session_dir = init_session_log()
+    memory = MemoryStore(MEMORY_DB)
+    user = memory.get_or_create_user(DEFAULT_USER)
     graph = build_graph()
-    config = {"configurable": {"thread_id": "radagent-v1"}}
 
-    print("\n请描述辐照仿真需求:")
-    user_input = _read_user_input()
-    if not user_input:
+    # ── 项目选择 ──────────────────────────────────────────────
+    projects = memory.list_projects(user.id)
+    project = None
+    branch = None
+    sim = None
+    initial_state = None
+
+    if projects and not _IS_PIPE:
+        print(f"\n欢迎, {user.display_name}! 近期项目:")
+        for i, p in enumerate(projects[:10], 1):
+            print(f"  {i}. [{p.status}] {p.title}  ({p.created_at[:10]})")
+        print(f"\n输入编号继续, 或输入新需求开始新项目")
+
+    user_input_raw = _read_user_input()
+    if not user_input_raw:
         print("再见！")
+        memory.close()
         return
 
+    # 判断是选择已有项目还是新需求
+    if projects and not _IS_PIPE and user_input_raw.isdigit():
+        idx = int(user_input_raw) - 1
+        if 0 <= idx < len(projects):
+            project = projects[idx]
+            branch = memory.get_main_branch(project.id)
+            sim = memory.get_latest_simulation(branch.id)
+            # 恢复已有项目：让用户输入修改指令
+            print(f"\n项目: {project.title}")
+            branches = memory.list_branches(project.id)
+            for b in branches:
+                latest = memory.get_latest_simulation(b.id)
+                status = latest.status if latest else "none"
+                print(f"  分支 [{b.label}] → {status}")
+
+            print("\n输入修改指令创建新分支, 或输入新需求")
+            mod_input = _read_user_input()
+            if not mod_input:
+                print("再见！")
+                memory.close()
+                return
+
+            # 创建新分支
+            parent_sim_id = sim.id if sim else ""
+            branch = memory.create_branch(
+                project_id=project.id,
+                label=mod_input[:40],
+                parent_branch_id=branch.id,
+                parent_sim_id=parent_sim_id,
+            )
+            user_input = mod_input
+            initial_state = None
+        else:
+            print("无效编号")
+            memory.close()
+            return
+    else:
+        user_input = user_input_raw
+
+    # ── 创建项目/仿真记录 ────────────────────────────────────
     log_info("main", f"用户输入: {user_input}")
 
-    initial_state = {
-        "messages": [],
-        "user_input": user_input,
-        "sim_plan": None,
-        "build": BuildResult(),
-        "results": [],
-        "anomaly": [],
-        "figure_paths": {},
-        "report": "",
-        "control": ControlState(),
-        "parse_error": "",
-        "gate_feedback": "",
-    }
+    if project is None:
+        project = memory.create_project(user.id, user_input)
+        branch = memory.get_main_branch(project.id)
 
-    print(f"\n--- 开始处理 (日志: {session_dir}) ---\n")
+    sim = memory.create_simulation(branch.id, str(session_dir))
 
-    # 阶段 1: 流式执行，处理子图中的 interrupt（confirm_params）
+    if initial_state is None:
+        initial_state = {
+            "messages": [],
+            "user_input": user_input,
+            "sim_plan": None,
+            "build": BuildResult(),
+            "results": [],
+            "anomaly": [],
+            "figure_paths": {},
+            "analysis_data": {},
+            "report": "",
+            "control": ControlState(),
+            "parse_error": "",
+            "gate_feedback": "",
+            "gate_feedback_source": "",
+            "simulation_id": sim.id,
+        }
+    else:
+        initial_state["user_input"] = user_input
+        initial_state["simulation_id"] = sim.id
+
+    config = {"configurable": {"thread_id": f"radagent-{project.id}-{branch.id}"}}
+
+    print(f"\n--- 开始处理 (日志: {session_dir}, 项目: {project.title}) ---\n")
+
+    # ── 执行管线 ──────────────────────────────────────────────
     _run_stream(graph, initial_state, config)
 
-    # 阶段 2: 处理剩余 interrupt（human_review）
+    # 处理 interrupt
     state_snapshot = graph.get_state(config)
     while state_snapshot.next:
-        if not _handle_interrupt(graph, config, state_snapshot):
+        if not _handle_interrupt(graph, config, state_snapshot, memory, sim.id):
             break
         state_snapshot = graph.get_state(config)
 
+    # ── 更新仿真记录 ──────────────────────────────────────────
+    final = graph.get_state(config)
+    final_results = final.values.get("results", [])
+    final_report = final.values.get("report", "")
+    final_plan = final.values.get("sim_plan")
+
+    memory.update_simulation(
+        sim.id,
+        sim_plan=json.dumps(_to_json_safe(final_plan), ensure_ascii=False) if final_plan else "",
+        results=json.dumps([_to_json_safe(r) for r in final_results], ensure_ascii=False) if final_results else "",
+        report=final_report,
+        status="completed",
+        finished_at=MemoryStore._now(),
+    )
+    memory.update_project_status(project.id, "completed")
+
+    memory.close()
     print("\n完成！")
 
 
@@ -102,12 +190,6 @@ def _print_node_update(node_name: str, output: dict):
         err = output.get("parse_error")
         if err:
             print(f"  [调研错误] {err[:200]}")
-
-    elif node_name == "research_gate":
-        err = output.get("parse_error", "")
-        if not err:
-            print(f"  [门禁 ✓] 调研质量通过")
-        # 门禁失败时会在 _handle_interrupt 中展示详情
 
     elif node_name == "parameterize":
         build = output.get("build")
@@ -161,11 +243,14 @@ def _print_node_update(node_name: str, output: dict):
         print(f"\n  [报告] 已生成 ({len(report)} 字)")
 
     elif node_name == "human_review":
-        pass  # 在 _handle_interrupt 中处理
+        pass
+
+    elif node_name == "revise":
+        print(f"  [修订] 分析中...")
 
 
-def _handle_interrupt(graph, config, snapshot) -> bool:
-    """处理 interrupt（confirm_params 或 human_review），返回 True 表示继续"""
+def _handle_interrupt(graph, config, snapshot, memory, sim_id) -> bool:
+    """处理 interrupt，返回 True 表示继续"""
     if not snapshot.tasks:
         return False
 
@@ -175,9 +260,7 @@ def _handle_interrupt(graph, config, snapshot) -> bool:
 
         info = task.interrupts[0].value
 
-        # 区分确认类型
         if info.get("type") == "plan_confirmation":
-            # confirm_params: 显示仿真计划
             print("\n" + "=" * 50)
             print("仿真计划确认")
             print("=" * 50)
@@ -199,7 +282,6 @@ def _handle_interrupt(graph, config, snapshot) -> bool:
                 resume_value = {"action": "modify", "feedback": decision}
 
         elif info.get("type") == "gate_warning":
-            # 门禁警告：展示问题和建议，让用户决定
             gate_name = info.get("gate_name", "unknown")
             print(f"\n{'=' * 50}")
             print(f"门禁警告 [{gate_name}]")
@@ -219,7 +301,6 @@ def _handle_interrupt(graph, config, snapshot) -> bool:
                 resume_value = {"action": "modify", "feedback": decision}
 
         else:
-            # human_review: 报告审核
             print("\n" + "=" * 50)
             print("报告审核")
             print("=" * 50)
@@ -239,6 +320,17 @@ def _handle_interrupt(graph, config, snapshot) -> bool:
 
         log_info("main", f"用户决定: {decision}")
 
+        # 记录用户决策到 L2
+        try:
+            memory.append_attempt(
+                simulation_id=sim_id,
+                node="interrupt",
+                user_action=str(resume_value.get("action", resume_value.get("approved", ""))),
+                user_feedback=resume_value.get("feedback", ""),
+            )
+        except Exception as e:
+            log_info("main", f"记忆写入失败: {e}")
+
         try:
             graph.invoke(Command(resume=resume_value), config=config)
         except Exception as e:
@@ -249,6 +341,21 @@ def _handle_interrupt(graph, config, snapshot) -> bool:
         return True
 
     return False
+
+
+def _to_json_safe(obj):
+    """递归转换为 JSON 安全类型"""
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, dict):
+        return {k: _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(i) for i in obj]
+    if hasattr(obj, "__dataclass_fields__"):
+        return {k: _to_json_safe(getattr(obj, k)) for k in obj.__dataclass_fields__}
+    return str(obj)
 
 
 if __name__ == "__main__":
