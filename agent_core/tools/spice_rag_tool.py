@@ -1,14 +1,14 @@
-"""SPICE RAG tool - stub implementation for MVP-1 with full interface."""
+"""SPICE RAG tool — stub for MVP-1 (Geant4-only scope).
+
+MVP-1 scope: Geant4 only. SPICE retrieval will be added in MVP-6+.
+Source: knowledge_base/spice/ (future)
+"""
 
 
 class SPICERAGTool:
-    """SPICE RAG tool for retrieving SPICE-related context.
+    """SPICE RAG tool — returns empty results until SPICE scope is implemented."""
 
-    MVP-1: Stub implementation that returns empty results.
-    Full implementation will be added in MVP-6.
-    """
-
-    def __init__(self, endpoint: str | None = None):
+    def __init__(self, endpoint: str | None = None) -> None:
         self.endpoint = endpoint
         self.available = False
 
@@ -38,7 +38,7 @@ class SPICERAGTool:
             "sufficiency": {
                 "score": 0.0,
                 "missing_items": ["SPICE RAG not yet implemented"],
-                "decision": "block",
+                "decision": "block_no_context",
             },
             "query_used": query,
             "sources_queried": [],

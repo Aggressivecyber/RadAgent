@@ -90,7 +90,7 @@ class TestRAGContextPack:
         )
         report = compute_sufficiency(context)
         assert report.score >= 0.75
-        assert report.decision in ("allow", "allow_with_warning")
+        assert report.decision in ("allow_rag", "needs_web")
 
     def test_sufficiency_with_no_context(self):
         """No context should have zero score."""
@@ -98,7 +98,7 @@ class TestRAGContextPack:
         report = compute_sufficiency(context)
         # Empty error_cases counts as "no_errors" -> +0.15
         assert report.score == 0.15
-        assert report.decision == "block"
+        assert report.decision == "block_no_context"
 
     def test_sufficiency_with_manual_only(self):
         """Only manual snippets should give score of 0.30 (manual) + 0.15 (no errors)."""
@@ -107,4 +107,4 @@ class TestRAGContextPack:
         )
         report = compute_sufficiency(context)
         assert report.score == pytest.approx(0.45)
-        assert report.decision == "block"
+        assert report.decision == "block_no_context"

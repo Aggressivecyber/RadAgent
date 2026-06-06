@@ -19,7 +19,7 @@ async def route_rag(state: RadiationAgentState) -> dict:
 
     # Save routing decision
     job_dir = get_job_dir(job_id)
-    route_file = job_dir / "01_context" / "rag_route.json"
+    route_file = job_dir / "01_context" / "rag_routing_result.json"
     route_file.write_text(
         json.dumps(
             {

@@ -63,6 +63,7 @@ class RadiationAgentState(TypedDict, total=False):
     proposed_patch: dict[str, Any]
     patch_review_result: dict[str, Any]
     applied_patch: dict[str, Any]
+    patch_applied_at: str  # ISO timestamp when patch was applied (for Gate 9 provenance)
 
     # Gate checks and error handling
     gate_results: list[dict[str, Any]]

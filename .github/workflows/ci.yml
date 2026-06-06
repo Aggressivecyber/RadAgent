@@ -60,7 +60,11 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/test_schemas.py -v --tb=short
+      - run: >
+          pytest
+          tests/unit/test_schemas.py
+          tests/unit/test_g4_output_contract_parser_consistency.py
+          -v --tb=short
 
   rag-workspace-test:
     runs-on: ubuntu-latest
@@ -82,7 +86,14 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/test_gate_validation.py tests/unit/test_score_rag_sufficiency.py -v --tb=short
+      - run: >
+          pytest
+          tests/unit/test_gate_validation.py
+          tests/unit/test_score_rag_sufficiency.py
+          tests/unit/test_gate0_rag_web_sufficiency.py
+          tests/unit/test_gate11_physics_sanity.py
+          tests/unit/test_acceptance_mode_no_skip.py
+          -v --tb=short
 
   routes-test:
     runs-on: ubuntu-latest
@@ -97,5 +108,32 @@ jobs:
           pytest
           tests/unit/test_routes.py
           tests/unit/test_web_search_tool.py
+          tests/unit/test_web_fallback_policy.py
           tests/unit/test_combined_context_sufficiency.py
           -v --tb=short
+
+  legacy-and-artifacts-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: >
+          pytest
+          tests/unit/test_no_legacy_names.py
+          tests/unit/test_no_tracked_job_artifacts.py
+          -v --tb=short
+
+  runner-env-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit/test_geant4_runner_output_env.py -v --tb=short

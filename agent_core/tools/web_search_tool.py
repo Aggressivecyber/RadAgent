@@ -38,14 +38,16 @@ class WebResult:
     url: str
     snippet: str
     source_type: str = "web"
+    confidence: float = 0.0
 
-    def to_context_entry(self) -> dict[str, str]:
+    def to_context_entry(self) -> dict[str, str | float]:
         return {
             "title": self.title,
             "url": self.url,
             "snippet": f"{_DISCLOSURE} {self.snippet}",
             "source_type": self.source_type,
             "retrieved_at": datetime.now(UTC).isoformat(),
+            "confidence": self.confidence,
         }
 
 

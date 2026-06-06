@@ -1,0 +1,112 @@
+"""No legacy names in codebase tests.
+
+Scans the codebase for deprecated names that were renamed during cleanup.
+Ensures g4rag, tcadrag, spicerag, and other legacy identifiers are gone.
+"""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _git_grep(pattern: str, pathspec: str = "") -> list[str]:
+    """Run git grep and return matching lines (empty list if none)."""
+    cmd = ["git", "grep", "-n", pattern]
+    if pathspec:
+        cmd.append("--")
+        cmd.append(pathspec)
+    result = subprocess.run(
+        cmd,
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+class TestNoLegacyRagNames:
+    """Legacy RAG tool names must be removed from production code."""
+
+    def test_no_g4rag_in_production_code(self):
+        """'g4rag' should not appear in agent_core/ source files."""
+        matches = _git_grep("g4rag", "agent_core/")
+        assert len(matches) == 0, (
+            "Found legacy 'g4rag' in agent_core/:\n"
+            + "\n".join(matches)
+        )
+
+    def test_no_tcadrag_in_production_code(self):
+        """'tcadrag' should not appear in agent_core/ source files."""
+        matches = _git_grep("tcadrag", "agent_core/")
+        assert len(matches) == 0, (
+            "Found legacy 'tcadrag' in agent_core/:\n"
+            + "\n".join(matches)
+        )
+
+    def test_no_spicerag_in_production_code(self):
+        """'spicerag' should not appear in agent_core/ source files."""
+        matches = _git_grep("spicerag", "agent_core/")
+        assert len(matches) == 0, (
+            "Found legacy 'spicerag' in agent_core/:\n"
+            + "\n".join(matches)
+        )
+
+
+class TestNoLegacyDecisionEnum:
+    """Old decision enum values should not appear in production code."""
+
+    def test_no_allow_with_warning_in_production(self):
+        """'allow_with_warning' (old enum) should not be in agent_core/."""
+        matches = _git_grep("allow_with_warning", "agent_core/")
+        assert len(matches) == 0, (
+            "Found legacy 'allow_with_warning' in agent_core/:\n"
+            + "\n".join(matches)
+        )
+
+    def test_no_bare_allow_in_schemas(self):
+        """Bare 'allow' (old enum) should not be in agent_core/schemas/."""
+        matches = _git_grep('"allow"', "agent_core/schemas/")
+        # Filter to only rag_context_pack.py — the decision enum file
+        real = [
+            m for m in matches
+            if '"allow"' in m
+            and "allow_rag" not in m
+            and "allow_with" not in m
+            and "rag_context_pack" in m  # Only check the decision enum file
+        ]
+        assert len(real) == 0, (
+            "Found bare '\"allow\"' in rag_context_pack.py (should be 'allow_rag'):\n"
+            + "\n".join(real)
+        )
+
+    def test_no_bare_block_in_decision_enum(self):
+        """Bare 'block' should not be in rag_context_pack.py decision enum."""
+        matches = _git_grep('"block"', "agent_core/schemas/rag_context_pack.py")
+        real = [m for m in matches if '"block"' in m and "block_no_context" not in m]
+        assert len(real) == 0, (
+            "Found bare '\"block\"' in rag_context_pack.py (should be 'block_no_context'):\n"
+            + "\n".join(real)
+        )
+
+
+class TestNoLegacyEnvEndpoints:
+    """Old .env endpoint names should be removed."""
+
+    def test_no_g4rag_endpoint_in_env_example(self):
+        """G4RAG_ENDPOINT should not appear in .env.example."""
+        content = (REPO_ROOT / ".env.example").read_text()
+        assert "G4RAG_ENDPOINT" not in content, (
+            "Found legacy G4RAG_ENDPOINT in .env.example"
+        )
+
+    def test_no_tcadrag_endpoint_in_env_example(self):
+        """TCADRAG_ENDPOINT should not appear in .env.example."""
+        content = (REPO_ROOT / ".env.example").read_text()
+        assert "TCADRAG_ENDPOINT" not in content, (
+            "Found legacy TCADRAG_ENDPOINT in .env.example"
+        )

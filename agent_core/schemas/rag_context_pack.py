@@ -1,4 +1,7 @@
-"""RAG context pack schema for simulation pipeline knowledge retrieval."""
+"""RAG context pack schema for simulation pipeline knowledge retrieval.
+
+Decision model: allow_rag / needs_web / block_no_context.
+"""
 
 from __future__ import annotations
 
@@ -37,7 +40,7 @@ class SufficiencyReport(BaseModel):
 
     score: float = Field(ge=0.0, le=1.0)
     missing_items: list[str] = Field(default_factory=list)
-    decision: Literal["allow", "allow_with_warning", "block"]
+    decision: Literal["allow_rag", "needs_web", "block_no_context"]
     has_manual: bool
     has_examples: bool
     has_contracts: bool
@@ -55,7 +58,13 @@ class RAGContextPack(BaseModel):
 
 
 def compute_sufficiency(context: RetrievedContext) -> SufficiencyReport:
-    """Score retrieved context and produce a sufficiency decision."""
+    """Score retrieved context and produce a sufficiency decision.
+
+    Tri-state model:
+      - allow_rag:         score >= 0.90, all categories present
+      - needs_web:         score >= 0.60 but < 0.90
+      - block_no_context:  score < 0.60
+    """
     has_manual = len(context.manual_snippets) > 0
     has_examples = len(context.example_code) > 0
     has_contracts = len(context.data_contracts) > 0
@@ -81,11 +90,11 @@ def compute_sufficiency(context: RetrievedContext) -> SufficiencyReport:
         missing.append("benchmark_cases")
 
     if score >= 0.90:
-        decision: Literal["allow", "allow_with_warning", "block"] = "allow"
-    elif score >= 0.75:
-        decision = "allow_with_warning"
+        decision: Literal["allow_rag", "needs_web", "block_no_context"] = "allow_rag"
+    elif score >= 0.60:
+        decision = "needs_web"
     else:
-        decision = "block"
+        decision = "block_no_context"
 
     return SufficiencyReport(
         score=score,

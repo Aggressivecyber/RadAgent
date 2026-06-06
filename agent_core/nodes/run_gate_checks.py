@@ -443,6 +443,37 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 except Exception:
                     missing.append("provenance.json (invalid JSON)")
 
+            # Validate g4_summary.simulation_id matches current job
+            summary_path = output_dir / "g4_summary.json"
+            if summary_path.is_file() and "g4_summary.json" not in missing:
+                try:
+                    summary = json.loads(summary_path.read_text())
+                    if summary.get("simulation_id") != job_id:
+                        missing.append("g4_summary.json (simulation_id mismatch)")
+                except Exception:
+                    missing.append("g4_summary.json (invalid JSON)")
+
+            # Validate output files were generated after patch was applied
+            patch_applied_at = state.get("patch_applied_at", "")
+            if patch_applied_at:
+                try:
+                    from datetime import datetime as _dt
+
+                    applied_time = _dt.fromisoformat(patch_applied_at)
+                    for fname in ("provenance.json", "g4_summary.json"):
+                        fpath = output_dir / fname
+                        if fpath.is_file() and fname not in missing:
+                            mtime = _dt.fromtimestamp(
+                                fpath.stat().st_mtime,
+                                tz=applied_time.tzinfo,
+                            )
+                            if mtime < applied_time:
+                                missing.append(
+                                    f"{fname} (stale — modified before patch applied)"
+                                )
+                except Exception:
+                    pass  # Non-fatal: don't block on timestamp comparison errors
+
             if missing:
                 gate_results.append({
                     "gate_id": 9,

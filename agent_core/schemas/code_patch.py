@@ -30,7 +30,7 @@ class ChangedFile(BaseModel):
     path: str
     operation: Literal["create_or_replace"] = "create_or_replace"
     zone: Zone
-    diff_content: str = ""
+    diff_content: str = ""  # Deprecated: MVP-1 uses json_file_replacement only
     new_content: str = ""
 
     @model_validator(mode="after")

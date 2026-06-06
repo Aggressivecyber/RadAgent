@@ -78,9 +78,9 @@ sufficiency:
     no_known_errors: 0.15
     has_benchmark_cases: 0.10
   thresholds:
-    allow: 0.90
-    allow_with_warning: 0.75
-    block: 0.60
+    allow_rag: 0.90
+    needs_web: 0.60
+    block_no_context: 0.0
   minimum_required_score: 0.75
 
 fallback:

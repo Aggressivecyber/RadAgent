@@ -1,4 +1,8 @@
-"""Geant4 output data contract — Pydantic v2 models."""
+"""Geant4 output data contract — Pydantic v2 models.
+
+Unified with parse_simulation_results output structure.
+Every output file entry has: file, unit, exists, rows, checksum.
+"""
 
 from __future__ import annotations
 
@@ -28,9 +32,13 @@ class G4GeometryInfo(BaseModel):
 
 
 class G4OutputFiles(BaseModel):
+    """All required Geant4 output files — must match parse_simulation_results."""
+
     edep: FileInfo
-    dose: FileInfo | None = None
-    event_table: str
+    dose: FileInfo
+    event_table: FileInfo
+    g4_summary: FileInfo
+    provenance: FileInfo
 
 
 class G4Checks(BaseModel):
@@ -44,10 +52,13 @@ class G4OutputContract(BaseModel):
 
     schema_version: str = "g4_output_v1"
     simulation_id: str
-    particle: G4ParticleInfo
-    geometry: G4GeometryInfo
+    particle: G4ParticleInfo | dict = {}
+    geometry: G4GeometryInfo | dict = {}
     outputs: G4OutputFiles
     checks: G4Checks
+    output_dir: str = ""
+    all_required_files_present: bool = False
+    provenance: dict = {}
 
 
 class G4Provenance(BaseModel):

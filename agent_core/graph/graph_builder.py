@@ -1,4 +1,10 @@
-"""LangGraph graph builder that assembles the full agent pipeline."""
+"""LangGraph graph builder that assembles the full agent pipeline.
+
+Uses a unified retrieve_required_context node instead of the old
+fan-out (retrieve_g4/tcad/spice_context).  Only required sources
+are queried; non-required sources return empty context and do not
+affect the sufficiency score.
+"""
 
 from __future__ import annotations
 
@@ -25,9 +31,7 @@ from agent_core.nodes.plan_code_architecture import plan_code_architecture
 from agent_core.nodes.plan_simulation import plan_simulation
 from agent_core.nodes.prepare_local_rag_workspace import prepare_local_rag_workspace
 from agent_core.nodes.retrieve_error_context import retrieve_error_context
-from agent_core.nodes.retrieve_g4_context import retrieve_g4_context
-from agent_core.nodes.retrieve_spice_context import retrieve_spice_context
-from agent_core.nodes.retrieve_tcad_context import retrieve_tcad_context
+from agent_core.nodes.retrieve_required_context import retrieve_required_context
 from agent_core.nodes.retrieve_web_context import retrieve_web_context
 from agent_core.nodes.review_code_patch import review_code_patch
 from agent_core.nodes.route_rag import route_rag
@@ -55,9 +59,7 @@ def build_graph() -> StateGraph:
     graph.add_node("build_simulation_ir", build_simulation_ir)
     graph.add_node("validate_simulation_ir", validate_simulation_ir)
     graph.add_node("route_rag", route_rag)
-    graph.add_node("retrieve_g4_context", retrieve_g4_context)
-    graph.add_node("retrieve_tcad_context", retrieve_tcad_context)
-    graph.add_node("retrieve_spice_context", retrieve_spice_context)
+    graph.add_node("retrieve_required_context", retrieve_required_context)
     graph.add_node("score_rag_sufficiency", score_rag_sufficiency)
     graph.add_node("retrieve_web_context", retrieve_web_context)
     graph.add_node("score_combined_context_sufficiency", score_combined_context_sufficiency)
@@ -75,7 +77,7 @@ def build_graph() -> StateGraph:
     graph.add_node("validate_data_contract", validate_data_contract)
     graph.add_node("generate_report", generate_report)
 
-    # --- Entry point: prepare workspace first ---
+    # --- Entry point ---
     graph.set_entry_point("prepare_local_rag_workspace")
 
     # --- Linear: workspace → parse request → task spec ---
@@ -83,7 +85,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("parse_user_request", "build_task_spec")
     graph.add_edge("build_task_spec", "validate_task_spec")
 
-    # Conditional: task spec valid? (3x fail → generate_report, not force proceed)
+    # Conditional: task spec valid? (3x fail → generate_report)
     graph.add_conditional_edges(
         "validate_task_spec",
         route_after_task_spec_validation,
@@ -96,7 +98,7 @@ def build_graph() -> StateGraph:
 
     graph.add_edge("build_simulation_ir", "validate_simulation_ir")
 
-    # Conditional: sim IR valid? (3x fail → generate_report, not force proceed)
+    # Conditional: sim IR valid? (3x fail → generate_report)
     graph.add_conditional_edges(
         "validate_simulation_ir",
         route_after_sim_ir_validation,
@@ -107,16 +109,11 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # RAG fan-out: route_rag -> all three RAG sources
-    # Each retrieve_* node checks rag_required_sources and returns [] if not needed
-    graph.add_edge("route_rag", "retrieve_g4_context")
-    graph.add_edge("route_rag", "retrieve_tcad_context")
-    graph.add_edge("route_rag", "retrieve_spice_context")
-
-    # RAG fan-in: all sources -> sufficiency scoring
-    graph.add_edge("retrieve_g4_context", "score_rag_sufficiency")
-    graph.add_edge("retrieve_tcad_context", "score_rag_sufficiency")
-    graph.add_edge("retrieve_spice_context", "score_rag_sufficiency")
+    # Unified RAG retrieval (replaces old fan-out)
+    # route_rag determines required/optional sources,
+    # retrieve_required_context queries only what's needed
+    graph.add_edge("route_rag", "retrieve_required_context")
+    graph.add_edge("retrieve_required_context", "score_rag_sufficiency")
 
     # Conditional: RAG sufficient? (allow_rag / needs_web / block_no_context)
     graph.add_conditional_edges(

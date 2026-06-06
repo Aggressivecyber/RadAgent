@@ -6,7 +6,7 @@ import json
 
 from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
-from agent_core.tools.g4rag_tool import G4RAGTool
+from agent_core.tools.geant4_rag_tool import G4RAGTool
 
 
 async def retrieve_g4_context(state: RadiationAgentState) -> dict:

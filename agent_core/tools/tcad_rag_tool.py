@@ -1,14 +1,14 @@
-"""TCAD RAG tool - stub implementation for MVP-1 with full interface."""
+"""TCAD RAG tool — stub for MVP-1 (Geant4-only scope).
+
+MVP-1 scope: Geant4 only. TCAD retrieval will be added in MVP-4+.
+Source: knowledge_base/tcad/ (future)
+"""
 
 
 class TCADRAGTool:
-    """TCAD RAG tool for retrieving TCAD-related context.
+    """TCAD RAG tool — returns empty results until TCAD scope is implemented."""
 
-    MVP-1: Stub implementation that returns empty results.
-    Full implementation will be added in MVP-4.
-    """
-
-    def __init__(self, endpoint: str | None = None):
+    def __init__(self, endpoint: str | None = None) -> None:
         self.endpoint = endpoint
         self.available = False
 
@@ -38,7 +38,7 @@ class TCADRAGTool:
             "sufficiency": {
                 "score": 0.0,
                 "missing_items": ["TCAD RAG not yet implemented"],
-                "decision": "block",
+                "decision": "block_no_context",
             },
             "query_used": query,
             "sources_queried": [],

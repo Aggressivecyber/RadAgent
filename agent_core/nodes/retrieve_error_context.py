@@ -7,7 +7,7 @@ Used ONLY in the fix loop (classify_failure -> retrieve_error_context
 from __future__ import annotations
 
 from agent_core.graph.state import RadiationAgentState
-from agent_core.tools.g4rag_tool import G4RAGTool
+from agent_core.tools.geant4_rag_tool import G4RAGTool
 
 
 async def retrieve_error_context(state: RadiationAgentState) -> dict:

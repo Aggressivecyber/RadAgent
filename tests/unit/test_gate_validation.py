@@ -277,7 +277,9 @@ class TestGate9FileChecks:
         )
 
         # Create required files
-        (tmp_path / "g4_summary.json").write_text("{}")
+        (tmp_path / "g4_summary.json").write_text(
+            json.dumps({"simulation_id": job_id})
+        )
         (tmp_path / "edep_3d.csv").write_text("x,y,z,edep\n1,2,3,0.5\n")
         (tmp_path / "dose_3d.csv").write_text("x,y,z,dose\n1,2,3,0.01\n")
         (tmp_path / "event_table.csv").write_text("event,edep\n1,0.5\n")

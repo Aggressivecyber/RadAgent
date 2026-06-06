@@ -1,4 +1,4 @@
-"""Geant4 RAG tool — interfaces with the g4rag MCP server with local fallback."""
+"""Geant4 RAG tool — interfaces with the Geant4 RAG MCP server with local fallback."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class G4RAGTool:
             self._client = None
 
     async def search(self, query: str, top_k: int = 5) -> list[dict]:
-        """Search g4rag knowledge base; falls back to local on error."""
+        """Search Geant4 RAG knowledge base; falls back to local on error."""
         client = await self._get_client()
         if client:
             try:

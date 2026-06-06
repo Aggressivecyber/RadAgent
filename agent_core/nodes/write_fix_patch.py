@@ -44,7 +44,7 @@ async def write_fix_patch(state: RadiationAgentState) -> dict:
     failure = state.get("failure_report", {})
     job_id = state.get("job_id", "unknown")
     original_patch = state.get("proposed_patch", {})
-    error_context = state.get("web_context", [])
+    error_context = state.get("rag_error_context", [])
     g4_context = state.get("g4_context", [])
 
     gate_name = failure.get("gate_name", "unknown")
