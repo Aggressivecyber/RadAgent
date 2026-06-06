@@ -373,3 +373,146 @@ class TestGate9FileChecks:
             "provenance" in gate9["message"].lower()
             or "mismatch" in gate9["message"].lower()
         )
+
+
+class TestGate9TimestampHardening:
+    """Gate 9 timestamp: mvp1_acceptance must fail on parse error,
+    dev_no_geant4_env allows silent pass."""
+
+    @pytest.mark.asyncio
+    async def test_mvp1_fails_on_bad_timestamp(self, tmp_path: Path) -> None:
+        """MVP-1 acceptance: invalid patch_applied_at → timestamp error is fatal."""
+        job_id = "g9-ts-mvp1"
+        state = _make_state(
+            execution_mode="mvp1_acceptance",
+            job_id=job_id,
+            patch_data=_valid_patch(),
+        )
+        # Inject an unparseable timestamp
+        state["patch_applied_at"] = "not-a-valid-timestamp"
+
+        # Create all required files with valid content
+        (tmp_path / "g4_summary.json").write_text(
+            json.dumps({"simulation_id": job_id})
+        )
+        (tmp_path / "edep_3d.csv").write_text("x,y,z,edep\n1,2,3,0.5\n")
+        (tmp_path / "dose_3d.csv").write_text("x,y,z,dose\n1,2,3,0.01\n")
+        (tmp_path / "event_table.csv").write_text("event,edep\n1,0.5\n")
+        (tmp_path / "provenance.json").write_text(
+            json.dumps({"simulation_id": job_id})
+        )
+
+        mock_runner = MagicMock()
+        mock_runner.geant4_available = True
+
+        (p1, p2), _ = _setup_job_dirs(tmp_path)
+        with (
+            patch(
+                "agent_core.tools.geant4_runner.Geant4Runner",
+                return_value=mock_runner,
+                create=True,
+            ),
+            p1,
+            p2,
+        ):
+            result = await run_gate_checks(state)
+
+        gate9 = result["gate_results"][9]
+        assert gate9["passed"] is False
+        assert "timestamp" in gate9["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_dev_warns_on_bad_timestamp(self, tmp_path: Path) -> None:
+        """Dev mode: invalid patch_applied_at → non-fatal, still passes."""
+        job_id = "g9-ts-dev"
+        state = _make_state(
+            execution_mode="dev_no_geant4_env",
+            job_id=job_id,
+            patch_data=_valid_patch(),
+        )
+        state["patch_applied_at"] = "not-a-valid-timestamp"
+
+        (tmp_path / "g4_summary.json").write_text(
+            json.dumps({"simulation_id": job_id})
+        )
+        (tmp_path / "edep_3d.csv").write_text("x,y,z,edep\n1,2,3,0.5\n")
+        (tmp_path / "dose_3d.csv").write_text("x,y,z,dose\n1,2,3,0.01\n")
+        (tmp_path / "event_table.csv").write_text("event,edep\n1,0.5\n")
+        (tmp_path / "provenance.json").write_text(
+            json.dumps({"simulation_id": job_id})
+        )
+
+        mock_runner = MagicMock()
+        mock_runner.geant4_available = True
+
+        (p1, p2), _ = _setup_job_dirs(tmp_path)
+        with (
+            patch(
+                "agent_core.tools.geant4_runner.Geant4Runner",
+                return_value=mock_runner,
+                create=True,
+            ),
+            p1,
+            p2,
+        ):
+            result = await run_gate_checks(state)
+
+        gate9 = result["gate_results"][9]
+        # In dev mode, timestamp parse error is non-fatal → should still pass
+        assert gate9["passed"] is True
+        assert gate9["severity"] == "pass"
+
+    @pytest.mark.asyncio
+    async def test_stale_file_fails_in_mvp1(self, tmp_path: Path) -> None:
+        """MVP-1: file modified BEFORE patch_applied_at → stale detection."""
+        job_id = "g9-stale"
+        import datetime as _dt
+
+        # patch applied "now"
+        applied_time = _dt.datetime.now(_dt.UTC)
+        state = _make_state(
+            execution_mode="mvp1_acceptance",
+            job_id=job_id,
+            patch_data=_valid_patch(),
+        )
+        state["patch_applied_at"] = applied_time.isoformat()
+
+        # Create files with OLD timestamps (1 hour before patch)
+        old_time = applied_time - _dt.timedelta(hours=1)
+        (tmp_path / "g4_summary.json").write_text(
+            json.dumps({"simulation_id": job_id})
+        )
+        (tmp_path / "edep_3d.csv").write_text("x,y,z,edep\n1,2,3,0.5\n")
+        (tmp_path / "dose_3d.csv").write_text("x,y,z,dose\n1,2,3,0.01\n")
+        (tmp_path / "event_table.csv").write_text("event,edep\n1,0.5\n")
+        (tmp_path / "provenance.json").write_text(
+            json.dumps({"simulation_id": job_id})
+        )
+        # Set all files to old mtime
+        import os
+
+        old_ts = old_time.timestamp()
+        for fname in (
+            "g4_summary.json", "edep_3d.csv", "dose_3d.csv",
+            "event_table.csv", "provenance.json",
+        ):
+            os.utime(tmp_path / fname, (old_ts, old_ts))
+
+        mock_runner = MagicMock()
+        mock_runner.geant4_available = True
+
+        (p1, p2), _ = _setup_job_dirs(tmp_path)
+        with (
+            patch(
+                "agent_core.tools.geant4_runner.Geant4Runner",
+                return_value=mock_runner,
+                create=True,
+            ),
+            p1,
+            p2,
+        ):
+            result = await run_gate_checks(state)
+
+        gate9 = result["gate_results"][9]
+        assert gate9["passed"] is False
+        assert "stale" in gate9["message"].lower()

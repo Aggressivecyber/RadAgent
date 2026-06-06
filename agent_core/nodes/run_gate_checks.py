@@ -471,8 +471,14 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                                 missing.append(
                                     f"{fname} (stale — modified before patch applied)"
                                 )
-                except Exception:
-                    pass  # Non-fatal: don't block on timestamp comparison errors
+                except Exception as ts_exc:
+                    # MVP-1 acceptance: timestamp errors are fatal
+                    # dev mode: non-fatal warning
+                    if execution_mode == "mvp1_acceptance":
+                        missing.append(
+                            f"timestamp validation error: {ts_exc}"
+                        )
+                    # dev mode: silently continue (non-fatal)
 
             if missing:
                 gate_results.append({
