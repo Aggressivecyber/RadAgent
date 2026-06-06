@@ -1,6 +1,0 @@
-2026-05-22 04:30:51.845 [INFO] [parameterize] === 节点进入 ===  user_input=10km高度5cm铝板 能防护吗
-2026-05-22 04:30:51.850 [INFO] 模板渲染完成: /home/rylan/RadAgent/workspace/20260522_043051_亚轨道多层屏蔽结构_proton10MeV
-2026-05-22 04:30:51.850 [INFO] 结构: 亚轨道多层屏蔽结构 [外层结构(G4_Al 5.0mm), 主屏蔽层(G4_Al 50.0mm), 敏感体积(G4_Si 2.0mm)]
-2026-05-22 04:30:51.850 [INFO] 场景数: 6, 首个场景: LEO 质子 10.0 MeV (proton 10.0 MeV, 100000 events)
-2026-05-22 04:30:51.851 [INFO] 生成文件: ['CMakeLists.txt', 'exampleB1.cc', 'include/DetectorConstruction.hh', 'include/EventAction.hh', 'include/ActionInitialization.hh', 'include/RunAction.hh', 'include/PrimaryGeneratorAction.hh', 'include/SteppingAction.hh', 'src/PrimaryGeneratorAction.cc', 'src/SteppingAction.cc', 'src/DetectorConstruction.cc', 'src/RunAction.cc', 'src/EventAction.cc', 'src/ActionInitialization.cc']
-2026-05-22 04:30:51.851 [INFO] [parameterize] === 节点退出 → build_and_run ===  build(compile=False, run=False)

@@ -1,5 +1,0 @@
-2026-05-22 03:57:27.528 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_035727
-2026-05-22 03:57:27.543 [INFO] [main] 用户输入: exit test
-2026-05-22 03:57:27.546 [INFO] [parse_intent] === 节点进入 ===  user_input=exit test
-2026-05-22 03:57:28.270 [INFO] [parse_intent] LLM 调用完成 (9 → 123 chars)
-2026-05-22 03:57:28.271 [INFO] [main] 流执行错误: object of type 'NoneType' has no len()

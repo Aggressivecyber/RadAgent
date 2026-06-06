@@ -1,7 +1,0 @@
-2026-05-22 06:22:54.231 [INFO] === 会话开始 ===  目录: /home/rylan/RadAgent/logs/session_20260522_062254
-2026-05-22 06:22:58.433 [INFO] [main] 用户输入: --- 开始处理 (日志: /home/rylan/RadAgent/logs/session_20260522_062135) ---错误: float() argument must be a string or a real number, not 'NoneType'完成！
-2026-05-22 06:22:58.439 [INFO] [parse_intent] === 节点进入 ===  user_input=--- 开始处理 (日志: /home/rylan/RadAgent/logs/session_20260522_062135) ---错误: float() argument must be a string or a real number, not 'NoneType'完成！
-2026-05-22 06:22:59.487 [INFO] [parse_intent] LLM 调用完成 (141 → 197 chars)
-2026-05-22 06:22:59.487 [INFO] [parse_intent] 解析结果: orbit=None, layers=0 层, particles=None, scenarios=0 个, size_xy_cm=None, missing=['轨道信息', '层结构', '粒子类型', '场景参数', '任务信息', '横截面尺寸']
-2026-05-22 06:22:59.487 [INFO] [parse_intent] === 节点退出 → design_schema ===
-2026-05-22 06:22:59.489 [INFO] [design_schema] === 节点进入 ===  user_input=--- 开始处理 (日志: /home/rylan/RadAgent/logs/session_20260522_062135) ---错误: float() argument must be a string or a real number, not 'NoneType'完成！

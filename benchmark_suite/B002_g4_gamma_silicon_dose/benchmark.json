@@ -1,0 +1,17 @@
+{
+  "benchmark_id": "B002",
+  "name": "g4_gamma_silicon_dose",
+  "description": "Geant4 gamma ray on silicon dose distribution benchmark",
+  "input": {
+    "user_query": "模拟 1 MeV 伽马射线照射 500 微米硅片，计算剂量分布",
+    "expected_task_spec": {
+      "simulation_scope": ["geant4"],
+      "particle": {"type": "gamma", "energy_MeV": 1.0},
+      "target": {"material": "Si", "size_um": [1000.0, 1000.0, 500.0]},
+      "outputs": ["dose_distribution"]
+    }
+  },
+  "expected_outputs": {
+    "files": ["CMakeLists.txt", "geant4_sim.cc", "dose_3d.csv"]
+  }
+}

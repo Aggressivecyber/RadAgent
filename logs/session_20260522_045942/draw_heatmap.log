@@ -1,3 +1,0 @@
-2026-05-22 04:59:55.695 [INFO] [draw_heatmap] === 节点进入 ===
-2026-05-22 04:59:56.142 [INFO] 热力图已保存: /home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV/build/figures/energy_heatmap.png
-2026-05-22 04:59:56.142 [INFO] [draw_heatmap] === 节点退出 → draw_spectrum ===

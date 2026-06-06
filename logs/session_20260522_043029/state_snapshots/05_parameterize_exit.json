@@ -1,9 +1,0 @@
-{
-  "build": {
-    "source_dir": "/home/rylan/RadAgent/workspace/20260522_043051_亚轨道多层屏蔽结构_proton10MeV",
-    "executable_path": "",
-    "compile_ok": false,
-    "run_ok": false,
-    "compile_error": ""
-  }
-}

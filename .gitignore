@@ -1,14 +1,38 @@
-学习/
+# Python
 __pycache__/
-*.pyc
-.ruff_cache/
-.env
+*.py[cod]
+*$py.class
 *.egg-info/
+*.egg
 dist/
 build/
-*.o
-.gitignore
-CLAUDE.md
-radagent/memory/checkpoints.db
-radagent/memory/store.db
-logs/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Ruff cache
+.ruff_cache/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MyPy
+.mypy_cache/
+
+# Environment variables
+.env
+
+# Simulation workspace (generated at runtime)
+simulation_workspace/jobs/
+
+# OS
+.DS_Store
+Thumbs.db

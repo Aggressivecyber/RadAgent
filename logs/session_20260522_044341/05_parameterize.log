@@ -1,6 +1,0 @@
-2026-05-22 04:44:15.497 [INFO] [parameterize] === 节点进入 ===  user_input=10ko高度5cm铝板器件防护水性好吗
-2026-05-22 04:44:15.502 [INFO] 模板渲染完成: /home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV
-2026-05-22 04:44:15.502 [INFO] 结构: LEO多层屏蔽结构-铝基防护 [外层结构(G4_Al 50.0mm), 中层绝热屏蔽(G4_KAPTON 5.0mm), 内层敏感体积(G4_Si 2.0mm)]
-2026-05-22 04:44:15.502 [INFO] 场景数: 6, 首个场景: LEO 质子 10.0 MeV (proton 10.0 MeV, 100000 events)
-2026-05-22 04:44:15.502 [INFO] 生成文件: ['CMakeLists.txt', 'exampleB1.cc', 'include/DetectorConstruction.hh', 'include/EventAction.hh', 'include/ActionInitialization.hh', 'include/RunAction.hh', 'include/PrimaryGeneratorAction.hh', 'include/SteppingAction.hh', 'src/PrimaryGeneratorAction.cc', 'src/SteppingAction.cc', 'src/DetectorConstruction.cc', 'src/RunAction.cc', 'src/EventAction.cc', 'src/ActionInitialization.cc']
-2026-05-22 04:44:15.502 [INFO] [parameterize] === 节点退出 → build_and_run ===  build(compile=False, run=False)

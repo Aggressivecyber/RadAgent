@@ -1,3 +1,0 @@
-2026-05-22 04:31:05.645 [INFO] [draw_heatmap] === 节点进入 ===
-2026-05-22 04:31:05.891 [INFO] 热力图已保存: /home/rylan/RadAgent/workspace/20260522_043051_亚轨道多层屏蔽结构_proton10MeV/build/figures/energy_heatmap.png
-2026-05-22 04:31:05.891 [INFO] [draw_heatmap] === 节点退出 → draw_spectrum ===

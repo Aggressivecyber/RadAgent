@@ -1,0 +1,14 @@
+{
+  "benchmark_id": "B004",
+  "name": "spice_set_current_source",
+  "description": "SPICE current source injection benchmark",
+  "input": {
+    "user_query": "生成一个包含 PWL 电流源的 SPICE 网表，仿真反相器的瞬态响应",
+    "expected_task_spec": {
+      "simulation_scope": ["spice"],
+      "circuit": {"circuit_type": "inverter"},
+      "outputs": ["transient_waveform"]
+    }
+  },
+  "mvp": "MVP-6"
+}

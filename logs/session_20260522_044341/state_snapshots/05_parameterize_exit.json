@@ -1,9 +1,0 @@
-{
-  "build": {
-    "source_dir": "/home/rylan/RadAgent/workspace/20260522_044415_LEO多层屏蔽结构-铝基防护_proton10MeV",
-    "executable_path": "",
-    "compile_ok": false,
-    "run_ok": false,
-    "compile_error": ""
-  }
-}

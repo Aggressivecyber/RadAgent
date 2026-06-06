@@ -1,7 +1,0 @@
-{
-  "control": {
-    "retry_count": 0,
-    "max_retries": 3,
-    "approved": true
-  }
-}

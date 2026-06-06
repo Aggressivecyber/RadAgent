@@ -1,0 +1,42 @@
+# File Access Policy for RadAgent
+# Controls which files the Agent can modify via patches
+
+green_zone:
+  description: "Auto-apply allowed. Generated simulation code and workspace files."
+  patterns:
+    - "simulation_workspace/jobs/**"
+    - "benchmark_suite/*/workspace/**"
+  rules:
+    auto_apply_patch: true
+    requires_human_review: false
+    max_file_size_kb: 1024
+
+yellow_zone:
+  description: "Requires human review. Knowledge base and benchmark reference files."
+  patterns:
+    - "knowledge_base/g4rag/**"
+    - "knowledge_base/tcadrag/**"
+    - "knowledge_base/spicerag/**"
+    - "benchmark_suite/**"
+  rules:
+    auto_apply_patch: false
+    requires_human_review: true
+    max_file_size_kb: 512
+
+red_zone:
+  description: "Default reject. Core agent infrastructure."
+  patterns:
+    - "agent_core/schemas/**"
+    - "agent_core/validators/**"
+    - "agent_core/policies/**"
+    - "agent_core/graph/**"
+    - "agent_core/tools/rag_router.py"
+    - "agent_core/nodes/run_gate_checks.py"
+  rules:
+    auto_apply_patch: false
+    requires_human_review: true
+    default_action: "reject"
+    override_requires: "explicit_user_consent_with_reason"
+
+default_action: "reject"
+version: "1.0"
