@@ -1,4 +1,9 @@
-"""Retrieve Geant4 context from local knowledge_base."""
+"""DEPRECATED: Retrieve Geant4 context from local knowledge_base.
+
+This node is NOT wired into the main graph. The unified
+retrieve_required_context node handles all RAG retrieval.
+Kept for reference only.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import json
 
 from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
-from agent_core.tools.geant4_rag_tool import G4RAGTool
+from agent_core.tools.geant4_rag_tool import Geant4RAGTool
 
 
 async def retrieve_g4_context(state: RadiationAgentState) -> dict:
@@ -29,7 +34,7 @@ async def retrieve_g4_context(state: RadiationAgentState) -> dict:
     user_query = state.get("user_query", "")
     job_id = state.get("job_id", "unknown")
 
-    tool = G4RAGTool()
+    tool = Geant4RAGTool()
     context_pack = await tool.build_context_pack(user_query, task_spec)
 
     # Save context

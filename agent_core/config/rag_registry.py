@@ -23,9 +23,9 @@ class RAGRegistry:
 
     # Logical source names to env var mapping
     _SOURCE_ENV: dict[str, str] = {
-        "geant4": "G4RAG_MCP_ENDPOINT",
-        "tcad": "TCADRAG_MCP_ENDPOINT",
-        "spice": "SPICERAG_MCP_ENDPOINT",
+        "geant4": "GEANT4_RAG_ENDPOINT",
+        "tcad": "TCAD_RAG_ENDPOINT",
+        "spice": "SPICE_RAG_ENDPOINT",
     }
 
     def __init__(self) -> None:

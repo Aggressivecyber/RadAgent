@@ -18,11 +18,15 @@ _LOCAL_DIR = Path(__file__).resolve().parents[2] / "knowledge_base" / "geant4"
 _TIMEOUT = 15.0
 
 
-class G4RAGTool:
+class Geant4RAGTool:
     """Async client for the Geant4 RAG MCP server with local file fallback."""
 
     def __init__(self, endpoint: str | None = None) -> None:
-        self._endpoint = endpoint or os.environ.get("G4RAG_MCP_ENDPOINT")
+        self._endpoint = (
+            endpoint
+            or os.environ.get("GEANT4_RAG_ENDPOINT")
+            or os.environ.get("G4RAG_MCP_ENDPOINT")  # deprecated, kept for compat
+        )
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient | None:

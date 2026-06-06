@@ -5,7 +5,7 @@ Source: knowledge_base/spice/ (future)
 """
 
 
-class SPICERAGTool:
+class SpiceTool:
     """SPICE RAG tool — returns empty results until SPICE scope is implemented."""
 
     def __init__(self, endpoint: str | None = None) -> None:

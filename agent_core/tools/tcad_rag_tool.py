@@ -5,7 +5,7 @@ Source: knowledge_base/tcad/ (future)
 """
 
 
-class TCADRAGTool:
+class TcadTool:
     """TCAD RAG tool — returns empty results until TCAD scope is implemented."""
 
     def __init__(self, endpoint: str | None = None) -> None:

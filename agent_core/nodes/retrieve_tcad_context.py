@@ -1,4 +1,9 @@
-"""Retrieve TCAD context — stub for MVP-1."""
+"""DEPRECATED: Retrieve TCAD context — stub for MVP-1.
+
+This node is NOT wired into the main graph. The unified
+retrieve_required_context node handles all RAG retrieval.
+Kept for reference only.
+"""
 
 from __future__ import annotations
 

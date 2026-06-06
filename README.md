@@ -2,6 +2,10 @@
 
 基于 LangGraph 的自主代码生成型辐照联合仿真智能体系统。
 
+## MVP-1 状态
+
+**🚧 候选版 / 未验收** — Geant4 自主代码生成 + 12 道门禁已实现。待 `mvp1_acceptance` 模式完整运行后更新状态。
+
 ## 概述
 
 RadAgent 是一个工程化 Agent 平台，能够：
@@ -26,36 +30,45 @@ RadAgent 遵循严格的上下文充分性原则：
 2. **Web Search 补足**：当 RAG 评分 ≥ 0.60 但 < 0.90 时，允许 Web Search 补充
    - 所有 Web 结果必须标注 `[WEB SUPPLEMENT — verify independently]`
    - 后端：DuckDuckGo HTML（默认，无需 API key）或 Exa（可选）
+   - Web 放行门槛：≥ 2 个有效 URL + ≥ 1 个官方来源 + title/snippet 命中关键词
 
 3. **无充分上下文时终止**：当 RAG 评分 < 0.60 且 Web 也无法补足时，**管线终止**
    - **禁止依赖模型内置知识继续写代码**
    - 终止原因写入报告
 
-### 上下文充分性决策矩阵
+### Gate 0: RAG + Web Context Sufficiency
 
-| RAG 评分 | Web 可用 | 决策 |
-|----------|---------|------|
-| ≥ 0.90 | — | `allow_rag` — 直接继续 |
-| ≥ 0.60 | 可用且充分 | `allow_with_web_supplement` — 继续（附 Web 来源披露） |
-| < 0.60 | — | `block_no_context` — 终止 |
+| 场景 | RAG 评分 | Web 补充 | 结果 |
+|------|---------|---------|------|
+| RAG 充分 | ≥ 0.90 | — | `allow_rag` → pass |
+| RAG 不足 + Web 补足 | ≥ 0.60 | ≥ 2 URL, ≥ 1 官方源, 关键词命中 | `allow_with_web_supplement` → warning (pass with disclosure) |
+| RAG + Web 都不足 | < 0.60 | — | `block_no_context` → 终止 |
 
 ## 架构
 
 ```
 用户输入 → LangGraph 状态调度 → Task Spec → Simulation IR
-    → RAG 路由 → RAG 检索 → 充分性评分
+    → RAG 路由 → 统一 RAG 检索 (retrieve_required_context) → RAG 充分性评分
       ├─ allow_rag              → 代码生成
       ├─ needs_web → Web Search → 组合评分 → 代码生成 / 终止
       └─ block_no_context       → 报告（终止）
+    → [MVP-1 Scope Guard] → 仅允许 Geant4 代码生成
     → Agent 自主代码生成 → Patch → 12 道门禁检查
     → 小规模仿真 → 数据契约校验 → 正式仿真 → 报告
 ```
+
+### MVP-1 Scope Guard
+
+MVP-1 只允许 `simulation_scope == ["geant4"]`。如果 task_spec 包含 TCAD/SPICE：
+- RAG 检索和报告生成 **允许**
+- `write_code_patch` **阻断** — 不会为 TCAD/SPICE 生成代码
+- 报告明确标注 "TCAD/SPICE reserved for later MVPs"
 
 ## MVP 进度
 
 | MVP | 描述 | 状态 |
 |-----|------|------|
-| MVP-1 | Geant4 自主代码生成 + 门禁 | 🚧 开发中 |
+| MVP-1 | Geant4 自主代码生成 + 门禁 | 🚧 候选版 / 未验收 |
 | MVP-2 | Geant4 输出标准数据包 + 数据契约 | 📋 规划中 |
 | MVP-3 | Geant4 → TCAD 映射器 | 📋 规划中 |
 | MVP-4 | TCAD 自主命令生成 + 门禁 | 📋 规划中 |
@@ -105,7 +118,7 @@ RadAgent/
 
 | Gate | 名称 | 检查内容 |
 |------|------|----------|
-| 0 | 上下文充分性 | RAG+Web 上下文是否足够（三态：pass/warning/block） |
+| 0 | **RAG + Web Context Sufficiency** | RAG 优先；RAG 不足 Web 补充；RAG+Web 都不足终止 |
 | 1 | Task Spec Schema | 任务规格是否完整 |
 | 2 | Simulation IR Schema | 仿真中间表示是否完整 |
 | 3 | Patch 格式 | Patch 格式是否正确 |
@@ -114,7 +127,7 @@ RadAgent/
 | 6 | 编译/解析 | CMake 编译或 SPICE 语法检查 |
 | 7 | 单元测试 | 核心功能单元测试 |
 | 8 | 数据契约 | 数据包格式校验 |
-| 9 | 小规模仿真 | Smoke test（5 文件 + simulation_id 一致性 + 文件时效性） |
+| 9 | 小规模仿真 | Smoke test（详见下方） |
 | 10 | 基准回归 | 基准测试对比 |
 | 11 | 物理一致性 | NaN/Inf/负值检查 |
 
@@ -124,7 +137,7 @@ RadAgent/
 2. `event_table.csv` ≥ 1 行数据
 3. `provenance.json` 的 `simulation_id` == 当前 `job_id`
 4. `g4_summary.json` 的 `simulation_id` == 当前 `job_id`
-5. 输出文件必须在 patch 应用之后生成（`patch_applied_at` 时序验证）
+5. **所有 5 个输出文件**必须在 `patch_applied_at` 时间戳之后生成（防止旧文件冒充本轮输出）
 
 ## 数据契约
 
@@ -157,7 +170,7 @@ RadAgent/
 | test_g4_output_contract_parser_consistency.py | G4 output contract 一致性 |
 | test_geant4_runner_output_env.py | Geant4Runner 环境变量注入 |
 | test_acceptance_mode_no_skip.py | MVP-1 验收模式不可跳过 |
-| test_no_legacy_names.py | 代码库无遗留名称 |
+| test_no_legacy_names.py | 代码库无遗留名称（含大写环境变量扫描） |
 | test_no_tracked_job_artifacts.py | 无 Git 跟踪的作业输出 |
 
 ## 许可证

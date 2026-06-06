@@ -13,16 +13,16 @@ import logging
 
 from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
-from agent_core.tools.geant4_rag_tool import G4RAGTool
-from agent_core.tools.spice_rag_tool import SPICERAGTool
-from agent_core.tools.tcad_rag_tool import TCADRAGTool
+from agent_core.tools.geant4_rag_tool import Geant4RAGTool
+from agent_core.tools.spice_rag_tool import SpiceTool
+from agent_core.tools.tcad_rag_tool import TcadTool
 
 logger = logging.getLogger(__name__)
 
 _TOOL_MAP: dict[str, type] = {
-    "geant4": G4RAGTool,
-    "tcad": TCADRAGTool,
-    "spice": SPICERAGTool,
+    "geant4": Geant4RAGTool,
+    "tcad": TcadTool,
+    "spice": SpiceTool,
 }
 
 

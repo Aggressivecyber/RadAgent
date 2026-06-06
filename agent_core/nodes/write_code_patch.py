@@ -104,10 +104,29 @@ async def write_code_patch(state: RadiationAgentState) -> dict:
 
     Only writes proposed_patch.json to 04_generated_code/.
     Actual code files are written by apply_patch node.
+
+    MVP-1 scope guard: Only generates Geant4 code. TCAD/SPICE simulation
+    scopes are reserved for later MVPs and will not produce code patches.
     """
     sim_ir = state.get("simulation_ir", {})
     g4_context = state.get("g4_context", [])
     job_id = state.get("job_id", "unknown")
+
+    # MVP-1 scope guard: block TCAD/SPICE code generation
+    task_spec = state.get("task_spec", {})
+    simulation_scope = task_spec.get("simulation_scope", ["geant4"])
+    mvp1_blocked = [s for s in simulation_scope if s not in ("geant4",)]
+    if mvp1_blocked:
+        blocked_names = ", ".join(mvp1_blocked)
+        return {
+            "proposed_patch": {},
+            "errors": [
+                f"[MVP-1 Scope Guard] Code generation blocked for: {blocked_names}. "
+                f"TCAD/SPICE code generation is reserved for later MVPs. "
+                f"RAG retrieval and reporting are allowed, but no code will be generated.",
+            ],
+            "current_node": "write_code_patch",
+        }
 
     rag_context_str = (
         json.dumps(g4_context[:5], indent=2, ensure_ascii=False)

@@ -2,6 +2,7 @@
 
 Scans the codebase for deprecated names that were renamed during cleanup.
 Ensures g4rag, tcadrag, spicerag, and other legacy identifiers are gone.
+Covers both lowercase (identifiers) and UPPERCASE (env vars) variants.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 def _git_grep(pattern: str, pathspec: str = "") -> list[str]:
     """Run git grep and return matching lines (empty list if none)."""
-    cmd = ["git", "grep", "-n", pattern]
+    cmd = ["git", "grep", "-n", "-i", pattern]
     if pathspec:
         cmd.append("--")
         cmd.append(pathspec)
@@ -29,31 +30,64 @@ def _git_grep(pattern: str, pathspec: str = "") -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
+def _filter_deprecated_compat(matches: list[str]) -> list[str]:
+    """Filter out lines that are explicitly marked as deprecated compat."""
+    return [m for m in matches if "deprecated" not in m.lower()]
+
+
 class TestNoLegacyRagNames:
     """Legacy RAG tool names must be removed from production code."""
 
     def test_no_g4rag_in_production_code(self):
-        """'g4rag' should not appear in agent_core/ source files."""
+        """'g4rag' should not appear in agent_core/ (except deprecated compat)."""
         matches = _git_grep("g4rag", "agent_core/")
-        assert len(matches) == 0, (
-            "Found legacy 'g4rag' in agent_core/:\n"
-            + "\n".join(matches)
+        real = _filter_deprecated_compat(matches)
+        assert len(real) == 0, (
+            "Found legacy 'g4rag' in agent_core/:\n" + "\n".join(real)
         )
 
     def test_no_tcadrag_in_production_code(self):
-        """'tcadrag' should not appear in agent_core/ source files."""
+        """'tcadrag' should not appear in agent_core/."""
         matches = _git_grep("tcadrag", "agent_core/")
-        assert len(matches) == 0, (
-            "Found legacy 'tcadrag' in agent_core/:\n"
-            + "\n".join(matches)
+        real = _filter_deprecated_compat(matches)
+        assert len(real) == 0, (
+            "Found legacy 'tcadrag' in agent_core/:\n" + "\n".join(real)
         )
 
     def test_no_spicerag_in_production_code(self):
-        """'spicerag' should not appear in agent_core/ source files."""
+        """'spicerag' should not appear in agent_core/."""
         matches = _git_grep("spicerag", "agent_core/")
-        assert len(matches) == 0, (
-            "Found legacy 'spicerag' in agent_core/:\n"
-            + "\n".join(matches)
+        real = _filter_deprecated_compat(matches)
+        assert len(real) == 0, (
+            "Found legacy 'spicerag' in agent_core/:\n" + "\n".join(real)
+        )
+
+
+class TestNoLegacyEnvVars:
+    """Legacy UPPERCASE env var names should be gone from production code."""
+
+    def test_no_g4rag_uppercase_in_production(self):
+        """G4RAG_MCP_ENDPOINT etc. should not appear in agent_core/ (except deprecated compat)."""
+        matches = _git_grep("G4RAG", "agent_core/")
+        real = _filter_deprecated_compat(matches)
+        assert len(real) == 0, (
+            "Found legacy G4RAG in agent_core/:\n" + "\n".join(real)
+        )
+
+    def test_no_tcadrage_uppercase_in_production(self):
+        """TCADRAG_ENDPOINT etc. should not appear in agent_core/."""
+        matches = _git_grep("TCADRAG", "agent_core/")
+        real = _filter_deprecated_compat(matches)
+        assert len(real) == 0, (
+            "Found legacy TCADRAG in agent_core/:\n" + "\n".join(real)
+        )
+
+    def test_no_spicerage_uppercase_in_production(self):
+        """SPICERAG_ENDPOINT etc. should not appear in agent_core/."""
+        matches = _git_grep("SPICERAG", "agent_core/")
+        real = _filter_deprecated_compat(matches)
+        assert len(real) == 0, (
+            "Found legacy SPICERAG in agent_core/:\n" + "\n".join(real)
         )
 
 
@@ -69,15 +103,11 @@ class TestNoLegacyDecisionEnum:
         )
 
     def test_no_bare_allow_in_schemas(self):
-        """Bare 'allow' (old enum) should not be in agent_core/schemas/."""
-        matches = _git_grep('"allow"', "agent_core/schemas/")
-        # Filter to only rag_context_pack.py — the decision enum file
+        """Bare 'allow' (old enum) should not be in rag_context_pack.py."""
+        matches = _git_grep('"allow"', "agent_core/schemas/rag_context_pack.py")
         real = [
             m for m in matches
-            if '"allow"' in m
-            and "allow_rag" not in m
-            and "allow_with" not in m
-            and "rag_context_pack" in m  # Only check the decision enum file
+            if '"allow"' in m and "allow_rag" not in m
         ]
         assert len(real) == 0, (
             "Found bare '\"allow\"' in rag_context_pack.py (should be 'allow_rag'):\n"
@@ -104,7 +134,7 @@ class TestNoLegacyEnvEndpoints:
             "Found legacy G4RAG_ENDPOINT in .env.example"
         )
 
-    def test_no_tcadrag_endpoint_in_env_example(self):
+    def test_no_tcadrage_endpoint_in_env_example(self):
         """TCADRAG_ENDPOINT should not appear in .env.example."""
         content = (REPO_ROOT / ".env.example").read_text()
         assert "TCADRAG_ENDPOINT" not in content, (

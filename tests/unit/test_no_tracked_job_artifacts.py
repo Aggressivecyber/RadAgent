@@ -72,10 +72,22 @@ class TestNoTrackedJobArtifacts:
             "Found tracked run_log.txt:\n" + "\n".join(outside_tests)
         )
 
+    def test_no_nested_simulation_workspace(self):
+        """No simulation_workspace/simulation_workspace/** should be tracked."""
+        tracked = _git_ls_files("simulation_workspace/simulation_workspace/")
+        assert len(tracked) == 0, (
+            "Found tracked nested simulation_workspace:\n" + "\n".join(tracked)
+        )
+
     def test_gitignore_covers_jobs(self):
         """simulation_workspace/jobs/*/ is in .gitignore."""
         gitignore = (REPO_ROOT / ".gitignore").read_text()
         assert "simulation_workspace/jobs/*/" in gitignore
+
+    def test_gitignore_covers_nested_workspace(self):
+        """simulation_workspace/simulation_workspace/ is in .gitignore."""
+        gitignore = (REPO_ROOT / ".gitignore").read_text()
+        assert "simulation_workspace/simulation_workspace/" in gitignore
 
     def test_gitignore_keeps_gitkeep(self):
         """Exception for .gitkeep is in .gitignore."""

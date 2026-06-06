@@ -453,14 +453,14 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 except Exception:
                     missing.append("g4_summary.json (invalid JSON)")
 
-            # Validate output files were generated after patch was applied
+            # Validate ALL output files were generated after patch was applied
             patch_applied_at = state.get("patch_applied_at", "")
             if patch_applied_at:
                 try:
                     from datetime import datetime as _dt
 
                     applied_time = _dt.fromisoformat(patch_applied_at)
-                    for fname in ("provenance.json", "g4_summary.json"):
+                    for fname in g9_required_files:
                         fpath = output_dir / fname
                         if fpath.is_file() and fname not in missing:
                             mtime = _dt.fromtimestamp(

@@ -187,7 +187,25 @@ async def generate_report(state: RadiationAgentState) -> dict:
         lines.append("- Cannot safely generate simulation code without domain context.")
         lines.append("- Either expand the knowledge base or provide web search access.")
 
-    lines.extend(["", "## 13. Known Issues and Next Steps", ""])
+    # --- MVP-1 Scope Declaration ---
+    task_spec = state.get("task_spec", {})
+    simulation_scope = task_spec.get("simulation_scope", ["geant4"])
+    non_geant4 = [s for s in simulation_scope if s not in ("geant4",)]
+    if non_geant4:
+        lines.extend(["", "## 13. MVP-1 Scope Declaration", ""])
+        lines.append(
+            f"**TCAD/SPICE Reserved for Later MVPs.** "
+            f"The following simulation scopes were requested but are not supported in MVP-1: "
+            f"{', '.join(non_geant4)}. "
+            "RAG retrieval and reporting were allowed, "
+            "but no code was generated for these scopes. "
+            f"TCAD support is planned for MVP-4, SPICE support for MVP-6."
+        )
+    else:
+        lines.extend(["", "## 13. MVP-1 Scope", ""])
+        lines.append("Simulation scope: Geant4 only (MVP-1).")
+
+    lines.extend(["", "## 14. Known Issues and Next Steps", ""])
 
     issues = []
     if rag_score < 0.75:
