@@ -1,4 +1,4 @@
-"""Generate final simulation report."""
+"""Generate final simulation report with full context disclosure."""
 
 from __future__ import annotations
 
@@ -25,6 +25,8 @@ async def generate_report(state: RadiationAgentState) -> dict:
     failure = state.get("failure_report", {})
     execution_mode = state.get("execution_mode", "dev_no_geant4_env")
     skipped_gates = state.get("skipped_gates", [])
+    context_decision = state.get("context_decision", "block_no_context")
+    web_context = state.get("web_context", [])
 
     # Build report sections
     lines = [
@@ -42,23 +44,46 @@ async def generate_report(state: RadiationAgentState) -> dict:
         json.dumps(task_spec, indent=2, ensure_ascii=False),
         "```",
         "",
-        "## 3. RAG Sources Used",
+        "## 3. Context Sources",
         "",
-        f"- Required: {', '.join(rag_required) if rag_required else 'None'}",
-        f"- Optional: {', '.join(rag_optional) if rag_optional else 'None'}",
-        f"- Sufficiency Score: {rag_score:.2f}",
-        f"- Decision: {rag_report.get('decision', 'unknown')}",
-        "",
-        "## 4. Code Generation",
-        "",
-        f"- Patch ID: {patch.get('patch_id', 'N/A')}",
-        f"- Description: {patch.get('description', 'N/A')}",
-        f"- Files Generated: {len(patch.get('changed_files', []))}",
-        f"- Risk Level: {patch.get('risk_level', 'N/A')}",
-        "",
-        "## 5. Gate Results",
-        "",
+        f"- Required RAG sources: {', '.join(rag_required) if rag_required else 'None'}",
+        f"- Optional RAG sources: {', '.join(rag_optional) if rag_optional else 'None'}",
+        f"- RAG sufficiency score: {rag_score:.2f}",
+        f"- RAG decision: {rag_report.get('decision', 'unknown')}",
+        f"- Final context decision: {context_decision}",
     ]
+
+    # RAG source detail
+    g4_count = len(state.get("g4_context", []))
+    tcad_count = len(state.get("tcad_context", []))
+    spice_count = len(state.get("spice_context", []))
+    lines.append(f"- Geant4 context entries: {g4_count}")
+    lines.append(f"- TCAD context entries: {tcad_count}")
+    lines.append(f"- SPICE context entries: {spice_count}")
+
+    # Web context detail
+    if web_context:
+        lines.append(f"- Web sources used: {len(web_context)} results")
+        urls = sorted(set(r.get("url", "") for r in web_context if r.get("url")))
+        for u in urls[:5]:
+            lines.append(f"  - {u}")
+        if len(urls) > 5:
+            lines.append(f"  - ... and {len(urls) - 5} more")
+    else:
+        lines.append("- Web sources: none used")
+
+    # Context provenance for web-supplemented
+    if context_decision == "allow_with_web_supplement":
+        lines.append("")
+        lines.append("**⚠️ Context includes web-supplemented information — verify independently.**")
+
+    lines.extend(["", "## 4. Code Generation", ""])
+    lines.append(f"- Patch ID: {patch.get('patch_id', 'N/A')}")
+    lines.append(f"- Description: {patch.get('description', 'N/A')}")
+    lines.append(f"- Files Generated: {len(patch.get('changed_files', []))}")
+    lines.append(f"- Risk Level: {patch.get('risk_level', 'N/A')}")
+
+    lines.extend(["", "## 5. Gate Results", ""])
 
     passed_count = sum(1 for g in gate_results if g.get("passed"))
     for g in gate_results:
@@ -66,6 +91,10 @@ async def generate_report(state: RadiationAgentState) -> dict:
         sev = g.get("severity", "")
         if sev == "skipped":
             status = "SKIPPED"
+        elif sev == "warning":
+            status = "PASS (with warning)"
+        elif sev == "block":
+            status = "BLOCKED"
         lines.append(
             f"- Gate {g.get('gate_id')}: {g.get('gate_name')} -- {status} {g.get('message', '')}"
         )
@@ -77,9 +106,12 @@ async def generate_report(state: RadiationAgentState) -> dict:
     if sim_results.get("geant4"):
         g4 = sim_results["geant4"]
         lines.append("### Geant4 Output")
-        lines.append(f"- Output exists: {g4.get('output_exists', False)}")
+        lines.append(f"- All required files present: {g4.get('all_required_files_present', False)}")
         for name, info in g4.get("outputs", {}).items():
-            lines.append(f"- {name}: {info.get('file')} (exists: {info.get('exists', False)})")
+            lines.append(
+                f"- {name}: {info.get('file')} "
+                f"(exists: {info.get('exists', False)}, rows: {info.get('rows', 0)})"
+            )
     else:
         lines.append("No simulation results available.")
 
@@ -123,31 +155,49 @@ async def generate_report(state: RadiationAgentState) -> dict:
 
     # --- MVP-1 Status ---
     lines.extend(["", "## 11. MVP-1 Verification Status", ""])
-    all_passed = all(
-        g.get("severity") in ("pass", "warning", "skipped") for g in gate_results
+    has_hard_failure = any(
+        g.get("severity") in ("fail", "block") for g in gate_results
     )
+    critical_skipped = [
+        g for g in gate_results
+        if g.get("severity") == "skipped" and g.get("gate_id") in (6, 8, 9, 11)
+    ]
+
     if execution_mode == "mvp1_acceptance":
-        if all_passed:
-            lines.append("**MVP-1: PASSED** — All gates passed in acceptance mode.")
-        else:
+        if critical_skipped:
+            lines.append(
+                "**MVP-1: FAILED** — Critical gates were skipped in acceptance mode."
+            )
+        elif has_hard_failure:
             lines.append("**MVP-1: FAILED** — Gate failures in acceptance mode.")
+        else:
+            lines.append("**MVP-1: PASSED** — All gates passed in acceptance mode.")
     else:
         lines.append(
             "**MVP-1: NOT VERIFIED** — Running in dev mode (Geant4 not available). "
             "Cannot claim MVP-1 acceptance."
         )
 
-    lines.extend(["", "## 12. Known Issues and Next Steps", ""])
+    # --- Termination Reason ---
+    if context_decision == "block_no_context":
+        lines.extend(["", "## 12. Termination Reason", ""])
+        lines.append("Pipeline terminated due to insufficient context.")
+        lines.append(f"- RAG score: {rag_score:.2f}")
+        lines.append(f"- Web search available: {state.get('web_search_available', False)}")
+        lines.append("- Cannot safely generate simulation code without domain context.")
+        lines.append("- Either expand the knowledge base or provide web search access.")
+
+    lines.extend(["", "## 13. Known Issues and Next Steps", ""])
 
     issues = []
     if rag_score < 0.75:
         issues.append("- RAG context was insufficient; consider expanding the knowledge base")
-    if not all(g.get("passed") for g in gate_results):
+    if has_hard_failure:
         issues.append("- Some gates failed; review failure report above")
-    if sim_results.get("geant4", {}).get("output_exists") is False:
-        issues.append("- Geant4 output does not exist; simulation may not have run")
-    if skipped_gates and execution_mode == "mvp1_acceptance":
-        issues.append("- Gates were skipped in acceptance mode — this should not happen")
+    if critical_skipped:
+        issues.append("- Critical gates were skipped; results not verified")
+    if not sim_results.get("geant4", {}).get("all_required_files_present", False):
+        issues.append("- Geant4 output files incomplete; simulation may not have run")
 
     if issues:
         lines.extend(issues)

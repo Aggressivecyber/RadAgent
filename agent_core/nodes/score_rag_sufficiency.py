@@ -1,4 +1,12 @@
-"""Score RAG context sufficiency."""
+"""Score RAG context sufficiency.
+
+Decisions:
+  - allow_rag:         RAG score >= 0.90, all required sources present.
+  - needs_web:         RAG score >= 0.60 but < 0.90, or required source missing.
+  - block_no_context:  RAG score < 0.60.
+
+NEVER allows the pipeline to proceed on LLM built-in knowledge alone.
+"""
 
 from __future__ import annotations
 
@@ -15,9 +23,9 @@ def _compute_score(
 ) -> tuple[float, dict]:
     """Compute RAG sufficiency score based on retrieved context.
 
-    *required_sources* and *optional_sources* use logical names ("geant4",
-    "tcad", "spice").  If a required source has empty context the score is
-    capped below the block threshold (0.60).
+    Returns (score, report) where score is 0.0-1.0 and report contains
+    decision details.  Decisions use a tri-state model:
+    allow_rag / needs_web / block_no_context.
     """
     required_sources = required_sources or []
     optional_sources = optional_sources or []
@@ -53,6 +61,8 @@ def _compute_score(
 
     if not all_ctx:
         report["missing_items"] = ["No context retrieved at all"]
+        report["score"] = 0.0
+        report["decision"] = "block_no_context"
         return 0.0, report
 
     # Check for manual snippets
@@ -103,15 +113,13 @@ def _compute_score(
     if missing_required:
         score = min(score, 0.55)
 
-    # Decision
-    if score >= 0.90:
-        report["decision"] = "allow"
-    elif score >= 0.75:
-        report["decision"] = "allow_with_warning"
+    # --- Decision ----------------------------------------------------------
+    if score >= 0.90 and not missing_required:
+        report["decision"] = "allow_rag"
     elif score >= 0.60:
-        report["decision"] = "allow_draft_only"
+        report["decision"] = "needs_web"
     else:
-        report["decision"] = "block"
+        report["decision"] = "block_no_context"
 
     report["score"] = round(max(0.0, score), 2)
     return report["score"], report
@@ -120,9 +128,9 @@ def _compute_score(
 async def score_rag_sufficiency(state: RadiationAgentState) -> dict:
     """Score the sufficiency of retrieved RAG context.
 
-    When no RAG server is available (all contexts empty), gives a baseline
-    score of 0.76 with a warning so the pipeline can proceed using the
-    LLM's built-in knowledge as fallback.
+    No fallback to LLM built-in knowledge.  If RAG is empty the
+    decision is block_no_context and the pipeline must either try
+    web search or terminate.
     """
     g4_ctx = state.get("g4_context", [])
     tcad_ctx = state.get("tcad_context", [])
@@ -137,15 +145,6 @@ async def score_rag_sufficiency(state: RadiationAgentState) -> dict:
         optional_sources=rag_optional,
     )
 
-    # When no RAG server is available, allow pipeline to proceed with warning
-    if score == 0.0:
-        score = 0.76
-        report["score"] = 0.76
-        report["decision"] = "allow_with_warning"
-        report["missing_items"].insert(
-            0, "WARNING: No RAG server available, proceeding with LLM knowledge only"
-        )
-
     # Save report
     job_dir = get_job_dir(job_id)
     report_file = job_dir / "01_context" / "rag_sufficiency_report.json"
@@ -154,5 +153,6 @@ async def score_rag_sufficiency(state: RadiationAgentState) -> dict:
     return {
         "rag_sufficiency_score": score,
         "rag_sufficiency_report": report,
+        "context_decision": report["decision"],
         "current_node": "score_rag_sufficiency",
     }

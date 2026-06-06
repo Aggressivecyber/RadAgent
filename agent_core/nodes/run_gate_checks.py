@@ -73,47 +73,49 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
     task_spec = state.get("task_spec", {})
     sim_ir = state.get("simulation_ir", {})
     rag_score = state.get("rag_sufficiency_score", 0.0)
-    rag_required = state.get("rag_required_sources", [])
-    rag_registry = state.get("rag_registry", {})
     execution_mode = state.get("execution_mode", "dev_no_geant4_env")
+    output_dir = get_output_dir(job_id)
 
     # ==================================================================
-    # Gate 0: RAG Sufficiency — check score + required sources
+    # Gate 0: Context Sufficiency — check combined RAG+Web decision
     # ==================================================================
-    sources = rag_registry.get("sources", {})
+    context_decision = state.get("context_decision", "block_no_context")
+    context_report = state.get("context_sufficiency_report", {})
     g0_errors: list[str] = []
+    g0_severity: str = "pass"
 
-    # Check score threshold
-    if rag_score < 0.75:
-        g0_errors.append(f"RAG score {rag_score:.2f} below threshold 0.75")
+    if context_decision == "allow_rag":
+        g0_message = f"Context sufficient via RAG (score: {rag_score:.2f})"
+    elif context_decision == "allow_with_web_supplement":
+        web_urls = context_report.get("web_urls", [])
+        g0_message = (
+            f"Context supplemented via web search (RAG: {rag_score:.2f}, "
+            f"Web: {len(web_urls)} results). "
+            f"URLs: {', '.join(web_urls[:3])}"
+        )
+        g0_severity = "warning"  # Pass with disclosure
+    elif context_decision == "block_no_context":
+        g0_errors.append(f"No sufficient context (RAG: {rag_score:.2f})")
+        if state.get("web_search_available", False):
+            g0_errors.append("Web search returned insufficient results")
+        else:
+            g0_errors.append("Web search not available")
+        g0_message = "; ".join(g0_errors)
+        g0_severity = "block"
+    else:
+        g0_errors.append(f"Unknown context decision: {context_decision}")
+        g0_message = "; ".join(g0_errors)
+        g0_severity = "fail"
 
-    # Check each required source is available and has context
-    context_map = {
-        "geant4": state.get("g4_context", []),
-        "tcad": state.get("tcad_context", []),
-        "spice": state.get("spice_context", []),
-    }
-    for src in rag_required:
-        src_info = sources.get(src, {})
-        if not src_info.get("available", False):
-            g0_errors.append(f"Required source '{src}' not available")
-        elif not context_map.get(src):
-            g0_errors.append(f"Required source '{src}' returned no context")
-
-    g0_passed = len(g0_errors) == 0
-    gate_results.append(
-        {
-            "gate_id": 0,
-            "gate_name": "RAG Sufficiency",
-            "passed": g0_passed,
-            "severity": "pass" if g0_passed else "fail",
-            "message": (
-                "; ".join(g0_errors) if g0_errors
-                else f"RAG score: {rag_score:.2f}, all required sources available"
-            ),
-            "retry_node": "retrieve_g4_context" if not g0_passed else None,
-        }
-    )
+    g0_passed = g0_severity in ("pass", "warning")
+    gate_results.append({
+        "gate_id": 0,
+        "gate_name": "Context Sufficiency",
+        "passed": g0_passed,
+        "severity": g0_severity,
+        "message": g0_message,
+        "retry_node": None,  # Context insufficiency is terminal
+    })
 
     # ==================================================================
     # Gate 1: Task Spec Schema
@@ -201,36 +203,45 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
     # ==================================================================
     # Gate 6: Build/Parse
     # ==================================================================
+    g6_severity = "fail"
     try:
         from agent_core.tools.geant4_runner import Geant4Runner
 
         runner = Geant4Runner()
         if runner.geant4_available:
-            build_result = await runner.smoke_test(str(g4_dir), events=10)
+            build_result = await runner.smoke_test(
+                str(g4_dir),
+                job_id=job_id,
+                output_dir=str(output_dir),
+                events=10,
+            )
             build_valid = build_result.get("success", False)
             build_msg = (
                 "Build and smoke test passed"
                 if build_valid
                 else str(build_result.get("errors", "Build failed"))
             )
+            g6_severity = "pass" if build_valid else "fail"
         else:
-            build_result = await runner.structure_check(str(g4_dir))
-            build_valid = build_result.get("valid", False)
-            status_str = "OK" if build_valid else "Issues found"
-            build_msg = f"Structure check (Geant4 not available): {status_str}"
+            # Geant4 NOT available — structure_check does NOT count as build pass
+            if execution_mode == "mvp1_acceptance":
+                build_valid = False
+                build_msg = "[MVP1] Geant4 environment required but not available"
+                g6_severity = "fail"
+            else:
+                build_valid = False
+                g6_severity = "skipped"
+                build_msg = "Geant4 not available — build NOT verified (dev mode only)"
+                skipped_gates.append({"gate_id": 6, "reason": build_msg})
     except Exception as e:
         build_valid = False
         build_msg = f"Build check error: {e}"
-
-    g6_severity = "pass" if build_valid else "fail"
-    if not build_valid and "not available" in build_msg:
-        g6_severity = "skipped"
-        skipped_gates.append({"gate_id": 6, "reason": build_msg})
+        g6_severity = "fail"
 
     gate_results.append(
         _check_execution_mode_gate(
-            6, build_valid or g6_severity == "skipped", g6_severity,
-            build_msg, "write_fix_patch" if not build_valid else None,
+            6, build_valid, g6_severity,
+            build_msg, "write_fix_patch" if g6_severity == "fail" else None,
             execution_mode,
         )
     )
@@ -316,7 +327,6 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
     # ==================================================================
     # Gate 8: Data Contract — check g4_output_package files
     # ==================================================================
-    output_dir = get_output_dir(job_id)
     _g4_required_output_files = (
         "g4_summary.json", "edep_3d.csv", "dose_3d.csv",
         "event_table.csv", "provenance.json",
@@ -357,48 +367,107 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
             )
 
     # ==================================================================
-    # Gate 9: Smoke Simulation
+    # Gate 9: Smoke Simulation — validate actual output files
     # ==================================================================
+    g9_required_files = (
+        "g4_summary.json", "edep_3d.csv", "dose_3d.csv",
+        "event_table.csv", "provenance.json",
+    )
+
+    def _csv_has_data_rows(csv_path: Path) -> bool:
+        """Check CSV has at least 1 data row (header excluded)."""
+        try:
+            text = csv_path.read_text(errors="replace").strip()
+            return len(text.splitlines()) > 1
+        except Exception:
+            return False
+
     try:
         from agent_core.tools.geant4_runner import Geant4Runner
 
         runner9 = Geant4Runner()
         if not runner9.geant4_available:
-            gate_results.append(
-                _check_execution_mode_gate(
-                    9, True, "skipped",
-                    "Geant4 not available for smoke simulation", None, execution_mode,
-                )
-            )
-            skipped_gates.append({"gate_id": 9, "reason": "Geant4 not available"})
-        else:
-            has_output = output_dir.is_dir() and any(output_dir.iterdir())
-            if not has_output:
-                gate_results.append(
-                    {
-                        "gate_id": 9,
-                        "gate_name": "Smoke Simulation",
-                        "passed": False,
-                        "severity": "fail",
-                        "message": "No simulation output files produced",
-                        "retry_node": "write_fix_patch",
-                    }
-                )
+            if execution_mode == "mvp1_acceptance":
+                gate_results.append({
+                    "gate_id": 9,
+                    "gate_name": "Smoke Simulation",
+                    "passed": False,
+                    "severity": "fail",
+                    "message": "[MVP1] Geant4 environment required for smoke simulation",
+                    "retry_node": None,
+                })
             else:
                 gate_results.append(
-                    {
-                        "gate_id": 9,
-                        "gate_name": "Smoke Simulation",
-                        "passed": True,
-                        "severity": "pass",
-                        "message": "Simulation output files detected",
-                        "retry_node": None,
-                    }
+                    _check_execution_mode_gate(
+                        9, False, "skipped",
+                        "Geant4 not available for smoke simulation", None,
+                        execution_mode,
+                    )
                 )
+                skipped_gates.append({"gate_id": 9, "reason": "Geant4 not available"})
+        elif not output_dir.is_dir():
+            gate_results.append({
+                "gate_id": 9,
+                "gate_name": "Smoke Simulation",
+                "passed": False,
+                "severity": "fail",
+                "message": f"Output directory does not exist: {output_dir}",
+                "retry_node": "write_fix_patch",
+            })
+        else:
+            # Check each required file
+            missing: list[str] = []
+            present: list[str] = []
+            for fname in g9_required_files:
+                fpath = output_dir / fname
+                if fname == "event_table.csv":
+                    if fpath.is_file() and _csv_has_data_rows(fpath):
+                        present.append(fname)
+                    else:
+                        if not fpath.is_file():
+                            missing.append(fname)
+                        else:
+                            missing.append(f"{fname} (no data rows)")
+                elif fpath.is_file():
+                    present.append(fname)
+                else:
+                    missing.append(fname)
+
+            # Validate provenance matches current job
+            prov_path = output_dir / "provenance.json"
+            if prov_path.is_file() and "provenance.json" not in missing:
+                try:
+                    prov = json.loads(prov_path.read_text())
+                    if prov.get("simulation_id") != job_id:
+                        missing.append("provenance.json (simulation_id mismatch)")
+                except Exception:
+                    missing.append("provenance.json (invalid JSON)")
+
+            if missing:
+                gate_results.append({
+                    "gate_id": 9,
+                    "gate_name": "Smoke Simulation",
+                    "passed": False,
+                    "severity": "fail",
+                    "message": (
+                        f"Missing/invalid: {', '.join(missing)}. "
+                        f"Present: {', '.join(present) if present else 'none'}"
+                    ),
+                    "retry_node": "write_fix_patch",
+                })
+            else:
+                gate_results.append({
+                    "gate_id": 9,
+                    "gate_name": "Smoke Simulation",
+                    "passed": True,
+                    "severity": "pass",
+                    "message": f"All required files verified ({len(present)} files)",
+                    "retry_node": None,
+                })
     except Exception as exc9:
         gate_results.append(
             _check_execution_mode_gate(
-                9, True, "skipped",
+                9, False, "skipped",
                 f"Smoke simulation check error: {exc9}", None, execution_mode,
             )
         )

@@ -71,9 +71,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/test_rag_router.py -v --tb=short
+      - run: pytest tests/unit/test_rag_router.py tests/unit/test_workspace_paths.py -v --tb=short
 
-  gate-test:
+  gate-validation-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,4 +82,20 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/test_workspace_paths.py -v --tb=short
+      - run: pytest tests/unit/test_gate_validation.py tests/unit/test_score_rag_sufficiency.py -v --tb=short
+
+  routes-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: >
+          pytest
+          tests/unit/test_routes.py
+          tests/unit/test_web_search_tool.py
+          tests/unit/test_combined_context_sufficiency.py
+          -v --tb=short

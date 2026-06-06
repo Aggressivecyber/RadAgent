@@ -4,6 +4,10 @@
 # Patch paths are relative to the job directory.
 # Example: "05_geant4/src/DetectorConstruction.cc"
 
+version: "1.2"
+
+default_action: "reject"
+
 green_zone:
   description: "Auto-apply allowed. Generated simulation code and workspace files."
   patterns:
@@ -19,11 +23,8 @@ green_zone:
     max_file_size_kb: 1024
 
 yellow_zone:
-  description: "Requires human review. Knowledge base and benchmark reference files."
+  description: "Requires human review. Benchmark reference files."
   patterns:
-    - "knowledge_base/g4rag/**"
-    - "knowledge_base/tcadrag/**"
-    - "knowledge_base/spicerag/**"
     - "benchmark_suite/**"
   rules:
     auto_apply_patch: false
@@ -31,7 +32,7 @@ yellow_zone:
     max_file_size_kb: 512
 
 red_zone:
-  description: "Default reject. Core agent infrastructure."
+  description: "Default reject. Core agent infrastructure and read-only knowledge bases."
   patterns:
     - "agent_core/schemas/**"
     - "agent_core/validators/**"
@@ -39,11 +40,9 @@ red_zone:
     - "agent_core/graph/**"
     - "agent_core/tools/rag_router.py"
     - "agent_core/nodes/run_gate_checks.py"
+    - "knowledge_base/**"
   rules:
     auto_apply_patch: false
     requires_human_review: true
     default_action: "reject"
     override_requires: "explicit_user_consent_with_reason"
-
-default_action: "reject"
-version: "1.1"

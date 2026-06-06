@@ -80,33 +80,52 @@ class Geant4Runner:
         macro: str | None = None,
         events: int = 100,
         threads: int = 1,
+        output_dir: str | None = None,
+        job_id: str = "unknown",
     ) -> dict[str, Any]:
         """Run simulation. Macro passed as positional arg per project convention."""
         cmd = executable
         if macro:
             cmd += f" {macro}"
-        env_prefix = f"export G4FORCE_RUN_MANAGER_THREAD={threads}; " if threads > 1 else ""
+        env_prefix = ""
+        if threads > 1:
+            env_prefix += f"export G4FORCE_RUN_MANAGER_THREAD={threads}; "
+        if output_dir:
+            env_prefix += f"export G4_OUTPUT_DIR={output_dir}; "
+        if job_id != "unknown":
+            env_prefix += f"export G4_JOB_ID={job_id}; "
         rc, out, err = await self._run(env_prefix + cmd)
         return {
             "success": rc == 0,
-            "output_dir": str(Path(executable).parent),
+            "output_dir": output_dir or str(Path(executable).parent),
             "log": out,
             "errors": err,
         }
 
-    async def smoke_test(self, project_dir: str, events: int = 10) -> dict[str, Any]:
+    async def smoke_test(
+        self,
+        project_dir: str,
+        *,
+        job_id: str = "unknown",
+        output_dir: str | None = None,
+        events: int = 10,
+    ) -> dict[str, Any]:
         """Quick smoke test: configure + build + run with few events.
 
-        If Geant4 is not available, falls back to structure check only.
+        If Geant4 is not available, returns success=False (structure_check
+        does NOT count as a build pass).
         """
         if not self.geant4_available:
-            struct = await self.structure_check(project_dir)
             return {
-                "success": struct["valid"],
+                "success": False,
                 "has_geant4": False,
                 "output_summary": None,
-                "warnings": struct["issues"],
+                "warnings": ["Geant4 not available — structure_check does not verify build"],
             }
+
+        # Resolve output dir
+        _output_dir = output_dir or str(Path(project_dir) / "build" / "output")
+        Path(_output_dir).mkdir(parents=True, exist_ok=True)
 
         build_dir = str(Path(project_dir) / "build")
         cfg = await self.configure(project_dir, build_dir)
@@ -127,10 +146,16 @@ class Geant4Runner:
                 "warnings": [bld["errors"]],
             }
 
-        sim = await self.simulate(bld["executable_path"], events=events)
+        sim = await self.simulate(
+            bld["executable_path"],
+            events=events,
+            output_dir=_output_dir,
+            job_id=job_id,
+        )
         return {
             "success": sim["success"],
             "has_geant4": True,
+            "output_dir": _output_dir,
             "output_summary": sim["log"][-500:] if sim["log"] else "",
             "warnings": [sim["errors"]] if sim["errors"] else [],
         }

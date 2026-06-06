@@ -1,4 +1,8 @@
-"""Retrieve additional context for error resolution."""
+"""Retrieve additional RAG context for error resolution during fix loop.
+
+Used ONLY in the fix loop (classify_failure -> retrieve_error_context
+-> write_fix_patch).  Results go into rag_error_context, NOT web_context.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +20,6 @@ async def retrieve_error_context(state: RadiationAgentState) -> dict:
     error_context = await tool.search(f"error: {gate_name} {error_msg}", top_k=3)
 
     return {
-        "web_context": error_context,
+        "rag_error_context": error_context,
         "current_node": "retrieve_error_context",
     }

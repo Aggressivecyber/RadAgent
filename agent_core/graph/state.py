@@ -45,6 +45,15 @@ class RadiationAgentState(TypedDict, total=False):
     rag_sufficiency_score: float
     rag_sufficiency_report: dict[str, Any]
 
+    # Combined context sufficiency (RAG + Web)
+    context_decision: str  # "allow_rag" | "allow_with_web_supplement" | "block_no_context"
+    context_sufficiency_report: dict[str, Any]
+    web_sufficiency_score: float
+    web_search_available: bool
+
+    # Error-resolution RAG context (fix loop only, NOT web fallback)
+    rag_error_context: list[dict[str, Any]]
+
     # Planning
     simulation_plan: dict[str, Any]
     code_architecture_plan: dict[str, Any]

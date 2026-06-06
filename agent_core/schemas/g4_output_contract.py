@@ -9,7 +9,10 @@ class FileInfo(BaseModel):
     """Reference to a single output file."""
 
     file: str
-    unit: str
+    unit: str = ""
+    exists: bool = False
+    rows: int = 0
+    checksum: str = ""
 
 
 class G4ParticleInfo(BaseModel):

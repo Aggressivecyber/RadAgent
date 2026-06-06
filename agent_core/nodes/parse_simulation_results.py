@@ -1,13 +1,15 @@
 """Parse simulation results and create output packages.
 
-Fix 4: Reads from the canonical output directory
-       (08_data_packages/g4_output_package/).
-       Validates all 5 required files exist.
+Reads from the canonical output directory
+(08_data_packages/g4_output_package/).
+Validates all 5 required files exist.
+Does NOT auto-generate missing files.
 """
 
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -23,6 +25,16 @@ G4_REQUIRED_FILES = (
     "event_table.csv",
     "provenance.json",
 )
+
+
+def _sha256(path: Path) -> str:
+    """Compute SHA256 hex digest of a file."""
+    h = hashlib.sha256()
+    try:
+        h.update(path.read_bytes())
+    except Exception:
+        return ""
+    return h.hexdigest()
 
 
 def _read_csv_safe(path: Path) -> list[dict]:
@@ -81,13 +93,8 @@ async def parse_simulation_results(state: RadiationAgentState) -> dict:
         edep_rows = _read_csv_safe(output_dir / "edep_3d.csv")
         dose_rows = _read_csv_safe(output_dir / "dose_3d.csv")
 
-        # Read summary and provenance if available
+        # Read provenance if available
         provenance: dict = {}
-        if file_status["g4_summary.json"]:
-            try:
-                _g4_summary = json.loads((output_dir / "g4_summary.json").read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
         if file_status["provenance.json"]:
             try:
                 provenance = json.loads((output_dir / "provenance.json").read_text())
@@ -112,24 +119,35 @@ async def parse_simulation_results(state: RadiationAgentState) -> dict:
                     "unit": "MeV",
                     "exists": file_status["edep_3d.csv"],
                     "rows": len(edep_rows),
+                    "checksum": _sha256(output_dir / "edep_3d.csv"),
                 },
                 "dose": {
                     "file": "dose_3d.csv",
                     "unit": "Gy",
                     "exists": file_status["dose_3d.csv"],
                     "rows": len(dose_rows),
+                    "checksum": _sha256(output_dir / "dose_3d.csv"),
                 },
                 "event_table": {
                     "file": "event_table.csv",
+                    "unit": "",
                     "exists": file_status["event_table.csv"],
+                    "rows": len(_read_csv_safe(output_dir / "event_table.csv")),
+                    "checksum": _sha256(output_dir / "event_table.csv"),
                 },
                 "g4_summary": {
                     "file": "g4_summary.json",
+                    "unit": "",
                     "exists": file_status["g4_summary.json"],
+                    "rows": 0,
+                    "checksum": _sha256(output_dir / "g4_summary.json"),
                 },
                 "provenance": {
                     "file": "provenance.json",
+                    "unit": "",
                     "exists": file_status["provenance.json"],
+                    "rows": 0,
+                    "checksum": _sha256(output_dir / "provenance.json"),
                 },
             },
             "checks": checks,
@@ -138,14 +156,8 @@ async def parse_simulation_results(state: RadiationAgentState) -> dict:
             "provenance": provenance,
         }
 
-        # Ensure output package dir exists and write summary
-        output_dir.mkdir(parents=True, exist_ok=True)
-        summary_file = output_dir / "g4_summary.json"
-        if not file_status["g4_summary.json"]:
-            # Write a generated summary if the C++ code didn't produce one
-            summary_file.write_text(
-                json.dumps(g4_output_package, indent=2, ensure_ascii=False)
-            )
+        # NOTE: We do NOT auto-generate g4_summary.json when missing.
+        # If the simulation didn't produce it, Gate 8 will correctly fail.
 
         results["geant4"] = g4_output_package
 

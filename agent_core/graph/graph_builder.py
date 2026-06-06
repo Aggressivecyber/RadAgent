@@ -6,6 +6,7 @@ from langgraph.graph import END, StateGraph
 
 from agent_core.graph.routes import (
     route_after_classify_failure,
+    route_after_combined_context,
     route_after_gate_checks,
     route_after_rag,
     route_after_sim_ir_validation,
@@ -27,9 +28,13 @@ from agent_core.nodes.retrieve_error_context import retrieve_error_context
 from agent_core.nodes.retrieve_g4_context import retrieve_g4_context
 from agent_core.nodes.retrieve_spice_context import retrieve_spice_context
 from agent_core.nodes.retrieve_tcad_context import retrieve_tcad_context
+from agent_core.nodes.retrieve_web_context import retrieve_web_context
 from agent_core.nodes.review_code_patch import review_code_patch
 from agent_core.nodes.route_rag import route_rag
 from agent_core.nodes.run_gate_checks import run_gate_checks
+from agent_core.nodes.score_combined_context_sufficiency import (
+    score_combined_context_sufficiency,
+)
 from agent_core.nodes.score_rag_sufficiency import score_rag_sufficiency
 from agent_core.nodes.validate_data_contract import validate_data_contract
 from agent_core.nodes.validate_simulation_ir import validate_simulation_ir
@@ -54,6 +59,8 @@ def build_graph() -> StateGraph:
     graph.add_node("retrieve_tcad_context", retrieve_tcad_context)
     graph.add_node("retrieve_spice_context", retrieve_spice_context)
     graph.add_node("score_rag_sufficiency", score_rag_sufficiency)
+    graph.add_node("retrieve_web_context", retrieve_web_context)
+    graph.add_node("score_combined_context_sufficiency", score_combined_context_sufficiency)
     graph.add_node("plan_simulation", plan_simulation)
     graph.add_node("plan_code_architecture", plan_code_architecture)
     graph.add_node("generate_test_plan", generate_test_plan)
@@ -101,6 +108,7 @@ def build_graph() -> StateGraph:
     )
 
     # RAG fan-out: route_rag -> all three RAG sources
+    # Each retrieve_* node checks rag_required_sources and returns [] if not needed
     graph.add_edge("route_rag", "retrieve_g4_context")
     graph.add_edge("route_rag", "retrieve_tcad_context")
     graph.add_edge("route_rag", "retrieve_spice_context")
@@ -110,13 +118,27 @@ def build_graph() -> StateGraph:
     graph.add_edge("retrieve_tcad_context", "score_rag_sufficiency")
     graph.add_edge("retrieve_spice_context", "score_rag_sufficiency")
 
-    # Conditional: RAG sufficient?
+    # Conditional: RAG sufficient? (allow_rag / needs_web / block_no_context)
     graph.add_conditional_edges(
         "score_rag_sufficiency",
         route_after_rag,
         {
-            "retrieve_error_context": "retrieve_error_context",
+            "retrieve_web_context": "retrieve_web_context",
             "plan_simulation": "plan_simulation",
+            "generate_report": "generate_report",
+        },
+    )
+
+    # Web context -> combined scoring
+    graph.add_edge("retrieve_web_context", "score_combined_context_sufficiency")
+
+    # Conditional: combined context sufficient?
+    graph.add_conditional_edges(
+        "score_combined_context_sufficiency",
+        route_after_combined_context,
+        {
+            "plan_simulation": "plan_simulation",
+            "generate_report": "generate_report",
         },
     )
 
