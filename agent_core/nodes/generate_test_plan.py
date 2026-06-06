@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from agent_core.graph.state import RadiationAgentState
 
 
 async def generate_test_plan(state: RadiationAgentState) -> dict:
     """Generate a test plan for the simulation code."""
     scope = state.get("task_spec", {}).get("simulation_scope", [])
-    test_plan = {"tests": []}
+    test_plan: dict[str, list[Any]] = {"tests": []}
 
     if "geant4" in scope:
         test_plan["tests"] = [

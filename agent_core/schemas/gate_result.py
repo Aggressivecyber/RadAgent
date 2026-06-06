@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 
 
 class GateResult(BaseModel):
@@ -31,14 +31,12 @@ class GateReport(BaseModel):
     total_gates: int = 12
     results: list[GateResult]
 
-    @computed_field
     @property
     def overall_passed(self) -> bool:
         return all(
             r.severity in ("pass", "warning", "skipped") for r in self.results
         )
 
-    @computed_field
     @property
     def summary(self) -> str:
         passed = sum(1 for r in self.results if r.severity == "pass")

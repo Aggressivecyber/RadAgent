@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 
 def get_llm(temperature: float = 0.0) -> ChatOpenAI:
@@ -31,6 +32,6 @@ def get_llm(temperature: float = 0.0) -> ChatOpenAI:
     return ChatOpenAI(
         model=model_name,
         temperature=temperature,
-        api_key=api_key,
+        api_key=SecretStr(api_key),
         base_url=base_url,
     )

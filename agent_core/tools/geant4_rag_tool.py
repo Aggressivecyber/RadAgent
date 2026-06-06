@@ -46,7 +46,7 @@ class Geant4RAGTool:
             try:
                 r = await client.post("/search", json={"query": query, "top_k": top_k})
                 r.raise_for_status()
-                return r.json().get("results", [])
+                return list(r.json().get("results", []))
             except Exception:
                 logger.warning("MCP search failed, using local fallback", exc_info=True)
         return self._local_search(query, top_k)

@@ -144,7 +144,8 @@ async def write_code_patch(state: RadiationAgentState) -> dict:
             simulation_ir=sim_ir_str, rag_context=rag_context_str
         )
         response = await llm.ainvoke(prompt)
-        content = response.content.strip()
+        raw_content = response.content
+        content = raw_content.strip() if isinstance(raw_content, str) else str(raw_content)
         # Strip markdown code blocks
         if content.startswith("```"):
             content = content.split("\n", 1)[1] if "\n" in content else content[3:]

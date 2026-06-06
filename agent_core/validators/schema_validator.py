@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from agent_core.schemas.simulation_ir import SimulationIR
 from agent_core.schemas.task_spec import SimulationScope, TaskSpec
 
@@ -72,7 +74,7 @@ class SchemaValidator:
         Raises:
             ValueError: If *schema_type* is not a recognised value.
         """
-        dispatchers: dict[str, callable] = {
+        dispatchers: dict[str, Callable[[dict], tuple[bool, list[str]]]] = {
             "task_spec": self.validate_task_spec,
             "simulation_ir": self.validate_simulation_ir,
         }

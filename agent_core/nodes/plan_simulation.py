@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
@@ -15,7 +16,7 @@ async def plan_simulation(state: RadiationAgentState) -> dict:
     scope = task_spec.get("simulation_scope", [])
     job_id = state.get("job_id", "unknown")
 
-    plan = {
+    plan: dict[str, Any] = {
         "job_id": job_id,
         "phases": [],
         "estimated_duration": "unknown",

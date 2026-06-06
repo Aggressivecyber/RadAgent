@@ -76,7 +76,8 @@ async def write_fix_patch(state: RadiationAgentState) -> dict:
             error_context=error_ctx_str,
         )
         response = await llm.ainvoke(prompt)
-        content = response.content.strip()
+        raw_content = response.content
+        content = raw_content.strip() if isinstance(raw_content, str) else str(raw_content)
         if content.startswith("```"):
             content = content.split("\n", 1)[1] if "\n" in content else content[3:]
         if content.endswith("```"):

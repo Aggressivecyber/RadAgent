@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 
 from agent_core.config.workspace import get_job_dir, get_output_dir
 from agent_core.graph.state import RadiationAgentState
@@ -19,7 +20,7 @@ async def build_simulation_ir(state: RadiationAgentState) -> dict:
         json.dumps(task_spec, sort_keys=True).encode()
     ).hexdigest()[:12]
 
-    sim_ir = {
+    sim_ir: dict[str, Any] = {
         "simulation_id": job_id,
         "task_spec_hash": task_spec_hash,
         "g4_config": None,

@@ -24,7 +24,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
-async def run_agent(query: str, job_id: str | None = None) -> dict:
+async def run_agent(query: str, job_id: str | None = None) -> dict[str, object]:
     """Run the full RadAgent pipeline for a user query.
 
     Args:
@@ -52,7 +52,7 @@ async def run_agent(query: str, job_id: str | None = None) -> dict:
 
     # Compile and run graph
     graph = compile_graph()
-    result = await graph.ainvoke(
+    result: dict[str, object] = await graph.ainvoke(
         initial_state,
         config={"recursion_limit": 50},
     )
@@ -72,7 +72,8 @@ async def check_status(job_id: str) -> dict:
     if not job_dir.exists():
         return {"status": "not_found", "job_id": job_id}
 
-    status = {"status": "found", "job_id": job_id, "artifacts": {}}
+    status: dict[str, object] = {"status": "found", "job_id": job_id, "artifacts": {}}
+    artifacts: dict[str, dict[str, object]] = {}
 
     # Check for each artifact
     checks = {
@@ -86,10 +87,11 @@ async def check_status(job_id: str) -> dict:
 
     for name, rel_path in checks.items():
         full_path = job_dir / rel_path
-        status["artifacts"][name] = {
+        artifacts[name] = {
             "exists": full_path.exists(),
             "path": str(full_path),
         }
+    status["artifacts"] = artifacts
 
     # Read gate results if available
     gate_file = job_dir / "09_validation" / "gate_results.json"
@@ -101,7 +103,7 @@ async def check_status(job_id: str) -> dict:
     return status
 
 
-def main():
+def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="Radiation Simulation Agent (RadAgent)")
     parser.add_argument("query", nargs="?", help="Natural language simulation request")

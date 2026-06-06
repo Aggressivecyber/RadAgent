@@ -8,6 +8,8 @@ affect the sufficiency score.
 
 from __future__ import annotations
 
+from typing import Any
+
 from langgraph.graph import END, StateGraph
 
 from agent_core.graph.routes import (
@@ -178,7 +180,7 @@ def build_graph() -> StateGraph:
     return graph
 
 
-def compile_graph():
+def compile_graph() -> Any:
     """Build and compile the graph, ready for execution."""
     graph = build_graph()
     return graph.compile()

@@ -33,18 +33,19 @@ User request: {user_query}
 """
 
 
-def _heuristic_parse(query: str) -> dict:
+def _heuristic_parse(query: str) -> dict[str, object]:
     """Fallback heuristic parser when LLM is unavailable."""
     scope = ["geant4"]
-    particle = {
+    particle: dict[str, object] = {
         "type": "proton",
         "energy_MeV": 10.0,
         "direction": [0, 0, 1],
         "events": 1000,
     }
-    target = {
+    size_um: list[float] = [1000.0, 1000.0, 300.0]
+    target: dict[str, object] = {
         "material": "Si",
-        "size_um": [1000.0, 1000.0, 300.0],
+        "size_um": size_um,
         "geometry_type": "box",
     }
     outputs = ["energy_deposition", "dose_distribution"]
@@ -69,7 +70,7 @@ def _heuristic_parse(query: str) -> dict:
     # Try to extract thickness
     thickness_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:um|微米)", query)
     if thickness_match:
-        target["size_um"][2] = float(thickness_match.group(1))
+        size_um[2] = float(thickness_match.group(1))
 
     return {
         "simulation_scope": scope,
@@ -91,7 +92,8 @@ async def build_task_spec(state: RadiationAgentState) -> dict:
         llm = get_llm(temperature=0)
         prompt = TASK_SPEC_PROMPT.format(user_query=user_query)
         response = await llm.ainvoke(prompt)
-        content = response.content.strip()
+        raw_content = response.content
+        content = raw_content.strip() if isinstance(raw_content, str) else str(raw_content)
         # Strip markdown code blocks if present
         if content.startswith("```"):
             content = content.split("\n", 1)[1] if "\n" in content else content[3:]

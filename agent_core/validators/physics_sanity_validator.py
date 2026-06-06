@@ -17,6 +17,13 @@ def _normalize(data: list[dict] | dict) -> list[dict]:
     return data if isinstance(data, list) else [data]
 
 
+def _as_float(v: Any) -> float | None:
+    """Cast to float if possible, else None."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    return None
+
+
 class PhysicsSanityValidator:
     """Validates physical plausibility of simulation output."""
 
@@ -79,7 +86,9 @@ class PhysicsSanityValidator:
                 errors.append(f"Point {i}: value is NaN/Inf")
             if i > 0:
                 prev_t = data[i - 1].get(time_field)
-                if _is_finite(prev_t) and _is_finite(t) and t <= prev_t:
+                prev_tf = _as_float(prev_t)
+                tf = _as_float(t)
+                if prev_tf is not None and tf is not None and tf <= prev_tf:
                     errors.append(f"Point {i}: time not monotonically increasing")
         return (not errors, errors)
 
@@ -118,22 +127,27 @@ class PhysicsSanityValidator:
         return (not errors, errors)
 
     def _run_single(self, fn_name: str, payload: Any, *args: str) -> list[str]:
-        _, errs = getattr(self, fn_name)(payload, *args)
-        return errs
+        fn = getattr(self, fn_name)
+        result: tuple[bool, list[str]] = fn(payload, *args)
+        return result[1]
 
     def run_all_checks(self, result_type: str, data: dict) -> tuple[bool, list[str]]:
         errors: list[str] = []
-        checks: list[tuple[str, Any, ...]] = []
+        checks: list[tuple[str, Any, tuple[str, ...]]] = []
         if result_type == "g4":
-            checks = [("validate_energy_deposition", data.get("edep")),
-                      ("validate_dose", data.get("dose")),
-                      ("validate_event_data", data.get("events"))]
+            checks = [
+                ("validate_energy_deposition", data.get("edep"), ()),
+                ("validate_dose", data.get("dose"), ()),
+                ("validate_event_data", data.get("events"), ()),
+            ]
         elif result_type == "tcad":
-            checks = [("validate_dose", data.get("dose"))]
+            checks = [("validate_dose", data.get("dose"), ())]
         elif result_type == "spice":
-            checks = [("validate_time_series", data.get("time_series"), "time", "voltage"),
-                      ("validate_charge_integration", data.get("current_data"), "time", "current")]
-        for fn_name, payload, *extra in checks:
+            checks = [
+                ("validate_time_series", data.get("time_series"), ("time", "voltage")),
+                ("validate_charge_integration", data.get("current_data"), ("time", "current")),
+            ]
+        for fn_name, payload, extra in checks:
             if payload is not None:
                 errors.extend(self._run_single(fn_name, payload, *extra))
         if "units" in data or "_units" in data:

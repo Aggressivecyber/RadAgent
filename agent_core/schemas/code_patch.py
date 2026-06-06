@@ -8,7 +8,7 @@ valid diff — it simply means the patch is using JSON replacement mode.
 from __future__ import annotations
 
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -62,7 +62,7 @@ class CodePatch(BaseModel):
 
     @field_validator("risk_level")
     @classmethod
-    def risk_must_cover_zones(cls, v: RiskLevel, info) -> RiskLevel:
+    def risk_must_cover_zones(cls, v: RiskLevel, info: Any) -> RiskLevel:
         """Ensure risk level is sufficient for the most sensitive file zone."""
         changed_files = info.data.get("changed_files", [])
         if not changed_files:

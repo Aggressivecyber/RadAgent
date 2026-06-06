@@ -219,7 +219,7 @@ class WebSearchTool:
     # Utility
     # ------------------------------------------------------------------
 
-    def format_for_context(self, results: list[WebResult]) -> list[dict[str, str]]:
+    def format_for_context(self, results: list[WebResult]) -> list[dict[str, str | float]]:
         """Format web results as RAG-compatible context entries with disclosure."""
         return [r.to_context_entry() for r in results]
 
