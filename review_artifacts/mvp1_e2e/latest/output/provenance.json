@@ -1,0 +1,36 @@
+{
+  "job_id": "job_20260606_203227_e2296c",
+  "mode": "dev_no_geant4_env",
+  "created_at": "2026-06-06T20:32:27Z",
+  "pipeline_stages_completed": [
+    "00_request",
+    "01_context",
+    "02_task_spec",
+    "03_simulation_ir",
+    "04_generated_code",
+    "05_geant4",
+    "09_validation",
+    "10_report"
+  ],
+  "pipeline_stages_skipped": [
+    "06_build",
+    "07_simulation",
+    "08_data_packages"
+  ],
+  "rag_routes": ["g4rag"],
+  "rag_sufficiency_score": 0.76,
+  "code_generation": {
+    "patch_id": "438b45c9-a671-4f8e-8aa2-243fc3855902",
+    "files_generated": 12,
+    "risk_level": "low"
+  },
+  "gate_summary": {
+    "total": 12,
+    "passed": 10,
+    "failed": 2,
+    "failed_gate_ids": [5, 6]
+  },
+  "geant4_executed": false,
+  "geant4_version": null,
+  "review_artifact_generated_at": "2026-06-07T01:00:00Z"
+}
