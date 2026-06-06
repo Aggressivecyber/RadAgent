@@ -47,21 +47,29 @@ class TestNoTrackedJobArtifacts:
             )
 
     def test_no_tracked_g4_summary_json(self):
-        """No g4_summary.json files should be tracked (except in tests/fixtures)."""
+        """No g4_summary.json in simulation_workspace/ (review_artifacts/ stubs OK)."""
         tracked = _git_ls_files("**/g4_summary.json")
-        outside_tests = [f for f in tracked if "tests/" not in f]
-        assert len(outside_tests) == 0, (
-            "Found tracked g4_summary.json outside tests/:\n"
-            + "\n".join(outside_tests)
+        # Allowed: tests/ fixtures, review_artifacts/ lightweight stubs
+        disallowed = [
+            f for f in tracked
+            if "tests/" not in f and "review_artifacts/" not in f
+        ]
+        assert len(disallowed) == 0, (
+            "Found tracked g4_summary.json outside tests/ and review_artifacts/:\n"
+            + "\n".join(disallowed)
         )
 
     def test_no_tracked_provenance_json(self):
-        """No provenance.json files should be tracked (except in tests/fixtures)."""
+        """No provenance.json in simulation_workspace/ (review_artifacts/ stubs OK)."""
         tracked = _git_ls_files("**/provenance.json")
-        outside_tests = [f for f in tracked if "tests/" not in f]
-        assert len(outside_tests) == 0, (
-            "Found tracked provenance.json outside tests/:\n"
-            + "\n".join(outside_tests)
+        # Allowed: tests/ fixtures, review_artifacts/ lightweight stubs
+        disallowed = [
+            f for f in tracked
+            if "tests/" not in f and "review_artifacts/" not in f
+        ]
+        assert len(disallowed) == 0, (
+            "Found tracked provenance.json outside tests/ and review_artifacts/:\n"
+            + "\n".join(disallowed)
         )
 
     def test_no_tracked_run_log(self):
