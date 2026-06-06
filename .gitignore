@@ -42,6 +42,11 @@ knowledge_base/**/data/
 knowledge_base/**/__pycache__/
 knowledge_base/**/.ruff_cache/
 
+# Review artifacts (generated at runtime, only keep READMEs)
+review_artifacts/*/latest/output/
+review_artifacts/*/latest/*.json
+!review_artifacts/*/latest/README.md
+
 # OS
 .DS_Store
 Thumbs.db

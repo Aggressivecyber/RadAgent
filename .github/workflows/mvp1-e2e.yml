@@ -1,0 +1,114 @@
+name: MVP-1 E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agent_core/**'
+      - 'tests/e2e/**'
+      - 'scripts/run_mvp1_e2e.py'
+      - 'scripts/collect_mvp1_artifacts.py'
+      - 'scripts/make_review_artifact.py'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dev-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+
+      - name: Run dev mode E2E
+        id: e2e_dev
+        continue-on-error: true
+        run: |
+          python scripts/run_mvp1_e2e.py \
+            --mode dev \
+            --output-dir review_artifacts/mvp1_e2e/latest \
+            --json
+
+      - name: Collect artifacts
+        continue-on-error: true
+        run: |
+          # Find latest job directory
+          JOB_DIR=$(find simulation_workspace/jobs -mindepth 1 -maxdepth 1 -type d -newer review_artifacts/mvp1_e2e/latest 2>/dev/null | sort | tail -1 || true)
+          if [ -n "$JOB_DIR" ]; then
+            python scripts/collect_mvp1_artifacts.py \
+              --job-dir "$JOB_DIR" \
+              --output-dir review_artifacts/mvp1_e2e/latest/output
+          fi
+          python scripts/make_review_artifact.py \
+            --mode dev \
+            --run-results review_artifacts/mvp1_e2e/latest/e2e_results.json \
+            --artifacts-dir review_artifacts/mvp1_e2e/latest/output \
+            --output-dir review_artifacts/mvp1_e2e/latest
+
+      - name: Upload review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvp1-e2e-dev-review
+          path: review_artifacts/mvp1_e2e/latest/
+          retention-days: 30
+
+      - name: Check E2E result
+        if: steps.e2e_dev.outcome == 'failure'
+        run: |
+          echo "::error::MVP-1 E2E dev mode tests failed"
+          exit 1
+
+  acceptance-e2e:
+    runs-on: [self-hosted, geant4]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+
+      - name: Run acceptance mode E2E
+        id: e2e_acceptance
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          MODEL_NAME: ${{ secrets.MODEL_NAME }}
+        run: |
+          python scripts/run_mvp1_e2e.py \
+            --mode acceptance \
+            --output-dir review_artifacts/mvp1_e2e/latest \
+            --json
+
+      - name: Collect artifacts
+        continue-on-error: true
+        run: |
+          JOB_DIR=$(find simulation_workspace/jobs -mindepth 1 -maxdepth 1 -type d -newer review_artifacts/mvp1_e2e/latest 2>/dev/null | sort | tail -1 || true)
+          if [ -n "$JOB_DIR" ]; then
+            python scripts/collect_mvp1_artifacts.py \
+              --job-dir "$JOB_DIR" \
+              --output-dir review_artifacts/mvp1_e2e/latest/output
+          fi
+          python scripts/make_review_artifact.py \
+            --mode acceptance \
+            --run-results review_artifacts/mvp1_e2e/latest/e2e_results.json \
+            --artifacts-dir review_artifacts/mvp1_e2e/latest/output \
+            --output-dir review_artifacts/mvp1_e2e/latest
+
+      - name: Upload review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvp1-e2e-acceptance-review
+          path: review_artifacts/mvp1_e2e/latest/
+          retention-days: 30
+
+      - name: Check E2E result
+        if: steps.e2e_acceptance.outcome == 'failure'
+        run: |
+          echo "::error::MVP-1 E2E acceptance mode tests failed"
+          exit 1

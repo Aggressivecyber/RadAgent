@@ -51,6 +51,7 @@ markers = [
     "requires_geant4: requires Geant4 environment",
     "requires_tcad: requires TCAD environment",
     "requires_spice: requires ngspice environment",
+    "e2e: end-to-end pipeline tests",
 ]
 
 [tool.mypy]
