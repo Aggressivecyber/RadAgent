@@ -42,10 +42,17 @@ knowledge_base/**/data/
 knowledge_base/**/__pycache__/
 knowledge_base/**/.ruff_cache/
 
-# Review artifacts (generated at runtime, only keep READMEs)
-review_artifacts/*/latest/output/
-review_artifacts/*/latest/*.json
-!review_artifacts/*/latest/README.md
+# Review artifacts — lightweight review bundle (must be committable)
+# All files under review_artifacts/*/latest/ are kept small (<100KB each)
+# and contain only summaries, CSV headers, and metadata — never raw data.
+# review_artifacts/*/latest/** is explicitly allowed for commit.
+
+# Still block large binary / raw simulation data
+review_artifacts/*/latest/**/*.root
+review_artifacts/*/latest/**/*.hdf5
+review_artifacts/*/latest/**/*.h5
+review_artifacts/*/latest/**/*.raw
+review_artifacts/*/latest/**/*.bin
 
 # OS
 .DS_Store

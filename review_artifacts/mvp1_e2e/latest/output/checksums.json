@@ -1,0 +1,13 @@
+{
+  "dose_3d_head.csv": "996292135fbb308a4202841e3d1827835951091bd6d83be4050a37d9dae57611",
+  "edep_3d_head.csv": "4fef4573ac72dcba93273e4e51614fe8ef9e3abf66a9cb164a04fa8096513373",
+  "event_table_head.csv": "8ef5e10b9aa60d9bb4c86bd26391fca3fda07b52c04fdeea5c584b488575fac1",
+  "final_report.md": "919ee2e5004fd4dd0fa7a74329fe62790efdf58dbad8172d9f51938c5f63d11e",
+  "g4_summary.json": "c61bb3cfee6a68f9c99bcabc4cfc34e855e1121b01d302f861a05a9f60ef0d4b",
+  "gate_results.json": "da1d084a8fefeaedb5ebce2edfcb2e343ab53b493f5b00b394ba96fa39036888",
+  "proposed_patch_summary.json": "3227daed4ae585c34b5edc34a4dc052c4e7d56016ffb5c5ba3ca4167da5ced61",
+  "provenance.json": "a8a6bef54ebb229ff523cbed272db6666e111080a183daf866547e9a66b05070",
+  "simulation_ir.json": "492cc05469b25f40586d9f72d19ef544ef195f8076ed094be981196ee2cacf2c",
+  "task_spec.json": "907c6a7f27bce66928435556bf83bd403ff22ce13febb2c9c0555318e42f23dd",
+  "user_query.md": "093395999d57d66f058e4688a47eeb7ab362ae84503188da1224b7f32a6f8842"
+}

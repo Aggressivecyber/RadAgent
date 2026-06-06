@@ -1,0 +1,120 @@
+{
+  "patch_id": "438b45c9-a671-4f8e-8aa2-243fc3855902",
+  "job_id": "job_20260606_203227_e2296c",
+  "description": "A minimal Geant4 simulation with a silicon target (1000x1000x300 um) irradiated by 10 MeV protons along +z axis. Energy deposition and dose are scored in a 3D voxel grid (50 um resolution) and written to a single CSV file. The FTFP_BERT physics list is used. The code is designed for single-thread execution.",
+  "change_type": "create",
+  "risk_level": "low",
+  "changed_files": [
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/CMakeLists.txt",
+      "zone": "green",
+      "new_content": "cmake_minimum_required(VERSION 3.10)\nproject(Geant4VoxelSim)\n\nfind_package(Geant4 REQUIRED)\n\ninclude(${Geant4_USE_FILE})\n\nadd_executable(geant4_sim\n  geant4_sim.cc\n  DetectorConstruction.cc\n  PrimaryG\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/geant4_sim.cc",
+      "zone": "green",
+      "new_content": "#include \"G4RunManager.hh\"\n#include \"G4UImanager.hh\"\n#include \"FTFP_BERT.hh\"\n#include \"DetectorConstruction.hh\"\n#include \"PrimaryGeneratorAction.hh\"\n#include \"RunAction.hh\"\n#include \"G4ScoringManager.\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/DetectorConstruction.hh",
+      "zone": "green",
+      "new_content": "#ifndef DetectorConstruction_h\n#define DetectorConstruction_h 1\n\n#include \"G4VUserDetectorConstruction.hh\"\n#include \"globals.hh\"\n#include \"G4ThreeVector.hh\"\n\nclass G4LogicalVolume;\nclass G4VPhysicalVo\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/DetectorConstruction.cc",
+      "zone": "green",
+      "new_content": "#include \"DetectorConstruction.hh\"\n#include \"G4Box.hh\"\n#include \"G4LogicalVolume.hh\"\n#include \"G4PVPlacement.hh\"\n#include \"G4NistManager.hh\"\n#include \"G4SystemOfUnits.hh\"\n#include \"SensitiveDetector.h\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/PrimaryGeneratorAction.hh",
+      "zone": "green",
+      "new_content": "#ifndef PrimaryGeneratorAction_h\n#define PrimaryGeneratorAction_h 1\n\n#include \"G4VUserPrimaryGeneratorAction.hh\"\n#include \"G4ParticleGun.hh\"\n#include \"globals.hh\"\n\nclass G4ParticleDefinition;\n\nclass P\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/PrimaryGeneratorAction.cc",
+      "zone": "green",
+      "new_content": "#include \"PrimaryGeneratorAction.hh\"\n#include \"G4Event.hh\"\n#include \"G4ParticleTable.hh\"\n#include \"G4ParticleDefinition.hh\"\n#include \"G4SystemOfUnits.hh\"\n\nPrimaryGeneratorAction::PrimaryGeneratorActio\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/VoxelScorer.hh",
+      "zone": "green",
+      "new_content": "#ifndef VoxelScorer_h\n#define VoxelScorer_h 1\n\n#include \"globals.hh\"\n#include \"G4ThreeVector.hh\"\n#include <vector>\n#include <fstream>\n\nclass G4Material;\n\nclass VoxelScorer {\npublic:\n  static VoxelScor\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/VoxelScorer.cc",
+      "zone": "green",
+      "new_content": "#include \"VoxelScorer.hh\"\n#include \"G4Material.hh\"\n#include \"G4SystemOfUnits.hh\"\n#include <cmath>\n#include <iomanip>\n#include <sstream>\n\nVoxelScorer* VoxelScorer::fInstance = nullptr;\n\nVoxelScorer* Vo\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/SensitiveDetector.hh",
+      "zone": "green",
+      "new_content": "#ifndef SensitiveDetector_h\n#define SensitiveDetector_h 1\n\n#include \"G4VSensitiveDetector.hh\"\n#include \"globals.hh\"\n\nclass G4Step;\nclass G4HCofThisEvent;\n\nclass SensitiveDetector : public G4VSensitive\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/SensitiveDetector.cc",
+      "zone": "green",
+      "new_content": "#include \"SensitiveDetector.hh\"\n#include \"G4Step.hh\"\n#include \"G4Track.hh\"\n#include \"G4SystemOfUnits.hh\"\n#include \"VoxelScorer.hh\"\n\nSensitiveDetector::SensitiveDetector(const G4String& name)\n  : G4VSe\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/RunAction.hh",
+      "zone": "green",
+      "new_content": "#ifndef RunAction_h\n#define RunAction_h 1\n\n#include \"G4UserRunAction.hh\"\n#include \"globals.hh\"\n\nclass DetectorConstruction;\nclass G4Run;\n\nclass RunAction : public G4UserRunAction {\npublic:\n  RunAction\n... [truncated]",
+      "diff_content": ""
+    },
+    {
+      "path": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/RunAction.cc",
+      "zone": "green",
+      "new_content": "#include \"RunAction.hh\"\n#include \"DetectorConstruction.hh\"\n#include \"VoxelScorer.hh\"\n#include \"G4Run.hh\"\n#include \"G4SystemOfUnits.hh\"\n#include \"G4Material.hh\"\n#include <sys/stat.h>\n\nRunAction::RunAct\n... [truncated]",
+      "diff_content": ""
+    }
+  ],
+  "test_plan": [
+    {
+      "name": "structure_check",
+      "description": "Verify all required files exist"
+    },
+    {
+      "name": "cmake_configure",
+      "description": "CMake configure succeeds"
+    },
+    {
+      "name": "cmake_build",
+      "description": "Build succeeds without errors"
+    },
+    {
+      "name": "smoke_run",
+      "description": "Run with 10 events, check output"
+    },
+    {
+      "name": "output_not_empty",
+      "description": "Output files are not empty"
+    },
+    {
+      "name": "no_negative_energy",
+      "description": "No negative energy deposition"
+    },
+    {
+      "name": "no_nan_values",
+      "description": "No NaN or Inf in outputs"
+    }
+  ],
+  "expected_outputs": [
+    "edep_3d.csv",
+    "dose_3d.csv",
+    "event_table.csv"
+  ],
+  "dependencies": [
+    "Geant4"
+  ],
+  "rollback_possible": true
+}

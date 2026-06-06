@@ -1,0 +1,52 @@
+{
+  "simulation_id": "job_20260606_203227_e2296c",
+  "task_spec_hash": "e50bbfc948e9",
+  "g4_config": {
+    "geometry": {
+      "target_material": "Si",
+      "dimensions_um": [
+        1000.0,
+        1000.0,
+        300.0
+      ],
+      "world_size_um": [
+        2000.0,
+        2000.0,
+        1000.0
+      ]
+    },
+    "particle_source": {
+      "type": "proton",
+      "energy_MeV": 10.0,
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "events": 1000
+    },
+    "physics_list": "FTFP_BERT",
+    "scoring": {
+      "edep": true,
+      "dose": true,
+      "voxel_size_um": [
+        50.0,
+        50.0,
+        50.0
+      ],
+      "output_format": "csv"
+    },
+    "run_config": {
+      "threads": 1,
+      "output_dir": "simulation_workspace/jobs/job_20260606_203227_e2296c/05_geant4/output"
+    }
+  },
+  "tcad_config": null,
+  "spice_config": null,
+  "mapping_chain": null,
+  "unit_registry": {
+    "energy": "MeV",
+    "length": "um",
+    "dose": "Gy"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "mode": "dev_no_geant4_env",
+  "timestamp": "2026-06-06T20:32:27Z",
+  "scenario": "10 MeV proton vertical incidence on 300um Si",
+  "results": {
+    "passed": 4,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "duration_seconds": 12.5,
+  "pytest_exit_code": 0,
+  "source_job": "job_20260606_203227_e2296c",
+  "note": "Retrospective artifact collection from existing dev-mode job run"
+}

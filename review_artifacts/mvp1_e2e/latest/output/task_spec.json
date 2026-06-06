@@ -1,0 +1,31 @@
+{
+  "simulation_scope": [
+    "geant4"
+  ],
+  "particle": {
+    "type": "proton",
+    "energy_MeV": 10.0,
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "events": 1000
+  },
+  "target": {
+    "material": "Si",
+    "size_um": [
+      1000.0,
+      1000.0,
+      300.0
+    ],
+    "geometry_type": "box"
+  },
+  "outputs": [
+    "energy_deposition",
+    "dose_distribution"
+  ],
+  "metadata": {
+    "source": "heuristic_parser"
+  }
+}

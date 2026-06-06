@@ -1,0 +1,40 @@
+{
+  "mvp1_review": {
+    "mode": "dev_no_geant4_env",
+    "scenario": "10 MeV proton vertical incidence on 300um Si",
+    "verification_status": "NOT VERIFIED",
+    "timestamp": "2026-06-06T18:53:55.307019+00:00",
+    "duration_seconds": 12.5
+  },
+  "test_results": {
+    "passed": 4,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "gate_summary": {
+    "total": 12,
+    "passed": 10,
+    "failed": 2,
+    "skipped": 0,
+    "skipped_ids": []
+  },
+  "artifacts": {
+    "files": [
+      "checksums.json",
+      "collection_manifest.json",
+      "dose_3d_head.csv",
+      "edep_3d_head.csv",
+      "event_table_head.csv",
+      "final_report.md",
+      "g4_summary.json",
+      "gate_results.json",
+      "proposed_patch_summary.json",
+      "provenance.json",
+      "simulation_ir.json",
+      "task_spec.json",
+      "user_query.md"
+    ],
+    "total_size_bytes": 19866
+  }
+}
