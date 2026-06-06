@@ -1,0 +1,32 @@
+{
+  "logical_name": "tcad",
+  "source_path": "/home/rylan/.openclaw/workspace/skills/tcad-rag",
+  "copied_to": "knowledge_base/tcad",
+  "detected_type": "mixed",
+  "confidence": 0.9,
+  "sample_files": [
+    "tcad_rag_mcp.py",
+    "preprocess_course.py",
+    "query_rewrite.py",
+    "tcad_agent.py",
+    "code_generator.py",
+    "ocr_pdf.sh",
+    "SKILL.md",
+    "ingest_pdf.py",
+    "PLAN.md",
+    "build_index.py"
+  ],
+  "keywords_matched": [
+    "TCAD",
+    "Sentaurus",
+    "sdevice",
+    "sde",
+    "sprocess",
+    "TID"
+  ],
+  "copied_at": "2026-06-06T13:55:32.371834+00:00",
+  "file_count": 27,
+  "notes": [
+    "Detected mixed source with 27 files"
+  ]
+}

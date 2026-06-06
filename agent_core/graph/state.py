@@ -22,6 +22,10 @@ class RadiationAgentState(TypedDict, total=False):
     job_id: str
     user_query: str
 
+    # Execution mode: "dev_no_geant4_env" | "mvp1_acceptance"
+    execution_mode: Annotated[str, _last_value]
+    skipped_gates: list[dict[str, Any]]
+
     # Parsed task specification
     task_spec: dict[str, Any]
     task_spec_errors: list[str]
@@ -30,17 +34,16 @@ class RadiationAgentState(TypedDict, total=False):
     simulation_ir: dict[str, Any]
     simulation_ir_errors: list[str]
 
-    # RAG routing and context
+    # RAG routing and context (logical names only: geant4, tcad, spice)
     rag_registry: dict[str, Any]
-    rag_route: list[str]
+    rag_required_sources: list[str]
+    rag_optional_sources: list[str]
     g4_context: list[dict[str, Any]]
     tcad_context: list[dict[str, Any]]
     spice_context: list[dict[str, Any]]
     web_context: list[dict[str, Any]]
     rag_sufficiency_score: float
     rag_sufficiency_report: dict[str, Any]
-    rag_required_sources: list[str]
-    rag_optional_sources: list[str]
 
     # Planning
     simulation_plan: dict[str, Any]

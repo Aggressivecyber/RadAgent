@@ -7,13 +7,13 @@ from datetime import datetime
 
 from agent_core.config.workspace import ensure_job_dirs
 from agent_core.graph.state import RadiationAgentState
-from agent_core.tools.rag_discovery_tool import discover_rag_sources
 
 
 async def parse_user_request(state: RadiationAgentState) -> dict:
     """Parse the user's natural language request.
 
     Creates job_id, saves user query, initializes workspace directories.
+    RAG registry is loaded by prepare_local_rag_workspace (runs before this node).
     """
     user_query = state.get("user_query", "")
     if not user_query:
@@ -31,13 +31,9 @@ async def parse_user_request(state: RadiationAgentState) -> dict:
     query_file = job_dir / "00_request" / "user_query.md"
     query_file.write_text(f"# User Request\n\n{user_query}\n")
 
-    # Discover available RAG sources
-    rag_registry = await discover_rag_sources()
-
     return {
         "job_id": job_id,
         "user_query": user_query,
-        "rag_registry": rag_registry,
         "current_node": "parse_user_request",
         "errors": [],
     }

@@ -1,4 +1,4 @@
-"""RAG routing node."""
+"""RAG routing node — outputs only logical names (geant4, tcad, spice)."""
 
 from __future__ import annotations
 
@@ -15,8 +15,7 @@ async def route_rag(state: RadiationAgentState) -> dict:
     job_id = state.get("job_id", "unknown")
 
     router = RAGRouter()
-    rag_route = router.route(task_spec)
-    priority = router.route_with_priority(task_spec)
+    priority = router.route(task_spec)
 
     # Save routing decision
     job_dir = get_job_dir(job_id)
@@ -24,7 +23,6 @@ async def route_rag(state: RadiationAgentState) -> dict:
     route_file.write_text(
         json.dumps(
             {
-                "rag_route": rag_route,
                 "task_scope": task_spec.get("simulation_scope", []),
                 "required_sources": priority["required"],
                 "optional_sources": priority["optional"],
@@ -34,7 +32,6 @@ async def route_rag(state: RadiationAgentState) -> dict:
     )
 
     return {
-        "rag_route": rag_route,
         "rag_required_sources": priority["required"],
         "rag_optional_sources": priority["optional"],
         "current_node": "route_rag",

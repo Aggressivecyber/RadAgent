@@ -14,7 +14,8 @@ async def generate_report(state: RadiationAgentState) -> dict:
     job_id = state.get("job_id", "unknown")
     user_query = state.get("user_query", "")
     task_spec = state.get("task_spec", {})
-    rag_route = state.get("rag_route", [])
+    rag_required = state.get("rag_required_sources", [])
+    rag_optional = state.get("rag_optional_sources", [])
     rag_score = state.get("rag_sufficiency_score", 0.0)
     rag_report = state.get("rag_sufficiency_report", {})
     patch = state.get("proposed_patch", {})
@@ -22,6 +23,8 @@ async def generate_report(state: RadiationAgentState) -> dict:
     sim_results = state.get("simulation_results", {})
     contract_results = state.get("data_contract_results", {})
     failure = state.get("failure_report", {})
+    execution_mode = state.get("execution_mode", "dev_no_geant4_env")
+    skipped_gates = state.get("skipped_gates", [])
 
     # Build report sections
     lines = [
@@ -41,7 +44,8 @@ async def generate_report(state: RadiationAgentState) -> dict:
         "",
         "## 3. RAG Sources Used",
         "",
-        f"- Routes: {', '.join(rag_route) if rag_route else 'None'}",
+        f"- Required: {', '.join(rag_required) if rag_required else 'None'}",
+        f"- Optional: {', '.join(rag_optional) if rag_optional else 'None'}",
         f"- Sufficiency Score: {rag_score:.2f}",
         f"- Decision: {rag_report.get('decision', 'unknown')}",
         "",
@@ -56,11 +60,17 @@ async def generate_report(state: RadiationAgentState) -> dict:
         "",
     ]
 
+    passed_count = sum(1 for g in gate_results if g.get("passed"))
     for g in gate_results:
         status = "PASS" if g.get("passed") else "FAIL"
+        sev = g.get("severity", "")
+        if sev == "skipped":
+            status = "SKIPPED"
         lines.append(
             f"- Gate {g.get('gate_id')}: {g.get('gate_name')} -- {status} {g.get('message', '')}"
         )
+
+    lines.append(f"\nGate Summary: {passed_count}/{len(gate_results)} passed")
 
     lines.extend(["", "## 6. Simulation Results", ""])
 
@@ -91,7 +101,43 @@ async def generate_report(state: RadiationAgentState) -> dict:
     else:
         lines.append("No failures detected.")
 
-    lines.extend(["", "## 9. Known Issues and Next Steps", ""])
+    # --- Execution Mode Section ---
+    lines.extend(["", "## 9. Execution Mode", ""])
+    if execution_mode == "mvp1_acceptance":
+        lines.append("**Mode: MVP-1 Acceptance** — All gates enforced, no skips allowed.")
+    else:
+        lines.append(
+            "**Mode: Dev (No Geant4 Environment)** — "
+            "Critical gates may be skipped. **NOT MVP-1 VERIFIED.**"
+        )
+
+    # --- Skipped Gates Section ---
+    if skipped_gates:
+        lines.extend(["", "## 10. Skipped Gates", ""])
+        for sg in skipped_gates:
+            gid = sg.get("gate_id", "?")
+            reason = sg.get("reason", "Unknown")
+            lines.append(f"- Gate {gid}: {reason}")
+            if execution_mode == "dev_no_geant4_env":
+                lines.append("  - [DEV MODE ONLY — would fail in acceptance mode]")
+
+    # --- MVP-1 Status ---
+    lines.extend(["", "## 11. MVP-1 Verification Status", ""])
+    all_passed = all(
+        g.get("severity") in ("pass", "warning", "skipped") for g in gate_results
+    )
+    if execution_mode == "mvp1_acceptance":
+        if all_passed:
+            lines.append("**MVP-1: PASSED** — All gates passed in acceptance mode.")
+        else:
+            lines.append("**MVP-1: FAILED** — Gate failures in acceptance mode.")
+    else:
+        lines.append(
+            "**MVP-1: NOT VERIFIED** — Running in dev mode (Geant4 not available). "
+            "Cannot claim MVP-1 acceptance."
+        )
+
+    lines.extend(["", "## 12. Known Issues and Next Steps", ""])
 
     issues = []
     if rag_score < 0.75:
@@ -100,6 +146,8 @@ async def generate_report(state: RadiationAgentState) -> dict:
         issues.append("- Some gates failed; review failure report above")
     if sim_results.get("geant4", {}).get("output_exists") is False:
         issues.append("- Geant4 output does not exist; simulation may not have run")
+    if skipped_gates and execution_mode == "mvp1_acceptance":
+        issues.append("- Gates were skipped in acceptance mode — this should not happen")
 
     if issues:
         lines.extend(issues)

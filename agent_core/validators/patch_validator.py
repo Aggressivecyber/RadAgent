@@ -1,4 +1,10 @@
-"""Patch format and content validator."""
+"""Patch format and content validator.
+
+MVP-1 enforces ``json_file_replacement`` mode: every changed file must have
+non-empty ``new_content``.  Empty ``diff_content`` is allowed (it simply
+means no unified diff is provided), but ``new_content`` must always be
+present.
+"""
 
 import re
 
@@ -9,7 +15,7 @@ PATCH_REQUIRED_FIELDS = {
     "risk_level", "changed_files", "test_plan", "expected_outputs",
 }
 
-FILE_REQUIRED_FIELDS = {"path", "diff_content", "zone"}
+FILE_REQUIRED_FIELDS = {"path", "new_content", "zone"}
 
 
 class PatchValidator:
@@ -25,11 +31,18 @@ class PatchValidator:
             missing_f = FILE_REQUIRED_FIELDS - set(f.keys())
             if missing_f:
                 errors.append(f"changed_files[{idx}] missing: {sorted(missing_f)}")
+            # Enforce new_content is non-empty (json_file_replacement mode)
+            if f.get("new_content") is not None and not f["new_content"]:
+                errors.append(
+                    f"changed_files[{idx}] ({f.get('path', '?')}): "
+                    "new_content must not be empty in json_file_replacement mode"
+                )
         if not patch_data.get("changed_files"):
             errors.append("changed_files must not be empty")
         return (len(errors) == 0, errors)
 
     def validate_diff_syntax(self, diff_content: str) -> tuple[bool, str]:
+        """Validate unified diff syntax (for future diff-mode support)."""
         if not diff_content.strip():
             return (False, "Diff content is empty")
         has_old = bool(re.search(r"^--- ", diff_content, re.MULTILINE))

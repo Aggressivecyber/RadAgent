@@ -27,7 +27,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: mypy agent_core/ --ignore-missing-imports --no-error-summary || true
+      - run: mypy agent_core/ --ignore-missing-imports --no-error-summary
 
   test:
     runs-on: ubuntu-latest
@@ -40,7 +40,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest tests/unit/ -v --tb=short -m "not integration"
 
-  patch-validator-test:
+  patch-discipline-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,3 +61,25 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: pytest tests/unit/test_schemas.py -v --tb=short
+
+  rag-workspace-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit/test_rag_router.py -v --tb=short
+
+  gate-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit/test_workspace_paths.py -v --tb=short

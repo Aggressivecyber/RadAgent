@@ -14,7 +14,7 @@ from agent_core.schemas.rag_context_pack import RetrievedContext, compute_suffic
 
 logger = logging.getLogger(__name__)
 
-_LOCAL_DIR = Path(__file__).resolve().parents[2] / "knowledge_base" / "g4rag"
+_LOCAL_DIR = Path(__file__).resolve().parents[2] / "knowledge_base" / "geant4"
 _TIMEOUT = 15.0
 
 
@@ -50,26 +50,52 @@ class G4RAGTool:
     async def get_manual_snippets(self, topic: str) -> list[dict]:
         results = await self.search(f"manual {topic}", top_k=5)
         return [
-            {"text": r.get("text", ""), "source": r.get("source", ""), "page": r.get("page")}
-            for r in results if r.get("doc_type") in ("manual", "book", None)
+            {
+                "text": r.get("text", ""),
+                "source": r.get("source", ""),
+                "page": r.get("page"),
+                "source_type": "manual",
+                "doc_type": r.get("doc_type", "manual"),
+            }
+            for r in results if r.get("doc_type") in ("manual", "book", "local", None)
         ]
 
     async def get_example_code(self, task_description: str) -> list[dict]:
         results = await self.search(f"example code {task_description}", top_k=5)
         return [
-            {"code": r.get("code", r.get("text", "")), "language": r.get("language", "cpp"),
-             "source": r.get("source", ""), "description": r.get("description", "")}
-            for r in results if r.get("doc_type") in ("example", "code", None)
+            {
+                "code": r.get("code", r.get("text", "")),
+                "language": r.get("language", "cpp"),
+                "source": r.get("source", ""),
+                "description": r.get("description", ""),
+                "source_type": "example_code",
+                "doc_type": r.get("doc_type", "example_code"),
+            }
+            for r in results if r.get("doc_type") in ("example", "code", "local", None)
         ]
 
     async def get_data_contract_info(self) -> list[dict]:
         results = await self.search("Geant4 output data contract format", top_k=3)
         if results:
-            return [{"contract_name": "g4_output_v1", "schema": r.get("text", ""),
-                      "description": r.get("source", "")} for r in results]
-        return [{"contract_name": "g4_output_v1",
-                 "schema": "edep, dose, event_table files with unit metadata",
-                 "description": "Default contract (no RAG results)"}]
+            return [
+                {
+                    "contract_name": "g4_output_v1",
+                    "schema": r.get("text", ""),
+                    "source": r.get("source", ""),
+                    "source_type": "data_contract",
+                    "doc_type": r.get("doc_type", "contract"),
+                }
+                for r in results
+            ]
+        return [
+            {
+                "contract_name": "g4_output_v1",
+                "schema": "edep, dose, event_table files with unit metadata",
+                "source": "builtin_default",
+                "source_type": "data_contract",
+                "doc_type": "contract",
+            }
+        ]
 
     async def build_context_pack(self, query: str, task_spec: dict[str, Any]) -> dict[str, Any]:
         """Build a complete RAG context pack for Geant4 code generation."""
@@ -89,16 +115,47 @@ class G4RAGTool:
         }
 
     def _local_search(self, query: str, top_k: int) -> list[dict]:
-        """Fallback: keyword search over local knowledge_base/g4rag/ files."""
+        """Fallback: keyword search over local knowledge_base/geant4/ files.
+
+        Searches .md, .jsonl, and .py files for relevant content.
+        """
         if not _LOCAL_DIR.is_dir():
             return []
         terms = query.lower().split()
         hits: list[dict] = []
-        for p in sorted(_LOCAL_DIR.rglob("*.md")):
-            text = p.read_text(errors="ignore")
-            n = sum(1 for t in terms if t in text.lower())
-            if n:
-                hits.append({"text": text[:2000], "source": str(p.relative_to(_LOCAL_DIR)),
-                             "score": n / max(len(terms), 1), "doc_type": "local"})
+        search_extensions = {".md", ".jsonl", ".py", ".txt"}
+
+        for p in sorted(_LOCAL_DIR.rglob("*")):
+            if p.suffix not in search_extensions:
+                continue
+            if "__pycache__" in str(p) or ".ruff_cache" in str(p):
+                continue
+            try:
+                text = p.read_text(errors="ignore")
+            except Exception:
+                continue
+
+            if p.suffix == ".jsonl":
+                # Each line is a JSON doc — search line by line
+                for line_no, line in enumerate(text.splitlines()):
+                    line_lower = line.lower()
+                    n = sum(1 for t in terms if t in line_lower)
+                    if n:
+                        hits.append({
+                            "text": line[:2000],
+                            "source": f"{p.relative_to(_LOCAL_DIR)}#L{line_no}",
+                            "score": n / max(len(terms), 1),
+                            "doc_type": "local",
+                        })
+            else:
+                n = sum(1 for t in terms if t in text.lower())
+                if n:
+                    hits.append({
+                        "text": text[:2000],
+                        "source": str(p.relative_to(_LOCAL_DIR)),
+                        "score": n / max(len(terms), 1),
+                        "doc_type": "local",
+                    })
+
         hits.sort(key=lambda r: r["score"], reverse=True)
         return hits[:top_k]

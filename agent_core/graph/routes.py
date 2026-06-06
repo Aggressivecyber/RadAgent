@@ -25,21 +25,30 @@ def route_after_gate_checks(state: RadiationAgentState) -> str:
 
 
 def route_after_task_spec_validation(state: RadiationAgentState) -> str:
-    """Route based on task spec validation."""
+    """Route based on task spec validation.
+
+    After 3 retries with errors, stop and generate report — do NOT force proceed.
+    """
     errors = state.get("task_spec_errors", [])
     retry_count = state.get("retry_count", 0)
-    # Safety valve: after 3 retries, force proceed even with errors
     if errors and retry_count < 3:
         return "build_task_spec"
+    if errors and retry_count >= 3:
+        return "generate_report"
     return "build_simulation_ir"
 
 
 def route_after_sim_ir_validation(state: RadiationAgentState) -> str:
-    """Route based on simulation IR validation."""
+    """Route based on simulation IR validation.
+
+    After 3 retries with errors, stop and generate report — do NOT force proceed.
+    """
     errors = state.get("simulation_ir_errors", [])
     retry_count = state.get("retry_count", 0)
     if errors and retry_count < 3:
         return "build_simulation_ir"
+    if errors and retry_count >= 3:
+        return "generate_report"
     return "route_rag"
 
 
@@ -51,12 +60,11 @@ def route_after_classify_failure(state: RadiationAgentState) -> str:
     failure = state.get("failure_report", {})
     failure_type = failure.get("type", "unknown")
     if failure_type in ("rag_insufficient",):
-        # RAG insufficiency that persisted through retry → proceed with warning
         return "generate_report"
     if failure_type in ("schema_invalid",):
         return "retrieve_error_context"
     if failure_type in ("build_error", "runtime_error", "test_failure", "patch_format_error"):
         return "write_fix_patch"
     if failure_type in ("permission_violation",):
-        return "generate_report"  # Can't fix permission violations automatically
+        return "generate_report"
     return "retrieve_error_context"

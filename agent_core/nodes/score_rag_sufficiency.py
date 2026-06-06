@@ -58,6 +58,7 @@ def _compute_score(
     # Check for manual snippets
     has_manual = any(
         ctx.get("source_type") == "manual"
+        or ctx.get("doc_type") in ("manual", "book", "local")
         or "manual" in ctx.get("source", "").lower()
         for ctx in all_ctx
     )
@@ -69,8 +70,10 @@ def _compute_score(
 
     # Check for example code
     has_examples = any(
-        "code" in ctx.get("source", "").lower()
-        or ctx.get("doc_type") == "example_code"
+        ctx.get("source_type") == "example_code"
+        or ctx.get("doc_type") in ("example", "example_code", "local")
+        or "code" in ctx.get("source", "").lower()
+        or "code" in ctx
         for ctx in all_ctx
     )
     if has_examples:
@@ -81,7 +84,10 @@ def _compute_score(
 
     # Check for data contracts
     has_contracts = any(
-        "contract" in ctx.get("source", "").lower() for ctx in all_ctx
+        ctx.get("source_type") == "data_contract"
+        or "contract" in ctx.get("source", "").lower()
+        or "contract_name" in ctx
+        for ctx in all_ctx
     )
     if has_contracts:
         score += 0.20

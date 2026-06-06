@@ -46,7 +46,8 @@ async def run_agent(query: str, job_id: str | None = None) -> dict:
         "errors": [],
         "retry_count": 0,
         "max_retries_reached": False,
-        "rag_registry": {},
+        "execution_mode": "dev_no_geant4_env",
+        "skipped_gates": [],
     }
 
     # Compile and run graph

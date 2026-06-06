@@ -37,6 +37,11 @@ simulation_workspace/simulation_workspace/
 # Keep .gitkeep for directory structure
 !simulation_workspace/jobs/.gitkeep
 
+# Knowledge base data files (too large for git)
+knowledge_base/**/data/
+knowledge_base/**/__pycache__/
+knowledge_base/**/.ruff_cache/
+
 # OS
 .DS_Store
 Thumbs.db

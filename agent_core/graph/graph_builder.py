@@ -22,6 +22,7 @@ from agent_core.nodes.parse_simulation_results import parse_simulation_results
 from agent_core.nodes.parse_user_request import parse_user_request
 from agent_core.nodes.plan_code_architecture import plan_code_architecture
 from agent_core.nodes.plan_simulation import plan_simulation
+from agent_core.nodes.prepare_local_rag_workspace import prepare_local_rag_workspace
 from agent_core.nodes.retrieve_error_context import retrieve_error_context
 from agent_core.nodes.retrieve_g4_context import retrieve_g4_context
 from agent_core.nodes.retrieve_spice_context import retrieve_spice_context
@@ -42,6 +43,7 @@ def build_graph() -> StateGraph:
     graph = StateGraph(RadiationAgentState)
 
     # --- Add all nodes ---
+    graph.add_node("prepare_local_rag_workspace", prepare_local_rag_workspace)
     graph.add_node("parse_user_request", parse_user_request)
     graph.add_node("build_task_spec", build_task_spec)
     graph.add_node("validate_task_spec", validate_task_spec)
@@ -66,32 +68,35 @@ def build_graph() -> StateGraph:
     graph.add_node("validate_data_contract", validate_data_contract)
     graph.add_node("generate_report", generate_report)
 
-    # --- Entry point ---
-    graph.set_entry_point("parse_user_request")
+    # --- Entry point: prepare workspace first ---
+    graph.set_entry_point("prepare_local_rag_workspace")
 
-    # --- Linear edges ---
+    # --- Linear: workspace → parse request → task spec ---
+    graph.add_edge("prepare_local_rag_workspace", "parse_user_request")
     graph.add_edge("parse_user_request", "build_task_spec")
     graph.add_edge("build_task_spec", "validate_task_spec")
 
-    # Conditional: task spec valid?
+    # Conditional: task spec valid? (3x fail → generate_report, not force proceed)
     graph.add_conditional_edges(
         "validate_task_spec",
         route_after_task_spec_validation,
         {
             "build_task_spec": "build_task_spec",
             "build_simulation_ir": "build_simulation_ir",
+            "generate_report": "generate_report",
         },
     )
 
     graph.add_edge("build_simulation_ir", "validate_simulation_ir")
 
-    # Conditional: sim IR valid?
+    # Conditional: sim IR valid? (3x fail → generate_report, not force proceed)
     graph.add_conditional_edges(
         "validate_simulation_ir",
         route_after_sim_ir_validation,
         {
             "build_simulation_ir": "build_simulation_ir",
             "route_rag": "route_rag",
+            "generate_report": "generate_report",
         },
     )
 

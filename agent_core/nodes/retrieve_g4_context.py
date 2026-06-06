@@ -1,4 +1,4 @@
-"""Retrieve Geant4 context from RAG."""
+"""Retrieve Geant4 context from local knowledge_base."""
 
 from __future__ import annotations
 
@@ -10,24 +10,19 @@ from agent_core.tools.g4rag_tool import G4RAGTool
 
 
 async def retrieve_g4_context(state: RadiationAgentState) -> dict:
-    """Retrieve Geant4-related context from g4rag knowledge base."""
-    rag_route = state.get("rag_route", [])
+    """Retrieve Geant4-related context from knowledge_base/geant4/."""
     rag_required = state.get("rag_required_sources", [])
     rag_optional = state.get("rag_optional_sources", [])
 
-    # Check both legacy route and new priority-based routing
-    geant4_needed = (
-        "g4rag" in rag_route
-        or "geant4" in rag_required
-        or "geant4" in rag_optional
-    )
+    geant4_needed = "geant4" in rag_required or "geant4" in rag_optional
     if not geant4_needed:
         return {"g4_context": [], "current_node": "retrieve_g4_context"}
 
-    # Check RAG registry for geant4 availability — skip MCP if unavailable
+    # Check RAG registry for geant4 availability
     rag_registry = state.get("rag_registry", {})
-    g4_status = rag_registry.get("geant4", {})
-    if not g4_status.get("available", False):
+    sources = rag_registry.get("sources", {})
+    g4_info = sources.get("geant4", {})
+    if not g4_info.get("available", False):
         return {"g4_context": [], "current_node": "retrieve_g4_context"}
 
     task_spec = state.get("task_spec", {})
@@ -42,7 +37,9 @@ async def retrieve_g4_context(state: RadiationAgentState) -> dict:
     ctx_file = job_dir / "01_context" / "g4_context.json"
     ctx_file.write_text(json.dumps(context_pack, indent=2, ensure_ascii=False, default=str))
 
-    g4_context = context_pack.get("retrieved_context", {}).get("manual_snippets", [])
-    g4_context += context_pack.get("retrieved_context", {}).get("example_code", [])
+    retrieved = context_pack.get("retrieved_context", {})
+    g4_context = retrieved.get("manual_snippets", [])
+    g4_context += retrieved.get("example_code", [])
+    g4_context += retrieved.get("data_contracts", [])
 
     return {"g4_context": g4_context, "current_node": "retrieve_g4_context"}

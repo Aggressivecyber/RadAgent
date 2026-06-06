@@ -1,0 +1,28 @@
+{
+  "logical_name": "geant4",
+  "source_path": "/home/rylan/.openclaw/workspace/skills/geant4-rag",
+  "copied_to": "knowledge_base/geant4",
+  "detected_type": "mixed",
+  "confidence": 0.9,
+  "sample_files": [
+    "geant4_rag_mcp.py",
+    "geant4_agent.py",
+    "query_rewrite.py",
+    "geant4_generator.py",
+    "SKILL.md",
+    "build_index.py",
+    "preprocess.py"
+  ],
+  "keywords_matched": [
+    "Geant4",
+    "G4",
+    "DetectorConstruction",
+    "PhysicsList",
+    "G4RunManager"
+  ],
+  "copied_at": "2026-06-06T13:55:32.371456+00:00",
+  "file_count": 433,
+  "notes": [
+    "Detected mixed source with 433 files"
+  ]
+}

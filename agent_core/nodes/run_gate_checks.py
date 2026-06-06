@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import math
 from pathlib import Path
@@ -11,33 +12,112 @@ from agent_core.graph.state import RadiationAgentState
 from agent_core.validators.code_structure_validator import CodeStructureValidator
 from agent_core.validators.file_permission_validator import FilePermissionValidator
 from agent_core.validators.patch_validator import PatchValidator
-from agent_core.validators.physics_sanity_validator import PhysicsSanityValidator
 from agent_core.validators.schema_validator import SchemaValidator
+
+# Gates that CANNOT be skipped in mvp1_acceptance mode
+_MVP1_NO_SKIP_GATES = {6, 8, 9, 11}
+
+
+def _check_execution_mode_gate(
+    gate_id: int,
+    passed: bool,
+    severity: str,
+    message: str,
+    retry_node: str | None,
+    execution_mode: str,
+) -> dict:
+    """Apply execution mode rules to gate results."""
+    if execution_mode == "mvp1_acceptance" and gate_id in _MVP1_NO_SKIP_GATES:
+        if severity == "skipped":
+            # In mvp1_acceptance, these gates cannot be skipped — fail instead
+            return {
+                "gate_id": gate_id,
+                "gate_name": _GATE_NAMES.get(gate_id, f"Gate {gate_id}"),
+                "passed": False,
+                "severity": "fail",
+                "message": f"[MVP1] {message} — gate cannot be skipped in acceptance mode",
+                "retry_node": retry_node,
+            }
+    return {
+        "gate_id": gate_id,
+        "gate_name": _GATE_NAMES.get(gate_id, f"Gate {gate_id}"),
+        "passed": passed,
+        "severity": severity,
+        "message": message,
+        "retry_node": retry_node,
+    }
+
+
+_GATE_NAMES: dict[int, str] = {
+    0: "RAG Sufficiency",
+    1: "Task Spec Schema",
+    2: "Simulation IR Schema",
+    3: "Patch Format",
+    4: "File Permission",
+    5: "Static Check",
+    6: "Build/Parse",
+    7: "Unit Test",
+    8: "Data Contract",
+    9: "Smoke Simulation",
+    10: "Benchmark Regression",
+    11: "Physics Sanity",
+}
 
 
 async def run_gate_checks(state: RadiationAgentState) -> dict:
     """Run all 12 gate checks sequentially."""
     gate_results = []
+    skipped_gates: list[dict] = []
     job_id = state.get("job_id", "unknown")
     patch = state.get("proposed_patch", {})
     task_spec = state.get("task_spec", {})
     sim_ir = state.get("simulation_ir", {})
     rag_score = state.get("rag_sufficiency_score", 0.0)
+    rag_required = state.get("rag_required_sources", [])
+    rag_registry = state.get("rag_registry", {})
+    execution_mode = state.get("execution_mode", "dev_no_geant4_env")
 
-    # Gate 0: RAG Sufficiency
-    g0_passed = rag_score >= 0.75
+    # ==================================================================
+    # Gate 0: RAG Sufficiency — check score + required sources
+    # ==================================================================
+    sources = rag_registry.get("sources", {})
+    g0_errors: list[str] = []
+
+    # Check score threshold
+    if rag_score < 0.75:
+        g0_errors.append(f"RAG score {rag_score:.2f} below threshold 0.75")
+
+    # Check each required source is available and has context
+    context_map = {
+        "geant4": state.get("g4_context", []),
+        "tcad": state.get("tcad_context", []),
+        "spice": state.get("spice_context", []),
+    }
+    for src in rag_required:
+        src_info = sources.get(src, {})
+        if not src_info.get("available", False):
+            g0_errors.append(f"Required source '{src}' not available")
+        elif not context_map.get(src):
+            g0_errors.append(f"Required source '{src}' returned no context")
+
+    g0_passed = len(g0_errors) == 0
     gate_results.append(
         {
             "gate_id": 0,
             "gate_name": "RAG Sufficiency",
             "passed": g0_passed,
             "severity": "pass" if g0_passed else "fail",
-            "message": f"RAG score: {rag_score:.2f}",
+            "message": (
+                "; ".join(g0_errors) if g0_errors
+                else f"RAG score: {rag_score:.2f}, all required sources available"
+            ),
             "retry_node": "retrieve_g4_context" if not g0_passed else None,
         }
     )
 
+    # ==================================================================
     # Gate 1: Task Spec Schema
+    # ==================================================================
     sv = SchemaValidator()
     ts_valid, ts_errors = sv.validate_task_spec(task_spec)
     gate_results.append(
@@ -51,7 +131,9 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
         }
     )
 
+    # ==================================================================
     # Gate 2: Simulation IR Schema
+    # ==================================================================
     ir_valid, ir_errors = sv.validate_simulation_ir(sim_ir)
     gate_results.append(
         {
@@ -64,7 +146,9 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
         }
     )
 
+    # ==================================================================
     # Gate 3: Patch Format
+    # ==================================================================
     pv = PatchValidator()
     pf_valid, pf_errors = pv.validate_patch_format(patch)
     gate_results.append(
@@ -78,7 +162,9 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
         }
     )
 
+    # ==================================================================
     # Gate 4: File Permission
+    # ==================================================================
     fpv = FilePermissionValidator()
     changed_files = patch.get("changed_files", [])
     perm_valid, perm_msgs = fpv.validate_patch_permissions(changed_files)
@@ -94,11 +180,13 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
         }
     )
 
+    # ==================================================================
     # Gate 5: Static Check (structure validation)
+    # ==================================================================
     job_dir = get_job_dir(job_id)
     g4_dir = job_dir / "05_geant4"
-    csv = CodeStructureValidator()
-    struct_valid, struct_errors = csv.validate_geant4_project(str(g4_dir))
+    struct_validator = CodeStructureValidator()
+    struct_valid, struct_errors = struct_validator.validate_geant4_project(str(g4_dir))
     gate_results.append(
         {
             "gate_id": 5,
@@ -110,7 +198,9 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
         }
     )
 
-    # Gate 6: Build (attempt if Geant4 available)
+    # ==================================================================
+    # Gate 6: Build/Parse
+    # ==================================================================
     try:
         from agent_core.tools.geant4_runner import Geant4Runner
 
@@ -132,20 +222,22 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
         build_valid = False
         build_msg = f"Build check error: {e}"
 
+    g6_severity = "pass" if build_valid else "fail"
+    if not build_valid and "not available" in build_msg:
+        g6_severity = "skipped"
+        skipped_gates.append({"gate_id": 6, "reason": build_msg})
+
     gate_results.append(
-        {
-            "gate_id": 6,
-            "gate_name": "Build/Parse",
-            "passed": build_valid,
-            "severity": "pass" if build_valid else "fail",
-            "message": build_msg,
-            "retry_node": "write_fix_patch" if not build_valid else None,
-        }
+        _check_execution_mode_gate(
+            6, build_valid or g6_severity == "skipped", g6_severity,
+            build_msg, "write_fix_patch" if not build_valid else None,
+            execution_mode,
+        )
     )
 
-    # ------------------------------------------------------------------
+    # ==================================================================
     # Gate 7: Unit Test — code structure + optional compile check
-    # ------------------------------------------------------------------
+    # ==================================================================
     try:
         csv7 = CodeStructureValidator()
         struct7_valid, struct7_errors = csv7.validate_geant4_project(str(g4_dir))
@@ -161,7 +253,6 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 }
             )
         else:
-            # Structure OK — try a compile check if Geant4 is available
             try:
                 from agent_core.tools.geant4_runner import Geant4Runner
 
@@ -179,9 +270,9 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                                 "Geant4 structure check passed"
                                 if build7_ok
                                 else (
-                                    "Structure check issues: "
-                                    f"{'; '.join(build7.get('issues', []))}"
-                                )
+                            "Structure check issues: "
+                            f"{'; '.join(build7.get('issues', []))}"
+                        )
                             ),
                             "retry_node": "write_fix_patch" if not build7_ok else None,
                         }
@@ -197,6 +288,7 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                             "retry_node": None,
                         }
                     )
+                    skipped_gates.append({"gate_id": 7, "reason": "Geant4 not available"})
             except Exception as exc7:
                 gate_results.append(
                     {
@@ -208,6 +300,7 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                         "retry_node": None,
                     }
                 )
+                skipped_gates.append({"gate_id": 7, "reason": str(exc7)})
     except Exception as exc7:
         gate_results.append(
             {
@@ -220,28 +313,21 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
             }
         )
 
-    # ------------------------------------------------------------------
+    # ==================================================================
     # Gate 8: Data Contract — check g4_output_package files
-    # ------------------------------------------------------------------
+    # ==================================================================
     output_dir = get_output_dir(job_id)
     _g4_required_output_files = (
-        "g4_summary.json",
-        "edep_3d.csv",
-        "dose_3d.csv",
-        "event_table.csv",
-        "provenance.json",
+        "g4_summary.json", "edep_3d.csv", "dose_3d.csv",
+        "event_table.csv", "provenance.json",
     )
     if not output_dir.is_dir():
         gate_results.append(
-            {
-                "gate_id": 8,
-                "gate_name": "Data Contract",
-                "passed": True,
-                "severity": "skipped",
-                "message": "No simulation output yet",
-                "retry_node": None,
-            }
+            _check_execution_mode_gate(
+                8, True, "skipped", "No simulation output yet", None, execution_mode,
+            )
         )
+        skipped_gates.append({"gate_id": 8, "reason": "No simulation output yet"})
     else:
         missing_files = [
             f for f in _g4_required_output_files
@@ -270,26 +356,22 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 }
             )
 
-    # ------------------------------------------------------------------
-    # Gate 9: Smoke Simulation — verify smoke test output produced
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Gate 9: Smoke Simulation
+    # ==================================================================
     try:
         from agent_core.tools.geant4_runner import Geant4Runner
 
         runner9 = Geant4Runner()
         if not runner9.geant4_available:
             gate_results.append(
-                {
-                    "gate_id": 9,
-                    "gate_name": "Smoke Simulation",
-                    "passed": True,
-                    "severity": "skipped",
-                    "message": "Geant4 not available for smoke simulation",
-                    "retry_node": None,
-                }
+                _check_execution_mode_gate(
+                    9, True, "skipped",
+                    "Geant4 not available for smoke simulation", None, execution_mode,
+                )
             )
+            skipped_gates.append({"gate_id": 9, "reason": "Geant4 not available"})
         else:
-            # Check if any output files exist from a previous run
             has_output = output_dir.is_dir() and any(output_dir.iterdir())
             if not has_output:
                 gate_results.append(
@@ -315,19 +397,16 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 )
     except Exception as exc9:
         gate_results.append(
-            {
-                "gate_id": 9,
-                "gate_name": "Smoke Simulation",
-                "passed": True,
-                "severity": "skipped",
-                "message": f"Smoke simulation check error: {exc9}",
-                "retry_node": None,
-            }
+            _check_execution_mode_gate(
+                9, True, "skipped",
+                f"Smoke simulation check error: {exc9}", None, execution_mode,
+            )
         )
+        skipped_gates.append({"gate_id": 9, "reason": str(exc9)})
 
-    # ------------------------------------------------------------------
-    # Gate 10: Benchmark Regression — compare against benchmark_suite/
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Gate 10: Benchmark Regression
+    # ==================================================================
     _benchmark_root = Path(__file__).resolve().parent.parent.parent / "benchmark_suite"
     matched_benchmark: dict | None = None
     try:
@@ -336,8 +415,7 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
             particle_info = task_spec.get("particle", {})
             p_type = (
                 particle_info.get("type", "").lower()
-                if isinstance(particle_info, dict)
-                else ""
+                if isinstance(particle_info, dict) else ""
             )
             for _bdir in sorted(_benchmark_root.iterdir()):
                 bfile = _bdir / "benchmark.json"
@@ -349,15 +427,14 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 b_particle = b_spec_data.get("particle", {})
                 b_ptype = (
                     b_particle.get("type", "").lower()
-                    if isinstance(b_particle, dict)
-                    else ""
+                    if isinstance(b_particle, dict) else ""
                 )
                 if sim_scope and b_scope and set(sim_scope) & set(b_scope):
                     if p_type and b_ptype and p_type == b_ptype:
                         matched_benchmark = bdata
                         break
     except Exception:
-        pass  # Non-fatal — fall through to skipped
+        pass
 
     if matched_benchmark is None:
         gate_results.append(
@@ -371,7 +448,6 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
             }
         )
     else:
-        # Compare gate expectations from the benchmark
         expected_gates = matched_benchmark.get("expected_outputs", {}).get("gates", {})
         regressions: list[str] = []
         for gate_key, expected_sev in expected_gates.items():
@@ -384,8 +460,7 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 gate_entry = gate_results[gate_num]
                 actual = (
                     gate_entry.get("severity", "unknown")
-                    if isinstance(gate_entry, dict)
-                    else "unknown"
+                    if isinstance(gate_entry, dict) else "unknown"
                 )
                 if actual not in (expected_sev, "skipped"):
                     regressions.append(f"{gate_key}: expected={expected_sev}, actual={actual}")
@@ -412,21 +487,17 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 }
             )
 
-    # ------------------------------------------------------------------
+    # ==================================================================
     # Gate 11: Physics Sanity — validate output data for NaN/Inf/negatives
-    # ------------------------------------------------------------------
-    _psv = PhysicsSanityValidator()
+    # ==================================================================
     if not output_dir.is_dir():
         gate_results.append(
-            {
-                "gate_id": 11,
-                "gate_name": "Physics Sanity",
-                "passed": True,
-                "severity": "skipped",
-                "message": "No output files to validate",
-                "retry_node": None,
-            }
+            _check_execution_mode_gate(
+                11, True, "skipped",
+                "No output files to validate", None, execution_mode,
+            )
         )
+        skipped_gates.append({"gate_id": 11, "reason": "No output files to validate"})
     else:
         physics_errors: list[str] = []
         # Validate edep_3d.csv
@@ -436,21 +507,21 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 with open(edep_path, newline="", encoding="utf-8") as f:
                     reader = csv.DictReader(f)
                     for i, row in enumerate(reader):
-                        for field in ("edep", "energy_dep", "energy"):
+                        for field in ("edep_MeV", "edep", "energy_dep", "energy"):
                             val = row.get(field)
                             if val is not None:
                                 try:
                                     v = float(val)
                                 except (ValueError, TypeError):
                                     physics_errors.append(
-                            f"edep row {i}: non-numeric value '{val}'"
-                        )
+                                        f"edep row {i}: non-numeric value '{val}'"
+                                    )
                                     continue
                                 if math.isnan(v) or math.isinf(v):
                                     physics_errors.append(f"edep row {i}: {field} is NaN or Inf")
                                 elif v < 0:
                                     physics_errors.append(f"edep row {i}: negative {field} ({v})")
-                                break  # only check the first matching field
+                                break
             except Exception as exc_edep:
                 physics_errors.append(f"Error reading edep_3d.csv: {exc_edep}")
         # Validate dose_3d.csv
@@ -460,15 +531,15 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                 with open(dose_path, newline="", encoding="utf-8") as f:
                     reader = csv.DictReader(f)
                     for i, row in enumerate(reader):
-                        for field in ("dose", "dose_Gy"):
+                        for field in ("dose_Gy", "dose"):
                             val = row.get(field)
                             if val is not None:
                                 try:
                                     v = float(val)
                                 except (ValueError, TypeError):
                                     physics_errors.append(
-                            f"dose row {i}: non-numeric value '{val}'"
-                        )
+                                        f"dose row {i}: non-numeric value '{val}'"
+                                    )
                                     continue
                                 if math.isnan(v) or math.isinf(v):
                                     physics_errors.append(f"dose row {i}: {field} is NaN or Inf")
@@ -477,6 +548,7 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
                                 break
             except Exception as exc_dose:
                 physics_errors.append(f"Error reading dose_3d.csv: {exc_dose}")
+
         if not physics_errors:
             gate_results.append(
                 {
@@ -506,6 +578,7 @@ async def run_gate_checks(state: RadiationAgentState) -> dict:
 
     return {
         "gate_results": gate_results,
+        "skipped_gates": skipped_gates,
         "current_node": "run_gate_checks",
         "retry_count": state.get("retry_count", 0),
     }
