@@ -39,7 +39,12 @@ class Geant4Runner:
     @staticmethod
     async def _run(cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
         """Execute *cmd* inside a bash login shell (sources geant4.sh)."""
-        setup = f"source {_G4_SETUP_SCRIPT} 2>/dev/null; " if Path(_G4_SETUP_SCRIPT).is_file() else ""
+        g4_script = Path(_G4_SETUP_SCRIPT)
+        setup = (
+            f"source {_G4_SETUP_SCRIPT} 2>/dev/null; "
+            if g4_script.is_file()
+            else ""
+        )
         proc = await asyncio.create_subprocess_shell(
             setup + cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -47,7 +52,8 @@ class Geant4Runner:
             cwd=cwd,
         )
         stdout, stderr = await proc.communicate()
-        return proc.returncode or 0, stdout.decode(errors="replace"), stderr.decode(errors="replace")
+        rc = proc.returncode or 0
+        return rc, stdout.decode(errors="replace"), stderr.decode(errors="replace")
 
     # ------------------------------------------------------------------
     # Public API
@@ -81,7 +87,12 @@ class Geant4Runner:
             cmd += f" {macro}"
         env_prefix = f"export G4FORCE_RUN_MANAGER_THREAD={threads}; " if threads > 1 else ""
         rc, out, err = await self._run(env_prefix + cmd)
-        return {"success": rc == 0, "output_dir": str(Path(executable).parent), "log": out, "errors": err}
+        return {
+            "success": rc == 0,
+            "output_dir": str(Path(executable).parent),
+            "log": out,
+            "errors": err,
+        }
 
     async def smoke_test(self, project_dir: str, events: int = 10) -> dict[str, Any]:
         """Quick smoke test: configure + build + run with few events.
@@ -90,16 +101,31 @@ class Geant4Runner:
         """
         if not self.geant4_available:
             struct = await self.structure_check(project_dir)
-            return {"success": struct["valid"], "has_geant4": False, "output_summary": None, "warnings": struct["issues"]}
+            return {
+                "success": struct["valid"],
+                "has_geant4": False,
+                "output_summary": None,
+                "warnings": struct["issues"],
+            }
 
         build_dir = str(Path(project_dir) / "build")
         cfg = await self.configure(project_dir, build_dir)
         if not cfg["success"]:
-            return {"success": False, "has_geant4": True, "output_summary": None, "warnings": [cfg["errors"]]}
+            return {
+                "success": False,
+                "has_geant4": True,
+                "output_summary": None,
+                "warnings": [cfg["errors"]],
+            }
 
         bld = await self.build(build_dir)
         if not bld["success"] or not bld["executable_path"]:
-            return {"success": False, "has_geant4": True, "output_summary": None, "warnings": [bld["errors"]]}
+            return {
+                "success": False,
+                "has_geant4": True,
+                "output_summary": None,
+                "warnings": [bld["errors"]],
+            }
 
         sim = await self.simulate(bld["executable_path"], events=events)
         return {

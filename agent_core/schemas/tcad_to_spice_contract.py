@@ -1,6 +1,5 @@
 """TCAD-to-SPICE mapping contract schema."""
 
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,7 +17,7 @@ class TCADToSPICEContract(BaseModel):
     radiation_current_source: str = Field(
         description="File path to the .cir file containing the radiation-induced current source.",
     )
-    degraded_device_model: Optional[str] = Field(
+    degraded_device_model: str | None = Field(
         default=None,
         description="File path to the .lib file with degraded device model parameters.",
     )

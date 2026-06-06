@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 
+from agent_core.config.workspace import get_job_dir, get_output_dir
 from agent_core.graph.state import RadiationAgentState
 
 
@@ -56,7 +56,7 @@ async def build_simulation_ir(state: RadiationAgentState) -> dict:
             },
             "run_config": {
                 "threads": 1,
-                "output_dir": f"simulation_workspace/jobs/{job_id}/05_geant4/output",
+                "output_dir": str(get_output_dir(job_id)),
             },
         }
         sim_ir["unit_registry"]["energy"] = "MeV"
@@ -91,7 +91,7 @@ async def build_simulation_ir(state: RadiationAgentState) -> dict:
         }
 
     # Save simulation IR
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    job_dir = get_job_dir(job_id)
     ir_file = job_dir / "03_simulation_ir" / "simulation_ir.json"
     ir_file.write_text(json.dumps(sim_ir, indent=2, ensure_ascii=False))
 

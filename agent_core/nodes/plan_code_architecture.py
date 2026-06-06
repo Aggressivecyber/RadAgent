@@ -8,7 +8,6 @@ from agent_core.graph.state import RadiationAgentState
 async def plan_code_architecture(state: RadiationAgentState) -> dict:
     """Plan the architecture of generated simulation code."""
     task_spec = state.get("task_spec", {})
-    sim_ir = state.get("simulation_ir", {})
     scope = task_spec.get("simulation_scope", [])
 
     arch_plan = {"modules": [], "file_map": {}, "dependencies": []}

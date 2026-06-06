@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import subprocess
 from pathlib import Path
 
 BLOCKED_PATTERNS = (
@@ -46,7 +45,7 @@ class ShellTool:
             return {
                 "success": False,
                 "stdout": "",
-                "stderr": f"Blocked: command matches a dangerous pattern",
+                "stderr": "Blocked: command matches a dangerous pattern",
                 "return_code": -1,
                 "timed_out": False,
             }
@@ -73,7 +72,7 @@ class ShellTool:
                 "return_code": proc.returncode or 0,
                 "timed_out": False,
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             return {
                 "success": False,

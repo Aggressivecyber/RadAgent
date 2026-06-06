@@ -31,7 +31,11 @@ htmlcov/
 .env
 
 # Simulation workspace (generated at runtime)
-simulation_workspace/jobs/
+simulation_workspace/jobs/*/
+simulation_workspace/simulation_workspace/
+
+# Keep .gitkeep for directory structure
+!simulation_workspace/jobs/.gitkeep
 
 # OS
 .DS_Store

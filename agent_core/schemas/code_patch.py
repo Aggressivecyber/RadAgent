@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -27,7 +27,7 @@ class ChangedFile(BaseModel):
     new_content: str = ""
 
     @model_validator(mode="after")
-    def _validate_content(self) -> "ChangedFile":
+    def _validate_content(self) -> ChangedFile:
         if self.zone == "red" and not self.diff_content and not self.new_content:
             raise ValueError("Red-zone files must include diff_content or new_content")
         return self
@@ -48,7 +48,7 @@ class CodePatch(BaseModel):
     expected_outputs: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
     rollback_possible: bool = True
-    metadata: Optional[dict] = None
+    metadata: dict | None = None
 
     @field_validator("risk_level")
     @classmethod

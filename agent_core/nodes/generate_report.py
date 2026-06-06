@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 
+from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
 
 
@@ -109,7 +109,7 @@ async def generate_report(state: RadiationAgentState) -> dict:
     report_text = "\n".join(lines)
 
     # Save report
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    job_dir = get_job_dir(job_id)
     report_file = job_dir / "10_report" / "final_report.md"
     report_file.write_text(report_text)
 

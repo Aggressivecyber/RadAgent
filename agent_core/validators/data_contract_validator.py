@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from agent_core.schemas.g4_output_contract import G4OutputContract, G4Provenance
 from agent_core.schemas.g4_to_tcad_contract import G4ToTCADContract
-from agent_core.schemas.tcad_output_contract import TCADOutputContract
 from agent_core.schemas.spice_output_contract import SPICEOutputContract
+from agent_core.schemas.tcad_output_contract import TCADOutputContract
 
 
 class DataContractValidator:

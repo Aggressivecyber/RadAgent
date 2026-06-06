@@ -68,5 +68,74 @@ class RAGRouter:
         mapped = [_SCOPE_MAP[s] for s in scope if s in _SCOPE_MAP]
         return mapped or self.get_fallback_sources()
 
+    def route_with_priority(self, task_spec: dict) -> dict:
+        """Route RAG sources with required/optional distinction.
+
+        Returns ``{"required": [...], "optional": [...], "all": [...]}`` where
+        *required* sources must return context to pass sufficiency, and
+        *optional* sources are bonuses.  Logical names ("geant4", "tcad",
+        "spice") are used — NOT the legacy RAG identifiers.
+        """
+        scope = task_spec.get("simulation_scope", [])
+        text = " ".join(
+            str(v) for v in task_spec.values() if isinstance(v, (str, list))
+        )
+        if isinstance(scope, str):
+            scope = [scope]
+
+        # Determine logical scope list (same logic as route, but keep names)
+        logical = self._resolve_logical_scope(scope, text)
+
+        required: list[str] = []
+        optional: list[str] = []
+
+        # Priority mapping
+        scope_set = set(logical)
+        if scope_set == {"geant4"}:
+            required = ["geant4"]
+            optional = ["tcad", "spice"]
+        elif scope_set == {"tcad"}:
+            required = ["tcad"]
+            optional = []
+        elif scope_set == {"spice"}:
+            required = ["spice"]
+            optional = []
+        elif scope_set == {"geant4", "tcad"}:
+            required = ["geant4", "tcad"]
+            optional = ["spice"]
+        elif scope_set == {"geant4", "tcad", "spice"}:
+            required = ["geant4", "tcad", "spice"]
+            optional = []
+        else:
+            # default fallback
+            required = ["geant4"]
+            optional = []
+
+        all_sources = required + optional
+        return {"required": required, "optional": optional, "all": all_sources}
+
+    def _resolve_logical_scope(self, scope: list[str], text: str) -> list[str]:
+        """Resolve scope + keyword detection to logical domain names."""
+        if scope:
+            return [s for s in scope if s in _SCOPE_MAP]
+
+        # Try chain keywords
+        for chain_name, keywords in self._chain_keywords.items():
+            pattern = "|".join(re.escape(kw) for kw in keywords)
+            if pattern and re.search(pattern, text, re.IGNORECASE):
+                # Map chain source names back to logical names
+                reverse = {v: k for k, v in _SCOPE_MAP.items()}
+                return [reverse[s] for s in _CHAIN_SOURCES.get(chain_name, []) if s in reverse]
+
+        # Individual domain keyword matching
+        matched: list[str] = []
+        for domain in self._keywords:
+            if self._match_keywords(text, domain):
+                matched.append(domain)
+        if matched:
+            return matched
+
+        return [self._default_scope]
+
     def get_fallback_sources(self) -> list[str]:
         return [_SCOPE_MAP.get(self._default_scope, "g4rag")]

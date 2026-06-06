@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -26,7 +24,7 @@ class MappingEntry(BaseModel):
     source_file: str = Field(
         ..., description="Geant4 output file providing this quantity"
     )
-    validity_range: Optional[dict] = Field(
+    validity_range: dict | None = Field(
         default=None, description="Range constraints (min/max) for the mapping"
     )
 
@@ -42,10 +40,10 @@ class G4ToTCADContract(BaseModel):
     generation_rate_profile: str = Field(
         ..., description="File path to generation rate spatial profile"
     )
-    trap_profile: Optional[str] = Field(
+    trap_profile: str | None = Field(
         default=None, description="File path to trap density profile"
     )
-    fixed_charge_profile: Optional[str] = Field(
+    fixed_charge_profile: str | None = Field(
         default=None, description="File path to fixed charge profile"
     )
     mapping_report: str = Field(

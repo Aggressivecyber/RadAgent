@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Literal, Optional
+from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -14,13 +14,13 @@ class GateResult(BaseModel):
     gate_id: int = Field(ge=0, le=11)
     gate_name: str
     passed: bool
-    severity: Literal["pass", "warning", "fail", "block"]
+    severity: Literal["pass", "warning", "fail", "block", "skipped"]
     message: str
-    details: Optional[dict] = None
-    remediation: Optional[str] = None
-    retry_node: Optional[str] = None
+    details: dict | None = None
+    remediation: str | None = None
+    retry_node: str | None = None
     timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
 
@@ -35,7 +35,7 @@ class GateReport(BaseModel):
     @property
     def overall_passed(self) -> bool:
         return all(
-            r.severity in ("pass", "warning") for r in self.results
+            r.severity in ("pass", "warning", "skipped") for r in self.results
         )
 
     @computed_field
@@ -44,8 +44,9 @@ class GateReport(BaseModel):
         passed = sum(1 for r in self.results if r.severity == "pass")
         warned = sum(1 for r in self.results if r.severity == "warning")
         failed = sum(1 for r in self.results if r.severity in ("fail", "block"))
+        skipped = sum(1 for r in self.results if r.severity == "skipped")
         status = "PASS" if self.overall_passed else "FAIL"
-        return f"{status}: {passed} passed, {warned} warnings, {failed} failed"
+        return f"{status}: {passed} passed, {warned} warnings, {skipped} skipped, {failed} failed"
 
 
 def create_gate_result(
@@ -53,7 +54,7 @@ def create_gate_result(
     gate_name: str,
     passed: bool,
     *,
-    severity: Literal["pass", "warning", "fail", "block"] | None = None,
+    severity: Literal["pass", "warning", "fail", "block", "skipped"] | None = None,
     message: str = "",
     details: dict | None = None,
     remediation: str | None = None,

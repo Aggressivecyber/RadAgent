@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from agent_core.validators.schema_validator import SchemaValidator
 from agent_core.validators.patch_validator import PatchValidator
 from agent_core.validators.physics_sanity_validator import PhysicsSanityValidator
+from agent_core.validators.schema_validator import SchemaValidator
 
 
 class TestSchemaValidator:

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class FileInfo(BaseModel):
@@ -16,7 +14,7 @@ class FileInfo(BaseModel):
 
 class G4ParticleInfo(BaseModel):
     type: str
-    energy_MeV: float
+    energy_MeV: float  # noqa: N815
     events: int
 
 
@@ -28,7 +26,7 @@ class G4GeometryInfo(BaseModel):
 
 class G4OutputFiles(BaseModel):
     edep: FileInfo
-    dose: Optional[FileInfo] = None
+    dose: FileInfo | None = None
     event_table: str
 
 
@@ -62,7 +60,7 @@ class G4Provenance(BaseModel):
 
 def validate_g4_output(
     data: dict,
-) -> tuple[Optional[G4OutputContract], list[str]]:
+) -> tuple[G4OutputContract | None, list[str]]:
     """Validate a raw dict against the G4OutputContract schema.
 
     Returns (contract, errors) — contract is None when validation fails.

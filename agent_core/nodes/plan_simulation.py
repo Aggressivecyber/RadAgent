@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
+from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
 
 
@@ -45,7 +45,7 @@ async def plan_simulation(state: RadiationAgentState) -> dict:
         plan["required_tools"].extend(["cmake", "g++", "geant4"])
 
     # Save plan
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    job_dir = get_job_dir(job_id)
     plan_dir = job_dir / "04_generated_code"
     plan_dir.mkdir(parents=True, exist_ok=True)
     plan_file = plan_dir / "simulation_plan.json"

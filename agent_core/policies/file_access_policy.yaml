@@ -1,10 +1,17 @@
 # File Access Policy for RadAgent
 # Controls which files the Agent can modify via patches
+#
+# Patch paths are relative to the job directory.
+# Example: "05_geant4/src/DetectorConstruction.cc"
 
 green_zone:
   description: "Auto-apply allowed. Generated simulation code and workspace files."
   patterns:
     - "simulation_workspace/jobs/**"
+    - "05_geant4/**"
+    - "06_tcad/**"
+    - "07_spice/**"
+    - "08_data_packages/**"
     - "benchmark_suite/*/workspace/**"
   rules:
     auto_apply_patch: true
@@ -39,4 +46,4 @@ red_zone:
     override_requires: "explicit_user_consent_with_reason"
 
 default_action: "reject"
-version: "1.0"
+version: "1.1"

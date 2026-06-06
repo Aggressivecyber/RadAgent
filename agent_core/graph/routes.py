@@ -17,7 +17,7 @@ def route_after_gate_checks(state: RadiationAgentState) -> str:
     """After gate checks, route based on results."""
     gate_results = state.get("gate_results", [])
     all_passed = all(
-        r.get("severity") in ("pass", "warning") for r in gate_results
+        r.get("severity") in ("pass", "warning", "skipped") for r in gate_results
     )
     if all_passed:
         return "parse_simulation_results"

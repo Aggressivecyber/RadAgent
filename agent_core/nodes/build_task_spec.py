@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
+from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
 
 TASK_SPEC_PROMPT = """You are a radiation simulation task parser.
@@ -103,7 +103,7 @@ async def build_task_spec(state: RadiationAgentState) -> dict:
         task_spec = _heuristic_parse(user_query)
 
     # Save task spec
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    job_dir = get_job_dir(job_id)
     spec_file = job_dir / "02_task_spec" / "task_spec.json"
     spec_file.write_text(json.dumps(task_spec, indent=2, ensure_ascii=False))
 

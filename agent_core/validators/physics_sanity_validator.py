@@ -111,7 +111,10 @@ class PhysicsSanityValidator:
             if actual is None:
                 errors.append(f"Field '{field}' has no declared unit (expected '{expected}')")
             elif actual != expected:
-                errors.append(f"Field '{field}' unit mismatch: got '{actual}', expected '{expected}'")
+                errors.append(
+                    f"Field '{field}' unit mismatch: "
+                    f"got '{actual}', expected '{expected}'"
+                )
         return (not errors, errors)
 
     def _run_single(self, fn_name: str, payload: Any, *args: str) -> list[str]:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from agent_core.graph.state import RadiationAgentState
 from agent_core.validators.file_permission_validator import FilePermissionValidator
 from agent_core.validators.patch_validator import PatchValidator

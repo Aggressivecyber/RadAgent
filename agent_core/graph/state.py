@@ -31,6 +31,7 @@ class RadiationAgentState(TypedDict, total=False):
     simulation_ir_errors: list[str]
 
     # RAG routing and context
+    rag_registry: dict[str, Any]
     rag_route: list[str]
     g4_context: list[dict[str, Any]]
     tcad_context: list[dict[str, Any]]
@@ -38,6 +39,8 @@ class RadiationAgentState(TypedDict, total=False):
     web_context: list[dict[str, Any]]
     rag_sufficiency_score: float
     rag_sufficiency_report: dict[str, Any]
+    rag_required_sources: list[str]
+    rag_optional_sources: list[str]
 
     # Planning
     simulation_plan: dict[str, Any]

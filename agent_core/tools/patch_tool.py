@@ -19,7 +19,11 @@ class PatchTool:
     Creates .bak backups before every modification.
     """
 
-    def __init__(self, workspace_root: str, policy_path: str = "agent_core/policies/file_access_policy.yaml") -> None:
+    def __init__(
+        self,
+        workspace_root: str,
+        policy_path: str = "agent_core/policies/file_access_policy.yaml",
+    ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self._validator = FilePermissionValidator(policy_path)
         self._suffix = ".bak"
@@ -52,7 +56,12 @@ class PatchTool:
             applied.append(rel)
             logger.info("Patch applied (%s zone): %s", zone, rel)
 
-        return {"applied": applied, "rejected": rejected, "warnings": warnings, "backups_created": backups}
+        return {
+            "applied": applied,
+            "rejected": rejected,
+            "warnings": warnings,
+            "backups_created": backups,
+        }
 
     def rollback(self, patch_data: dict) -> bool:
         """Restore files from .bak copies. Returns True on full success."""

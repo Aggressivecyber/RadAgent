@@ -9,9 +9,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from agent_core.schemas.task_spec import validate_task_spec
-from agent_core.schemas.gate_result import create_gate_result, create_gate_report
+from agent_core.schemas.gate_result import create_gate_report, create_gate_result
 from agent_core.schemas.rag_context_pack import RetrievedContext, compute_sufficiency
+from agent_core.schemas.task_spec import validate_task_spec
 
 
 class TestTaskSpec:

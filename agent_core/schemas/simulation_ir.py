@@ -7,10 +7,7 @@ TCAD, SPICE) with mapping metadata linking adjacent stages.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel, Field
-
 
 # -- Stage configurations ---------------------------------------------------
 
@@ -39,12 +36,12 @@ class TCADConfig(BaseModel):
     integration matures.
     """
 
-    device_structure: Optional[dict] = None
-    mesh_config: Optional[dict] = None
-    physics_models: Optional[dict] = None
-    defect_model: Optional[dict] = None
-    bias_conditions: Optional[dict] = None
-    simulation_type: Optional[str] = None
+    device_structure: dict | None = None
+    mesh_config: dict | None = None
+    physics_models: dict | None = None
+    defect_model: dict | None = None
+    bias_conditions: dict | None = None
+    simulation_type: str | None = None
 
 
 class SPICEConfig(BaseModel):
@@ -53,10 +50,10 @@ class SPICEConfig(BaseModel):
     To be expanded when the circuit-level integration stage is implemented.
     """
 
-    circuit_type: Optional[str] = None
-    models: Optional[list[dict]] = None
-    stimulus: Optional[list[dict]] = None
-    analysis: Optional[dict] = None
+    circuit_type: str | None = None
+    models: list[dict] | None = None
+    stimulus: list[dict] | None = None
+    analysis: dict | None = None
 
 
 # -- Inter-stage mapping ----------------------------------------------------
@@ -69,8 +66,8 @@ class MappingChain(BaseModel):
         tcad_to_spice: Method/params for TCAD IV curves -> SPICE models.
     """
 
-    g4_to_tcad: Optional[dict] = None
-    tcad_to_spice: Optional[dict] = None
+    g4_to_tcad: dict | None = None
+    tcad_to_spice: dict | None = None
 
 
 # -- Top-level IR -----------------------------------------------------------
@@ -85,10 +82,10 @@ class SimulationIR(BaseModel):
 
     simulation_id: str = Field(..., description="Unique simulation identifier.")
     task_spec_hash: str = Field(..., description="SHA-256 of originating TaskSpec.")
-    g4_config: Optional[G4Config] = None
-    tcad_config: Optional[TCADConfig] = None
-    spice_config: Optional[SPICEConfig] = None
-    mapping_chain: Optional[MappingChain] = None
+    g4_config: G4Config | None = None
+    tcad_config: TCADConfig | None = None
+    spice_config: SPICEConfig | None = None
+    mapping_chain: MappingChain | None = None
     unit_registry: dict[str, str] = Field(
         default_factory=dict, description="Quantity name -> unit string.",
     )
@@ -98,7 +95,7 @@ class SimulationIR(BaseModel):
 
 def validate_simulation_ir(
     data: dict,
-) -> tuple[Optional[SimulationIR], list[str]]:
+) -> tuple[SimulationIR | None, list[str]]:
     """Validate a raw dict against the SimulationIR schema.
 
     Returns:

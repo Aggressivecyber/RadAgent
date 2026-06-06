@@ -10,12 +10,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
 from pathlib import Path
 
 # Load .env before any other imports
 from dotenv import load_dotenv
+
+from agent_core.config.workspace import get_job_dir, get_workspace_root
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -36,7 +37,7 @@ async def run_agent(query: str, job_id: str | None = None) -> dict:
     from agent_core.graph.graph_builder import compile_graph
 
     # Ensure workspace directories exist
-    Path("simulation_workspace/jobs").mkdir(parents=True, exist_ok=True)
+    (get_workspace_root() / "jobs").mkdir(parents=True, exist_ok=True)
 
     # Build initial state
     initial_state = {
@@ -45,6 +46,7 @@ async def run_agent(query: str, job_id: str | None = None) -> dict:
         "errors": [],
         "retry_count": 0,
         "max_retries_reached": False,
+        "rag_registry": {},
     }
 
     # Compile and run graph
@@ -65,7 +67,7 @@ async def check_status(job_id: str) -> dict:
     Returns:
         Status dict with job info.
     """
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    job_dir = get_job_dir(job_id)
     if not job_dir.exists():
         return {"status": "not_found", "job_id": job_id}
 
@@ -109,7 +111,7 @@ def main():
     args = parser.parse_args()
 
     if args.list_jobs:
-        jobs_dir = Path("simulation_workspace/jobs")
+        jobs_dir = get_workspace_root() / "jobs"
         if jobs_dir.exists():
             for job in sorted(jobs_dir.iterdir()):
                 if job.is_dir():
@@ -129,7 +131,7 @@ def main():
         parser.print_help()
         return
 
-    print(f"RadAgent: Processing request...")
+    print("RadAgent: Processing request...")
     print(f"  Query: {args.query}")
     print()
 
@@ -139,7 +141,8 @@ def main():
     report = result.get("final_report", "")
 
     print(f"Job completed: {job_id}")
-    print(f"Report saved to: simulation_workspace/jobs/{job_id}/10_report/final_report.md")
+    report_path = get_job_dir(job_id) / "10_report" / "final_report.md"
+    print(f"Report saved to: {report_path}")
     print()
 
     if report:

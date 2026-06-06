@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime
-from pathlib import Path
 
+from agent_core.config.workspace import ensure_job_dirs
 from agent_core.graph.state import RadiationAgentState
+from agent_core.tools.rag_discovery_tool import discover_rag_sources
 
 
 async def parse_user_request(state: RadiationAgentState) -> dict:
@@ -25,31 +25,19 @@ async def parse_user_request(state: RadiationAgentState) -> dict:
     )
 
     # Create job workspace directories
-    workspace_root = Path("simulation_workspace/jobs")
-    job_dir = workspace_root / job_id
-    dirs_to_create = [
-        job_dir / "00_request",
-        job_dir / "01_context",
-        job_dir / "02_task_spec",
-        job_dir / "03_simulation_ir",
-        job_dir / "04_generated_code",
-        job_dir / "05_geant4" / "src",
-        job_dir / "05_geant4" / "include",
-        job_dir / "05_geant4" / "macros",
-        job_dir / "08_data_packages" / "g4_output_package",
-        job_dir / "09_validation",
-        job_dir / "10_report",
-    ]
-    for d in dirs_to_create:
-        d.mkdir(parents=True, exist_ok=True)
+    job_dir = ensure_job_dirs(job_id)
 
     # Save user query
     query_file = job_dir / "00_request" / "user_query.md"
     query_file.write_text(f"# User Request\n\n{user_query}\n")
 
+    # Discover available RAG sources
+    rag_registry = await discover_rag_sources()
+
     return {
         "job_id": job_id,
         "user_query": user_query,
+        "rag_registry": rag_registry,
         "current_node": "parse_user_request",
         "errors": [],
     }

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 
 class UnitValidator:
     """Validates and converts physical units used in simulation workflows."""
@@ -38,7 +36,7 @@ class UnitValidator:
 
     def validate_unit(
         self, value: float, unit: str, expected_units: list[str]
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         if unit in expected_units:
             return True, f"Unit '{unit}' is valid for value {value}."
         category = self._find_category(unit)
@@ -52,7 +50,7 @@ class UnitValidator:
 
     def convert(
         self, value: float, from_unit: str, to_unit: str
-    ) -> Tuple[float, bool]:
+    ) -> tuple[float, bool]:
         cat = self._find_category(from_unit)
         if cat is None or self._find_category(to_unit) != cat:
             return 0.0, False
@@ -62,7 +60,7 @@ class UnitValidator:
 
     def check_consistency(
         self, data: dict, field_unit_map: dict[str, str]
-    ) -> Tuple[bool, list[str]]:
+    ) -> tuple[bool, list[str]]:
         errors: list[str] = []
         for field, expected_unit in field_unit_map.items():
             if field not in data:

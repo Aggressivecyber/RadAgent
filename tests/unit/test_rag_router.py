@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +16,10 @@ from agent_core.tools.rag_router import RAGRouter
 @pytest.fixture
 def router():
     """Create RAG router with test policy."""
-    policy_path = Path(__file__).resolve().parent.parent.parent / "agent_core" / "policies" / "rag_policy.yaml"
+    policy_path = (
+        Path(__file__).resolve().parent.parent.parent
+        / "agent_core" / "policies" / "rag_policy.yaml"
+    )
     return RAGRouter(str(policy_path))
 
 

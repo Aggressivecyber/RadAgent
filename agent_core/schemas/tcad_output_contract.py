@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class TCADDeviceInfo(BaseModel):
     type: str = Field(description="Device topology (e.g. NMOS, FinFET)")
-    temperature_K: float = Field(gt=0, description="Simulation temperature in kelvin")
+    temperature_K: float = Field(gt=0, description="Simulation temperature in kelvin")  # noqa: N815
     bias_condition: str = Field(description="Bias description (e.g. Vgs=0.8V Vds=1.2V)")
 
 

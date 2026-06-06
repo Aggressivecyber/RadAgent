@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class SPICECircuitInfo(BaseModel):
     type: str = Field(description="Circuit topology name (e.g. CMOS_inverter)")
-    supply_voltage_V: float = Field(gt=0, description="Supply voltage in volts")
+    supply_voltage_V: float = Field(gt=0, description="Supply voltage in volts")  # noqa: N815
 
 
 class SPICEInputs(BaseModel):

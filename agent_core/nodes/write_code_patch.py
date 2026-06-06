@@ -1,12 +1,21 @@
-"""Generate code as a patch using LLM with RAG context."""
+"""Generate code as a patch using LLM with RAG context.
+
+Fix 2: Only writes proposed_patch.json to 04_generated_code/.
+        Actual file writes are delegated to apply_patch node.
+Fix 4: LLM prompt instructs proper output directory usage.
+Fix 7: No silent fallback — failures propagate to classify_failure.
+"""
 
 from __future__ import annotations
 
 import json
+import logging
 import uuid
-from pathlib import Path
 
+from agent_core.config.workspace import get_job_dir, get_output_dir
 from agent_core.graph.state import RadiationAgentState
+
+logger = logging.getLogger(__name__)
 
 G4_CODE_GEN_PROMPT = """You are a Geant4 simulation code generator.
 
@@ -27,58 +36,75 @@ Requirements:
 6. Output CSV files for energy deposition and dose
 7. Use FTFP_BERT physics list (or as specified)
 8. Generate a main entry point (geant4_sim.cc)
+9. The program must read the output directory from the G4_OUTPUT_DIR environment
+   variable (fallback to "./output" if not set).
+10. The program must read the job ID from the G4_JOB_ID environment variable.
+11. At the end of the run, write these files to G4_OUTPUT_DIR:
+    - edep_3d.csv: voxelized energy deposition (columns: ix,iy,iz,edep_MeV)
+    - dose_3d.csv: voxelized dose (columns: ix,iy,iz,dose_Gy)
+    - event_table.csv: per-event summary (columns: event_id,primary_particle,total_edep_MeV)
+    - g4_summary.json: {{"particle": ..., "energy_MeV": ...,
+        "events": ..., "geometry": ..., "physics_list": ...}}
+    - provenance.json: {{"simulation_id": ..., "geant4_version": ...,
+        "physics_list": ..., "random_seed": ..., "generated_at": ..., "code_hash": ...}}
+12. Use bare filenames (e.g. "DetectorConstruction.cc", NOT "src/DetectorConstruction.cc").
+    The build system will place them in the correct directories.
 
 Output format: Return a JSON object with this structure:
 {{
   "files": {{
-    "path/to/file.cc": "file content here",
+    "DetectorConstruction.cc": "file content here",
+    "DetectorConstruction.hh": "file content here",
+    "geant4_sim.cc": "file content here",
     "CMakeLists.txt": "file content here"
   }},
   "description": "Brief description of generated code",
   "assumptions": ["list of assumptions made"]
 }}
 
-Return ONLY the JSON object.
+Return ONLY the JSON object. Use bare filenames, no directory prefixes.
 """
 
-# Minimal template constants for fallback
-_MAIN_CC = '''#include "G4RunManager.hh"
-#include "G4UImanager.hh"
-#include "FTFP_BERT.hh"
 
-int main() {
-    G4RunManager* runManager = new G4RunManager;
-    runManager->SetUserInitialization(new FTFP_BERT);
-    // TODO: Add user actions
-    runManager->Initialize();
-    runManager->BeamOn(10);
-    delete runManager;
-    return 0;
-}
-'''
+def _map_to_geant4_layout(files: dict[str, str]) -> list[dict]:
+    """Map flat filenames to proper Geant4 project layout.
 
-_CMAKELISTS = '''cmake_minimum_required(VERSION 3.16)
-project(geant4_sim)
-find_package(Geant4 REQUIRED)
-add_executable(geant4_sim geant4_sim.cc)
-target_link_libraries(geant4_sim Geant4::Granular)
-'''
+    - *.cc (except geant4_sim.cc) → 05_geant4/src/{name}
+    - *.hh → 05_geant4/include/{name}
+    - geant4_sim.cc, CMakeLists.txt → 05_geant4/{name}
+    - Everything else → 05_geant4/{name}
+    """
+    root_files = {"geant4_sim.cc", "CMakeLists.txt", "CMakeLists.txt.in"}
+    changed: list[dict] = []
 
+    for filename, content in files.items():
+        if filename in root_files:
+            rel_path = f"05_geant4/{filename}"
+        elif filename.endswith(".cc"):
+            rel_path = f"05_geant4/src/{filename}"
+        elif filename.endswith(".hh") or filename.endswith(".h"):
+            rel_path = f"05_geant4/include/{filename}"
+        elif filename.endswith(".mac"):
+            rel_path = f"05_geant4/macros/{filename}"
+        else:
+            rel_path = f"05_geant4/{filename}"
 
-def _generate_fallback_code(sim_ir: dict) -> dict:
-    """Generate minimal fallback Geant4 code when LLM is unavailable."""
-    return {
-        "files": {
-            "geant4_sim.cc": _MAIN_CC,
-            "CMakeLists.txt": _CMAKELISTS,
-        },
-        "description": "Minimal Geant4 simulation (fallback template)",
-        "assumptions": ["Using default FTFP_BERT physics", "Fallback code without LLM"],
-    }
+        changed.append({
+            "path": rel_path,
+            "zone": "green",
+            "new_content": content,
+            "diff_content": "",
+        })
+
+    return changed
 
 
 async def write_code_patch(state: RadiationAgentState) -> dict:
-    """Generate Geant4 code as a patch using LLM with RAG context."""
+    """Generate Geant4 code as a patch using LLM with RAG context.
+
+    Only writes proposed_patch.json to 04_generated_code/.
+    Actual code files are written by apply_patch node.
+    """
     sim_ir = state.get("simulation_ir", {})
     g4_context = state.get("g4_context", [])
     job_id = state.get("job_id", "unknown")
@@ -90,6 +116,7 @@ async def write_code_patch(state: RadiationAgentState) -> dict:
     )
     sim_ir_str = json.dumps(sim_ir, indent=2, ensure_ascii=False)
 
+    code_result: dict | None = None
     try:
         from agent_core.llm import get_llm
 
@@ -105,44 +132,48 @@ async def write_code_patch(state: RadiationAgentState) -> dict:
         if content.endswith("```"):
             content = content[:-3]
         code_result = json.loads(content.strip())
-    except Exception:
-        code_result = _generate_fallback_code(sim_ir)
+    except Exception as exc:
+        logger.warning("LLM code generation failed: %s", exc)
+        # Fix 7: Do NOT silently fall back to a useless stub.
+        # Return empty patch → Gate 3 (Patch Format) fails → classify_failure.
+        return {
+            "proposed_patch": {},
+            "errors": [f"Code generation failed: {exc}"],
+            "current_node": "write_code_patch",
+        }
 
-    # Build patch
+    # Build patch with proper file layout
     files = code_result.get("files", {})
+    if not files:
+        return {
+            "proposed_patch": {},
+            "errors": ["LLM returned empty files dict"],
+            "current_node": "write_code_patch",
+        }
+
+    output_dir = str(get_output_dir(job_id))
     patch = {
         "patch_id": str(uuid.uuid4()),
         "job_id": job_id,
         "description": code_result.get("description", "Generated Geant4 simulation code"),
         "change_type": "create",
         "risk_level": "low",
-        "changed_files": [
-            {
-                "path": f"simulation_workspace/jobs/{job_id}/05_geant4/{fp}",
-                "zone": "green",
-                "new_content": content,
-                "diff_content": "",
-            }
-            for fp, content in files.items()
-        ],
+        "changed_files": _map_to_geant4_layout(files),
         "test_plan": state.get("test_plan", {}).get("tests", []),
-        "expected_outputs": ["edep_3d.csv", "dose_3d.csv", "event_table.csv"],
+        "expected_outputs": [
+            "g4_summary.json", "edep_3d.csv", "dose_3d.csv",
+            "event_table.csv", "provenance.json",
+        ],
         "dependencies": ["Geant4"],
         "rollback_possible": True,
+        "output_dir": output_dir,
     }
 
-    # Save patch
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    # Fix 2: Only save patch metadata, NOT actual code files
+    job_dir = get_job_dir(job_id)
     patch_file = job_dir / "04_generated_code" / "proposed_patch.json"
     patch_file.write_text(json.dumps(patch, indent=2, ensure_ascii=False))
     changed_file = job_dir / "04_generated_code" / "changed_files.json"
     changed_file.write_text(json.dumps(list(files.keys()), indent=2))
-
-    # Write actual code files
-    g4_dir = job_dir / "05_geant4"
-    for fp, content in files.items():
-        file_path = g4_dir / fp
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(content)
 
     return {"proposed_patch": patch, "current_node": "write_code_patch"}

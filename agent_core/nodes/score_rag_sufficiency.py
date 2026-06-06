@@ -3,22 +3,51 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
+from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
 
 
 def _compute_score(
-    g4_ctx: list, tcad_ctx: list, spice_ctx: list
+    g4_ctx: list, tcad_ctx: list, spice_ctx: list,
+    required_sources: list[str] | None = None,
+    optional_sources: list[str] | None = None,
 ) -> tuple[float, dict]:
-    """Compute RAG sufficiency score based on retrieved context."""
+    """Compute RAG sufficiency score based on retrieved context.
+
+    *required_sources* and *optional_sources* use logical names ("geant4",
+    "tcad", "spice").  If a required source has empty context the score is
+    capped below the block threshold (0.60).
+    """
+    required_sources = required_sources or []
+    optional_sources = optional_sources or []
+
     score = 0.0
-    report = {
+    report: dict = {
         "missing_items": [],
         "has_manual": False,
         "has_examples": False,
         "has_contracts": False,
     }
+
+    # Map logical names to their context lists
+    _ctx_map: dict[str, list] = {
+        "geant4": g4_ctx,
+        "tcad": tcad_ctx,
+        "spice": spice_ctx,
+    }
+
+    # --- Required-source penalty -------------------------------------------
+    missing_required: list[str] = []
+    for src in required_sources:
+        if src in _ctx_map and not _ctx_map[src]:
+            missing_required.append(src)
+    if missing_required:
+        report["missing_required_sources"] = missing_required
+        for ms in missing_required:
+            report["missing_items"].append(
+                f"Required source '{ms}' returned no context"
+            )
 
     all_ctx = g4_ctx + tcad_ctx + spice_ctx
 
@@ -64,6 +93,10 @@ def _compute_score(
     if len(all_ctx) > 0:
         score += 0.15
 
+    # --- Cap score if a required source is empty ---------------------------
+    if missing_required:
+        score = min(score, 0.55)
+
     # Decision
     if score >= 0.90:
         report["decision"] = "allow"
@@ -88,9 +121,15 @@ async def score_rag_sufficiency(state: RadiationAgentState) -> dict:
     g4_ctx = state.get("g4_context", [])
     tcad_ctx = state.get("tcad_context", [])
     spice_ctx = state.get("spice_context", [])
+    rag_required = state.get("rag_required_sources", [])
+    rag_optional = state.get("rag_optional_sources", [])
     job_id = state.get("job_id", "unknown")
 
-    score, report = _compute_score(g4_ctx, tcad_ctx, spice_ctx)
+    score, report = _compute_score(
+        g4_ctx, tcad_ctx, spice_ctx,
+        required_sources=rag_required,
+        optional_sources=rag_optional,
+    )
 
     # When no RAG server is available, allow pipeline to proceed with warning
     if score == 0.0:
@@ -102,7 +141,7 @@ async def score_rag_sufficiency(state: RadiationAgentState) -> dict:
         )
 
     # Save report
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    job_dir = get_job_dir(job_id)
     report_file = job_dir / "01_context" / "rag_sufficiency_report.json"
     report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False))
 

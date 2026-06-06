@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
+from agent_core.config.workspace import get_job_dir
 from agent_core.graph.state import RadiationAgentState
 from agent_core.tools.rag_router import RAGRouter
 
@@ -16,15 +16,26 @@ async def route_rag(state: RadiationAgentState) -> dict:
 
     router = RAGRouter()
     rag_route = router.route(task_spec)
+    priority = router.route_with_priority(task_spec)
 
     # Save routing decision
-    job_dir = Path("simulation_workspace/jobs") / job_id
+    job_dir = get_job_dir(job_id)
     route_file = job_dir / "01_context" / "rag_route.json"
     route_file.write_text(
         json.dumps(
-            {"rag_route": rag_route, "task_scope": task_spec.get("simulation_scope", [])},
+            {
+                "rag_route": rag_route,
+                "task_scope": task_spec.get("simulation_scope", []),
+                "required_sources": priority["required"],
+                "optional_sources": priority["optional"],
+            },
             indent=2,
         )
     )
 
-    return {"rag_route": rag_route, "current_node": "route_rag"}
+    return {
+        "rag_route": rag_route,
+        "rag_required_sources": priority["required"],
+        "rag_optional_sources": priority["optional"],
+        "current_node": "route_rag",
+    }
