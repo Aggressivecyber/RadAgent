@@ -125,7 +125,11 @@ def _generate_source(model_ir: Any) -> str:
 
     for s in model_ir.scoring:
         quantities = s.quantities
-        target = ", ".join(s.region_scores) if s.region_scores else s.scoring_id
+        target = (
+            ", ".join(rs.region_component_id for rs in s.region_scores)
+            if s.region_scores
+            else s.scoring_id
+        )
         fmt = s.output_format
         method_name = f"Write{s.scoring_id}"
         header_cols = ",".join(quantities)
