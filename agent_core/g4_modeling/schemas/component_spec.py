@@ -94,6 +94,12 @@ class ComponentSpec(BaseModel):
         default_factory=list,
         description="Unresolved questions about this component",
     )
+    requires_confirmation: bool = Field(default=False, description="Needs user confirmation")
+    confirmed_by_user: bool = Field(default=False, description="User has confirmed")
+    confirmation_source: str | None = Field(
+        default=None,
+        description="Confirmation source reference",
+    )
 
     @field_validator("mother_volume")
     @classmethod

@@ -29,6 +29,7 @@ from agent_core.graph.main_routes import (
     route_after_g4_codegen,
     route_after_g4_modeling,
     route_after_gates,
+    route_after_human_confirmation,
     route_after_patch,
     route_after_task_planning,
 )
@@ -140,6 +141,37 @@ def _make_g4_modeling_subgraph_node() -> Any:
             "model_review_report_path": result.get("model_review_report_path", ""),
             "g4_modeling_status": result.get("g4_modeling_status", "failed"),
             "current_node": "g4_modeling_subgraph",
+        }
+
+    return _run
+
+
+def _make_human_confirmation_subgraph_node() -> Any:
+    """Create the human confirmation subgraph node."""
+    from agent_core.graph.subgraphs.human_confirmation_graph import (
+        build_human_confirmation_subgraph,
+    )
+
+    subgraph = build_human_confirmation_subgraph().compile()
+
+    async def _run(state: RadAgentMainState) -> dict[str, Any]:
+        result = await subgraph.ainvoke({
+            "job_id": state.get("job_id", ""),
+            "user_query": state.get("user_query", ""),
+            "g4_model_ir_path": state.get("g4_model_ir_path", ""),
+            "evidence_map_path": state.get("evidence_map_path", ""),
+            "human_confirmation_round": state.get("human_confirmation_round", 1),
+        })
+        return {
+            "confirmation_record_path": result.get("confirmation_record_path", ""),
+            "confirmed_model_plan_path": result.get("confirmed_model_plan_path", ""),
+            "confirmation_report_path": result.get("confirmation_report_path", ""),
+            "confirmation_status": result.get("confirmation_status", "failed"),
+            "human_confirmation_required": result.get("requires_human_confirmation", False),
+            "human_confirmation_round": state.get("human_confirmation_round", 1) + (
+                1 if result.get("confirmation_status") == "pending" else 0
+            ),
+            "current_node": "human_confirmation_subgraph",
         }
 
     return _run
@@ -303,6 +335,7 @@ def build_main_graph() -> StateGraph:
     graph.add_node("context_subgraph", _make_context_subgraph_node())
     graph.add_node("task_planning_subgraph", _make_task_planning_subgraph_node())
     graph.add_node("g4_modeling_subgraph", _make_g4_modeling_subgraph_node())
+    graph.add_node("human_confirmation_subgraph", _make_human_confirmation_subgraph_node())
     graph.add_node("g4_codegen_subgraph", _make_g4_codegen_subgraph_node())
     graph.add_node("patch_subgraph", _make_patch_subgraph_node())
     graph.add_node("gate_subgraph", _make_gate_subgraph_node())
@@ -335,12 +368,24 @@ def build_main_graph() -> StateGraph:
         },
     )
 
-    # Conditional: g4_modeling → g4_codegen or report
+    # Conditional: g4_modeling → human_confirmation or g4_codegen or report
     graph.add_conditional_edges(
         "g4_modeling_subgraph",
         route_after_g4_modeling,
         {
+            "human_confirmation_subgraph": "human_confirmation_subgraph",
             "g4_codegen_subgraph": "g4_codegen_subgraph",
+            "report_subgraph": "report_subgraph",
+        },
+    )
+
+    # Conditional: human_confirmation → g4_codegen, context, or report
+    graph.add_conditional_edges(
+        "human_confirmation_subgraph",
+        route_after_human_confirmation,
+        {
+            "g4_codegen_subgraph": "g4_codegen_subgraph",
+            "context_subgraph": "context_subgraph",
             "report_subgraph": "report_subgraph",
         },
     )

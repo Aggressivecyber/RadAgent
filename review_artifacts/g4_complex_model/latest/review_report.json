@@ -2,8 +2,8 @@
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
   "job_id": "complex_test",
-  "validation_status": "FAILED",
-  "generated_at": "2026-06-07T15:03:29.345680+00:00",
+  "validation_status": "PARTIAL",
+  "generated_at": "2026-06-07T15:19:05.284474+00:00",
   "is_stub": false,
   "run_type": "dev",
   "artifacts_collected": 11,
@@ -11,26 +11,17 @@
   "has_gate_results": true,
   "has_model_review": true,
   "has_manifest": false,
+  "has_human_confirmation": false,
   "file_count": 11,
-  "skipped_gates": [
-    {
-      "gate_id": 4,
-      "name": "File Permission"
-    },
-    {
-      "gate_id": 7,
-      "name": "Unit Test"
-    },
-    {
-      "gate_id": 9,
-      "name": "Smoke Simulation"
-    },
-    {
-      "gate_id": 10,
-      "name": "Benchmark Regression"
-    }
-  ],
+  "skipped_gates": [],
   "known_limitations": [
-    "4 gate(s) skipped: File Permission, Unit Test, Smoke Simulation, Benchmark Regression"
-  ]
+    "Some gates skipped — not all validations ran"
+  ],
+  "human_confirmation": {
+    "required": false,
+    "status": "not_required",
+    "rounds": 0,
+    "edited_fields": [],
+    "remaining_unconfirmed_fields": []
+  }
 }

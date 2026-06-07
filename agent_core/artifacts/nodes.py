@@ -58,6 +58,28 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
     if review_path and Path(review_path).exists():
         shutil.copy2(Path(review_path), output_dir / "model_review_report.md")
 
+    # Copy human confirmation files if available
+    job_id = state.get("job_id", "unknown")
+    from agent_core.config.workspace import get_job_dir
+    job_dir = get_job_dir(job_id)
+    confirmation_dir = job_dir / "04_human_confirmation"
+
+    if confirmation_dir.exists():
+        # Copy confirmation_record.json
+        confirmation_record = confirmation_dir / "confirmation_record.json"
+        if confirmation_record.exists():
+            shutil.copy2(confirmation_record, output_dir / "confirmation_record.json")
+
+        # Copy confirmed_model_plan.json
+        confirmed_plan = confirmation_dir / "confirmed_model_plan.json"
+        if confirmed_plan.exists():
+            shutil.copy2(confirmed_plan, output_dir / "confirmed_model_plan.json")
+
+        # Copy human_confirmation_report.md
+        hc_report = confirmation_dir / "human_confirmation_report.md"
+        if hc_report.exists():
+            shutil.copy2(hc_report, output_dir / "human_confirmation_report.md")
+
     # Copy construction ledger
     ledger_path = state.get("construction_ledger_path", "")
     if ledger_path and Path(ledger_path).exists():
@@ -235,6 +257,21 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
 
     # Generate review_report.json (rich version)
     file_names = [e["name"] for e in file_entries]
+
+    # Extract human confirmation status from state
+    hc_status = {
+        "required": bool(state.get("human_confirmation_required", False)),
+        "status": state.get("confirmation_status", "not_required"),
+        "rounds": state.get("human_confirmation_round", 0),
+        "edited_fields": list(state.get("human_confirmation_edited_fields", [])),
+        "remaining_unconfirmed_fields": [],
+    }
+
+    # Extract remaining unconfirmed fields from model IR
+    model_ir = state.get("g4_model_ir", {})
+    if model_ir:
+        hc_status["remaining_unconfirmed_fields"] = list(model_ir.get("unconfirmed_fields", []))
+
     review_report = {
         "schema_version": "v3",
         "artifact_type": "g4_complex_model",
@@ -248,9 +285,11 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
         "has_gate_results": "gate_results.json" in file_names,
         "has_model_review": "model_review_report.md" in file_names,
         "has_manifest": "artifact_manifest.json" in file_names,
+        "has_human_confirmation": "confirmation_record.json" in file_names,
         "file_count": len(file_entries),
         "skipped_gates": skipped_gates,
         "known_limitations": known_limitations,
+        "human_confirmation": hc_status,
     }
     (artifact_dir / "review_report.json").write_text(
         json.dumps(review_report, indent=2, ensure_ascii=False)

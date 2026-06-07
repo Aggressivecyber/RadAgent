@@ -50,12 +50,33 @@ def route_after_task_planning(state: RadAgentMainState) -> str:
 
 
 def route_after_g4_modeling(state: RadAgentMainState) -> str:
-    """Route after G4 Modeling Subgraph."""
+    """Route after G4 Modeling Subgraph.
+
+    Check if human confirmation is required before proceeding to codegen.
+    """
     status = state.get("g4_modeling_status", "failed")
     if status == "passed":
+        # Check if human confirmation is required
+        hc_required = state.get("human_confirmation_required", False)
+        if hc_required:
+            return "human_confirmation_subgraph"
         return "g4_codegen_subgraph"
     if status == "needs_user_input":
         return "report_subgraph"
+    return "report_subgraph"
+
+
+def route_after_human_confirmation(state: RadAgentMainState) -> str:
+    """Route after Human Confirmation Subgraph."""
+    status = state.get("confirmation_status", "failed")
+    if status in {"approved", "edited"}:
+        return "g4_codegen_subgraph"
+    if status == "ask_more":
+        return "context_subgraph"
+    if status in {"rejected", "failed", "expired"}:
+        return "report_subgraph"
+    if status == "pending":
+        return "human_confirmation_subgraph"
     return "report_subgraph"
 
 

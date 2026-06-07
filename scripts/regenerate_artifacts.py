@@ -101,7 +101,7 @@ async def _run_gates(model_ir: dict) -> list[dict]:
 
     # Add G4 modeling gates (12-18) with dev-mode skip
     from agent_core.gates.base_gates import GATE_NAMES
-    for gid in range(12, 19):
+    for gid in range(12, 20):
         gate_results.append({
             "gate_id": gid,
             "name": GATE_NAMES.get(gid, f"Gate {gid}"),

@@ -197,6 +197,24 @@ class G4ModelIR(BaseModel):
         description="Unresolved issues that prevent final model validation",
     )
 
+    # Human confirmation tracking
+    human_confirmation: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Human confirmation status and metadata",
+    )
+    confirmed_fields: list[str] = Field(
+        default_factory=list,
+        description="Fields confirmed by user",
+    )
+    unconfirmed_fields: list[str] = Field(
+        default_factory=list,
+        description="Fields still requiring user confirmation",
+    )
+    assumptions_confirmed: bool = Field(
+        default=False,
+        description="Whether all assumptions have been confirmed by user",
+    )
+
     @field_validator("components")
     @classmethod
     def _world_volume_must_exist(cls, v: list[ComponentSpec]) -> list[ComponentSpec]:

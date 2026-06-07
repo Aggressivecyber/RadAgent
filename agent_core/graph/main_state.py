@@ -48,6 +48,16 @@ class RadAgentMainState(TypedDict, total=False):
     model_review_report_path: str
     g4_modeling_status: str  # "passed" | "failed" | "needs_user_input"
 
+    # ── Human Confirmation Subgraph outputs ──
+    confirmation_status: str  # "not_required"|"pending"|"approved"|"edited"|"rejected"|"ask_more"|"expired"|"failed"  # noqa: E501
+    confirmation_request_path: str
+    confirmation_response_path: str
+    confirmation_record_path: str
+    confirmed_model_plan_path: str
+    unconfirmed_assumptions_count: int
+    human_confirmation_required: bool
+    human_confirmation_round: int
+
     # ── G4 Codegen Subgraph outputs ──
     code_module_plan_path: str
     proposed_patch_path: str

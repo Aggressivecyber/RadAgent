@@ -163,7 +163,7 @@ def _create_gate_results(job_dir: Path) -> Path:
             "severity": "pass",
             "message": "OK",
         })
-    for gid in range(12, 19):
+    for gid in range(12, 20):
         gates.append({
             "gate_id": gid,
             "gate_name": f"G4-{chr(65 + gid - 12)}",

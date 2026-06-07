@@ -56,7 +56,7 @@ class GateReport(BaseModel):
     """Aggregated report of all gate results for a pipeline job."""
 
     job_id: str
-    total_gates: int = 19
+    total_gates: int = 20
     results: list[GateResult]
 
     @property

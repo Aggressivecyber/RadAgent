@@ -132,7 +132,7 @@ def test_gate_report_summary():
 
     report = create_gate_report("test-job", results)
 
-    assert report.total_gates == 19  # Default total
+    assert report.total_gates == 20  # Default total (gates 0-11 + G4-A to G4-H)
     assert len(report.results) == 4
     assert not report.overall_passed  # One fail
     # Overall status is FAIL, but counts should match
