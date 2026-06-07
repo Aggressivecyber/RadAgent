@@ -1,0 +1,45 @@
+flowchart TB
+
+    %% G4 Modeling 子图
+    %% Model IR 构建 — 核心建模管线 (14 nodes)
+
+    load_task_spec["加载任务规格"] :::entry
+    requirement_capture_node("需求捕获")
+    evidence_retrieval_node("证据检索")
+    model_scope_guard_node{{"Scope Guard"}}
+    geometry_decomposition_node("几何分解")
+    coordinate_system_node("坐标系定义")
+    material_definition_node("材料定义")
+    source_definition_node("源定义")
+    physics_list_node("物理列表")
+    sensitive_detector_node("灵敏探测器")
+    scoring_design_node("Scoring 设计")
+    model_ir_validation_node{{"Model IR 校验"}}
+    model_review_report_node("模型审查报告")
+    persist_model_ir["持久化 Model IR"]
+
+    load_task_spec --> requirement_capture_node
+    requirement_capture_node --> evidence_retrieval_node
+    evidence_retrieval_node --> model_scope_guard_node
+    geometry_decomposition_node --> coordinate_system_node
+    coordinate_system_node --> material_definition_node
+    material_definition_node --> source_definition_node
+    source_definition_node --> physics_list_node
+    physics_list_node --> sensitive_detector_node
+    sensitive_detector_node --> scoring_design_node
+    scoring_design_node --> model_ir_validation_node
+    model_review_report_node --> persist_model_ir
+    persist_model_ir --> END((END))
+
+    %% Conditional routes
+    model_scope_guard_node --> |proceed|geometry_decomposition_node
+    model_scope_guard_node ==> |block → 失败|persist_model_ir
+    model_ir_validation_node --> |通过|model_review_report_node
+    model_ir_validation_node -.-> |错误 < 3 → 重试|geometry_decomposition_node
+    model_ir_validation_node ==> |错误 ≥ 3 → 失败|persist_model_ir
+
+    %% Node styles
+    classDef artifact fill:#E0F7FA,stroke:#00838F,stroke-width:2px,color:#333
+    classDef core fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#333
+    classDef guard fill:#FCE4EC,stroke:#C62828,stroke-width:2px,color:#333
+    classDef io fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#333

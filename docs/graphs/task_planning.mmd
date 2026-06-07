@@ -1,0 +1,20 @@
+flowchart TB
+
+    %% Task Planning 子图
+    %% 解析用户需求 → 任务规格 (3 nodes, 含重试)
+
+    parse_task("解析任务") :::entry
+    validate_task_spec{{"验证任务规格"}}
+    save_task_spec["保存任务规格"]
+
+    parse_task --> validate_task_spec
+    save_task_spec --> END((END))
+
+    %% Conditional routes
+    validate_task_spec --> |无错误|save_task_spec
+    validate_task_spec -.-> |有错误 → 重试|parse_task
+
+    %% Node styles
+    classDef core fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#333
+    classDef guard fill:#FCE4EC,stroke:#C62828,stroke-width:2px,color:#333
+    classDef io fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#333

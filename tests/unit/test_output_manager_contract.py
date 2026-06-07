@@ -210,3 +210,87 @@ class TestOutputManagerContract:
         del model_ir["scoring"]
         result = await output_manager_codegen({"g4_model_ir": model_ir})
         assert result.get("code_modules", []) == []
+
+    async def test_no_empty_includes(self) -> None:
+        """Generated C++ must not contain empty #include lines."""
+        from agent_core.g4_modeling.codegen.output_manager_codegen import (
+            output_manager_codegen,
+        )
+
+        state = {"g4_model_ir": _minimal_model_ir_for_output()}
+        result = await output_manager_codegen(state)
+
+        content = result["code_modules"][0]["generated_content"]
+        for _fname, code in content.items():
+            for line in code.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("#include"):
+                    # Must not be just "#include" with nothing after
+                    assert len(stripped) > len("#include"), (
+                        f"Empty include found: '{stripped}' in {_fname}"
+                    )
+                    # Must have either <header> or "header"
+                    assert ("<" in stripped and ">" in stripped) or (
+                        '"' in stripped
+                    ), f"Malformed include: '{stripped}' in {_fname}"
+
+    async def test_scoring_methods_are_class_members(self) -> None:
+        """WriteScoringCSV must be a member of OutputManager, not a free function."""
+        from agent_core.g4_modeling.codegen.output_manager_codegen import (
+            output_manager_codegen,
+        )
+
+        state = {"g4_model_ir": _minimal_model_ir_for_output()}
+        result = await output_manager_codegen(state)
+
+        content = result["code_modules"][0]["generated_content"]
+        source = content["OutputManager::OutputManager.cc"]
+
+        # Per-scoring methods must use "OutputManager::" qualifier
+        assert "OutputManager::Writeedep_sensitive()" in source
+        assert "OutputManager::Writedose_3d()" in source
+        assert "OutputManager::Writeevent_table()" in source
+
+        # Must NOT have a bare free function WriteScoringCSV
+        lines = source.splitlines()
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("void Write"):
+                # Must be qualified as OutputManager::WriteXxx
+                assert "OutputManager::" in stripped, (
+                    f"Unqualified free function: {stripped}"
+                )
+
+    async def test_header_declares_per_scoring_methods(self) -> None:
+        """Header must declare a method for each scoring spec."""
+        from agent_core.g4_modeling.codegen.output_manager_codegen import (
+            output_manager_codegen,
+        )
+
+        state = {"g4_model_ir": _minimal_model_ir_for_output()}
+        result = await output_manager_codegen(state)
+
+        content = result["code_modules"][0]["generated_content"]
+        header = content["OutputManager::OutputManager.hh"]
+
+        # Must declare per-scoring write methods
+        assert "void Writeedep_sensitive();" in header
+        assert "void Writedose_3d();" in header
+        assert "void Writeevent_table();" in header
+
+    async def test_output_files_match_scoring_specs(self) -> None:
+        """Output CSV filenames must use scoring_id.format from scoring spec."""
+        from agent_core.g4_modeling.codegen.output_manager_codegen import (
+            output_manager_codegen,
+        )
+
+        state = {"g4_model_ir": _minimal_model_ir_for_output()}
+        result = await output_manager_codegen(state)
+
+        content = result["code_modules"][0]["generated_content"]
+        source = content["OutputManager::OutputManager.cc"]
+
+        # Must produce .csv files named after scoring IDs
+        assert '"/edep_sensitive.csv"' in source
+        assert '"/dose_3d.csv"' in source
+        assert '"/event_table.csv"' in source

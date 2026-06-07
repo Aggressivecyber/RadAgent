@@ -1,0 +1,39 @@
+flowchart TB
+
+    %% G4 Codegen 子图
+    %% 模块化 C++ 代码生成 (14 nodes, 线性)
+
+    load_model_ir["加载 Model IR"] :::entry
+    code_module_planner("代码模块规划")
+    geometry_builder_plan_node("几何构建规划")
+    material_registry_codegen("MaterialRegistry")
+    component_geometry_codegen("组件几何代码")
+    placement_codegen("Placement 代码")
+    source_codegen("PrimaryGenerator")
+    physics_macro_codegen("Physics Macro")
+    sensitive_detector_codegen("SD 代码")
+    scoring_codegen("Scoring 代码")
+    output_manager_codegen("OutputManager")
+    integration_assembler_node("集成组装")
+    geometry_validation_node{{"几何验证"}}
+    persist_codegen_output["持久化代码"]
+
+    load_model_ir --> code_module_planner
+    code_module_planner --> geometry_builder_plan_node
+    geometry_builder_plan_node --> material_registry_codegen
+    material_registry_codegen --> component_geometry_codegen
+    component_geometry_codegen --> placement_codegen
+    placement_codegen --> source_codegen
+    source_codegen --> physics_macro_codegen
+    physics_macro_codegen --> sensitive_detector_codegen
+    sensitive_detector_codegen --> scoring_codegen
+    scoring_codegen --> output_manager_codegen
+    output_manager_codegen --> integration_assembler_node
+    integration_assembler_node --> geometry_validation_node
+    geometry_validation_node --> persist_codegen_output
+    persist_codegen_output --> END((END))
+
+    %% Node styles
+    classDef codegen fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#333
+    classDef guard fill:#FCE4EC,stroke:#C62828,stroke-width:2px,color:#333
+    classDef io fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#333

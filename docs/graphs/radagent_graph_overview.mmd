@@ -1,0 +1,153 @@
+flowchart TB
+
+    prepare_workspace("准备工作区") :::entry
+
+    subgraph context_subgraph
+        direction TB
+        route_sources["路由源选择"]
+        retrieve_rag_context("RAG 上下文检索")
+        score_rag_context{{"RAG 评分"}}
+        retrieve_web_context("Web 补充检索")
+        score_combined_context{{"综合评分"}}
+        save_evidence_map["保存证据映射"]
+        route_sources --> retrieve_rag_context
+        retrieve_rag_context --> score_rag_context
+        retrieve_web_context --> score_combined_context
+        score_combined_context --> save_evidence_map
+        save_evidence_map --> context_subgraph_end((END))
+    end
+
+    subgraph task_planning_subgraph
+        direction TB
+        parse_task("解析任务")
+        validate_task_spec{{"验证任务规格"}}
+        save_task_spec["保存任务规格"]
+        parse_task --> validate_task_spec
+        save_task_spec --> task_planning_subgraph_end((END))
+    end
+
+    subgraph g4_modeling_subgraph
+        direction TB
+        load_task_spec["加载任务规格"]
+        requirement_capture_node("需求捕获")
+        evidence_retrieval_node("证据检索")
+        model_scope_guard_node{{"Scope Guard"}}
+        geometry_decomposition_node("几何分解")
+        coordinate_system_node("坐标系定义")
+        material_definition_node("材料定义")
+        source_definition_node("源定义")
+        physics_list_node("物理列表")
+        sensitive_detector_node("灵敏探测器")
+        scoring_design_node("Scoring 设计")
+        model_ir_validation_node{{"Model IR 校验"}}
+        model_review_report_node("模型审查报告")
+        persist_model_ir["持久化 Model IR"]
+        load_task_spec --> requirement_capture_node
+        requirement_capture_node --> evidence_retrieval_node
+        evidence_retrieval_node --> model_scope_guard_node
+        geometry_decomposition_node --> coordinate_system_node
+        coordinate_system_node --> material_definition_node
+        material_definition_node --> source_definition_node
+        source_definition_node --> physics_list_node
+        physics_list_node --> sensitive_detector_node
+        sensitive_detector_node --> scoring_design_node
+        scoring_design_node --> model_ir_validation_node
+        model_review_report_node --> persist_model_ir
+        persist_model_ir --> g4_modeling_subgraph_end((END))
+    end
+
+    subgraph g4_codegen_subgraph
+        direction TB
+        load_model_ir["加载 Model IR"]
+        code_module_planner("代码模块规划")
+        geometry_builder_plan_node("几何构建规划")
+        material_registry_codegen("MaterialRegistry")
+        component_geometry_codegen("组件几何代码")
+        placement_codegen("Placement 代码")
+        source_codegen("PrimaryGenerator")
+        physics_macro_codegen("Physics Macro")
+        sensitive_detector_codegen("SD 代码")
+        scoring_codegen("Scoring 代码")
+        output_manager_codegen("OutputManager")
+        integration_assembler_node("集成组装")
+        geometry_validation_node{{"几何验证"}}
+        persist_codegen_output["持久化代码"]
+        load_model_ir --> code_module_planner
+        code_module_planner --> geometry_builder_plan_node
+        geometry_builder_plan_node --> material_registry_codegen
+        material_registry_codegen --> component_geometry_codegen
+        component_geometry_codegen --> placement_codegen
+        placement_codegen --> source_codegen
+        source_codegen --> physics_macro_codegen
+        physics_macro_codegen --> sensitive_detector_codegen
+        sensitive_detector_codegen --> scoring_codegen
+        scoring_codegen --> output_manager_codegen
+        output_manager_codegen --> integration_assembler_node
+        integration_assembler_node --> geometry_validation_node
+        geometry_validation_node --> persist_codegen_output
+        persist_codegen_output --> g4_codegen_subgraph_end((END))
+    end
+
+    subgraph gate_validation_subgraph
+        direction TB
+        load_gate_inputs["加载门禁输入"]
+        run_base_gates{{"基础门禁 0-11"}}
+        run_g4_modeling_gates{{"G4 门禁 A-G"}}
+        finalize_gate_results{{"汇总结果"}}
+        load_gate_inputs --> run_base_gates
+        run_base_gates --> run_g4_modeling_gates
+        run_g4_modeling_gates --> finalize_gate_results
+        finalize_gate_results --> gate_validation_subgraph_end((END))
+    end
+
+    subgraph patch_subgraph
+        direction TB
+        load_proposed_patch["加载 Patch"]
+        review_patch{{"审查 Patch"}}
+        apply_patch("应用 Patch")
+        load_proposed_patch --> review_patch
+        review_patch --> apply_patch
+        apply_patch --> patch_subgraph_end((END))
+    end
+
+    subgraph artifact_subgraph
+        direction TB
+        collect_artifacts("收集产物")
+        generate_artifact_manifest("生成 Manifest")
+        generate_artifact_readme("生成 README")
+        collect_artifacts --> generate_artifact_manifest
+        generate_artifact_manifest --> generate_artifact_readme
+        generate_artifact_readme --> artifact_subgraph_end((END))
+    end
+
+    subgraph report_subgraph
+        direction TB
+        generate_final_report("生成最终报告")
+        generate_final_report --> report_subgraph_end((END))
+    end
+
+    %% Main graph routing
+    prepare_workspace --> context_subgraph
+    report_subgraph --> END((END))
+
+    context_subgraph --> |充分 → 规划|task_planning_subgraph
+    context_subgraph ==> |不足 → 报告|report_subgraph
+    task_planning_subgraph --> |scope=geant4|g4_modeling_subgraph
+    task_planning_subgraph ==> |TCAD/SPICE/失败|report_subgraph
+    g4_modeling_subgraph --> |通过|g4_codegen_subgraph
+    g4_modeling_subgraph ==> |失败|report_subgraph
+    g4_codegen_subgraph --> |通过|patch_subgraph
+    g4_codegen_subgraph ==> |失败|report_subgraph
+    patch_subgraph --> |已应用|gate_subgraph
+    patch_subgraph ==> |失败|report_subgraph
+    gate_subgraph --> |VERIFIED|artifact_subgraph
+    gate_subgraph -.-> |Gate 0/G4-E 失败|context_subgraph
+    gate_subgraph -.-> |Gate 1 失败|task_planning_subgraph
+    gate_subgraph -.-> |Gate 2/G4-A~D 失败|g4_modeling_subgraph
+    gate_subgraph -.-> |Gate 5~7/G4-F~G 失败|g4_codegen_subgraph
+    gate_subgraph -.-> |Gate 3~4 失败|patch_subgraph
+    gate_subgraph ==> |retry≥5 或其他|report_subgraph
+    artifact_subgraph --> report_subgraph
+
+    %% Node styles
+    classDef workspace fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#333

@@ -1,0 +1,15 @@
+flowchart TB
+
+    %% Artifact 子图
+    %% GitHub-reviewable 产物收集 (3 nodes, 线性)
+
+    collect_artifacts("收集产物") :::entry
+    generate_artifact_manifest("生成 Manifest")
+    generate_artifact_readme("生成 README")
+
+    collect_artifacts --> generate_artifact_manifest
+    generate_artifact_manifest --> generate_artifact_readme
+    generate_artifact_readme --> END((END))
+
+    %% Node styles
+    classDef artifact fill:#E0F7FA,stroke:#00838F,stroke-width:2px,color:#333

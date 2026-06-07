@@ -1,0 +1,18 @@
+flowchart TB
+
+    %% Gate Validation 子图
+    %% 19 道门禁检查 (4 nodes, 线性)
+
+    load_gate_inputs["加载门禁输入"] :::entry
+    run_base_gates{{"基础门禁 0-11"}}
+    run_g4_modeling_gates{{"G4 门禁 A-G"}}
+    finalize_gate_results{{"汇总结果"}}
+
+    load_gate_inputs --> run_base_gates
+    run_base_gates --> run_g4_modeling_gates
+    run_g4_modeling_gates --> finalize_gate_results
+    finalize_gate_results --> END((END))
+
+    %% Node styles
+    classDef gate fill:#FFF9C4,stroke:#F9A825,stroke-width:2px,color:#333
+    classDef io fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#333

@@ -1,0 +1,41 @@
+flowchart TB
+
+    %% RadAgent Main Graph
+    %% 主调度图 — 仅负责子图调度，不含领域逻辑
+
+    prepare_workspace("准备工作区") :::entry
+    context_subgraph["Context 子图"]
+    task_planning_subgraph["任务规划 子图"]
+    g4_modeling_subgraph["G4 建模 子图"]
+    g4_codegen_subgraph["G4 代码生成 子图"]
+    patch_subgraph["Patch 子图"]
+    gate_subgraph["门禁验证 子图"]
+    artifact_subgraph["产物收集 子图"]
+    report_subgraph["报告生成 子图"]
+
+    prepare_workspace --> context_subgraph
+    report_subgraph --> END((END))
+
+    %% Conditional routes
+    context_subgraph --> |充分 → 规划|task_planning_subgraph
+    context_subgraph ==> |不足 → 报告|report_subgraph
+    task_planning_subgraph --> |scope=geant4|g4_modeling_subgraph
+    task_planning_subgraph ==> |TCAD/SPICE/失败|report_subgraph
+    g4_modeling_subgraph --> |通过|g4_codegen_subgraph
+    g4_modeling_subgraph ==> |失败|report_subgraph
+    g4_codegen_subgraph --> |通过|patch_subgraph
+    g4_codegen_subgraph ==> |失败|report_subgraph
+    patch_subgraph --> |已应用|gate_subgraph
+    patch_subgraph ==> |失败|report_subgraph
+    gate_subgraph --> |VERIFIED|artifact_subgraph
+    gate_subgraph -.-> |Gate 0/G4-E 失败|context_subgraph
+    gate_subgraph -.-> |Gate 1 失败|task_planning_subgraph
+    gate_subgraph -.-> |Gate 2/G4-A~D 失败|g4_modeling_subgraph
+    gate_subgraph -.-> |Gate 5~7/G4-F~G 失败|g4_codegen_subgraph
+    gate_subgraph -.-> |Gate 3~4 失败|patch_subgraph
+    gate_subgraph ==> |retry≥5 或其他|report_subgraph
+    artifact_subgraph --> report_subgraph
+
+    %% Node styles
+    classDef subgraph fill:#F5F5F5,stroke:#757575,stroke-width:2px,color:#333
+    classDef workspace fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#333
