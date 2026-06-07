@@ -7,6 +7,7 @@ on:
     branches: [main]
 
 jobs:
+  # ── Lint & Type check (fast, fail early) ─────────────────────────────
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -29,8 +30,10 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: mypy agent_core/ --ignore-missing-imports --no-error-summary
 
+  # ── Unit tests (core logic, no LLM calls) ───────────────────────────
   unit-tests:
     runs-on: ubuntu-latest
+    needs: [lint]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,10 +41,12 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/ -v --tb=short
+      - run: pytest tests/unit/ -v --tb=short -x
 
-  e2e-tests:
+  # ── E2E dev-mode tests (mocked LLM, workspace on tmp) ───────────────
+  e2e-dev:
     runs-on: ubuntu-latest
+    needs: [lint]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,10 +54,20 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/e2e/ -v --tb=short
+      - run: >
+          pytest
+          tests/e2e/test_e2e_pipeline.py
+          tests/e2e/test_g4_complex_model_dev.py
+          tests/e2e/test_human_confirmation_e2e.py
+          tests/e2e/test_pipeline_complex_detector_dev.py
+          tests/e2e/test_pipeline_blocks_without_human_response.py
+          tests/e2e/test_pipeline_human_edit.py
+          -v --tb=short -x
 
+  # ── Architecture invariants ─────────────────────────────────────────
   architecture-invariants:
     runs-on: ubuntu-latest
+    needs: [lint]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,8 +77,10 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest tests/unit/test_architecture_invariants.py -v --tb=short
 
+  # ── Gate & routing tests ────────────────────────────────────────────
   gate-and-routing:
     runs-on: ubuntu-latest
+    needs: [lint]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -78,8 +95,10 @@ jobs:
           tests/unit/test_subgraph_compilation.py
           -v --tb=short
 
+  # ── G4 modeling tests ───────────────────────────────────────────────
   g4-modeling:
     runs-on: ubuntu-latest
+    needs: [lint]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

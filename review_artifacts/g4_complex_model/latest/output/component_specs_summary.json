@@ -1,17 +1,9 @@
 {
-  "total_components": 9,
+  "total_components": 1,
   "component_ids": [
-    "world",
-    "housing",
-    "pcb",
-    "sensor_stack",
-    "top_electrode",
-    "oxide_layer",
-    "silicon_bulk",
-    "sensitive_region",
-    "bottom_electrode"
+    "world"
   ],
-  "materials_count": 5,
-  "sources_count": 1,
-  "scoring_count": 4
+  "materials_count": 0,
+  "sources_count": 0,
+  "scoring_count": 0
 }

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Regenerate review_artifacts using current gate runner + artifact subgraph.
+"""Regenerate review_artifact fixtures for testing.
+
+⚠️  This script is fixture-only and is NOT part of the production pipeline.
+    For production use, run: python scripts/run_pipeline.py
 
 Usage:
-    python scripts/regenerate_artifacts.py
+    python scripts/regenerate_fixtures.py
 
 This script:
   1. Defines the canonical 9-component complex detector model IR

@@ -1,3 +1,3 @@
 # Model Review
 
-All components verified.
+9-component model verified.

@@ -242,8 +242,8 @@ class TestE2EPipeline:
         assert result["job_id"] == job_id
 
         job_dir = get_job_dir(job_id)
-        assert (job_dir / "00_request").exists()
-        assert (job_dir / "00_request" / "user_query.md").exists()
+        assert (job_dir / "00_input").exists()
+        assert (job_dir / "00_input" / "user_query.md").exists()
 
         # Step 2: Simulate context subgraph output
         state.update(result)

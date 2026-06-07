@@ -43,23 +43,42 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
 
     Generates a job_id with a human-readable title suffix via dsv4lite
     when no explicit job_id is provided by the user.
+
+    Sets workspace paths and maps run_mode to execution_mode for backward compatibility.
     """
     from agent_core.naming import build_job_id
+    from agent_core.workspace.manager import WorkspaceManager
 
     job_id = await build_job_id(
         state.get("job_id", ""),
         state.get("user_query", ""),
     )
 
-    job_dir = ensure_job_dirs(job_id)
-    request_dir = job_dir / "00_request"
-    request_dir.mkdir(parents=True, exist_ok=True)
+    # Use WorkspaceManager to create job structure
+    ws = WorkspaceManager()
+    job = ws.create_job(job_id)
+
+    # Write user query to request stage
+    request_dir = job.stage_dir("00_input")
     (request_dir / "user_query.md").write_text(
         f"# User Query\n\n{state.get('user_query', '')}\n"
     )
 
+    # Determine execution_mode from run_mode (backward compatibility)
+    run_mode = state.get("run_mode", "dev")
+    execution_mode_map = {
+        "dev": "dev_no_geant4_env",
+        "acceptance": "mvp1_acceptance",
+        "production": "mvp1_acceptance",  # Production uses same acceptance mode
+    }
+    execution_mode = execution_mode_map.get(run_mode, "dev_no_geant4_env")
+
     return {
         "job_id": job_id,
+        "run_mode": run_mode,
+        "execution_mode": execution_mode,
+        "workspace_root": str(ws.root),
+        "job_workspace": str(job.dir),
         "retry_count": 0,
         "max_retries_reached": False,
         "errors": [],
@@ -452,3 +471,25 @@ def build_main_graph() -> StateGraph:
 def compile_main_graph() -> Any:
     """Build and compile the main graph, ready for execution."""
     return build_main_graph().compile()
+
+
+# ─── Subgraph node access for step-by-step REPL ──────────────────────
+
+
+def build_subgraph_nodes() -> dict[str, Any]:
+    """Return subgraph node functions for step-by-step execution.
+
+    Each value is an async callable ``f(state) -> dict`` that the REPL
+    can invoke individually, avoiding a full-graph ainvoke().
+    """
+    return {
+        "context": _make_context_subgraph_node(),
+        "task_planning": _make_task_planning_subgraph_node(),
+        "g4_modeling": _make_g4_modeling_subgraph_node(),
+        "human_confirmation": _make_human_confirmation_subgraph_node(),
+        "g4_codegen": _make_g4_codegen_subgraph_node(),
+        "patch": _make_patch_subgraph_node(),
+        "gate": _make_gate_subgraph_node(),
+        "artifact": _make_artifact_subgraph_node(),
+        "report": _make_report_subgraph_node(),
+    }

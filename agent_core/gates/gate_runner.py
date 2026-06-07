@@ -47,17 +47,24 @@ async def load_gate_inputs(state: GateSubgraphState) -> dict[str, Any]:
 
 def compute_validation_status(
     gate_results: list[dict[str, Any]],
-    execution_mode: str,
+    execution_mode: str | None = None,
+    run_mode: str = "dev",
 ) -> str:
     """Compute validation status from gate results.
 
     Args:
         gate_results: List of gate result dicts with 'status' and 'gate_id'.
-        execution_mode: "dev" or "mvp1_acceptance".
+        execution_mode: Deprecated - use run_mode instead. "dev" or "mvp1_acceptance".
+        run_mode: "dev" | "acceptance" | "production" (preferred parameter).
 
     Returns:
         "VERIFIED", "PARTIAL", or "FAILED".
     """
+    # Backward compat: use execution_mode if run_mode not provided
+    if execution_mode and run_mode == "dev":
+        if execution_mode == "mvp1_acceptance":
+            run_mode = "acceptance"
+
     failed = [g for g in gate_results if g.get("status") == "fail"]
     # Handle both 'skip' and 'skipped' for backward compatibility
     skipped = [
@@ -75,14 +82,23 @@ def compute_validation_status(
     }
     critical_skipped = skipped_ids & CRITICAL_GATE_IDS
 
-    if execution_mode == "mvp1_acceptance" and critical_skipped:
-        return "FAILED"
-
+    # Critical gates skipped:
+    # - dev: allow -> PARTIAL
+    # - acceptance: block -> FAILED
+    # - production: block -> FAILED
     if critical_skipped:
-        return "PARTIAL"
+        if run_mode in {"dev"}:
+            return "PARTIAL"
+        else:  # acceptance, production
+            return "FAILED"
 
     if skipped:
-        return "PARTIAL"
+        if run_mode == "dev":
+            return "PARTIAL"
+        elif run_mode == "acceptance":
+            return "PARTIAL"
+        else:  # production
+            return "FAILED"
 
     return "VERIFIED"
 
@@ -91,18 +107,24 @@ async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
     """Save gate results and determine validation status."""
     job_id = state.get("job_id", "unknown")
     job_dir = get_job_dir(job_id)
-    val_dir = job_dir / "09_validation"
+    val_dir = job_dir / "08_gate_validation"
     val_dir.mkdir(parents=True, exist_ok=True)
 
     gate_results = state.get("gate_results", [])
-    execution_mode = state.get("execution_mode", "dev")
+    # Prefer run_mode, fall back to execution_mode for backward compatibility
+    run_mode = state.get("run_mode", state.get("execution_mode", "dev"))
+    # Normalize legacy execution_mode values to run_mode
+    if run_mode == "mvp1_acceptance":
+        run_mode = "acceptance"
+    elif run_mode == "dev_no_geant4_env":
+        run_mode = "dev"
 
     # Save results
     results_path = val_dir / "gate_results.json"
     results_path.write_text(json.dumps(gate_results, indent=2, ensure_ascii=False))
 
     # Determine status using the new strategy
-    status = compute_validation_status(gate_results, execution_mode)
+    status = compute_validation_status(gate_results, run_mode=run_mode)
 
     failed_gates = [g for g in gate_results if g.get("status") == "fail"]
     # Handle both 'skip' and 'skipped' for backward compatibility

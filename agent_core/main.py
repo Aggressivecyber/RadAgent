@@ -105,6 +105,10 @@ def main() -> None:
     parser.add_argument("--status", action="store_true", help="Check job status")
     parser.add_argument("--list-jobs", action="store_true", help="List all jobs")
     parser.add_argument(
+        "-i", "--interactive", action="store_true",
+        help="Launch interactive REPL mode",
+    )
+    parser.add_argument(
         "--mode",
         choices=["dev_no_geant4_env", "mvp1_acceptance"],
         default="dev_no_geant4_env",
@@ -112,6 +116,13 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    if args.interactive:
+        from agent_core.repl import RadAgentREPL
+
+        repl = RadAgentREPL(execution_mode=args.mode)
+        asyncio.run(repl.run())
+        return
 
     if args.list_jobs:
         jobs_dir = get_workspace_root() / "jobs"

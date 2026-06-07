@@ -28,7 +28,12 @@ class RadAgentMainState(TypedDict, total=False):
     # ── Job identification ──
     job_id: str
     user_query: str
-    execution_mode: str  # "dev_no_geant4_env" | "mvp1_acceptance"
+    execution_mode: str  # "dev_no_geant4_env" | "mvp1_acceptance" (legacy, retained for backward compatibility)
+    run_mode: str  # "dev" | "acceptance" | "production"
+
+    # ── Workspace ──
+    workspace_root: str  # Path to workspace root directory
+    job_workspace: str  # Path to job root directory
 
     # ── Context Subgraph outputs ──
     context_decision: str  # "allow_rag" | "allow_with_web_supplement" | "block_no_context"
