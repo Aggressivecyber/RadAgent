@@ -37,28 +37,35 @@ ARTIFACT_DIR = ROOT / "review_artifacts" / "g4_complex_model" / "latest"
 OUTPUT_DIR = ARTIFACT_DIR / "output"
 
 
+COMPLEX_MODEL_IR: dict = {
+    "components": [
+        {"component_id": "world", "component_type": "world", "geometry_type": "box"},
+        {"component_id": "target", "component_type": "volume", "geometry_type": "cylinder"},
+        {"component_id": "shield_1", "component_type": "volume", "geometry_type": "box"},
+        {"component_id": "shield_2", "component_type": "volume", "geometry_type": "box"},
+        {"component_id": "detector_1", "component_type": "volume", "geometry_type": "box"},
+        {"component_id": "detector_2", "component_type": "volume", "geometry_type": "box"},
+        {"component_id": "detector_3", "component_type": "volume", "geometry_type": "box"},
+        {"component_id": "collimator", "component_type": "volume", "geometry_type": "tube"},
+        {"component_id": "housing", "component_type": "volume", "geometry_type": "box"},
+    ],
+    "materials": ["G4_AIR", "G4_Si", "G4_Pb"],
+    "sources": ["gps_source"],
+    "scoring": ["dose_scoring", "energy_deposit"],
+}
+
+
 def _load_model_ir() -> dict:
-    """Load existing model IR from review_artifacts."""
+    """Load or create the complex 9-component model IR.
+
+    Always uses the canonical 9-component model and writes it to disk
+    so the artifact directory stays consistent.
+    """
     ir_path = OUTPUT_DIR / "g4_model_ir.json"
-    if ir_path.exists():
-        return json.loads(ir_path.read_text())
-    # Fallback: complex 9-component model
-    return {
-        "components": [
-            {"component_id": "world", "component_type": "world", "geometry_type": "box"},
-            {"component_id": "target", "component_type": "volume", "geometry_type": "cylinder"},
-            {"component_id": "shield_1", "component_type": "volume", "geometry_type": "box"},
-            {"component_id": "shield_2", "component_type": "volume", "geometry_type": "box"},
-            {"component_id": "detector_1", "component_type": "volume", "geometry_type": "box"},
-            {"component_id": "detector_2", "component_type": "volume", "geometry_type": "box"},
-            {"component_id": "detector_3", "component_type": "volume", "geometry_type": "box"},
-            {"component_id": "collimator", "component_type": "volume", "geometry_type": "tube"},
-            {"component_id": "housing", "component_type": "volume", "geometry_type": "box"},
-        ],
-        "materials": ["G4_AIR", "G4_Si", "G4_Pb"],
-        "sources": ["gps_source"],
-        "scoring": ["dose_scoring", "energy_deposit"],
-    }
+    # Always write the canonical model IR
+    ir_path.parent.mkdir(parents=True, exist_ok=True)
+    ir_path.write_text(json.dumps(COMPLEX_MODEL_IR, indent=2, ensure_ascii=False))
+    return COMPLEX_MODEL_IR
 
 
 async def _run_gates(model_ir: dict) -> list[dict]:
