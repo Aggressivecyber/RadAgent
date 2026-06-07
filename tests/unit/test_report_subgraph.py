@@ -116,3 +116,88 @@ class TestGenerateFinalReport:
         assert "Air" in report
         # Report uses "Allow simplification" (human-readable label)
         assert "Allow simplification" in report
+
+    async def test_report_reads_gate_schema_correctly(self, temp_workspace: Path) -> None:
+        """Report must read 'name' and 'status' fields from gate results."""
+        # Create gate results with correct schema
+        val_dir = temp_workspace / "jobs" / "test_job" / "09_validation"
+        val_dir.mkdir(parents=True)
+        gate_path = val_dir / "gate_results.json"
+        gate_path.write_text(json.dumps([
+            {
+                "gate_id": 0,
+                "name": "Context Sufficiency",
+                "status": "pass",
+                "checked_items": [{"item": "context_decision", "result": "pass"}],
+                "passed_items": ["context_decision"],
+                "failed_items": [],
+                "warnings": [],
+                "evidence": ["context_decision: allow_rag"],
+                "file_paths": [],
+                "message": "Context sufficient",
+            },
+            {
+                "gate_id": 5,
+                "name": "Static Check",
+                "status": "fail",
+                "checked_items": [{"item": "code structure", "result": "fail"}],
+                "passed_items": [],
+                "failed_items": ["Missing CMakeLists.txt"],
+                "warnings": [],
+                "evidence": [],
+                "file_paths": [],
+                "message": "Missing CMakeLists.txt",
+            },
+        ]))
+
+        state = {
+            "job_id": "test_job",
+            "user_query": "test",
+            "execution_mode": "dev_no_geant4_env",
+            "validation_status": "PARTIAL",
+            "context_decision": "allow_rag",
+            "simulation_scope": ["geant4"],
+            "failed_gates": ["Static Check"],
+            "errors": [],
+            "g4_model_ir_path": "",
+            "gate_results_path": str(gate_path),
+        }
+        result = await generate_final_report(state)
+        report = Path(result["final_report_path"]).read_text()
+
+        # Must use correct field names: 'name' not 'gate_name', 'status' not 'severity'
+        assert "Context Sufficiency" in report, (
+            "Report must show gate name from 'name' field"
+        )
+        assert "Static Check" in report, (
+            "Report must show failed gate name"
+        )
+        # Must show status, not '?'
+        assert "❌ fail" in report, (
+            "Report must show gate status from 'status' field"
+        )
+        assert "✅ pass" in report, (
+            "Report must show passed gate status"
+        )
+        # Must show passed/failed counts in the table
+        assert "Missing CMakeLists.txt" in report
+
+    async def test_report_partial_status(self, temp_workspace: Path) -> None:
+        """PARTIAL validation status should not be marked as verified."""
+        state = {
+            "job_id": "test_job",
+            "user_query": "test",
+            "execution_mode": "dev_no_geant4_env",
+            "validation_status": "PARTIAL",
+            "context_decision": "allow_rag",
+            "simulation_scope": ["geant4"],
+            "failed_gates": [],
+            "errors": [],
+            "g4_model_ir_path": "",
+            "gate_results_path": "",
+        }
+        result = await generate_final_report(state)
+        assert result["verified"] is False
+        report = Path(result["final_report_path"]).read_text()
+        assert "PARTIAL" in report
+        assert "VERIFIED" not in report or "PARTIAL" in report

@@ -183,16 +183,23 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
             "",
             f"### Gate Results ({len(gate_results)} gates)",
             "",
-            "| Gate | Name | Status | Message |",
-            "|------|------|--------|---------|",
+            "| Gate | Name | Status | Passed | Failed | Message |",
+            "|------|------|--------|--------|--------|---------|",
         ])
         for g in gate_results:
             gid = g.get("gate_id", "?")
-            gname = g.get("gate_name", "?")
-            gsev = g.get("severity", "?")
+            gname = g.get("name", "?")
+            gstatus = g.get("status", "?")
             gmsg = g.get("message", "")[:80]
-            emoji = {"pass": "✅", "warning": "⚠️", "fail": "❌", "block": "🚫", "skipped": "⏭️"}.get(gsev, "?")
-            report_lines.append(f"| {gid} | {gname} | {emoji} {gsev} | {gmsg} |")
+            gpassed = len(g.get("passed_items", []))
+            gfailed = len(g.get("failed_items", []))
+            emoji = {
+                "pass": "✅", "warning": "⚠️", "fail": "❌",
+                "block": "🚫", "skipped": "⏭️",
+            }.get(gstatus, "?")
+            report_lines.append(
+                f"| {gid} | {gname} | {emoji} {gstatus} | {gpassed} | {gfailed} | {gmsg} |"
+            )
 
     # Open issues
     if open_issues:
