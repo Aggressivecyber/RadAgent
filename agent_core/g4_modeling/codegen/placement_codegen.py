@@ -1,7 +1,10 @@
 """Placement codegen — generates PlacementManager.hh/.cc.
 
 Creates all G4PVPlacement calls with checkOverlaps=true.
-Parameters come exclusively from component_specs in G4ModelIR.
+Parameters come exclusively from component placement specs in G4ModelIR.
+
+This is the SOLE module responsible for placement. Component builders
+only create solid + logical volume — they do NOT place.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ logger = logging.getLogger(__name__)
 async def placement_codegen(state: RadiationAgentState) -> dict[str, Any]:
     """Generate PlacementManager.hh/.cc with checkOverlaps=true.
 
-    Reads: g4_model_ir (components, interfaces)
+    Reads: g4_model_ir (components, placements)
     Writes: code_modules entry
     """
     model_ir_dict = state.get("g4_model_ir", {})
@@ -25,6 +28,9 @@ async def placement_codegen(state: RadiationAgentState) -> dict[str, Any]:
     from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
 
     model_ir = G4ModelIR.model_validate(model_ir_dict)
+
+    if not model_ir.components:
+        return {"code_modules": []}
 
     # Sort components by depth (world first, then children)
     sorted_comps = _sort_by_depth(model_ir)
@@ -120,7 +126,11 @@ private:
 
 
 def _generate_source(sorted_comps: list[Any], model_ir: Any) -> str:
-    """Generate PlacementManager.cc with checkOverlaps=true."""
+    """Generate PlacementManager.cc with checkOverlaps=true.
+
+    ALL placements happen here — position/rotation come from
+    component placement specs in the IR.
+    """
     builder_inits: list[str] = []
     placement_calls: list[str] = []
     builder_map: dict[str, str] = {}
@@ -135,10 +145,10 @@ def _generate_source(sorted_comps: list[Any], model_ir: Any) -> str:
         )
 
         if comp.component_type == "world":
-            # World volume gets placed as top-level
+            # World volume gets placed at origin with no rotation
             placement_calls.append(
                 f"    // Place world volume\n"
-                f"    auto* world_phys = new G4PVPlacement(\n"
+                f"    auto* phys_world = new G4PVPlacement(\n"
                 f"        nullptr, G4ThreeVector(),\n"
                 f"        {var_name}->GetLogicalVolume(),\n"
                 f"        \"{comp.component_id}_phys\",\n"
@@ -146,18 +156,43 @@ def _generate_source(sorted_comps: list[Any], model_ir: Any) -> str:
                 f"    );"
             )
         else:
+            # Child volume: read position/rotation from IR placement spec
+            pos = comp.placement.position
+            rot = comp.placement.rotation
             mother_var = builder_map.get(comp.mother_volume or "", "")
-            if mother_var:
-                placement_calls.append(
-                    f"    // Place {comp.component_id} in {comp.mother_volume}\n"
-                    f"    {var_name}->Place({mother_var}->GetLogicalVolume());"
+
+            if not mother_var:
+                logger.warning(
+                    "Component %s has no valid mother_volume '%s'",
+                    comp.component_id, comp.mother_volume,
+                )
+                continue
+
+            pos_str = (
+                f"G4ThreeVector({pos[0]}*um, {pos[1]}*um, {pos[2]}*um)"
+            )
+            if all(abs(r) < 1e-10 for r in rot):
+                rot_str = "nullptr"
+            else:
+                rot_str = (
+                    f"new G4RotationMatrix({rot[0]}*deg, "
+                    f"{rot[1]}*deg, {rot[2]}*deg)"
                 )
 
-    # checkOverlaps call
+            placement_calls.append(
+                f"    // Place {comp.component_id} in {comp.mother_volume}\n"
+                f"    new G4PVPlacement(\n"
+                f"        {rot_str}, {pos_str},\n"
+                f"        {var_name}->GetLogicalVolume(),\n"
+                f"        \"{comp.component_id}_phys\",\n"
+                f"        {mother_var}->GetLogicalVolume(), false, 0\n"
+                f"    );"
+            )
+
+    # checkOverlaps verification
     check_overlaps = (
         "    // Verify no geometry overlaps\n"
         "    G4PhysicalVolumeStore::GetInstance()->SetCheckOverlaps(true);\n"
-        "    // Run overlap check on all volumes\n"
         "    for (auto* phys : *G4PhysicalVolumeStore::GetInstance()) {\n"
         "        phys->CheckOverlaps(1000, 0.1 * um, true);\n"
         "    }"
@@ -172,9 +207,12 @@ def _generate_source(sorted_comps: list[Any], model_ir: Any) -> str:
 // checkOverlaps is ALWAYS enabled
 
 #include "PlacementManager.hh"
+
 #include "G4PhysicalVolumeStore.hh"
-#include "G4SystemOfUnits.hh"
 #include "G4PVPlacement.hh"
+#include "G4RotationMatrix.hh"
+#include "G4SystemOfUnits.hh"
+#include "G4ThreeVector.hh"
 
 PlacementManager& PlacementManager::Instance() {{
     static PlacementManager instance;
@@ -185,7 +223,7 @@ G4VPhysicalVolume* PlacementManager::ConstructGeometry() {{
     // Initialize builders
 {inits_str}
 
-    // Place all volumes (depth-first order)
+    // Place all volumes (depth-first order from IR)
 {places_str}
 
 {check_overlaps}
