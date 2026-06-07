@@ -246,10 +246,10 @@ class TestOutputManagerContract:
         content = result["code_modules"][0]["generated_content"]
         source = content["OutputManager::OutputManager.cc"]
 
-        # Per-scoring methods must use "OutputManager::" qualifier
-        assert "OutputManager::Writeedep_sensitive()" in source
-        assert "OutputManager::Writedose_3d()" in source
-        assert "OutputManager::Writeevent_table()" in source
+        # Per-scoring methods must use "OutputManager::" qualifier (PascalCase)
+        assert "OutputManager::WriteEdepSensitive()" in source
+        assert "OutputManager::WriteDose3d()" in source
+        assert "OutputManager::WriteEventTable()" in source
 
         # Must NOT have a bare free function WriteScoringCSV
         lines = source.splitlines()
@@ -273,10 +273,10 @@ class TestOutputManagerContract:
         content = result["code_modules"][0]["generated_content"]
         header = content["OutputManager::OutputManager.hh"]
 
-        # Must declare per-scoring write methods
-        assert "void Writeedep_sensitive();" in header
-        assert "void Writedose_3d();" in header
-        assert "void Writeevent_table();" in header
+        # Must declare per-scoring write methods (PascalCase)
+        assert "void WriteEdepSensitive();" in header
+        assert "void WriteDose3d();" in header
+        assert "void WriteEventTable();" in header
 
     async def test_output_files_match_scoring_specs(self) -> None:
         """Output CSV filenames must use scoring_id.format from scoring spec."""
