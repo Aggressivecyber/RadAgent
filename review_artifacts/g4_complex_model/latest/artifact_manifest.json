@@ -1,6 +1,6 @@
 {
   "artifact_type": "g4_complex_model",
-  "job_id": "e2e_test",
+  "job_id": "complex_dev",
   "validation_status": "VERIFIED",
   "files": [
     "code_module_plan.json",

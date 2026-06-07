@@ -1,8 +1,8 @@
 {
-  "model_ir_id": "e2e_test_mir",
-  "job_id": "e2e_test",
+  "model_ir_id": "complex_dev_e2e",
+  "job_id": "complex_dev",
   "modeling_mode": "realistic",
-  "target_system": "E2E Test Detector",
+  "target_system": "Proton Therapy Beamline Detector",
   "simplification_policy": {
     "allow_simplification": false,
     "requires_user_approval": true,
@@ -27,14 +27,54 @@
       ]
     },
     {
-      "component_id": "silicon_detector",
-      "display_name": "Silicon Detector",
+      "component_id": "target_scatterer",
+      "display_name": "Target Scatterer",
+      "component_type": "volume",
+      "geometry_type": "cylinder",
+      "dimensions": {
+        "rmin": 0,
+        "rmax": 25,
+        "dz": 2
+      },
+      "material_id": "G4_Pb",
+      "mother_volume": "world",
+      "roles": [
+        "scatterer"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification"
+      ]
+    },
+    {
+      "component_id": "silicon_detector_1",
+      "display_name": "Silicon Detector Layer 1",
       "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
-        "dx": 100,
-        "dy": 100,
-        "dz": 50
+        "dx": 50,
+        "dy": 50,
+        "dz": 0.3
+      },
+      "material_id": "G4_Si",
+      "mother_volume": "world",
+      "roles": [
+        "edep_region"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification"
+      ]
+    },
+    {
+      "component_id": "silicon_detector_2",
+      "display_name": "Silicon Detector Layer 2",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 50,
+        "dy": 50,
+        "dz": 0.3
       },
       "material_id": "G4_Si",
       "mother_volume": "world",
@@ -60,6 +100,17 @@
       ]
     },
     {
+      "material_id": "G4_Pb",
+      "name": "G4_Pb",
+      "classification": "nist",
+      "nist_name": "G4_Pb",
+      "density_g_cm3": 11.35,
+      "custom": false,
+      "source_evidence": [
+        "NIST"
+      ]
+    },
+    {
       "material_id": "G4_Si",
       "name": "G4_Si",
       "classification": "nist",
@@ -76,44 +127,63 @@
       "source_id": "proton_beam",
       "particle_type": "proton",
       "energy": {
-        "value": 100.0,
+        "value": 150.0,
         "unit": "MeV",
-        "distribution": "mono"
+        "distribution": "gaussian",
+        "sigma": 1.5
       },
       "beam": {
         "position": [
           0,
           0,
-          5000
+          4000
         ],
         "direction": [
           0,
           0,
           -1
         ],
-        "surface_shape": "point"
+        "sigma_position_um": 5.0,
+        "surface_shape": "circle",
+        "surface_size": [
+          5.0
+        ]
       },
-      "generator_type": "gun",
+      "generator_type": "gps",
       "source_evidence": [
         "user_specification"
       ]
     }
   ],
   "physics": {
-    "physics_list": "FTFP_BERT",
-    "selection_reasoning": "FTFP_BERT covers proton therapy range with EM + hadronic.",
+    "physics_list": "QGSP_BIC_HP",
+    "selection_reasoning": "QGSP_BIC_HP chosen for proton therapy: binary cascade for p < 10 GeV, high-precision neutron, standard EM.",
     "source_evidence": [
-      "standard_physics"
+      "geant4_physics_guide"
     ]
   },
   "scoring": [
     {
-      "scoring_id": "edep_silicon",
+      "scoring_id": "edep_det1",
       "scoring_type": "region",
       "quantities": [
-        "edep_MeV"
+        "edep_MeV",
+        "dose_Gy"
       ],
-      "target_component_id": "silicon_detector",
+      "target_component_id": "silicon_detector_1",
+      "output_format": "csv",
+      "source_evidence": [
+        "user_specification"
+      ]
+    },
+    {
+      "scoring_id": "edep_det2",
+      "scoring_type": "region",
+      "quantities": [
+        "edep_MeV",
+        "dose_Gy"
+      ],
+      "target_component_id": "silicon_detector_2",
       "output_format": "csv",
       "source_evidence": [
         "user_specification"
@@ -123,7 +193,17 @@
   "interfaces": [
     {
       "parent_component": "world",
-      "child_component": "silicon_detector",
+      "child_component": "target_scatterer",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "world",
+      "child_component": "silicon_detector_1",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "world",
+      "child_component": "silicon_detector_2",
       "interface_type": "daughter"
     }
   ],
@@ -131,20 +211,42 @@
   "evidence": {
     "evidence_decision": "allow_rag",
     "geometry": [
-      "user_specification: silicon box"
+      {
+        "source": "user_specification",
+        "desc": "beamline layout"
+      }
     ],
     "materials": [
-      "NIST: G4_AIR",
-      "NIST: G4_Si"
+      {
+        "source": "NIST",
+        "desc": "G4_AIR"
+      },
+      {
+        "source": "NIST",
+        "desc": "G4_Pb"
+      },
+      {
+        "source": "NIST",
+        "desc": "G4_Si"
+      }
     ],
     "source": [
-      "user_specification: 100 MeV proton"
+      {
+        "source": "user_specification",
+        "desc": "150 MeV proton with Gaussian spread"
+      }
     ],
     "physics": [
-      "standard_physics: FTFP_BERT"
+      {
+        "source": "geant4_physics_guide",
+        "desc": "QGSP_BIC_HP for proton therapy"
+      }
     ],
     "scoring": [
-      "user_specification: edep in silicon"
+      {
+        "source": "user_specification",
+        "desc": "edep in both silicon layers"
+      }
     ]
   },
   "ledger": {

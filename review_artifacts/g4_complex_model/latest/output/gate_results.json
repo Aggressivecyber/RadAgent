@@ -73,43 +73,43 @@
   },
   {
     "gate_id": 12,
-    "gate_name": "G4-A",
+    "gate_name": "Gate 12",
     "severity": "pass",
     "message": "OK"
   },
   {
     "gate_id": 13,
-    "gate_name": "G4-B",
+    "gate_name": "Gate 13",
     "severity": "pass",
     "message": "OK"
   },
   {
     "gate_id": 14,
-    "gate_name": "G4-C",
+    "gate_name": "Gate 14",
     "severity": "pass",
     "message": "OK"
   },
   {
     "gate_id": 15,
-    "gate_name": "G4-D",
+    "gate_name": "Gate 15",
     "severity": "pass",
     "message": "OK"
   },
   {
     "gate_id": 16,
-    "gate_name": "G4-E",
+    "gate_name": "Gate 16",
     "severity": "pass",
     "message": "OK"
   },
   {
     "gate_id": 17,
-    "gate_name": "G4-F",
+    "gate_name": "Gate 17",
     "severity": "pass",
     "message": "OK"
   },
   {
     "gate_id": 18,
-    "gate_name": "G4-G",
+    "gate_name": "Gate 18",
     "severity": "pass",
     "message": "OK"
   }

@@ -25,6 +25,8 @@ from __future__ import annotations
 from langgraph.graph import END, StateGraph
 
 from agent_core.g4_codegen import load_model_ir, persist_codegen_output
+from agent_core.g4_codegen.nodes.code_module_planner import code_module_planner
+from agent_core.g4_codegen.nodes.integration_assembler import integration_assembler
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 from agent_core.g4_modeling.codegen import (
     component_geometry_codegen,
@@ -39,7 +41,6 @@ from agent_core.g4_modeling.codegen import (
 from agent_core.g4_modeling.nodes import (
     geometry_builder_plan_node,
     geometry_validation_node,
-    integration_assembler_node,
 )
 
 
@@ -50,6 +51,9 @@ def build_g4_codegen_subgraph() -> StateGraph:
     # I/O adapters
     graph.add_node("load_model_ir", load_model_ir)
     graph.add_node("persist_codegen_output", persist_codegen_output)
+
+    # Code module planner (determines which modules to generate)
+    graph.add_node("code_module_planner", code_module_planner)
 
     # Builder plan node
     graph.add_node("geometry_builder_plan_node", geometry_builder_plan_node)
@@ -64,13 +68,14 @@ def build_g4_codegen_subgraph() -> StateGraph:
     graph.add_node("scoring_codegen", scoring_codegen)
     graph.add_node("output_manager_codegen", output_manager_codegen)
 
-    # Assembly and validation
-    graph.add_node("integration_assembler_node", integration_assembler_node)
+    # Assembly and validation (using g4_codegen nodes)
+    graph.add_node("integration_assembler_node", integration_assembler)
     graph.add_node("geometry_validation_node", geometry_validation_node)
 
     # Flow
     graph.set_entry_point("load_model_ir")
-    graph.add_edge("load_model_ir", "geometry_builder_plan_node")
+    graph.add_edge("load_model_ir", "code_module_planner")
+    graph.add_edge("code_module_planner", "geometry_builder_plan_node")
 
     graph.add_edge("geometry_builder_plan_node", "material_registry_codegen")
     graph.add_edge("material_registry_codegen", "component_geometry_codegen")

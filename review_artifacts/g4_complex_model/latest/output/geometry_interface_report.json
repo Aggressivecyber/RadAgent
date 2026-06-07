@@ -1,9 +1,19 @@
 {
-  "total_interfaces": 1,
+  "total_interfaces": 3,
   "interfaces": [
     {
       "from": "world",
-      "to": "silicon_detector",
+      "to": "target_scatterer",
+      "type": "daughter"
+    },
+    {
+      "from": "world",
+      "to": "silicon_detector_1",
+      "type": "daughter"
+    },
+    {
+      "from": "world",
+      "to": "silicon_detector_2",
       "type": "daughter"
     }
   ]
