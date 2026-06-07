@@ -1,0 +1,18 @@
+{
+  "artifact_type": "g4_complex_model",
+  "job_id": "e2e_test",
+  "validation_status": "VERIFIED",
+  "files": [
+    "code_module_plan.json",
+    "component_specs_summary.json",
+    "construction_ledger.json",
+    "evidence_traceability_report.json",
+    "g4_model_ir.json",
+    "gate_results.json",
+    "geometry_interface_report.json",
+    "model_review_report.md",
+    "no_simplification_report.json",
+    "proposed_patch_summary.json"
+  ],
+  "total_files": 10
+}

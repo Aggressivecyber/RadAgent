@@ -29,7 +29,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: mypy agent_core/ --ignore-missing-imports --no-error-summary
 
-  test:
+  unit-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,9 +38,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/ -v --tb=short -m "not integration"
+      - run: pytest tests/unit/ -v --tb=short
 
-  patch-discipline-test:
+  e2e-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,9 +49,20 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/test_validators.py tests/unit/test_patch_discipline.py -v --tb=short
+      - run: pytest tests/e2e/ -v --tb=short
 
-  data-contract-test:
+  architecture-invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit/test_architecture_invariants.py -v --tb=short
+
+  gate-and-routing:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,11 +73,12 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: >
           pytest
-          tests/unit/test_schemas.py
-          tests/unit/test_g4_output_contract_parser_consistency.py
+          tests/unit/test_main_graph_subgraph_routing.py
+          tests/unit/test_gate_subgraph.py
+          tests/unit/test_subgraph_compilation.py
           -v --tb=short
 
-  rag-workspace-test:
+  g4-modeling:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -75,65 +87,4 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/test_rag_router.py tests/unit/test_workspace_paths.py -v --tb=short
-
-  gate-validation-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: >
-          pytest
-          tests/unit/test_gate_validation.py
-          tests/unit/test_score_rag_sufficiency.py
-          tests/unit/test_gate0_rag_web_sufficiency.py
-          tests/unit/test_gate11_physics_sanity.py
-          tests/unit/test_acceptance_mode_no_skip.py
-          -v --tb=short
-
-  routes-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: >
-          pytest
-          tests/unit/test_routes.py
-          tests/unit/test_web_search_tool.py
-          tests/unit/test_web_fallback_policy.py
-          tests/unit/test_combined_context_sufficiency.py
-          -v --tb=short
-
-  legacy-and-artifacts-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: >
-          pytest
-          tests/unit/test_no_legacy_names.py
-          tests/unit/test_no_tracked_job_artifacts.py
-          -v --tb=short
-
-  runner-env-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: pytest tests/unit/test_geant4_runner_output_env.py -v --tb=short
+      - run: pytest tests/unit/g4_modeling/ -v --tb=short

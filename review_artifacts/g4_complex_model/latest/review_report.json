@@ -1,0 +1,9 @@
+{
+  "artifact_type": "g4_complex_model",
+  "job_id": "e2e_test",
+  "validation_status": "VERIFIED",
+  "artifacts_collected": 10,
+  "has_model_ir": true,
+  "has_gate_results": true,
+  "has_model_review": true
+}

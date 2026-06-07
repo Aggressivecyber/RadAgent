@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class GateResult(BaseModel):
     """Result of a single quality gate check."""
 
-    gate_id: int = Field(ge=0, le=11)
+    gate_id: int = Field(ge=0, le=18)
     gate_name: str
     passed: bool
     severity: Literal["pass", "warning", "fail", "block", "skipped"]

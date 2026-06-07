@@ -1,0 +1,10 @@
+{
+  "total_interfaces": 1,
+  "interfaces": [
+    {
+      "from": "world",
+      "to": "silicon_detector",
+      "type": "daughter"
+    }
+  ]
+}

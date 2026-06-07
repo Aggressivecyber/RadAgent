@@ -1,0 +1,83 @@
+"""Main graph state for RadAgent — lightweight orchestration state.
+
+The main state holds ONLY paths and status strings. Large data objects
+(g4_model_ir, component_specs, rag_context, etc.) are persisted to disk
+and referenced by path. Subgraphs manage their own detailed state internally.
+
+This follows the principle: "Main graph only schedules, never processes."
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Any, TypedDict
+
+
+def _last_value(existing: Any, new: Any) -> Any:
+    """Reducer: last-write-wins for concurrent updates."""
+    return new
+
+
+class RadAgentMainState(TypedDict, total=False):
+    """Lightweight orchestration state for the main graph.
+
+    All subgraph outputs are referenced by file paths, not inlined.
+    The main graph never holds geometry details, C++ code, or
+    artifact content directly.
+    """
+
+    # ── Job identification ──
+    job_id: str
+    user_query: str
+    execution_mode: str  # "dev_no_geant4_env" | "mvp1_acceptance"
+
+    # ── Context Subgraph outputs ──
+    context_decision: str  # "allow_rag" | "allow_with_web_supplement" | "block_no_context"
+    context_report_path: str
+    evidence_map_path: str
+
+    # ── Task Planning Subgraph outputs ──
+    task_spec_path: str
+    simulation_scope: list[str]
+    task_planning_status: str  # "passed" | "failed" | "reserved"
+
+    # ── G4 Modeling Subgraph outputs ──
+    g4_model_ir_path: str
+    component_specs_dir: str
+    interfaces_path: str
+    construction_ledger_path: str
+    model_review_report_path: str
+    g4_modeling_status: str  # "passed" | "failed" | "needs_user_input"
+
+    # ── G4 Codegen Subgraph outputs ──
+    code_module_plan_path: str
+    proposed_patch_path: str
+    generated_code_dir: str
+    g4_codegen_status: str  # "passed" | "failed"
+
+    # ── Patch Subgraph outputs ──
+    patch_review_path: str
+    applied_patch_path: str
+    patch_applied_at: str
+    patch_status: str  # "applied" | "rejected" | "failed"
+
+    # ── Gate Subgraph outputs ──
+    gate_results_path: str
+    validation_status: str  # "VERIFIED" | "FAILED" | "PARTIAL"
+    failed_gates: list[str]
+    skipped_gates: list[str]
+
+    # ── Artifact Subgraph outputs ──
+    review_artifact_dir: str
+    artifact_manifest_path: str
+    artifact_status: str  # "collected" | "partial" | "failed"
+
+    # ── Report Subgraph outputs ──
+    final_report_path: str
+    verified: bool
+    termination_reason: str
+
+    # ── Control flow ──
+    retry_count: Annotated[int, _last_value]
+    max_retries_reached: Annotated[bool, _last_value]
+    current_node: Annotated[str, _last_value]
+    errors: list[str]

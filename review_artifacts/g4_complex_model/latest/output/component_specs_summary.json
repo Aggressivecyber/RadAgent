@@ -1,0 +1,10 @@
+{
+  "total_components": 2,
+  "component_ids": [
+    "world",
+    "silicon_detector"
+  ],
+  "materials_count": 2,
+  "sources_count": 1,
+  "scoring_count": 1
+}

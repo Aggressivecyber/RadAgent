@@ -30,29 +30,24 @@ htmlcov/
 # Environment variables
 .env
 
-# Simulation workspace (generated at runtime)
-simulation_workspace/jobs/*/
-simulation_workspace/simulation_workspace/
-
-# Keep .gitkeep for directory structure
-!simulation_workspace/jobs/.gitkeep
+# Simulation workspace (NEVER commit job data)
+simulation_workspace/
 
 # Knowledge base data files (too large for git)
 knowledge_base/**/data/
 knowledge_base/**/__pycache__/
 knowledge_base/**/.ruff_cache/
 
-# Review artifacts — lightweight review bundle (must be committable)
-# All files under review_artifacts/*/latest/ are kept small (<100KB each)
-# and contain only summaries, CSV headers, and metadata — never raw data.
-# review_artifacts/*/latest/** is explicitly allowed for commit.
+# Review artifacts — only latest summaries are committable
+# Block all binary/raw simulation data
+review_artifacts/**/*.root
+review_artifacts/**/*.hdf5
+review_artifacts/**/*.h5
+review_artifacts/**/*.raw
+review_artifacts/**/*.bin
 
-# Still block large binary / raw simulation data
-review_artifacts/*/latest/**/*.root
-review_artifacts/*/latest/**/*.hdf5
-review_artifacts/*/latest/**/*.h5
-review_artifacts/*/latest/**/*.raw
-review_artifacts/*/latest/**/*.bin
+# Archive old artifacts
+review_artifacts/archive/
 
 # OS
 .DS_Store

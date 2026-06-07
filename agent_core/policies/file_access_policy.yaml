@@ -1,48 +1,31 @@
-# File Access Policy for RadAgent
-# Controls which files the Agent can modify via patches
-#
-# Patch paths are relative to the job directory.
-# Example: "05_geant4/src/DetectorConstruction.cc"
-
-version: "1.2"
-
-default_action: "reject"
+# File access policy for RadAgent patch validation.
+# Classifies file paths into zones:
+#   green  — always allowed (generated code, configs)
+#   yellow — allowed with review (test files, scripts)
+#   red    — never allowed via patch (schemas, validators, knowledge base)
 
 green_zone:
-  description: "Auto-apply allowed. Generated simulation code and workspace files."
   patterns:
     - "simulation_workspace/jobs/**"
-    - "05_geant4/**"
-    - "06_tcad/**"
-    - "07_spice/**"
-    - "08_data_packages/**"
-    - "benchmark_suite/*/workspace/**"
-  rules:
-    auto_apply_patch: true
-    requires_human_review: false
-    max_file_size_kb: 1024
+    - "src/*.cc"
+    - "include/*.hh"
+    - "config/*.json"
+    - "macros/*.mac"
+    - "CMakeLists.txt"
 
 yellow_zone:
-  description: "Requires human review. Benchmark reference files."
   patterns:
-    - "benchmark_suite/**"
-  rules:
-    auto_apply_patch: false
-    requires_human_review: true
-    max_file_size_kb: 512
+    - "tests/**"
+    - "scripts/**"
+    - "*.md"
 
 red_zone:
-  description: "Default reject. Core agent infrastructure and read-only knowledge bases."
   patterns:
-    - "agent_core/schemas/**"
-    - "agent_core/validators/**"
-    - "agent_core/policies/**"
-    - "agent_core/graph/**"
-    - "agent_core/tools/rag_router.py"
-    - "agent_core/nodes/run_gate_checks.py"
+    - "agent_core/**/*.py"
+    - "agent_core/**/*.yaml"
     - "knowledge_base/**"
-  rules:
-    auto_apply_patch: false
-    requires_human_review: true
-    default_action: "reject"
-    override_requires: "explicit_user_consent_with_reason"
+    - ".env"
+    - ".git/**"
+    - "*.sh"
+
+default_action: reject
