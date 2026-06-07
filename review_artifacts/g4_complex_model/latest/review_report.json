@@ -1,14 +1,17 @@
 {
-  "schema_version": "v2",
+  "schema_version": "v3",
   "artifact_type": "g4_complex_model",
-  "job_id": "empty_test",
-  "validation_status": "UNKNOWN",
-  "generated_at": "2026-06-07T14:30:36.536429+00:00",
+  "job_id": "complex_dev",
+  "validation_status": "VERIFIED",
+  "generated_at": "2026-06-07T14:41:50.748011+00:00",
   "is_stub": false,
+  "run_type": "dev",
   "artifacts_collected": 11,
   "has_model_ir": true,
   "has_gate_results": true,
   "has_model_review": true,
   "has_manifest": false,
-  "file_count": 11
+  "file_count": 11,
+  "skipped_gates": [],
+  "known_limitations": []
 }

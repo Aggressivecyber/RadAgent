@@ -2,8 +2,10 @@
 
 Verifies:
   - VERIFIED only when 0 failed + 0 skipped
-  - PARTIAL when 0 failed but some skipped (dev mode)
+  - PARTIAL when 0 failed but some non-critical skipped (dev mode)
   - FAILED when any gate fails
+  - FAILED when critical gates skipped in acceptance mode
+  - PARTIAL when critical gates skipped in dev mode
   - Gate 4 does NOT bare auto-pass
   - Gate 4 validates zone from patch data
   - Gate 4 skipped when no patch data available
@@ -16,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from agent_core.gates.base_gates import run_base_gates
-from agent_core.gates.gate_runner import finalize_gate_results
+from agent_core.gates.gate_runner import compute_validation_status, finalize_gate_results
 
 
 class TestFinalizeStatusStrategy:
@@ -61,10 +63,10 @@ class TestFinalizeStatusStrategy:
         result = await finalize_gate_results(state)
         assert result["validation_status"] == "PARTIAL"
 
-    async def test_partial_when_few_failures(
+    async def test_failed_when_any_gate_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """PARTIAL when ≤2 failures."""
+        """FAILED when any gate fails, regardless of count."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         job_dir = tmp_path / "jobs" / "test_job3" / "09_validation"
         job_dir.mkdir(parents=True)
@@ -78,20 +80,24 @@ class TestFinalizeStatusStrategy:
             "skipped_gates": [],
         }
         result = await finalize_gate_results(state)
-        assert result["validation_status"] == "PARTIAL"
+        assert result["validation_status"] == "FAILED"
 
     async def test_failed_when_many_failures(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """FAILED when >2 failures."""
+        """FAILED when multiple gates fail."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         job_dir = tmp_path / "jobs" / "test_job4" / "09_validation"
         job_dir.mkdir(parents=True)
 
         state = {
             "job_id": "test_job4",
-            "gate_results": [],
-            "failed_gates": ["Gate A", "Gate B", "Gate C"],
+            "gate_results": [
+                {"gate_id": 0, "name": "Context", "status": "fail"},
+                {"gate_id": 5, "name": "Static", "status": "fail"},
+                {"gate_id": 7, "name": "Unit Test", "status": "fail"},
+            ],
+            "failed_gates": ["Context", "Static", "Unit Test"],
             "skipped_gates": [],
         }
         result = await finalize_gate_results(state)
@@ -242,3 +248,53 @@ class TestGate4NoAutoPass:
         assert gate4["status"] == "fail", (
             f"Gate 4 should fail for red zone files: {gate4}"
         )
+
+
+class TestComputeValidationStatus:
+    """Test compute_validation_status logic directly."""
+
+    def test_all_passed_returns_verified(self) -> None:
+        gates = [
+            {"gate_id": 0, "status": "pass"},
+            {"gate_id": 7, "status": "pass"},
+        ]
+        assert compute_validation_status(gates, "dev") == "VERIFIED"
+
+    def test_any_fail_returns_failed(self) -> None:
+        gates = [
+            {"gate_id": 0, "status": "pass"},
+            {"gate_id": 7, "status": "fail"},
+        ]
+        assert compute_validation_status(gates, "dev") == "FAILED"
+
+    def test_non_critical_skipped_dev_returns_partial(self) -> None:
+        gates = [
+            {"gate_id": 0, "status": "pass"},
+            {"gate_id": 3, "status": "skipped"},
+        ]
+        assert compute_validation_status(gates, "dev") == "PARTIAL"
+
+    def test_critical_skipped_dev_returns_partial(self) -> None:
+        gates = [
+            {"gate_id": 0, "status": "pass"},
+            {"gate_id": 7, "status": "skipped"},
+        ]
+        assert compute_validation_status(gates, "dev") == "PARTIAL"
+
+    def test_critical_skipped_acceptance_returns_failed(self) -> None:
+        gates = [
+            {"gate_id": 0, "status": "pass"},
+            {"gate_id": 7, "status": "skipped"},
+        ]
+        assert compute_validation_status(gates, "mvp1_acceptance") == "FAILED"
+
+    def test_non_critical_skipped_acceptance_returns_partial(self) -> None:
+        gates = [
+            {"gate_id": 0, "status": "pass"},
+            {"gate_id": 3, "status": "skipped"},
+        ]
+        # Gate 3 is not critical → still PARTIAL in acceptance
+        assert compute_validation_status(gates, "mvp1_acceptance") == "PARTIAL"
+
+    def test_empty_results_returns_verified(self) -> None:
+        assert compute_validation_status([], "dev") == "VERIFIED"

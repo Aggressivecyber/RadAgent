@@ -138,7 +138,7 @@ class TestRichManifest:
         manifest = json.loads(manifest_path.read_text())
 
         # Rich manifest fields
-        assert manifest["schema_version"] == "v2"
+        assert manifest["schema_version"] == "v3"
         assert "generated_at" in manifest
         assert "source_commit" in manifest
         assert manifest["total_files"] > 0
@@ -179,7 +179,7 @@ class TestRichManifest:
         assert review_path.exists()
 
         review = json.loads(review_path.read_text())
-        assert review["schema_version"] == "v2"
+        assert review["schema_version"] == "v3"
         assert review["is_stub"] is False
         assert "generated_at" in review
         assert review["validation_status"] == "PARTIAL"
@@ -207,7 +207,7 @@ class TestRichManifest:
 
         manifest = json.loads(manifest_path.read_text())
         # Rich manifest must always have these fields
-        assert manifest["schema_version"] == "v2"
+        assert manifest["schema_version"] == "v3"
         assert "generated_at" in manifest
         assert "source_commit" in manifest
         assert "files" in manifest

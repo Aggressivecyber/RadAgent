@@ -1,6 +1,11 @@
 """Gate Runner — orchestrates base gates and G4 modeling gates.
 
 Runs Gate 0-11 via base_gates, then G4-A to G4-G via g4_modeling_gates.
+
+Status strategy:
+  - VERIFIED: all gates passed, no failures, no skips
+  - PARTIAL: no failures, some non-critical gates skipped (dev mode)
+  - FAILED: any gate failed, OR critical gates skipped in acceptance mode
 """
 
 from __future__ import annotations
@@ -12,6 +17,9 @@ from typing import Any
 from agent_core.config.workspace import get_job_dir
 
 from .schemas import GateSubgraphState
+
+# Critical gates — skipping these in acceptance mode means FAILED
+CRITICAL_GATE_IDS = {6, 7, 8, 9, 10, 11}
 
 
 async def load_gate_inputs(state: GateSubgraphState) -> dict[str, Any]:
@@ -37,6 +45,44 @@ async def load_gate_inputs(state: GateSubgraphState) -> dict[str, Any]:
     }
 
 
+def compute_validation_status(
+    gate_results: list[dict[str, Any]],
+    execution_mode: str,
+) -> str:
+    """Compute validation status from gate results.
+
+    Args:
+        gate_results: List of gate result dicts with 'status' and 'gate_id'.
+        execution_mode: "dev" or "mvp1_acceptance".
+
+    Returns:
+        "VERIFIED", "PARTIAL", or "FAILED".
+    """
+    failed = [g for g in gate_results if g.get("status") == "fail"]
+    skipped = [g for g in gate_results if g.get("status") == "skipped"]
+
+    if failed:
+        return "FAILED"
+
+    skipped_ids = {
+        int(g["gate_id"])
+        for g in skipped
+        if str(g.get("gate_id", "")).isdigit()
+    }
+    critical_skipped = skipped_ids & CRITICAL_GATE_IDS
+
+    if execution_mode == "mvp1_acceptance" and critical_skipped:
+        return "FAILED"
+
+    if critical_skipped:
+        return "PARTIAL"
+
+    if skipped:
+        return "PARTIAL"
+
+    return "VERIFIED"
+
+
 async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
     """Save gate results and determine validation status."""
     job_id = state.get("job_id", "unknown")
@@ -45,30 +91,21 @@ async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
     val_dir.mkdir(parents=True, exist_ok=True)
 
     gate_results = state.get("gate_results", [])
-    failed_gates = state.get("failed_gates", [])
-    skipped = state.get("skipped_gates", [])
+    execution_mode = state.get("execution_mode", "dev")
 
     # Save results
     results_path = val_dir / "gate_results.json"
     results_path.write_text(json.dumps(gate_results, indent=2, ensure_ascii=False))
 
-    # Determine status
-    # VERIFIED requires ALL gates passed (no failures, no skips)
-    # PARTIAL means no failures but some gates were skipped (dev mode)
-    # FAILED means at least one gate failed
-    skipped_count = len(skipped) if isinstance(skipped, list) else 0
-    if not failed_gates and skipped_count == 0:
-        status = "VERIFIED"
-    elif not failed_gates and skipped_count > 0:
-        status = "PARTIAL"
-    elif len(failed_gates) <= 2:
-        status = "PARTIAL"
-    else:
-        status = "FAILED"
+    # Determine status using the new strategy
+    status = compute_validation_status(gate_results, execution_mode)
+
+    failed_gates = [g for g in gate_results if g.get("status") == "fail"]
+    skipped_gates = [g for g in gate_results if g.get("status") == "skipped"]
 
     return {
         "gate_results_path": str(results_path),
         "validation_status": status,
         "failed_gates": failed_gates,
-        "skipped_gates": skipped,
+        "skipped_gates": skipped_gates,
     }

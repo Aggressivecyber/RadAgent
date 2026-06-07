@@ -146,6 +146,9 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
 
     # Build rich file entries with sha256 + size
     file_entries: list[dict[str, Any]] = []
+    sha256_map: dict[str, str] = {}
+    size_map: dict[str, int] = {}
+
     if output_dir.exists():
         for f in sorted(output_dir.iterdir()):
             if f.is_file():
@@ -156,6 +159,9 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
                     "size_bytes": len(content),
                     "sha256": sha,
                 })
+                rel = f"output/{f.name}"
+                sha256_map[rel] = sha
+                size_map[rel] = len(content)
 
     # Get git commit if available
     source_commit = ""
@@ -170,15 +176,49 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
     except Exception:
         pass
 
+    # Extract model IR summary
+    model_ir_summary = _extract_model_ir_summary(state)
+
+    # Collect skipped gates
+    gate_results = state.get("gate_results", [])
+    skipped_gates = [
+        {"gate_id": g.get("gate_id"), "name": g.get("name", "")}
+        for g in gate_results
+        if g.get("status") == "skipped"
+    ]
+
+    # Determine run type
+    execution_mode = state.get("execution_mode", "dev")
+    run_type = "dev" if "dev" in execution_mode else "acceptance"
+
+    # Determine known limitations
+    known_limitations: list[str] = []
+    validation_status = state.get("validation_status", "UNKNOWN")
+    if validation_status == "PARTIAL":
+        known_limitations.append("Some gates skipped — not all validations ran")
+    if skipped_gates:
+        known_limitations.append(
+            f"{len(skipped_gates)} gate(s) skipped: "
+            + ", ".join(str(g.get("name", g.get("gate_id"))) for g in skipped_gates)
+        )
+
     manifest = {
-        "schema_version": "v2",
+        "schema_version": "v3",
         "artifact_type": "g4_complex_model",
         "job_id": state.get("job_id", "unknown"),
-        "validation_status": state.get("validation_status", "UNKNOWN"),
+        "validation_status": validation_status,
         "generated_at": datetime.now(UTC).isoformat(),
+        "is_stub": False,
+        "run_type": run_type,
         "source_commit": source_commit,
+        "source_job_id": state.get("job_id", "unknown"),
         "files": file_entries,
+        "sha256": sha256_map,
+        "size_bytes": size_map,
         "total_files": len(file_entries),
+        "model_ir_summary": model_ir_summary,
+        "skipped_gates": skipped_gates,
+        "known_limitations": known_limitations,
     }
 
     manifest_path = artifact_dir / "artifact_manifest.json"
@@ -187,18 +227,21 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
     # Generate review_report.json (rich version)
     file_names = [e["name"] for e in file_entries]
     review_report = {
-        "schema_version": "v2",
+        "schema_version": "v3",
         "artifact_type": "g4_complex_model",
         "job_id": state.get("job_id", "unknown"),
-        "validation_status": state.get("validation_status", "UNKNOWN"),
+        "validation_status": validation_status,
         "generated_at": datetime.now(UTC).isoformat(),
         "is_stub": False,
+        "run_type": run_type,
         "artifacts_collected": len(file_entries),
         "has_model_ir": "g4_model_ir.json" in file_names,
         "has_gate_results": "gate_results.json" in file_names,
         "has_model_review": "model_review_report.md" in file_names,
         "has_manifest": "artifact_manifest.json" in file_names,
         "file_count": len(file_entries),
+        "skipped_gates": skipped_gates,
+        "known_limitations": known_limitations,
     }
     (artifact_dir / "review_report.json").write_text(
         json.dumps(review_report, indent=2, ensure_ascii=False)
@@ -211,6 +254,36 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
     return {
         "artifact_manifest_path": str(manifest_path),
         "artifact_status": status,
+    }
+
+
+def _extract_model_ir_summary(state: dict[str, Any]) -> dict[str, Any]:
+    """Extract lightweight model IR summary from state."""
+    model_ir = state.get("g4_model_ir", {})
+    if not model_ir and state.get("g4_model_ir_path"):
+        ir_path = Path(state["g4_model_ir_path"])
+        if ir_path.exists():
+            model_ir = json.loads(ir_path.read_text())
+
+    if not model_ir:
+        return {
+            "components": [],
+            "materials_count": 0,
+            "scoring_count": 0,
+        }
+
+    components = model_ir.get("components", [])
+    return {
+        "components": [
+            {
+                "component_id": c.get("component_id", "?"),
+                "component_type": c.get("component_type", "?"),
+                "geometry_type": c.get("geometry_type", "?"),
+            }
+            for c in components
+        ],
+        "materials_count": len(model_ir.get("materials", [])),
+        "scoring_count": len(model_ir.get("scoring", [])),
     }
 
 

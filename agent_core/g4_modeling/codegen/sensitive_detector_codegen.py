@@ -278,7 +278,17 @@ private:
 
 
 def _generate_sd_source(sds: list[Any], model_ir: Any) -> str:
-    """Generate SensitiveDetectorManager.cc."""
+    """Generate SensitiveDetectorManager.cc.
+
+    Order: concrete SD classes FIRST, then Attach methods, then AttachAll.
+    This ensures C++ classes are defined before they are used.
+    """
+    # 1. Concrete SD class definitions (must come before Attach methods)
+    sd_classes = "\n\n".join(
+        _concrete_sd_class(sd) for sd in sds
+    )
+
+    # 2. Attach method implementations (use the SD classes above)
     attach_methods = "\n\n".join(
         _attach_method(sd) for sd in sds
     )
@@ -295,10 +305,19 @@ def _generate_sd_source(sds: list[Any], model_ir: Any) -> str:
 #include "SensitiveDetectorManager.hh"
 
 #include "G4LogicalVolume.hh"
+#include "G4LogicalVolumeStore.hh"
 #include "G4SDManager.hh"
 #include "G4Step.hh"
 #include "G4TouchableHistory.hh"
 #include "G4SystemOfUnits.hh"
+#include "G4RunManager.hh"
+#include "G4Event.hh"
+
+// ── Concrete SD class definitions ──
+
+{sd_classes}
+
+// ── SensitiveDetectorManager implementation ──
 
 SensitiveDetectorManager& SensitiveDetectorManager::Instance() {{
     static SensitiveDetectorManager instance;
@@ -313,62 +332,20 @@ void SensitiveDetectorManager::AttachAll(G4LogicalVolume* worldLogical) {{
 """
 
 
-def _attach_method(sd: Any) -> str:
-    """Generate a single attach method for a sensitive detector.
+def _concrete_sd_class(sd: Any) -> str:
+    """Generate a concrete SD class definition.
 
-    Creates a concrete SD class (not abstract G4VSensitiveDetector!)
-    that records hits into the specified collection.
+    Must be emitted BEFORE the Attach method that uses ``new SdClass(...)``.
     """
     method_suffix = _sanitize_method_name(sd.sd_id)
-    collection = sd.collection_name
-    components = sd.linked_component_ids
-
-    # Build component search logic
-    if len(components) == 1:
-        search = (
-            f'    G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->'
-            f'GetVolume("{components[0]}_logical", false);\n'
-            f"    if (!target) return;\n"
-        )
-    else:
-        searches = "\n".join(
-            f'    {{\n'
-            f'        G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->'
-            f'GetVolume("{cid}_logical", false);\n'
-            f'        if (target) target->SetSensitiveDetector(sd);\n'
-            f'    }}'
-            for cid in components
-        )
-        search = searches
-
-    # Build the concrete SD class (simple inner implementation)
-    # We create a lightweight SD that records hits into our Hit class
+    sd_class_name = f"{method_suffix}SD"
     hit_fill = _build_hit_fill(sd)
 
-    # Generate a concrete SD class per spec
-    sd_class_name = f"{method_suffix}SD"
-
-    sig = (
-        f"void SensitiveDetectorManager::Attach{method_suffix}"
-        f"(G4LogicalVolume* worldLogical) {{"
-    )
-    return f"""{sig}
-    auto* sdManager = G4SDManager::GetSDMpointer();
-    auto* sd = new {sd_class_name}("{sd.name}", "{collection}");
-    sdManager->AddNewDetector(sd);
-    detectors_["{sd.sd_id}"] = sd;
-
-    // Attach to specific component logical volumes
-{search}
-}}
-
-// ── Concrete SD class for {sd.name} ──
-
-class {sd_class_name} : public G4VSensitiveDetector {{
+    return f"""class {sd_class_name} : public G4VSensitiveDetector {{
 public:
-    {sd_class_name}(const std::string& name, const std::string& collection)
-        : G4VSensitiveDetector(name, collection) {{
-        collectionName.insert(collection);
+    {sd_class_name}(const G4String& name, const G4String& collectionName)
+        : G4VSensitiveDetector(name, collectionName) {{
+        collectionName.insert(collectionName);
     }}
 
     void Initialize(G4HCofThisEvent* hitCollection) override {{
@@ -387,6 +364,50 @@ public:
 private:
     HitsCollection* fHitsCollection = nullptr;
 }};"""
+
+
+def _attach_method(sd: Any) -> str:
+    """Generate a single Attach method for a sensitive detector.
+
+    The concrete SD class must already be defined above this method.
+    """
+    method_suffix = _sanitize_method_name(sd.sd_id)
+    collection = sd.collection_name
+    components = sd.linked_component_ids
+    sd_class_name = f"{method_suffix}SD"
+
+    # Build component search logic
+    if len(components) == 1:
+        search = (
+            f'    G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->'
+            f'GetVolume("{components[0]}_logical", false);\n'
+            f"    if (!target) return;\n"
+            f"    target->SetSensitiveDetector(sd);"
+        )
+    else:
+        searches = "\n".join(
+            f'    {{\n'
+            f'        G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->'
+            f'GetVolume("{cid}_logical", false);\n'
+            f'        if (target) target->SetSensitiveDetector(sd);\n'
+            f'    }}'
+            for cid in components
+        )
+        search = searches
+
+    sig = (
+        f"void SensitiveDetectorManager::Attach{method_suffix}"
+        f"(G4LogicalVolume* worldLogical) {{"
+    )
+    return f"""{sig}
+    auto* sdManager = G4SDManager::GetSDMpointer();
+    auto* sd = new {sd_class_name}("{sd.name}", "{collection}");
+    sdManager->AddNewDetector(sd);
+    detectors_["{sd.sd_id}"] = sd;
+
+    // Attach to specific component logical volumes
+{search}
+}}"""
 
 
 def _build_hit_fill(sd: Any) -> str:
