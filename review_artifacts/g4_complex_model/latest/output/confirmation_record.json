@@ -1,1 +1,40 @@
-{"final_status": "approved", "remaining_unconfirmed_fields": []}
+{
+  "schema_version": "confirmation_record_v1",
+  "job_id": "complex_human_confirmation_dev",
+  "total_rounds": 1,
+  "final_status": "approved",
+  "confirmed_fields": [
+    "components.world",
+    "components.housing",
+    "components.pcb",
+    "components.sensor_stack",
+    "components.top_electrode",
+    "components.oxide_layer",
+    "components.silicon_bulk",
+    "components.sensitive_region",
+    "components.bottom_electrode",
+    "materials.G4_AIR",
+    "materials.G4_Al",
+    "materials.FR4",
+    "materials.G4_Si",
+    "materials.SiO2",
+    "sources.proton_source",
+    "scoring.sensitive_edep",
+    "scoring.oxide_dose",
+    "scoring.bulk_dose_3d",
+    "scoring.event_table"
+  ],
+  "edited_fields": [],
+  "rejected_fields": [],
+  "remaining_unconfirmed_fields": [],
+  "confirmation_history": [
+    {
+      "round_id": 1,
+      "request_path": "output/confirmation_request_round_1.json",
+      "response_path": "output/confirmation_response_round_1.json",
+      "user_decision": "approve",
+      "user_notes": "approved for dev E2E"
+    }
+  ],
+  "confirmed_model_plan_path": "output/confirmed_model_plan.json"
+}

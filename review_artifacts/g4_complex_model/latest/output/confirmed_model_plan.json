@@ -1,1 +1,190 @@
-{"confirmation_status": "approved"}
+{
+  "schema_version": "confirmed_model_plan_v1",
+  "job_id": "complex_human_confirmation_dev",
+  "confirmation_status": "approved",
+  "assumptions_confirmed": true,
+  "components": [
+    {
+      "component_id": "world",
+      "component_type": "world",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "housing",
+      "component_type": "volume",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "pcb",
+      "component_type": "volume",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "sensor_stack",
+      "component_type": "assembly",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "top_electrode",
+      "component_type": "volume",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "oxide_layer",
+      "component_type": "volume",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "silicon_bulk",
+      "component_type": "volume",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "sensitive_region",
+      "component_type": "volume",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    },
+    {
+      "component_id": "bottom_electrode",
+      "component_type": "volume",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0,
+      "requires_confirmation": false
+    }
+  ],
+  "materials": [
+    {
+      "material_id": "G4_AIR",
+      "material_type": "standard",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    },
+    {
+      "material_id": "G4_Al",
+      "material_type": "standard",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    },
+    {
+      "material_id": "FR4",
+      "material_type": "composite",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    },
+    {
+      "material_id": "G4_Si",
+      "material_type": "standard",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    },
+    {
+      "material_id": "SiO2",
+      "material_type": "standard",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "proton_source",
+      "particle_type": "proton",
+      "energy": "10 MeV",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    }
+  ],
+  "scoring": [
+    {
+      "scoring_id": "sensitive_edep",
+      "scoring_type": "energy_deposit",
+      "target": "sensitive_region",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    },
+    {
+      "scoring_id": "oxide_dose",
+      "scoring_type": "dose",
+      "target": "oxide_layer",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    },
+    {
+      "scoring_id": "bulk_dose_3d",
+      "scoring_type": "dose_3d",
+      "target": "silicon_bulk",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    },
+    {
+      "scoring_id": "event_table",
+      "scoring_type": "event_table",
+      "target": "event-level output",
+      "confirmed_by_user": true,
+      "source_type": "rag",
+      "confidence": 1.0
+    }
+  ],
+  "confirmed_fields": [
+    "components.world",
+    "components.housing",
+    "components.pcb",
+    "components.sensor_stack",
+    "components.top_electrode",
+    "components.oxide_layer",
+    "components.silicon_bulk",
+    "components.sensitive_region",
+    "components.bottom_electrode",
+    "materials.G4_AIR",
+    "materials.G4_Al",
+    "materials.FR4",
+    "materials.G4_Si",
+    "materials.SiO2",
+    "sources.proton_source",
+    "scoring.sensitive_edep",
+    "scoring.oxide_dose",
+    "scoring.bulk_dose_3d",
+    "scoring.event_table"
+  ],
+  "edited_fields": [],
+  "assumptions": [
+    "Standard temperature (20°C) and pressure assumed",
+    "Proton beam energy set to 10 MeV per physics manual",
+    "Pencil beam distribution assumed (no divergence)",
+    "SiO2 used for oxide layer (standard gate oxide)"
+  ],
+  "remaining_unconfirmed_fields": []
+}
