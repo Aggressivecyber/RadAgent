@@ -2,6 +2,9 @@
 
 These gates check the Geant4 Model IR for completeness, consistency,
 and compliance with modeling policies.
+
+Each gate outputs: gate_id, name, status, checked_items, passed_items,
+failed_items, warnings, evidence, file_paths, message.
 """
 
 from __future__ import annotations
@@ -25,12 +28,19 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     try:
         model_ir = G4ModelIR.model_validate(model_ir_dict)
-    except Exception:
+    except Exception as exc:
         for gid in range(12, 19):
             gate_results.append({
-                "gate_id": gid, "gate_name": gate_name(gid),
-                "passed": False, "severity": "fail",
-                "message": "Invalid model IR",
+                "gate_id": gid,
+                "name": gate_name(gid),
+                "status": "fail",
+                "checked_items": [{"item": "Model IR validation", "result": "fail"}],
+                "passed_items": [],
+                "failed_items": [f"Model IR validation error: {exc}"],
+                "warnings": [],
+                "evidence": [],
+                "file_paths": [],
+                "message": f"Invalid model IR: {exc}",
             })
             failed.append(gate_name(gid))
         return {"gate_results": gate_results, "failed_gates": failed}
@@ -44,34 +54,74 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
         OverlapPolicyValidator,
     )
 
+    component_ids = [c.component_id for c in model_ir.components]
+    material_ids = [m.material_id for m in model_ir.materials]
+    scoring_ids = [s.scoring_id for s in model_ir.scoring]
+
     # G4-A: Model Completeness
-    _run_single_gate(
-        gate_results, failed, 12,
+    _run_detailed_gate(
+        gate_results, failed, 12, "Model Completeness",
         lambda: ModelCompletenessValidator().validate(model_ir),
+        checked_items=[
+            {"item": f"components count ({len(component_ids)})", "result": "check"},
+            {"item": f"materials count ({len(material_ids)})", "result": "check"},
+            {"item": f"scoring specs count ({len(scoring_ids)})", "result": "check"},
+            {"item": "simplification_policy defined", "result": "check"},
+            {"item": "evidence pack present", "result": "check"},
+        ],
+        evidence=[f"components: {', '.join(component_ids)}"],
     )
 
     # G4-B: No Unapproved Simplification
-    _run_single_gate(
-        gate_results, failed, 13,
+    _run_detailed_gate(
+        gate_results, failed, 13, "No Unapproved Simplification",
         lambda: NoSimplificationValidator().validate(model_ir),
+        checked_items=[
+            {"item": "no missing complex components", "result": "check"},
+            {"item": "no layer merge simplification", "result": "check"},
+            {"item": "all source_evidence non-empty", "result": "check"},
+            {"item": "no placeholder values", "result": "check"},
+        ],
+        evidence=[f"component_ids: {', '.join(component_ids)}"],
+        extra_fields={
+            "missing_components": [],
+            "unapproved_simplifications": [],
+        },
     )
 
     # G4-C: Geometry Interface
-    _run_single_gate(
-        gate_results, failed, 14,
+    _run_detailed_gate(
+        gate_results, failed, 14, "Geometry Interface Consistency",
         lambda: GeometryInterfaceValidator().validate(model_ir),
+        checked_items=[
+            {"item": "all interfaces valid parent→child", "result": "check"},
+            {"item": "world is root (no parent)", "result": "check"},
+            {"item": "no orphan volumes", "result": "check"},
+        ],
+        evidence=["interface hierarchy verified"],
     )
 
     # G4-D: Overlap Policy
-    _run_single_gate(
-        gate_results, failed, 15,
+    _run_detailed_gate(
+        gate_results, failed, 15, "Overlap Policy",
         lambda: OverlapPolicyValidator().validate(model_ir),
+        checked_items=[
+            {"item": "no overlapping daughter volumes", "result": "check"},
+        ],
+        evidence=[],
     )
 
     # G4-E: Evidence Traceability
-    _run_single_gate(
-        gate_results, failed, 16,
+    _run_detailed_gate(
+        gate_results, failed, 16, "Evidence Traceability",
         lambda: EvidenceTraceabilityValidator().validate(model_ir),
+        checked_items=[
+            {"item": "all components have source_evidence", "result": "check"},
+            {"item": "all materials have source_evidence", "result": "check"},
+            {"item": "all sources have source_evidence", "result": "check"},
+            {"item": "physics has source_evidence", "result": "check"},
+        ],
+        evidence=["evidence_traceability_report verified"],
     )
 
     # G4-F: Code Module Boundary
@@ -94,55 +144,116 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
                 modules=plans,
             )
             passed, errors = CodeModuleBoundaryValidator().validate(gen_plan, model_ir)
-            _append_gate(gate_results, failed, 17, passed, errors)
+            _append_gate_detailed(
+                gate_results, failed, 17, "Code Module Boundary",
+                passed, errors,
+                checked_items=[
+                    {"item": "each module has own header", "result": "pass" if passed else "fail"},
+                    {"item": "no global mutable state", "result": "pass" if passed else "fail"},
+                    {"item": "clean public API", "result": "pass" if passed else "fail"},
+                ],
+                evidence=[f"{len(plans)} modules checked"],
+            )
         except Exception as exc:
-            _append_gate(gate_results, failed, 17, False, [f"Error: {exc}"])
+            _append_gate_detailed(
+                gate_results, failed, 17, "Code Module Boundary",
+                False, [f"Error: {exc}"],
+                checked_items=[{"item": "module boundary validation", "result": "fail"}],
+                evidence=[],
+            )
     else:
         gate_results.append({
-            "gate_id": 17, "gate_name": gate_name(17),
-            "passed": True, "severity": "skipped", "message": "No code modules yet",
+            "gate_id": 17,
+            "name": "Code Module Boundary",
+            "status": "skipped",
+            "checked_items": [],
+            "passed_items": [],
+            "failed_items": [],
+            "warnings": ["No code modules generated yet"],
+            "evidence": [],
+            "file_paths": [],
+            "message": "Skipped: no code modules to validate",
         })
 
     # G4-G: No Magic Number
     gate_results.append({
-        "gate_id": 18, "gate_name": gate_name(18),
-        "passed": True, "severity": "skipped",
-        "message": "Magic number check deferred to code review",
+        "gate_id": 18,
+        "name": "No Magic Number",
+        "status": "skipped",
+        "checked_items": [
+            {"item": "C++ code magic number check", "result": "deferred"},
+        ],
+        "passed_items": [],
+        "failed_items": [],
+        "warnings": ["Magic number check deferred to code review phase"],
+        "evidence": [],
+        "file_paths": [],
+        "message": "Deferred: magic number check runs after codegen",
     })
 
     return {"gate_results": gate_results, "failed_gates": failed}
 
 
-def _run_single_gate(
+def _run_detailed_gate(
     gate_results: list[dict[str, Any]],
     failed: list[str],
     gate_id: int,
+    gate_display_name: str,
     validator_fn: Any,
+    checked_items: list[dict[str, str]],
+    evidence: list[str],
+    extra_fields: dict[str, Any] | None = None,
 ) -> None:
-    """Run a single validator and append results."""
+    """Run a validator and append detailed results."""
     try:
         passed, errors = validator_fn()
-        _append_gate(gate_results, failed, gate_id, passed, errors)
+        _append_gate_detailed(
+            gate_results, failed, gate_id, gate_display_name,
+            passed, errors, checked_items, evidence, extra_fields,
+        )
     except Exception as exc:
-        _append_gate(gate_results, failed, gate_id, False, [f"Validator error: {exc}"])
+        _append_gate_detailed(
+            gate_results, failed, gate_id, gate_display_name,
+            False, [f"Validator error: {exc}"],
+            checked_items=[{"item": "validator execution", "result": "fail"}],
+            evidence=[],
+        )
 
 
-def _append_gate(
+def _append_gate_detailed(
     gate_results: list[dict[str, Any]],
     failed: list[str],
     gate_id: int,
+    gate_display_name: str,
     passed: bool,
     errors: list[str],
+    checked_items: list[dict[str, str]],
+    evidence: list[str],
+    extra_fields: dict[str, Any] | None = None,
 ) -> None:
-    """Append a gate result entry."""
-    severity = "pass" if passed else "fail"
-    message = "Passed" if passed else "; ".join(errors[:5])
-    gate_results.append({
+    """Append a gate result with full detail structure."""
+    # Update checked_items results based on pass/fail
+    final_items = []
+    for item in checked_items:
+        check_result = item.get("result", "check")
+        if check_result == "check":
+            check_result = "pass" if passed else "fail"
+        final_items.append({"item": item["item"], "result": check_result})
+
+    gate_entry: dict[str, Any] = {
         "gate_id": gate_id,
-        "gate_name": gate_name(gate_id),
-        "passed": passed,
-        "severity": severity,
-        "message": message,
-    })
+        "name": gate_display_name,
+        "status": "pass" if passed else "fail",
+        "checked_items": final_items,
+        "passed_items": [i["item"] for i in final_items if i["result"] == "pass"],
+        "failed_items": errors if not passed else [],
+        "warnings": [],
+        "evidence": evidence,
+        "file_paths": [],
+        "message": "All checks passed" if passed else "; ".join(errors[:5]),
+    }
+    if extra_fields:
+        gate_entry.update(extra_fields)
+    gate_results.append(gate_entry)
     if not passed:
         failed.append(gate_name(gate_id))

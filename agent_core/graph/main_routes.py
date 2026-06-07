@@ -21,19 +21,27 @@ def route_after_task_planning(state: RadAgentMainState) -> str:
     """Route after Task Planning Subgraph.
 
     Only "geant4" scope proceeds to G4 Modeling.
-    TCAD/SPICE/full_chain scopes are marked reserved.
+    TCAD/SPICE/full_chain scopes are BLOCKED — routed to report_subgraph
+    with a clear message that these are reserved for later MVP phases.
     """
     status = state.get("task_planning_status", "failed")
     if status == "failed":
         return "report_subgraph"
 
     scope = state.get("simulation_scope", [])
-    # Only geant4 is supported in this phase
-    non_g4 = {"tcad", "spice", "geant4_to_tcad", "tcad_to_spice", "full_chain"}
-    if any(s in non_g4 for s in scope):
-        # Allow to proceed but report will note reserved status
+
+    # HARD BLOCK: any non-geant4 scope → report_subgraph
+    reserved_scopes = {"tcad", "spice", "geant4_to_tcad", "tcad_to_spice", "full_chain"}
+    if any(s in reserved_scopes for s in scope):
+        # Do NOT enter g4_modeling or g4_codegen
+        return "report_subgraph"
+
+    # Only pure geant4 scope proceeds
+    if scope == ["geant4"]:
         return "g4_modeling_subgraph"
-    return "g4_modeling_subgraph"
+
+    # Unknown/empty scope → report
+    return "report_subgraph"
 
 
 def route_after_g4_modeling(state: RadAgentMainState) -> str:

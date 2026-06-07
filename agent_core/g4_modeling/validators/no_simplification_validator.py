@@ -1,7 +1,12 @@
 """No unapproved simplification validator — Gate G4-B.
 
 Detects signs of lazy simplification: placeholder values,
-empty evidence, default-sized dimensions, merged layers.
+empty evidence, default-sized dimensions, merged layers,
+missing required components.
+
+This is a CRITICAL gate — if the user requests a complex detector
+but the Model IR only contains world + silicon_detector, this gate
+MUST fail.
 """
 
 from __future__ import annotations
@@ -21,24 +26,88 @@ _DEFAULT_DIMENSIONS: dict[str, tuple[float, ...]] = {
     "sphere": (500.0,),  # Generic sphere
 }
 
+# Signs of an oversimplified model — if ALL these are true, it's a red flag
+_SIMPLIFICATION_INDICATORS = {
+    "housing",
+    "pcb",
+    "oxide",
+    "electrode",
+    "sensitive",
+}
+
+# If user asked for complex model, these component patterns should exist
+_COMPLEX_MODEL_PATTERNS = [
+    ("housing", {"housing", "enclosure", "shield", "case"}),
+    ("pcb", {"pcb", "board", "carrier", "substrate_carrier"}),
+    ("oxide", {"oxide", "sio2", "gate_oxide", "insulator"}),
+    ("electrode", {"electrode", "contact", "metal_contact"}),
+    ("sensitive", {"sensitive", "active", "depletion"}),
+]
+
 
 class NoSimplificationValidator:
-    """Detects unapproved simplifications in the G4ModelIR."""
+    """Detects unapproved simplifications in the G4ModelIR.
+
+    Enhanced checks:
+    1. Empty source_evidence
+    2. Placeholder/TODO values
+    3. Default-sized dimensions
+    4. Missing complex model components (housing, pcb, oxide, electrodes)
+    5. Multi-layer merge detection (single silicon box instead of stack)
+    6. Complex model keyword detection in target_system
+    """
 
     def validate(self, model_ir: G4ModelIR) -> tuple[bool, list[str]]:
         """Scan all specs for signs of simplification.
 
-        Checks:
-        - Empty source_evidence lists
-        - Placeholder/TODO values in any string field
-        - Default-sized dimensions
-        - Merged layers (single component where user asked for multi-layer)
-        - Approved simplifications tracked in policy
+        Returns (passed, list_of_error_messages).
         """
         errors: list[str] = []
         approved = set(model_ir.simplification_policy.approved_simplifications)
 
-        # Check components
+        component_ids = {c.component_id for c in model_ir.components}
+        component_names_lower = {
+            c.component_id.lower() + " " + c.display_name.lower()
+            for c in model_ir.components
+        }
+
+        # ── Check 1: Complex model keyword detection ──
+        target_lower = model_ir.target_system.lower()
+        is_complex_request = any(
+            kw in target_lower
+            for kw in ("detector", "sensor", "pixel", "strip", "stack", "radiation", "rad-hard")
+        )
+
+        if is_complex_request:
+            # Check which complex patterns are present
+            for category, patterns in _COMPLEX_MODEL_PATTERNS:
+                found = any(
+                    any(p in name_lower for p in patterns)
+                    for name_lower in component_names_lower
+                )
+                if not found:
+                    # Check if user explicitly approved the omission
+                    approved_key = f"omit_{category}"
+                    if approved_key not in approved:
+                        errors.append(
+                            f"Complex model requested but no {category} component found. "
+                            f"Component IDs: {sorted(component_ids)}"
+                        )
+
+        # ── Check 2: Multi-layer merge detection ──
+        # If there's only 1 non-world volume and the target mentions "stack",
+        # that's a simplification red flag
+        non_world_components = [
+            c for c in model_ir.components
+            if c.component_type not in ("world",)
+        ]
+        if len(non_world_components) <= 2 and is_complex_request:
+            errors.append(
+                f"Complex model has only {len(non_world_components)} non-world components "
+                f"(expected multi-layer stack). Possible layer merge simplification."
+            )
+
+        # ── Check 3: Component evidence and dimensions ──
         for comp in model_ir.components:
             self._check_evidence(
                 comp.component_id, comp.source_evidence,
@@ -53,7 +122,7 @@ class NoSimplificationValidator:
                 "component", errors,
             )
 
-        # Check materials
+        # ── Check 4: Material evidence ──
         for mat in model_ir.materials:
             self._check_evidence(
                 mat.material_id, mat.source_evidence,
@@ -64,14 +133,14 @@ class NoSimplificationValidator:
                 "material", errors,
             )
 
-        # Check sources
+        # ── Check 5: Source evidence ──
         for src in model_ir.sources:
             self._check_evidence(
                 src.source_id, src.source_evidence,
                 "source", errors, approved,
             )
 
-        # Check physics
+        # ── Check 6: Physics evidence ──
         if model_ir.physics is not None:
             self._check_evidence(
                 model_ir.physics.physics_list,
@@ -79,7 +148,7 @@ class NoSimplificationValidator:
                 "physics", errors, approved,
             )
 
-        # Check scoring
+        # ── Check 7: Scoring evidence ──
         for sc in model_ir.scoring:
             self._check_evidence(
                 sc.scoring_id, sc.source_evidence,

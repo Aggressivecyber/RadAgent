@@ -1,0 +1,84 @@
+{
+  "contract_version": "1.0",
+  "output_files": [
+    {
+      "filename": "g4_summary.json",
+      "source": "RunAction",
+      "fields": [
+        "n_events",
+        "beam_particle",
+        "beam_energy_MeV",
+        "physics_list",
+        "run_timestamp"
+      ]
+    },
+    {
+      "filename": "sensitive_edep.csv",
+      "source": "scoring:sensitive_edep",
+      "fields": [
+        "event_id",
+        "edep_MeV",
+        "n_entries"
+      ],
+      "target_region": "sensitive_region"
+    },
+    {
+      "filename": "oxide_dose.csv",
+      "source": "scoring:oxide_dose",
+      "fields": [
+        "event_id",
+        "dose_Gy",
+        "edep_MeV"
+      ],
+      "target_region": "oxide_layer"
+    },
+    {
+      "filename": "bulk_dose_3d.csv",
+      "source": "scoring:bulk_dose_3d",
+      "fields": [
+        "voxel_id",
+        "x_mm",
+        "y_mm",
+        "z_mm",
+        "dose_Gy",
+        "edep_MeV"
+      ],
+      "target_region": "silicon_bulk",
+      "mesh": {
+        "voxel_size": "5×5×5 mm³"
+      }
+    },
+    {
+      "filename": "event_table.csv",
+      "source": "scoring:event_table",
+      "fields": [
+        "event_id",
+        "edep_MeV",
+        "x_mm",
+        "y_mm",
+        "z_mm"
+      ],
+      "target_region": "sensitive_region"
+    },
+    {
+      "filename": "provenance.json",
+      "source": "RunAction",
+      "fields": [
+        "model_ir_id",
+        "job_id",
+        "geant4_version",
+        "physics_list",
+        "timestamp"
+      ]
+    },
+    {
+      "filename": "run_log.txt",
+      "source": "RunAction",
+      "fields": [
+        "stdout/stderr capture"
+      ]
+    }
+  ],
+  "fields_from_model_ir": true,
+  "no_invented_fields": true
+}

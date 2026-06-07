@@ -85,7 +85,7 @@ class TestRunBaseGates:
 
         for g in gate_results:
             if g["gate_id"] in (7, 9):
-                assert g["severity"] != "pass", (
+                assert g["status"] != "pass", (
                     f"Gate {g['gate_id']} auto-passed in acceptance mode"
                 )
 

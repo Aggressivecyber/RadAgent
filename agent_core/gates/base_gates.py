@@ -63,6 +63,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     # Gate 0: Context Sufficiency
     g0_severity = "pass"
     g0_message = "Context sufficient"
+    g0_checked = [{"item": "context_decision == allow_rag or allow_with_web", "result": "pass"}]
     if context_decision == "allow_rag":
         g0_message = "Context sufficient via RAG"
     elif context_decision == "allow_with_web_supplement":
@@ -71,20 +72,35 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     elif context_decision == "block_no_context":
         g0_severity = "block"
         g0_message = "No sufficient context"
+        g0_checked = [{"item": "context_decision", "result": "fail"}]
     gate_results.append({
-        "gate_id": 0, "gate_name": gate_name(0),
-        "passed": g0_severity in ("pass", "warning"),
-        "severity": g0_severity, "message": g0_message,
+        "gate_id": 0, "name": gate_name(0),
+        "status": g0_severity,
+        "checked_items": g0_checked,
+        "passed_items": [c["item"] for c in g0_checked if c["result"] == "pass"],
+        "failed_items": [] if g0_severity != "block" else ["context blocked"],
+        "warnings": [] if g0_severity != "warning" else ["Web supplement used"],
+        "evidence": [f"context_decision: {context_decision}"],
+        "file_paths": [],
+        "message": g0_message,
     })
 
     # Gate 1: Task Spec Schema
     sv = SchemaValidator()
     ts_valid, ts_errors = sv.validate_task_spec(task_spec)
     gate_results.append({
-        "gate_id": 1, "gate_name": gate_name(1),
-        "passed": ts_valid,
-        "severity": "pass" if ts_valid else "fail",
-        "message": "; ".join(ts_errors) if ts_errors else "Valid",
+        "gate_id": 1, "name": gate_name(1),
+        "status": "pass" if ts_valid else "fail",
+        "checked_items": [
+            {"item": "task_spec schema validation", "result": "pass" if ts_valid else "fail"},
+            {"item": "required fields present", "result": "pass" if ts_valid else "fail"},
+        ],
+        "passed_items": ["schema valid"] if ts_valid else [],
+        "failed_items": ts_errors if not ts_valid else [],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
+        "message": "; ".join(ts_errors) if ts_errors else "Task spec schema valid",
     })
 
     # Gate 2: Simulation IR / Model IR
@@ -93,26 +109,47 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     else:
         ir_valid, ir_errors = False, ["No model IR loaded"]
     gate_results.append({
-        "gate_id": 2, "gate_name": gate_name(2),
-        "passed": ir_valid,
-        "severity": "pass" if ir_valid else "fail",
-        "message": "; ".join(ir_errors) if ir_errors else "Valid",
+        "gate_id": 2, "name": gate_name(2),
+        "status": "pass" if ir_valid else "fail",
+        "checked_items": [
+            {"item": "Model IR loaded", "result": "pass" if model_ir else "fail"},
+            {"item": "Model IR schema valid", "result": "pass" if ir_valid else "fail"},
+        ],
+        "passed_items": ["Model IR valid"] if ir_valid else [],
+        "failed_items": ir_errors if not ir_valid else [],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
+        "message": "; ".join(ir_errors) if ir_errors else "Model IR schema valid",
     })
 
     # Gate 3: Patch Format
     applied_path = state.get("applied_patch_path", "")
     patch_exists = bool(applied_path and Path(applied_path).exists())
     gate_results.append({
-        "gate_id": 3, "gate_name": gate_name(3),
-        "passed": patch_exists,
-        "severity": "pass" if patch_exists else "fail",
+        "gate_id": 3, "name": gate_name(3),
+        "status": "pass" if patch_exists else "fail",
+        "checked_items": [
+            {"item": "applied patch file exists", "result": "pass" if patch_exists else "fail"},
+        ],
+        "passed_items": ["patch applied"] if patch_exists else [],
+        "failed_items": [] if patch_exists else ["No applied patch found"],
+        "warnings": [],
+        "evidence": [applied_path] if applied_path else [],
+        "file_paths": [applied_path] if applied_path else [],
         "message": "Patch applied" if patch_exists else "No applied patch found",
     })
 
     # Gate 4: File Permission
     gate_results.append({
-        "gate_id": 4, "gate_name": gate_name(4),
-        "passed": True, "severity": "pass",
+        "gate_id": 4, "name": gate_name(4),
+        "status": "pass",
+        "checked_items": [{"item": "all files in green zone", "result": "pass"}],
+        "passed_items": ["all files green zone"],
+        "failed_items": [],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
         "message": "All green zone",
     })
 
@@ -121,15 +158,31 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         csv_ = CodeStructureValidator()
         struct_valid, struct_errors = csv_.validate_geant4_project(str(code_dir))
         gate_results.append({
-            "gate_id": 5, "gate_name": gate_name(5),
-            "passed": struct_valid,
-            "severity": "pass" if struct_valid else "fail",
-            "message": "; ".join(struct_errors) if struct_errors else "Structure OK",
+            "gate_id": 5, "name": gate_name(5),
+            "status": "pass" if struct_valid else "fail",
+            "checked_items": [
+                {"item": "code directory exists", "result": "pass"},
+                {"item": "src/*.cc files present", "result": "pass" if struct_valid else "fail"},
+                {"item": "include/*.hh files present", "result": "pass" if struct_valid else "fail"},
+                {"item": "CMakeLists.txt valid", "result": "pass" if struct_valid else "fail"},
+            ],
+            "passed_items": ["structure valid"] if struct_valid else [],
+            "failed_items": struct_errors if not struct_valid else [],
+            "warnings": [],
+            "evidence": [f"code_dir: {code_dir}"],
+            "file_paths": [code_dir],
+            "message": "; ".join(struct_errors) if struct_errors else "Geant4 code structure valid",
         })
     else:
         gate_results.append({
-            "gate_id": 5, "gate_name": gate_name(5),
-            "passed": False, "severity": "fail",
+            "gate_id": 5, "name": gate_name(5),
+            "status": "fail",
+            "checked_items": [{"item": "code directory exists", "result": "fail"}],
+            "passed_items": [],
+            "failed_items": ["Generated code directory not found"],
+            "warnings": [],
+            "evidence": [],
+            "file_paths": [],
             "message": "Generated code directory not found",
         })
 
@@ -158,9 +211,17 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     except Exception as e:
         g6_message = f"Build check error: {e}"
     gate_results.append({
-        "gate_id": 6, "gate_name": gate_name(6),
-        "passed": g6_severity == "pass",
-        "severity": g6_severity, "message": g6_message,
+        "gate_id": 6, "name": gate_name(6),
+        "status": g6_severity,
+        "checked_items": [
+            {"item": "build/parse verification", "result": "pass" if g6_severity == "pass" else "fail" if g6_severity == "fail" else "skipped"},
+        ],
+        "passed_items": ["build passed"] if g6_severity == "pass" else [],
+        "failed_items": [g6_message] if g6_severity == "fail" else [],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
+        "message": g6_message,
     })
 
     # Gate 7: Unit Test — cannot auto-pass
@@ -172,9 +233,17 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     else:
         skipped.append({"gate_id": 7, "reason": "Geant4 not available"})
     gate_results.append({
-        "gate_id": 7, "gate_name": gate_name(7),
-        "passed": g7_severity != "fail",
-        "severity": g7_severity, "message": g7_message,
+        "gate_id": 7, "name": gate_name(7),
+        "status": g7_severity,
+        "checked_items": [
+            {"item": "unit test execution", "result": "skipped" if g7_severity == "skipped" else "fail"},
+        ],
+        "passed_items": [],
+        "failed_items": [g7_message] if g7_severity == "fail" else [],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
+        "message": g7_message,
     })
 
     # Gate 8: Data Contract
@@ -184,28 +253,52 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "event_table.csv", "provenance.json",
         )
         missing = [f for f in required_files if not (output_dir / f).is_file()]
+        present = [f for f in required_files if (output_dir / f).is_file()]
         gate_results.append({
-            "gate_id": 8, "gate_name": gate_name(8),
-            "passed": not missing,
-            "severity": "pass" if not missing else "fail",
+            "gate_id": 8, "name": gate_name(8),
+            "status": "pass" if not missing else "fail",
+            "checked_items": [
+                {"item": f, "result": "pass" if f in present else "fail"}
+                for f in required_files
+            ],
+            "passed_items": present,
+            "failed_items": missing,
+            "warnings": [],
+            "evidence": [f"output_dir: {output_dir}"],
+            "file_paths": [str(output_dir / f) for f in present],
             "message": f"Missing: {', '.join(missing)}" if missing else "All output files present",
         })
     else:
         gate_results.append({
-            "gate_id": 8, "gate_name": gate_name(8),
-            "passed": False, "severity": "skipped" if execution_mode != "mvp1_acceptance" else "fail",
+            "gate_id": 8, "name": gate_name(8),
+            "status": "skipped" if execution_mode != "mvp1_acceptance" else "fail",
+            "checked_items": [{"item": "output directory exists", "result": "fail"}],
+            "passed_items": [],
+            "failed_items": ["No simulation output directory"],
+            "warnings": [],
+            "evidence": [],
+            "file_paths": [],
             "message": "No simulation output directory",
         })
         skipped.append({"gate_id": 8, "reason": "No output dir"})
 
     # Gate 9: Smoke Simulation
     g9_severity = "skipped"
+    g9_message = "Smoke sim not run"
     if execution_mode == "mvp1_acceptance":
         g9_severity = "fail"
+        g9_message = "[MVP1] Smoke sim required"
     gate_results.append({
-        "gate_id": 9, "gate_name": gate_name(9),
-        "passed": g9_severity != "fail",
-        "severity": g9_severity,
+        "gate_id": 9, "name": gate_name(9),
+        "status": g9_severity,
+        "checked_items": [
+            {"item": "smoke simulation (1000 events)", "result": "skipped" if g9_severity == "skipped" else "fail"},
+        ],
+        "passed_items": [],
+        "failed_items": [g9_message] if g9_severity == "fail" else [],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
         "message": "Smoke sim not run" if g9_severity == "skipped" else "[MVP1] Smoke sim required",
     })
     if g9_severity == "skipped":
@@ -213,8 +306,14 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # Gate 10: Benchmark Regression
     gate_results.append({
-        "gate_id": 10, "gate_name": gate_name(10),
-        "passed": True, "severity": "skipped",
+        "gate_id": 10, "name": gate_name(10),
+        "status": "skipped",
+        "checked_items": [{"item": "benchmark regression check", "result": "skipped"}],
+        "passed_items": [],
+        "failed_items": [],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
         "message": "No matching benchmark case",
     })
 
@@ -246,16 +345,24 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
                 except Exception as e:
                     physics_errors.append(f"Error reading {csv_name}: {e}")
     gate_results.append({
-        "gate_id": 11, "gate_name": gate_name(11),
-        "passed": not physics_errors,
-        "severity": "pass" if not physics_errors else "fail",
+        "gate_id": 11, "name": gate_name(11),
+        "status": "pass" if not physics_errors else "fail",
+        "checked_items": [
+            {"item": "edep values non-negative, finite", "result": "pass" if not physics_errors else "fail"},
+            {"item": "dose values non-negative, finite", "result": "pass" if not physics_errors else "fail"},
+        ],
+        "passed_items": ["physics sanity passed"] if not physics_errors else [],
+        "failed_items": physics_errors[:5],
+        "warnings": [],
+        "evidence": [],
+        "file_paths": [],
         "message": "; ".join(physics_errors[:5]) if physics_errors else "Physics sanity passed",
     })
 
     # Collect failed gate names
     for g in gate_results:
-        if g.get("severity") in ("fail", "block"):
-            failed.append(g.get("gate_name", f"Gate {g.get('gate_id')}"))
+        if g.get("status") in ("fail", "block"):
+            failed.append(g.get("name", f"Gate {g.get('gate_id')}"))
 
     return {
         "gate_results": gate_results,

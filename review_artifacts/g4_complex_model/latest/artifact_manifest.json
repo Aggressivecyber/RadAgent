@@ -12,7 +12,8 @@
     "geometry_interface_report.json",
     "model_review_report.md",
     "no_simplification_report.json",
+    "output_manager_contract.json",
     "proposed_patch_summary.json"
   ],
-  "total_files": 10
+  "total_files": 11
 }

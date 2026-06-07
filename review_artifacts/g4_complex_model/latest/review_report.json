@@ -2,7 +2,7 @@
   "artifact_type": "g4_complex_model",
   "job_id": "complex_dev",
   "validation_status": "VERIFIED",
-  "artifacts_collected": 10,
+  "artifacts_collected": 11,
   "has_model_ir": true,
   "has_gate_results": true,
   "has_model_review": true

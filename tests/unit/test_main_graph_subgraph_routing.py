@@ -55,13 +55,13 @@ class TestRouteAfterTaskPlanning:
         }
         assert route_after_task_planning(state) == "report_subgraph"
 
-    def test_reserved_scope_still_proceeds(self) -> None:
-        """TCAD/SPICE reserved scopes still proceed to G4 modeling."""
+    def test_reserved_scope_blocked(self) -> None:
+        """TCAD/SPICE reserved scopes are BLOCKED from G4 modeling."""
         state: RadAgentMainState = {
             "task_planning_status": "passed",
             "simulation_scope": ["geant4", "tcad"],
         }
-        assert route_after_task_planning(state) == "g4_modeling_subgraph"
+        assert route_after_task_planning(state) == "report_subgraph"
 
 
 class TestRouteAfterG4Modeling:
