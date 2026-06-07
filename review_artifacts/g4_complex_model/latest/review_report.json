@@ -1,9 +1,9 @@
 {
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
-  "job_id": "complex_dev",
-  "validation_status": "PARTIAL",
-  "generated_at": "2026-06-07T15:01:54.149564+00:00",
+  "job_id": "complex_test",
+  "validation_status": "FAILED",
+  "generated_at": "2026-06-07T15:03:29.345680+00:00",
   "is_stub": false,
   "run_type": "dev",
   "artifacts_collected": 11,
@@ -12,9 +12,25 @@
   "has_model_review": true,
   "has_manifest": false,
   "file_count": 11,
-  "skipped_gates": [],
+  "skipped_gates": [
+    {
+      "gate_id": 4,
+      "name": "File Permission"
+    },
+    {
+      "gate_id": 7,
+      "name": "Unit Test"
+    },
+    {
+      "gate_id": 9,
+      "name": "Smoke Simulation"
+    },
+    {
+      "gate_id": 10,
+      "name": "Benchmark Regression"
+    }
+  ],
   "known_limitations": [
-    "Dev mode run — validation status downgraded from VERIFIED to PARTIAL",
-    "Some gates skipped — not all validations ran"
+    "4 gate(s) skipped: File Permission, Unit Test, Smoke Simulation, Benchmark Regression"
   ]
 }
