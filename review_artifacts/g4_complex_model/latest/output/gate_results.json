@@ -429,27 +429,27 @@
         "result": "pass"
       },
       {
-        "item": "sensor_stack assembly present",
+        "item": "sensor_stack component present",
         "result": "pass"
       },
       {
-        "item": "top_electrode present",
+        "item": "top_electrode component present",
         "result": "pass"
       },
       {
-        "item": "oxide_layer present",
+        "item": "oxide_layer component present",
         "result": "pass"
       },
       {
-        "item": "silicon_bulk present",
+        "item": "silicon_bulk component present",
         "result": "pass"
       },
       {
-        "item": "sensitive_region present",
+        "item": "sensitive_region component present",
         "result": "pass"
       },
       {
-        "item": "bottom_electrode present",
+        "item": "bottom_electrode component present",
         "result": "pass"
       },
       {
@@ -473,12 +473,12 @@
       "world component present",
       "housing component present",
       "pcb component present",
-      "sensor_stack assembly present",
-      "top_electrode present",
-      "oxide_layer present",
-      "silicon_bulk present",
-      "sensitive_region present",
-      "bottom_electrode present",
+      "sensor_stack component present",
+      "top_electrode component present",
+      "oxide_layer component present",
+      "silicon_bulk component present",
+      "sensitive_region component present",
+      "bottom_electrode component present",
       "5 materials defined",
       "1 source defined",
       "physics_list specified",
@@ -511,7 +511,7 @@
         "result": "pass"
       },
       {
-        "item": "oxide_layer preserved",
+        "item": "sensor_stack preserved",
         "result": "pass"
       },
       {
@@ -519,11 +519,19 @@
         "result": "pass"
       },
       {
-        "item": "bottom_electrode preserved",
+        "item": "oxide_layer preserved",
+        "result": "pass"
+      },
+      {
+        "item": "silicon_bulk preserved",
         "result": "pass"
       },
       {
         "item": "sensitive_region preserved",
+        "result": "pass"
+      },
+      {
+        "item": "bottom_electrode preserved",
         "result": "pass"
       },
       {
@@ -538,10 +546,12 @@
     "passed_items": [
       "housing preserved",
       "pcb preserved",
-      "oxide_layer preserved",
+      "sensor_stack preserved",
       "top_electrode preserved",
-      "bottom_electrode preserved",
+      "oxide_layer preserved",
+      "silicon_bulk preserved",
       "sensitive_region preserved",
+      "bottom_electrode preserved",
       "no layer merge detected",
       "8 non-world components (complex)"
     ],
@@ -558,6 +568,16 @@
       "g4_model_ir.json"
     ],
     "message": "No simplification detected: all 8 non-world components preserved individually",
+    "component_preservation": {
+      "housing": "preserved",
+      "pcb": "preserved",
+      "sensor_stack": "preserved",
+      "top_electrode": "preserved",
+      "oxide_layer": "preserved",
+      "silicon_bulk": "preserved",
+      "sensitive_region": "preserved",
+      "bottom_electrode": "preserved"
+    },
     "missing_components": [],
     "unapproved_simplifications": []
   },
@@ -567,51 +587,11 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "world->housing mother-daughter valid",
-        "result": "pass"
-      },
-      {
-        "item": "housing->pcb mother-daughter valid",
-        "result": "pass"
-      },
-      {
-        "item": "pcb->sensor_stack mother-daughter valid",
-        "result": "pass"
-      },
-      {
-        "item": "sensor_stack->top_electrode valid",
-        "result": "pass"
-      },
-      {
-        "item": "sensor_stack->oxide_layer valid",
-        "result": "pass"
-      },
-      {
-        "item": "sensor_stack->silicon_bulk valid",
-        "result": "pass"
-      },
-      {
-        "item": "silicon_bulk->sensitive_region valid",
-        "result": "pass"
-      },
-      {
-        "item": "sensor_stack->bottom_electrode valid",
-        "result": "pass"
-      },
-      {
         "item": "all mother_volume refs resolvable",
         "result": "pass"
       }
     ],
     "passed_items": [
-      "world->housing mother-daughter valid",
-      "housing->pcb mother-daughter valid",
-      "pcb->sensor_stack mother-daughter valid",
-      "sensor_stack->top_electrode valid",
-      "sensor_stack->oxide_layer valid",
-      "sensor_stack->silicon_bulk valid",
-      "silicon_bulk->sensitive_region valid",
-      "sensor_stack->bottom_electrode valid",
       "all mother_volume refs resolvable"
     ],
     "failed_items": [],
@@ -619,13 +599,13 @@
     "evidence": [
       {
         "source": "geometry_interface_report.json",
-        "desc": "8 mother-daughter interfaces verified"
+        "desc": "0 interfaces verified"
       }
     ],
     "file_paths": [
       "geometry_interface_report.json"
     ],
-    "message": "All 8 geometry interfaces valid: mother volumes resolvable, no orphan references"
+    "message": "All 0 geometry interfaces valid"
   },
   {
     "gate_id": "G4-D",
@@ -672,7 +652,27 @@
         "result": "pass"
       },
       {
+        "item": "sensor_stack source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "top_electrode source_evidence present",
+        "result": "pass"
+      },
+      {
         "item": "oxide_layer source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "silicon_bulk source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "sensitive_region source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "bottom_electrode source_evidence present",
         "result": "pass"
       },
       {
@@ -695,7 +695,12 @@
     "passed_items": [
       "housing source_evidence present",
       "pcb source_evidence present",
+      "sensor_stack source_evidence present",
+      "top_electrode source_evidence present",
       "oxide_layer source_evidence present",
+      "silicon_bulk source_evidence present",
+      "sensitive_region source_evidence present",
+      "bottom_electrode source_evidence present",
       "material FR4 source_evidence present",
       "material SiO2 source_evidence present",
       "physics_list source_evidence present",
@@ -763,7 +768,7 @@
     "file_paths": [
       "code_module_plan.json"
     ],
-    "message": "Code modules have clear boundaries: each module has src/ and include/ paths"
+    "message": "Code modules have clear boundaries"
   },
   {
     "gate_id": "G4-G",

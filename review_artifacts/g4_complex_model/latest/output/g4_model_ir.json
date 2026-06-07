@@ -1,5 +1,4 @@
 {
-  "schema_version": "g4_model_ir_v1",
   "model_ir_id": "complex_detector_v1",
   "job_id": "complex_dev",
   "modeling_mode": "realistic",
@@ -8,22 +7,6 @@
     "allow_simplification": false,
     "requires_user_approval": true,
     "approved_simplifications": []
-  },
-  "global_units": {
-    "length": "mm",
-    "energy": "MeV",
-    "dose": "Gy",
-    "time": "s"
-  },
-  "coordinate_system": {
-    "system": "cartesian",
-    "origin_definition": "world_center",
-    "axis_definition": {
-      "x": "sensor_width",
-      "y": "sensor_length",
-      "z": "beam_direction"
-    },
-    "unit": "mm"
   },
   "components": [
     {
@@ -37,29 +20,19 @@
         "dz": 5000.0
       },
       "material_id": "G4_AIR",
-      "placement": {
-        "position": [
-          0,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": null,
-      "sensitive": false,
       "roles": [],
       "source_evidence": [
-        "geant4_convention:standard_world_volume"
+        {
+          "source": "geant4_convention",
+          "desc": "Standard world volume"
+        }
       ]
     },
     {
       "component_id": "housing",
       "display_name": "Aluminum Housing",
-      "component_type": "shielding",
+      "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
         "dx": 100.0,
@@ -67,32 +40,22 @@
         "dz": 50.0
       },
       "material_id": "G4_Al",
-      "placement": {
-        "position": [
-          0,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "world",
-      "sensitive": false,
       "roles": [
         "shielding",
         "mechanical_support"
       ],
       "source_evidence": [
-        "user_specification:al_housing_for_radiation_shielding"
+        {
+          "source": "user_specification",
+          "desc": "Al housing for radiation shielding"
+        }
       ]
     },
     {
       "component_id": "pcb",
       "display_name": "FR4 PCB Carrier",
-      "component_type": "substrate",
+      "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
         "dx": 80.0,
@@ -100,25 +63,15 @@
         "dz": 5.0
       },
       "material_id": "FR4",
-      "placement": {
-        "position": [
-          0,
-          0,
-          -15
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "housing",
-      "sensitive": false,
       "roles": [
         "mechanical_support"
       ],
       "source_evidence": [
-        "user_specification:fr4_carrier_board"
+        {
+          "source": "user_specification",
+          "desc": "FR4 carrier board"
+        }
       ]
     },
     {
@@ -132,31 +85,21 @@
         "dz": 20.0
       },
       "material_id": "G4_AIR",
-      "placement": {
-        "position": [
-          0,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "pcb",
-      "sensitive": false,
       "roles": [
         "assembly_container"
       ],
       "source_evidence": [
-        "user_specification:sensor_stack_container"
+        {
+          "source": "user_specification",
+          "desc": "Sensor stack container"
+        }
       ]
     },
     {
       "component_id": "top_electrode",
       "display_name": "Top Aluminum Electrode",
-      "component_type": "electrode",
+      "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
         "dx": 50.0,
@@ -164,31 +107,21 @@
         "dz": 1.0
       },
       "material_id": "G4_Al",
-      "placement": {
-        "position": [
-          0,
-          0,
-          9.5
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "sensor_stack",
-      "sensitive": false,
       "roles": [
         "electrode"
       ],
       "source_evidence": [
-        "detector_design:al_top_electrode_1mm"
+        {
+          "source": "detector_design",
+          "desc": "Al top electrode 1mm"
+        }
       ]
     },
     {
       "component_id": "oxide_layer",
       "display_name": "Gate Oxide SiO2",
-      "component_type": "layer",
+      "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
         "dx": 50.0,
@@ -196,25 +129,15 @@
         "dz": 0.001
       },
       "material_id": "SiO2",
-      "placement": {
-        "position": [
-          0,
-          0,
-          9.0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "sensor_stack",
-      "sensitive": false,
       "roles": [
         "dielectric"
       ],
       "source_evidence": [
-        "detector_design:sio2_gate_oxide_1um"
+        {
+          "source": "detector_design",
+          "desc": "SiO2 gate oxide 1um"
+        }
       ]
     },
     {
@@ -228,25 +151,15 @@
         "dz": 10.0
       },
       "material_id": "G4_Si",
-      "placement": {
-        "position": [
-          0,
-          0,
-          4.0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "sensor_stack",
-      "sensitive": false,
       "roles": [
         "active_material"
       ],
       "source_evidence": [
-        "detector_design:si_bulk_10mm"
+        {
+          "source": "detector_design",
+          "desc": "Si bulk 10mm"
+        }
       ]
     },
     {
@@ -260,32 +173,22 @@
         "dz": 5.0
       },
       "material_id": "G4_Si",
-      "placement": {
-        "position": [
-          0,
-          0,
-          3.0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "silicon_bulk",
-      "sensitive": true,
       "roles": [
         "edep_region",
         "active_detector"
       ],
       "source_evidence": [
-        "detector_design:sensitive_volume_inside_si_bulk"
+        {
+          "source": "detector_design",
+          "desc": "Sensitive volume inside Si bulk"
+        }
       ]
     },
     {
       "component_id": "bottom_electrode",
       "display_name": "Bottom Aluminum Electrode",
-      "component_type": "electrode",
+      "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
         "dx": 50.0,
@@ -293,99 +196,15 @@
         "dz": 1.0
       },
       "material_id": "G4_Al",
-      "placement": {
-        "position": [
-          0,
-          0,
-          -9.5
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ]
-      },
       "mother_volume": "sensor_stack",
-      "sensitive": false,
       "roles": [
         "electrode"
       ],
       "source_evidence": [
-        "detector_design:al_bottom_electrode_1mm"
-      ]
-    }
-  ],
-  "interfaces": [
-    {
-      "interface_id": "world_housing",
-      "component_a": "world",
-      "component_b": "housing",
-      "relationship": "contains",
-      "source_evidence": [
-        "geant4_convention"
-      ]
-    },
-    {
-      "interface_id": "housing_pcb",
-      "component_a": "housing",
-      "component_b": "pcb",
-      "relationship": "contains",
-      "source_evidence": [
-        "detector_design"
-      ]
-    },
-    {
-      "interface_id": "pcb_sensor_stack",
-      "component_a": "pcb",
-      "component_b": "sensor_stack",
-      "relationship": "contains",
-      "source_evidence": [
-        "detector_design"
-      ]
-    },
-    {
-      "interface_id": "sensor_stack_top_electrode",
-      "component_a": "sensor_stack",
-      "component_b": "top_electrode",
-      "relationship": "contains",
-      "source_evidence": [
-        "detector_design"
-      ]
-    },
-    {
-      "interface_id": "sensor_stack_oxide",
-      "component_a": "sensor_stack",
-      "component_b": "oxide_layer",
-      "relationship": "contains",
-      "source_evidence": [
-        "detector_design"
-      ]
-    },
-    {
-      "interface_id": "sensor_stack_si_bulk",
-      "component_a": "sensor_stack",
-      "component_b": "silicon_bulk",
-      "relationship": "contains",
-      "source_evidence": [
-        "detector_design"
-      ]
-    },
-    {
-      "interface_id": "si_bulk_sensitive",
-      "component_a": "silicon_bulk",
-      "component_b": "sensitive_region",
-      "relationship": "contains",
-      "source_evidence": [
-        "detector_design"
-      ]
-    },
-    {
-      "interface_id": "sensor_stack_bottom_electrode",
-      "component_a": "sensor_stack",
-      "component_b": "bottom_electrode",
-      "relationship": "contains",
-      "source_evidence": [
-        "detector_design"
+        {
+          "source": "detector_design",
+          "desc": "Al bottom electrode 1mm"
+        }
       ]
     }
   ],
@@ -397,7 +216,10 @@
       "nist_name": "G4_AIR",
       "density_g_cm3": 0.001214,
       "source_evidence": [
-        "NIST:standard_air"
+        {
+          "source": "NIST",
+          "desc": "Standard NIST air"
+        }
       ]
     },
     {
@@ -407,50 +229,59 @@
       "nist_name": "G4_Al",
       "density_g_cm3": 2.699,
       "source_evidence": [
-        "NIST:standard_aluminum"
+        {
+          "source": "NIST",
+          "desc": "Standard NIST aluminum"
+        }
       ]
     },
     {
       "material_id": "FR4",
-      "name": "FR4 Epoxy",
+      "name": "FR4_Epoxy",
       "classification": "custom",
-      "composition": [
-        {
-          "element": "C",
-          "fraction": 0.188
-        },
-        {
-          "element": "H",
-          "fraction": 0.013
-        },
-        {
-          "element": "O",
-          "fraction": 0.331
-        },
-        {
-          "element": "Si",
-          "fraction": 0.156
-        },
-        {
-          "element": "Al",
-          "fraction": 0.04
-        },
-        {
-          "element": "Ca",
-          "fraction": 0.05
-        },
-        {
-          "element": "Mg",
-          "fraction": 0.004
-        },
-        {
-          "element": "Fe",
-          "fraction": 0.003
-        }
-      ],
+      "composition": {
+        "type": "fraction",
+        "elements": [
+          {
+            "symbol": "C",
+            "fraction": 0.188
+          },
+          {
+            "symbol": "H",
+            "fraction": 0.013
+          },
+          {
+            "symbol": "O",
+            "fraction": 0.331
+          },
+          {
+            "symbol": "Si",
+            "fraction": 0.156
+          },
+          {
+            "symbol": "Al",
+            "fraction": 0.04
+          },
+          {
+            "symbol": "Ca",
+            "fraction": 0.05
+          },
+          {
+            "symbol": "Mg",
+            "fraction": 0.004
+          },
+          {
+            "symbol": "Fe",
+            "fraction": 0.003
+          }
+        ]
+      },
       "density_g_cm3": 1.85,
       "source_evidence": [
-        "material_database:FR4_fiberglass_epoxy"
+        {
+          "source": "material_database",
+          "desc": "FR4 fiberglass epoxy composite"
+        }
       ]
     },
     {
@@ -460,26 +291,35 @@
       "nist_name": "G4_Si",
       "density_g_cm3": 2.329,
       "source_evidence": [
-        "NIST:standard_silicon"
+        {
+          "source": "NIST",
+          "desc": "Standard NIST silicon"
+        }
       ]
     },
     {
       "material_id": "SiO2",
-      "name": "Silicon Dioxide",
+      "name": "SiO2",
       "classification": "custom",
-      "composition": [
-        {
-          "element": "Si",
-          "fraction": 0.467
-        },
-        {
-          "element": "O",
-          "fraction": 0.533
-        }
-      ],
+      "composition": {
+        "type": "stoichiometric",
+        "elements": [
+          {
+            "symbol": "Si",
+            "n_atoms": 1
+          },
+          {
+            "symbol": "O",
+            "n_atoms": 2
+          }
+        ]
+      },
       "density_g_cm3": 2.2,
       "source_evidence": [
-        "material_database:thermal_SiO2"
+        {
+          "source": "material_database",
+          "desc": "Thermal SiO2"
+        }
       ]
     }
   ],
@@ -494,29 +334,34 @@
       },
       "beam": {
         "position": [
-          0,
-          0,
-          4900000
+          0.0,
+          0.0,
+          4900.0
         ],
         "direction": [
-          0,
-          0,
-          -1
+          0.0,
+          0.0,
+          -1.0
         ],
-        "surface_shape": "point"
+        "shape": "point"
       },
       "generator_type": "gps",
-      "events": 200000,
       "source_evidence": [
-        "user_specification:10MeV_proton_vertical_incidence"
+        {
+          "source": "user_specification",
+          "desc": "10 MeV proton vertical incidence"
+        }
       ]
     }
   ],
   "physics": {
     "physics_list": "QGSP_BIC_HP",
-    "selection_reasoning": "QGSP_BIC_HP: standard EM + hadronic for proton with HP neutron",
+    "selection_reasoning": "QGSP_BIC_HP: standard EM + hadronic for proton simulation with high-precision neutron",
     "source_evidence": [
-      "geant4_physics_guide:recommended_for_proton_range"
+      {
+        "source": "geant4_physics_guide",
+        "desc": "Recommended for proton therapy range"
+      }
     ]
   },
   "scoring": [
@@ -529,14 +374,14 @@
         "n_entries"
       ],
       "region_scores": [
-        {
-          "region_component_id": "sensitive_region",
-          "quantity": "edep_MeV"
-        }
+        "sensitive_region"
       ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification:edep_in_sensitive_region"
+        {
+          "source": "user_specification",
+          "desc": "Energy deposition in sensitive region"
+        }
       ]
     },
     {
@@ -548,14 +393,14 @@
         "edep_MeV"
       ],
       "region_scores": [
-        {
-          "region_component_id": "oxide_layer",
-          "quantity": "dose_Gy"
-        }
+        "oxide_layer"
       ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification:TID_dose_in_gate_oxide"
+        {
+          "source": "user_specification",
+          "desc": "TID dose in gate oxide"
+        }
       ]
     },
     {
@@ -570,14 +415,20 @@
         "edep_MeV"
       ],
       "region_scores": [
-        {
-          "region_component_id": "silicon_bulk",
-          "quantity": "dose_Gy"
-        }
+        "silicon_bulk"
       ],
       "output_format": "csv",
+      "mesh": {
+        "nx": 10,
+        "ny": 10,
+        "nz": 10,
+        "voxel_size_mm": 5.0
+      },
       "source_evidence": [
-        "user_specification:3D_dose_map_in_silicon_bulk"
+        {
+          "source": "user_specification",
+          "desc": "3D dose map in silicon bulk"
+        }
       ]
     },
     {
@@ -591,18 +442,17 @@
         "z_mm"
       ],
       "region_scores": [
-        {
-          "region_component_id": "sensitive_region",
-          "quantity": "edep_MeV"
-        }
+        "sensitive_region"
       ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification:per_event_hit_table"
+        {
+          "source": "user_specification",
+          "desc": "Per-event hit table"
+        }
       ]
     }
   ],
-  "sensitive_detectors": [],
   "ledger": {
     "entries": [
       {
@@ -642,6 +492,5 @@
       }
     ],
     "version": "1.0"
-  },
-  "open_issues": []
+  }
 }

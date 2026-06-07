@@ -28,5 +28,7 @@
     "oxide_dose",
     "bulk_dose_3d",
     "event_table"
-  ]
+  ],
+  "interfaces_count": 0,
+  "physics_list": "QGSP_BIC_HP"
 }
