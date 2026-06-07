@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 from agent_core.visualization.graph_visualizer import (
-    MermaidRenderer,
     SubgraphSpec,
     NodeSpec,
     EdgeSpec,

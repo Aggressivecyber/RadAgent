@@ -85,9 +85,7 @@ class TestRunBaseGates:
 
         for g in gate_results:
             if g["gate_id"] in (7, 9):
-                assert g["status"] != "pass", (
-                    f"Gate {g['gate_id']} auto-passed in acceptance mode"
-                )
+                assert g["status"] != "pass", f"Gate {g['gate_id']} auto-passed in acceptance mode"
 
 
 class TestRunG4ModelingGates:
@@ -185,7 +183,10 @@ class TestRunG4ModelingGates:
             ],
             physics=PhysicsSpec(
                 physics_list="FTFP_BERT",
-                selection_reasoning="FTFP_BERT chosen for proton therapy range, covers EM and hadronic processes.",
+                selection_reasoning=(
+                    "FTFP_BERT chosen for proton therapy range,"
+                    " covers EM and hadronic processes."
+                ),
                 source_evidence=["standard_EM"],
             ),
             scoring=[

@@ -55,7 +55,10 @@ class RAGResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def cosine_similarity(query_vec: NDArray[np.floating[Any]], doc_vecs: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
+Vec = NDArray[np.floating[Any]]
+
+
+def cosine_similarity(query_vec: Vec, doc_vecs: Vec) -> Vec:
     """Compute cosine similarity between query and document vectors.
 
     Args:
@@ -70,7 +73,8 @@ def cosine_similarity(query_vec: NDArray[np.floating[Any]], doc_vecs: NDArray[np
 
     query_norm = query_vec / (np.linalg.norm(query_vec) + 1e-10)
     doc_norms = doc_vecs / (np.linalg.norm(doc_vecs, axis=1, keepdims=True) + 1e-10)
-    return (doc_norms @ query_norm).astype(np.float64)
+    result: Vec = (doc_norms @ query_norm).astype(np.float64)
+    return result
 
 
 class OllamaEmbedder:
@@ -98,7 +102,10 @@ class OllamaEmbedder:
                 data = resp.json()
                 embeddings = data.get("embeddings", [])
                 if embeddings and len(embeddings) > 0:
-                    return np.array(embeddings[0], dtype=np.float64)
+                    arr: NDArray[np.floating[Any]] = np.array(
+                        embeddings[0], dtype=np.float64,
+                    )
+                    return arr
                 return None
         except Exception as exc:
             logger.warning("Ollama embed failed: %s", exc)
@@ -130,11 +137,11 @@ class OllamaEmbedder:
             logger.warning("Ollama batch embed failed (%s), falling back to sequential", exc)
 
         # Fallback: embed one-by-one
-        results: list[NDArray[np.floating[Any]] | None] = []
+        fallback: list[NDArray[np.floating[Any]] | None] = []
         for text in texts:
             emb = await self.embed(text)
-            results.append(emb)
-        return results
+            fallback.append(emb)
+        return fallback
 
     async def is_available(self) -> bool:
         """Check if Ollama service is reachable."""

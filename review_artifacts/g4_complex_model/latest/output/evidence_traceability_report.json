@@ -1,27 +1,5 @@
 {
-  "decision": "allow_rag",
-  "geometry_evidence_count": 8,
-  "materials_evidence_count": 5,
-  "source_evidence_count": 1,
-  "physics_evidence_count": 1,
-  "scoring_evidence_count": 4,
-  "all_params_traced": true,
-  "traced_components": [
-    "world",
-    "housing",
-    "pcb",
-    "sensor_stack",
-    "top_electrode",
-    "oxide_layer",
-    "silicon_bulk",
-    "sensitive_region",
-    "bottom_electrode"
-  ],
-  "traced_materials": [
-    "G4_AIR",
-    "G4_Al",
-    "FR4",
-    "G4_Si",
-    "SiO2"
-  ]
+  "decision": "unknown",
+  "geometry_evidence_count": 0,
+  "materials_evidence_count": 0
 }

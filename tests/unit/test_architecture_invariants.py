@@ -23,14 +23,10 @@ class TestNoOldMonolith:
         )
 
     def test_no_old_graph_state(self) -> None:
-        assert not (AGENT_CORE / "graph" / "state.py").exists(), (
-            "Old state.py must be deleted"
-        )
+        assert not (AGENT_CORE / "graph" / "state.py").exists(), "Old state.py must be deleted"
 
     def test_no_old_routes(self) -> None:
-        assert not (AGENT_CORE / "graph" / "routes.py").exists(), (
-            "Old routes.py must be deleted"
-        )
+        assert not (AGENT_CORE / "graph" / "routes.py").exists(), "Old routes.py must be deleted"
 
 
 class TestNoOldFanOut:
@@ -133,15 +129,18 @@ class TestMainStateIsPathBased:
         from agent_core.graph.main_state import RadAgentMainState
 
         annotations = RadAgentMainState.__annotations__
-        assert "task_spec" not in annotations, (
-            "task_spec must NOT be inline — use task_spec_path"
-        )
+        assert "task_spec" not in annotations, "task_spec must NOT be inline — use task_spec_path"
 
     def test_no_tcad_spice_fields(self) -> None:
         from agent_core.graph.main_state import RadAgentMainState
 
         annotations = RadAgentMainState.__annotations__
-        for forbidden in ["tcad_context", "spice_context", "tcad_input_package", "spice_output_package"]:
+        for forbidden in [
+            "tcad_context",
+            "spice_context",
+            "tcad_input_package",
+            "spice_output_package",
+        ]:
             assert forbidden not in annotations, f"Forbidden field: {forbidden}"
 
 
@@ -153,9 +152,7 @@ class TestNoSimulationWorkspaceInGit:
         if gitignore.exists():
             content = gitignore.read_text()
             # Must have some rule blocking simulation_workspace
-            assert "simulation_workspace" in content, (
-                ".gitignore must block simulation_workspace"
-            )
+            assert "simulation_workspace" in content, ".gitignore must block simulation_workspace"
 
 
 class TestReviewArtifactsArchive:

@@ -8,9 +8,8 @@ Design: topology as data → renderer as pure function → output as string.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 
 # ─── Color palette ───────────────────────────────────────────────────
@@ -206,7 +205,10 @@ def get_g4_modeling_subgraph_spec() -> SubgraphSpec:
             EdgeSpec("model_scope_guard_node", "geometry_decomposition_node", "proceed"),
             EdgeSpec("model_scope_guard_node", "persist_model_ir", "block → 失败", "block"),
             EdgeSpec("model_ir_validation_node", "model_review_report_node", "通过"),
-            EdgeSpec("model_ir_validation_node", "geometry_decomposition_node", "错误 < 3 → 重试", "retry"),
+            EdgeSpec(
+                "model_ir_validation_node", "geometry_decomposition_node",
+                "错误 < 3 → 重试", "retry",
+            ),
             EdgeSpec("model_ir_validation_node", "persist_model_ir", "错误 ≥ 3 → 失败", "block"),
         ),
     )
@@ -601,7 +603,8 @@ def main() -> None:
         "--sub",
         type=str,
         default=None,
-        help="仅输出指定子图 (context/task_planning/g4_modeling/g4_codegen/gate_validation/patch/artifact/report)",
+        help="仅输出指定子图 "
+        "(context/task_planning/g4_modeling/g4_codegen/gate_validation/patch/artifact/report)",
     )
     parser.add_argument(
         "--combined", action="store_true",

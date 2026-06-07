@@ -174,7 +174,8 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
         "",
         f"- Allow simplification: `{simplification_policy.get('allow_simplification', False)}`",
         f"- Requires user approval: `{simplification_policy.get('requires_user_approval', True)}`",
-        f"- Approved simplifications: {len(simplification_policy.get('approved_simplifications', []))}",
+        f"- Approved simplifications: "
+        f"{len(simplification_policy.get('approved_simplifications', []))}",
     ])
 
     # Gate results

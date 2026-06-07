@@ -46,8 +46,10 @@ review_artifacts/**/*.h5
 review_artifacts/**/*.raw
 review_artifacts/**/*.bin
 
-# Archive old artifacts
-review_artifacts/archive/
+# Archive old artifacts (keep .gitkeep for directory structure)
+review_artifacts/archive/*
+!review_artifacts/archive/.gitkeep
+!review_artifacts/archive/**/.gitkeep
 
 # OS
 .DS_Store

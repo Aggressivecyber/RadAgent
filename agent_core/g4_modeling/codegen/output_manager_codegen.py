@@ -13,7 +13,6 @@ NO invented fields.
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState as RadiationAgentState

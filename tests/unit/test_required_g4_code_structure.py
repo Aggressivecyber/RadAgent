@@ -99,7 +99,9 @@ class TestRequiredG4CodeStructure:
             if target:
                 assert target.startswith("src/"), f"Module {mod['module_id']}: target not in src/"
             if header:
-                assert header.startswith("include/"), f"Module {mod['module_id']}: header not in include/"
+                assert header.startswith("include/"), (
+                    f"Module {mod['module_id']}: header not in include/"
+                )
 
     async def test_integration_assembler_generates_cmake(self) -> None:
         """Integration assembler must produce CMakeLists.txt."""
@@ -150,7 +152,7 @@ target_link_libraries(rad_detector ${Geant4_LIBRARIES})
         assert any("Geant4" in i for i in issues)
 
     async def test_no_physics_list_custom_class_required(self) -> None:
-        """If using standard physics list (e.g., QGSP_BIC_HP), no custom PhysicsList class required."""
+        """Standard physics list (e.g. QGSP_BIC_HP) needs no custom PhysicsList."""
         result = await code_module_planner({"g4_model_ir": _complex_model_ir()})
         modules = result["code_modules"]
         module_ids = {m["module_id"] for m in modules}

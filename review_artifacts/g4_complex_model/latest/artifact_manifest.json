@@ -1,66 +1,66 @@
 {
+  "schema_version": "v2",
   "artifact_type": "g4_complex_model",
-  "job_id": "complex_dev",
-  "validation_status": "PARTIAL",
-  "is_stub": false,
-  "run_type": "dev",
-  "source_commit": "0f8b3af5c618",
-  "source_job_id": "complex_dev",
+  "job_id": "empty_test",
+  "validation_status": "UNKNOWN",
+  "generated_at": "2026-06-07T14:22:33.344238+00:00",
+  "source_commit": "9944e84",
   "files": [
-    "code_module_plan.json",
-    "component_specs_summary.json",
-    "construction_ledger.json",
-    "evidence_traceability_report.json",
-    "g4_model_ir.json",
-    "gate_results.json",
-    "geometry_interface_report.json",
-    "model_review_report.md",
-    "no_simplification_report.json",
-    "output_manager_contract.json",
-    "proposed_patch_summary.json"
+    {
+      "name": "code_module_plan.json",
+      "size_bytes": 37,
+      "sha256": "690b5cbe6d016f4903383211d63299bf4f8bce3b4db9e890d400fe4ac78a1257"
+    },
+    {
+      "name": "component_specs_summary.json",
+      "size_bytes": 133,
+      "sha256": "2dc38dc6155f1810ead8546d0107817a16c8522701a7388e7e2e456e3cf54d3a"
+    },
+    {
+      "name": "construction_ledger.json",
+      "size_bytes": 33,
+      "sha256": "68fa1756264016dc29910bc0fa7660ae0df8737c8243f54ec0a27a30a1ac0cbe"
+    },
+    {
+      "name": "evidence_traceability_report.json",
+      "size_bytes": 92,
+      "sha256": "07cf65e9d440e765920baeaa5969abdcb37fdc0920e84fe285cf764cda567b7e"
+    },
+    {
+      "name": "g4_model_ir.json",
+      "size_bytes": 90,
+      "sha256": "d0352f637ede743882d0de574fa6b166b218c52672061d0cecb7a8b8519f8c19"
+    },
+    {
+      "name": "gate_results.json",
+      "size_bytes": 1882,
+      "sha256": "55cf0f8da460c05845a0dfb8cbd0923e7d87724fba445ba90c114c61655f6cd8"
+    },
+    {
+      "name": "geometry_interface_report.json",
+      "size_bytes": 47,
+      "sha256": "e20abd6958e83b2df55fff1dee67b9bdc8c827ddc627797ff58a3d100c860dd0"
+    },
+    {
+      "name": "model_review_report.md",
+      "size_bytes": 41,
+      "sha256": "d400268a7992af90b990f4ad7b3f178df39316d9faebded27b663f32169061d6"
+    },
+    {
+      "name": "no_simplification_report.json",
+      "size_bytes": 102,
+      "sha256": "c5d671c9c31b350cf11a9adc6048645e97fbc54a1ee520cb42f39732d1717b7e"
+    },
+    {
+      "name": "output_manager_contract.json",
+      "size_bytes": 2166,
+      "sha256": "2a04b1255bf549abdef205ebcb3bad6c6e2ed043d1dc60bd8eb2ad9e8d67edaf"
+    },
+    {
+      "name": "proposed_patch_summary.json",
+      "size_bytes": 79,
+      "sha256": "2e7f2d0a0a41c84fe05eb530c8a28c1f6709471e1cc842ca4992ab6b016ec988"
+    }
   ],
-  "total_files": 11,
-  "sha256": {
-    "construction_ledger.json": "a9110727434f56ec",
-    "geometry_interface_report.json": "7d1d97cbb7a7262e",
-    "component_specs_summary.json": "941b1d01b0bff9bf",
-    "proposed_patch_summary.json": "2740639965154d14",
-    "model_review_report.md": "ecf2d278ef92ca4b",
-    "no_simplification_report.json": "627bdff0d31d6784",
-    "output_manager_contract.json": "2a04b1255bf549ab",
-    "code_module_plan.json": "b34f49a1edfdfa20",
-    "evidence_traceability_report.json": "781b11beebd5fcaa",
-    "gate_results.json": "84cd14ea5da805d8",
-    "g4_model_ir.json": "1d9aa894c39eca83"
-  },
-  "size_bytes": {
-    "construction_ledger.json": 877,
-    "geometry_interface_report.json": 958,
-    "component_specs_summary.json": 591,
-    "proposed_patch_summary.json": 463,
-    "model_review_report.md": 511,
-    "no_simplification_report.json": 592,
-    "output_manager_contract.json": 2166,
-    "code_module_plan.json": 2107,
-    "evidence_traceability_report.json": 502,
-    "gate_results.json": 18658,
-    "g4_model_ir.json": 10962
-  },
-  "model_ir_summary": {
-    "components_count": 9,
-    "materials_count": 5,
-    "scoring_count": 4,
-    "source": "proton 10.0 MeV"
-  },
-  "skipped_gates": [
-    0,
-    3,
-    4,
-    6,
-    7,
-    9,
-    10,
-    11
-  ],
-  "note": "NOT VERIFIED — 8 gates skipped due to dev mode"
+  "total_files": 11
 }

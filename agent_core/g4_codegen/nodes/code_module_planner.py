@@ -95,7 +95,10 @@ async def code_module_planner(state: G4CodegenSubgraphState) -> dict[str, Any]:
         "target_file": "src/main.cc",
         "target_header": "",
         "description": "Program entry point",
-        "depends_on": ["detector_construction", "physics_list", "primary_generator", "output_manager"],
+        "depends_on": [
+            "detector_construction", "physics_list",
+            "primary_generator", "output_manager",
+        ],
     })
 
     return {

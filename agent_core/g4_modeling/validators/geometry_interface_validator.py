@@ -166,5 +166,8 @@ class GeometryInterfaceValidator:
             if current in visited:
                 break  # Cycle protection
             visited.add(current)
-            current = parent_map.get(current)
+            next_parent = parent_map.get(current)
+            if next_parent is None:
+                break
+            current = next_parent
         return False

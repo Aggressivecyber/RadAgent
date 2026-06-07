@@ -223,7 +223,7 @@ def _generate_source(class_name: str, comp: Any) -> str:
 
 def _solid_includes(solid_type: str) -> str:
     """Return the Geant4 include line(s) for a solid type."""
-    _SOLID_HEADERS: dict[str, str] = {
+    _solid_headers: dict[str, str] = {
         "G4Box": '#include "G4Box.hh"',
         "G4Tubs": '#include "G4Tubs.hh"',
         "G4Cons": '#include "G4Cons.hh"',
@@ -233,4 +233,4 @@ def _solid_includes(solid_type: str) -> str:
         "G4Para": '#include "G4Para.hh"',
         "G4Polycone": '#include "G4Polycone.hh"',
     }
-    return _SOLID_HEADERS.get(solid_type, '#include "G4Box.hh"')
+    return _solid_headers.get(solid_type, '#include "G4Box.hh"')

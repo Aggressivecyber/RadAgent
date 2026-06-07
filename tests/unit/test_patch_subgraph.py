@@ -21,7 +21,9 @@ def temp_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 class TestLoadProposedPatch:
     async def test_loads_from_file(self, temp_workspace: Path) -> None:
         patch_file = temp_workspace / "patch.json"
-        patch_file.write_text(json.dumps({"changed_files": [{"path": "test.cc", "content": "int main(){}"}]}))
+        patch_file.write_text(
+            json.dumps({"changed_files": [{"path": "test.cc", "content": "int main(){}"}]})
+        )
 
         state = {"proposed_patch_path": str(patch_file)}
         result = await load_proposed_patch(state)
@@ -57,7 +59,11 @@ class TestReviewPatch:
         }
 
         with patch.object(FilePermissionValidator, "__init__", lambda self, **kw: None):
-            with patch.object(FilePermissionValidator, "validate_patch_permissions", return_value=(True, ["All green zone"])):
+            with patch.object(
+                FilePermissionValidator,
+                "validate_patch_permissions",
+                return_value=(True, ["All green zone"]),
+            ):
                 result = await review_patch(state)
 
         assert result["patch_review_result"]["format_valid"] is True
@@ -85,7 +91,11 @@ class TestReviewPatch:
         }
 
         with patch.object(FilePermissionValidator, "__init__", lambda self, **kw: None):
-            with patch.object(FilePermissionValidator, "validate_patch_permissions", return_value=(False, ["red zone: ../../../etc/passwd"])):
+            with patch.object(
+                FilePermissionValidator,
+                "validate_patch_permissions",
+                return_value=(False, ["red zone: ../../../etc/passwd"]),
+            ):
                 result = await review_patch(state)
 
         assert not result["patch_review_result"]["permission_valid"]
@@ -103,7 +113,10 @@ class TestApplyPatch:
             "generated_code_dir": str(code_dir),
             "proposed_patch": {
                 "changed_files": [
-                    {"path": "src/main.cc", "content": "#include <iostream>\nint main() { return 0; }"},
+                    {
+                        "path": "src/main.cc",
+                        "content": "#include <iostream>\nint main() { return 0; }",
+                    },
                 ],
             },
             "patch_review_result": {"errors": []},

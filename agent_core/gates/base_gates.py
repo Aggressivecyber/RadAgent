@@ -157,9 +157,9 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     if not changed_files:
         # Try loading from the proposed patch if available
         proposed_path = state.get("proposed_patch_path", "")
-        if proposed_path and Path(proposed_path).exists():
+        if proposed_path and Path(str(proposed_path)).exists():
             try:
-                proposed_data = json.loads(Path(proposed_path).read_text())
+                proposed_data = json.loads(Path(str(proposed_path)).read_text())
                 changed_files = proposed_data.get("changed_files", [])
             except (json.JSONDecodeError, OSError):
                 pass
@@ -205,9 +205,18 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "status": "pass" if struct_valid else "fail",
             "checked_items": [
                 {"item": "code directory exists", "result": "pass"},
-                {"item": "src/*.cc files present", "result": "pass" if struct_valid else "fail"},
-                {"item": "include/*.hh files present", "result": "pass" if struct_valid else "fail"},
-                {"item": "CMakeLists.txt valid", "result": "pass" if struct_valid else "fail"},
+                {
+                    "item": "src/*.cc files present",
+                    "result": "pass" if struct_valid else "fail",
+                },
+                {
+                    "item": "include/*.hh files present",
+                    "result": "pass" if struct_valid else "fail",
+                },
+                {
+                    "item": "CMakeLists.txt valid",
+                    "result": "pass" if struct_valid else "fail",
+                },
             ],
             "passed_items": ["structure valid"] if struct_valid else [],
             "failed_items": struct_errors if not struct_valid else [],
@@ -242,8 +251,11 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
                 output_dir=str(output_dir), events=10,
             )
             build_valid = build_result.get("success", False)
-            g6_message = "Build passed" if build_valid else str(build_result.get("errors", "Build failed"))
+            g6_msg = "Build passed" if build_valid else str(
+                build_result.get("errors", "Build failed"),
+            )
             g6_severity = "pass" if build_valid else "fail"
+            g6_message = g6_msg
         else:
             if execution_mode == "mvp1_acceptance":
                 g6_message = "[MVP1] Geant4 environment required"
@@ -257,7 +269,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         "gate_id": 6, "name": gate_name(6),
         "status": g6_severity,
         "checked_items": [
-            {"item": "build/parse verification", "result": "pass" if g6_severity == "pass" else "fail" if g6_severity == "fail" else "skipped"},
+            {"item": "build/parse verification", "result": g6_severity},
         ],
         "passed_items": ["build passed"] if g6_severity == "pass" else [],
         "failed_items": [g6_message] if g6_severity == "fail" else [],
@@ -279,7 +291,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         "gate_id": 7, "name": gate_name(7),
         "status": g7_severity,
         "checked_items": [
-            {"item": "unit test execution", "result": "skipped" if g7_severity == "skipped" else "fail"},
+            {"item": "unit test execution", "result": g7_severity},
         ],
         "passed_items": [],
         "failed_items": [g7_message] if g7_severity == "fail" else [],
@@ -335,7 +347,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         "gate_id": 9, "name": gate_name(9),
         "status": g9_severity,
         "checked_items": [
-            {"item": "smoke simulation (1000 events)", "result": "skipped" if g9_severity == "skipped" else "fail"},
+            {"item": "smoke simulation (1000 events)", "result": g9_severity},
         ],
         "passed_items": [],
         "failed_items": [g9_message] if g9_severity == "fail" else [],
@@ -391,8 +403,14 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         "gate_id": 11, "name": gate_name(11),
         "status": "pass" if not physics_errors else "fail",
         "checked_items": [
-            {"item": "edep values non-negative, finite", "result": "pass" if not physics_errors else "fail"},
-            {"item": "dose values non-negative, finite", "result": "pass" if not physics_errors else "fail"},
+            {
+                "item": "edep values non-negative, finite",
+                "result": "pass" if not physics_errors else "fail",
+            },
+            {
+                "item": "dose values non-negative, finite",
+                "result": "pass" if not physics_errors else "fail",
+            },
         ],
         "passed_items": ["physics sanity passed"] if not physics_errors else [],
         "failed_items": physics_errors[:5],

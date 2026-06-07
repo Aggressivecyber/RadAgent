@@ -133,7 +133,10 @@ def _build_complex_model_ir() -> dict[str, Any]:
         ],
         "physics": {
             "physics_list": "QGSP_BIC_HP",
-            "selection_reasoning": "QGSP_BIC_HP chosen for proton therapy: binary cascade for p < 10 GeV, high-precision neutron, standard EM.",
+            "selection_reasoning": (
+                "QGSP_BIC_HP chosen for proton therapy:"
+                " binary cascade for p < 10 GeV, high-precision neutron, standard EM."
+            ),
             "source_evidence": ["geant4_physics_guide"],
         },
         "scoring": [
@@ -155,9 +158,21 @@ def _build_complex_model_ir() -> dict[str, Any]:
             },
         ],
         "interfaces": [
-            {"parent_component": "world", "child_component": "target_scatterer", "interface_type": "daughter"},
-            {"parent_component": "world", "child_component": "silicon_detector_1", "interface_type": "daughter"},
-            {"parent_component": "world", "child_component": "silicon_detector_2", "interface_type": "daughter"},
+            {
+                "parent_component": "world",
+                "child_component": "target_scatterer",
+                "interface_type": "daughter",
+            },
+            {
+                "parent_component": "world",
+                "child_component": "silicon_detector_1",
+                "interface_type": "daughter",
+            },
+            {
+                "parent_component": "world",
+                "child_component": "silicon_detector_2",
+                "interface_type": "daughter",
+            },
         ],
         "open_issues": [],
         "evidence": {
@@ -168,8 +183,12 @@ def _build_complex_model_ir() -> dict[str, Any]:
                 {"source": "NIST", "desc": "G4_Pb"},
                 {"source": "NIST", "desc": "G4_Si"},
             ],
-            "source": [{"source": "user_specification", "desc": "150 MeV proton with Gaussian spread"}],
-            "physics": [{"source": "geant4_physics_guide", "desc": "QGSP_BIC_HP for proton therapy"}],
+            "source": [
+                {"source": "user_specification", "desc": "150 MeV proton with Gaussian spread"}
+            ],
+            "physics": [
+                {"source": "geant4_physics_guide", "desc": "QGSP_BIC_HP for proton therapy"}
+            ],
             "scoring": [{"source": "user_specification", "desc": "edep in both silicon layers"}],
         },
         "ledger": {"entries": [], "version": "1.0"},
@@ -286,9 +305,7 @@ class TestG4ComplexModelDev:
         assert no_simp["status"] == "NO_SIMPLIFICATION"
 
         # Verify component summary reflects complex model
-        comp_summary = json.loads(
-            (output_dir / "component_specs_summary.json").read_text()
-        )
+        comp_summary = json.loads((output_dir / "component_specs_summary.json").read_text())
         assert comp_summary["total_components"] == 4
         assert comp_summary["materials_count"] == 3
         assert "target_scatterer" in comp_summary["component_ids"]
@@ -302,18 +319,23 @@ class TestG4ComplexModelDev:
         assert (artifact_dir / "artifact_manifest.json").exists()
 
         # 6. Generate report
-        report_result = await generate_final_report({
-            "job_id": job_id,
-            "user_query": "Simulate 150 MeV proton beam through Pb scatterer into 2-layer silicon detector",
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "VERIFIED",
-            "context_decision": "allow_rag",
-            "simulation_scope": ["geant4"],
-            "failed_gates": [],
-            "errors": [],
-            "g4_model_ir_path": str(ir_path),
-            "gate_results_path": str(gate_path),
-        })
+        report_result = await generate_final_report(
+            {
+                "job_id": job_id,
+                "user_query": (
+                    "Simulate 150 MeV proton beam through Pb scatterer"
+                    " into 2-layer silicon detector"
+                ),
+                "execution_mode": "dev_no_geant4_env",
+                "validation_status": "VERIFIED",
+                "context_decision": "allow_rag",
+                "simulation_scope": ["geant4"],
+                "failed_gates": [],
+                "errors": [],
+                "g4_model_ir_path": str(ir_path),
+                "gate_results_path": str(gate_path),
+            }
+        )
 
         assert report_result["verified"] is True
         report_text = Path(report_result["final_report_path"]).read_text()

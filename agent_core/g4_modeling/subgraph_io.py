@@ -98,7 +98,8 @@ async def persist_model_ir(state: G4ModelingSubgraphState) -> dict[str, Any]:
     # Save model review report
     review_report = state.get("model_review_report", "")
     review_path = model_ir_dir / "model_review_report.md"
-    review_path.write_text(review_report if review_report else "# Model Review\n\nNo review generated.\n")
+    default_review = "# Model Review\n\nNo review generated.\n"
+    review_path.write_text(review_report if review_report else default_review)
 
     # Determine status
     errors = state.get("model_ir_errors", [])

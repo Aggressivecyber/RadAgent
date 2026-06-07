@@ -134,12 +134,8 @@ class TestComponentGeometryContract:
         for mod in result["code_modules"]:
             content = mod["generated_content"]
             for fname, code in content.items():
-                assert "Place(" not in code, (
-                    f"{fname}: Builder must not have Place() method"
-                )
-                assert "G4PVPlacement" not in code, (
-                    f"{fname}: Builder must not use G4PVPlacement"
-                )
+                assert "Place(" not in code, f"{fname}: Builder must not have Place() method"
+                assert "G4PVPlacement" not in code, f"{fname}: Builder must not use G4PVPlacement"
 
     async def test_builder_creates_logical_volume(self) -> None:
         from agent_core.g4_modeling.codegen.component_geometry_codegen import (
@@ -180,7 +176,9 @@ class TestComponentGeometryContract:
         assert 'GetMaterial("G4_AIR")' in world_src
 
         # Sensitive layer uses G4_Si
-        sens_src = result["code_modules"][1]["generated_content"]["SensitiveLayerBuilder::SensitiveLayerBuilder.cc"]
+        sens_src = result["code_modules"][1]["generated_content"][
+            "SensitiveLayerBuilder::SensitiveLayerBuilder.cc"
+        ]
         assert 'GetMaterial("G4_Si")' in sens_src
 
     async def test_header_no_pv_placement_include(self) -> None:
@@ -250,7 +248,9 @@ class TestPlacementContract:
         state = {"g4_model_ir": _model_ir_with_hierarchy()}
         result = await placement_codegen(state)
 
-        source = result["code_modules"][0]["generated_content"]["PlacementManager::PlacementManager.cc"]
+        source = result["code_modules"][0]["generated_content"][
+            "PlacementManager::PlacementManager.cc"
+        ]
         assert "phys_world" in source
         assert "G4ThreeVector()" in source
         assert "builder_world->GetLogicalVolume()" in source
@@ -264,7 +264,9 @@ class TestPlacementContract:
         state = {"g4_model_ir": _model_ir_with_hierarchy()}
         result = await placement_codegen(state)
 
-        source = result["code_modules"][0]["generated_content"]["PlacementManager::PlacementManager.cc"]
+        source = result["code_modules"][0]["generated_content"][
+            "PlacementManager::PlacementManager.cc"
+        ]
 
         # Position from IR: [0, 0, 500]
         assert "500" in source and "*um" in source
@@ -281,7 +283,9 @@ class TestPlacementContract:
         state = {"g4_model_ir": _model_ir_with_hierarchy()}
         result = await placement_codegen(state)
 
-        source = result["code_modules"][0]["generated_content"]["PlacementManager::PlacementManager.cc"]
+        source = result["code_modules"][0]["generated_content"][
+            "PlacementManager::PlacementManager.cc"
+        ]
         assert "SetCheckOverlaps(true)" in source
         assert "CheckOverlaps(1000" in source
 
@@ -294,7 +298,9 @@ class TestPlacementContract:
         state = {"g4_model_ir": _model_ir_with_hierarchy()}
         result = await placement_codegen(state)
 
-        source = result["code_modules"][0]["generated_content"]["PlacementManager::PlacementManager.cc"]
+        source = result["code_modules"][0]["generated_content"][
+            "PlacementManager::PlacementManager.cc"
+        ]
         assert "builder_world" in source
         assert "builder_sensitive_layer" in source
 
@@ -339,9 +345,7 @@ class TestGeometryCppStatic:
             for line_no, line in enumerate(content.splitlines(), 1):
                 stripped = line.strip()
                 if stripped.startswith("#include"):
-                    assert len(stripped) > len("#include"), (
-                        f"Empty include in {fname}:{line_no}"
-                    )
+                    assert len(stripped) > len("#include"), f"Empty include in {fname}:{line_no}"
 
     async def test_no_using_namespace_std(self) -> None:
         from agent_core.g4_modeling.codegen.component_geometry_codegen import (
@@ -380,18 +384,14 @@ class TestGeometryCppStatic:
                     stripped = line.strip()
                     if stripped.startswith("//"):
                         continue
-                    assert not re.search(r'\bG4int\b', stripped), (
-                        f"{fname}: bare G4int: {stripped}"
-                    )
+                    assert not re.search(r"\bG4int\b", stripped), f"{fname}: bare G4int: {stripped}"
         for mod in place_result.get("code_modules", []):
             for fname, content in mod["generated_content"].items():
                 for line in content.splitlines():
                     stripped = line.strip()
                     if stripped.startswith("//"):
                         continue
-                    assert not re.search(r'\bG4int\b', stripped), (
-                        f"{fname}: bare G4int: {stripped}"
-                    )
+                    assert not re.search(r"\bG4int\b", stripped), f"{fname}: bare G4int: {stripped}"
 
     async def test_include_guards_present(self) -> None:
         from agent_core.g4_modeling.codegen.component_geometry_codegen import (
@@ -428,11 +428,8 @@ class TestGeometryCppStatic:
                 if not fname.endswith(".cc"):
                     continue
                 includes = [
-                    l.strip() for l in code.splitlines()
-                    if l.strip().startswith("#include")
+                    l.strip() for l in code.splitlines() if l.strip().startswith("#include")
                 ]
                 if includes:
                     class_name = fname.split("::")[1].replace(".cc", "")
-                    assert class_name in includes[0], (
-                        f"{fname}: first include must be own header"
-                    )
+                    assert class_name in includes[0], f"{fname}: first include must be own header"

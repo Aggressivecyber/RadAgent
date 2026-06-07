@@ -81,21 +81,58 @@ class TestGenerateFinalReport:
         ir_dir = temp_workspace / "jobs" / "test_job" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "components": [
-                {"component_id": "world", "component_type": "world", "material_id": "Air", "roles": [], "open_issues": []},
-                {"component_id": "silicon", "component_type": "volume", "material_id": "Si", "roles": ["edep_region"], "open_issues": []},
-            ],
-            "materials": [
-                {"material_id": "Air", "name": "G4_AIR", "density_g_cm3": 0.001214, "custom": False},
-                {"material_id": "Si", "name": "G4_Si", "density_g_cm3": 2.329, "custom": False},
-            ],
-            "sources": [{"particle_type": "proton", "energy_MeV": 10}],
-            "scoring": [{"scoring_id": "edep", "scoring_type": "edep"}],
-            "simplification_policy": {"allow_simplification": False, "requires_user_approval": True, "approved_simplifications": []},
-            "open_issues": [],
-            "evidence": {"evidence_decision": "allow_rag", "geometry": [], "materials": [], "source": [], "physics": [], "scoring": []},
-        }))
+        ir_path.write_text(
+            json.dumps(
+                {
+                    "components": [
+                        {
+                            "component_id": "world",
+                            "component_type": "world",
+                            "material_id": "Air",
+                            "roles": [],
+                            "open_issues": [],
+                        },
+                        {
+                            "component_id": "silicon",
+                            "component_type": "volume",
+                            "material_id": "Si",
+                            "roles": ["edep_region"],
+                            "open_issues": [],
+                        },
+                    ],
+                    "materials": [
+                        {
+                            "material_id": "Air",
+                            "name": "G4_AIR",
+                            "density_g_cm3": 0.001214,
+                            "custom": False,
+                        },
+                        {
+                            "material_id": "Si",
+                            "name": "G4_Si",
+                            "density_g_cm3": 2.329,
+                            "custom": False,
+                        },
+                    ],
+                    "sources": [{"particle_type": "proton", "energy_MeV": 10}],
+                    "scoring": [{"scoring_id": "edep", "scoring_type": "edep"}],
+                    "simplification_policy": {
+                        "allow_simplification": False,
+                        "requires_user_approval": True,
+                        "approved_simplifications": [],
+                    },
+                    "open_issues": [],
+                    "evidence": {
+                        "evidence_decision": "allow_rag",
+                        "geometry": [],
+                        "materials": [],
+                        "source": [],
+                        "physics": [],
+                        "scoring": [],
+                    },
+                }
+            )
+        )
 
         state = {
             "job_id": "test_job",
@@ -123,32 +160,36 @@ class TestGenerateFinalReport:
         val_dir = temp_workspace / "jobs" / "test_job" / "09_validation"
         val_dir.mkdir(parents=True)
         gate_path = val_dir / "gate_results.json"
-        gate_path.write_text(json.dumps([
-            {
-                "gate_id": 0,
-                "name": "Context Sufficiency",
-                "status": "pass",
-                "checked_items": [{"item": "context_decision", "result": "pass"}],
-                "passed_items": ["context_decision"],
-                "failed_items": [],
-                "warnings": [],
-                "evidence": ["context_decision: allow_rag"],
-                "file_paths": [],
-                "message": "Context sufficient",
-            },
-            {
-                "gate_id": 5,
-                "name": "Static Check",
-                "status": "fail",
-                "checked_items": [{"item": "code structure", "result": "fail"}],
-                "passed_items": [],
-                "failed_items": ["Missing CMakeLists.txt"],
-                "warnings": [],
-                "evidence": [],
-                "file_paths": [],
-                "message": "Missing CMakeLists.txt",
-            },
-        ]))
+        gate_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "gate_id": 0,
+                        "name": "Context Sufficiency",
+                        "status": "pass",
+                        "checked_items": [{"item": "context_decision", "result": "pass"}],
+                        "passed_items": ["context_decision"],
+                        "failed_items": [],
+                        "warnings": [],
+                        "evidence": ["context_decision: allow_rag"],
+                        "file_paths": [],
+                        "message": "Context sufficient",
+                    },
+                    {
+                        "gate_id": 5,
+                        "name": "Static Check",
+                        "status": "fail",
+                        "checked_items": [{"item": "code structure", "result": "fail"}],
+                        "passed_items": [],
+                        "failed_items": ["Missing CMakeLists.txt"],
+                        "warnings": [],
+                        "evidence": [],
+                        "file_paths": [],
+                        "message": "Missing CMakeLists.txt",
+                    },
+                ]
+            )
+        )
 
         state = {
             "job_id": "test_job",
@@ -166,19 +207,11 @@ class TestGenerateFinalReport:
         report = Path(result["final_report_path"]).read_text()
 
         # Must use correct field names: 'name' not 'gate_name', 'status' not 'severity'
-        assert "Context Sufficiency" in report, (
-            "Report must show gate name from 'name' field"
-        )
-        assert "Static Check" in report, (
-            "Report must show failed gate name"
-        )
+        assert "Context Sufficiency" in report, "Report must show gate name from 'name' field"
+        assert "Static Check" in report, "Report must show failed gate name"
         # Must show status, not '?'
-        assert "❌ fail" in report, (
-            "Report must show gate status from 'status' field"
-        )
-        assert "✅ pass" in report, (
-            "Report must show passed gate status"
-        )
+        assert "❌ fail" in report, "Report must show gate status from 'status' field"
+        assert "✅ pass" in report, "Report must show passed gate status"
         # Must show passed/failed counts in the table
         assert "Missing CMakeLists.txt" in report
 

@@ -134,7 +134,9 @@ def _generate_source(
 ) -> str:
     """Generate MaterialRegistry.cc."""
     nist_inits = "\n\n".join(
-        f"""G4Material* MaterialRegistry::Get{_sanitize_cpp_identifier(m.nist_name or m.material_id)}() const {{
+        f"""G4Material* MaterialRegistry::Get{_sanitize_cpp_identifier(
+            m.nist_name or m.material_id
+        )}() const {{
     auto it = registry_.find("{m.material_id}");
     return (it != registry_.end()) ? it->second : nullptr;
 }}"""
@@ -203,10 +205,12 @@ def _custom_material_def(mat: Any) -> str:
     if not elements_list:
         # Defensive: return nullptr for empty composition
         cpp_id = _sanitize_cpp_identifier(mat.material_id)
+        warn_msg = f"Warning: material {mat.material_id} has no composition"
         return (
-            f"G4Material* MaterialRegistry::Define{cpp_id}(G4NistManager* /*nist*/) {{\n"
+            f"G4Material* MaterialRegistry::Define{cpp_id}("
+            f"G4NistManager* /*nist*/) {{\n"
             f"    // {mat.name} — no composition defined\n"
-            f'    std::cerr << "Warning: material {mat.material_id} has no composition" << std::endl;\n'
+            f'    std::cerr << "{warn_msg}" << std::endl;\n'
             f"    return nullptr;\n"
             f"}}"
         )

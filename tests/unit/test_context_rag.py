@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
@@ -33,7 +33,6 @@ from agent_core.context.rag_client import (
     OllamaEmbedder,
     RAGClient,
     RAGDocument,
-    RAGResult,
     cosine_similarity,
 )
 
@@ -343,10 +342,10 @@ class TestRetrieveRAGContext:
         reset_rag_client()
 
         # Mock OllamaEmbedder to report unavailable
-        with patch("agent_core.context.nodes.OllamaEmbedder") as MockEmbedder:
+        with patch("agent_core.context.nodes.OllamaEmbedder") as mock_cls:
             mock_embedder = AsyncMock(spec=OllamaEmbedder)
             mock_embedder.is_available = AsyncMock(return_value=False)
-            MockEmbedder.return_value = mock_embedder
+            mock_cls.return_value = mock_embedder
 
             state: dict[str, Any] = {
                 "user_query": "G4Box detector geometry",
@@ -414,10 +413,10 @@ class TestRetrieveRAGContext:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         reset_rag_client()
 
-        with patch("agent_core.context.nodes.OllamaEmbedder") as MockEmbedder:
+        with patch("agent_core.context.nodes.OllamaEmbedder") as mock_cls:
             mock_embedder = AsyncMock(spec=OllamaEmbedder)
             mock_embedder.is_available = AsyncMock(return_value=False)
-            MockEmbedder.return_value = mock_embedder
+            mock_cls.return_value = mock_embedder
 
             state: dict[str, Any] = {
                 "user_query": "test",

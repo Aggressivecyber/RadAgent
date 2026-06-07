@@ -113,11 +113,32 @@ class TestNoSimplificationGateHard:
                 _component("housing", "Aluminum Housing", material_id="G4_Al"),
                 _component("pcb", "FR4 PCB Carrier", material_id="FR4"),
                 _component("sensor_stack", "Sensor Stack", comp_type="assembly"),
-                _component("top_electrode", "Top Aluminum Electrode", material_id="G4_Al", mother_volume="sensor_stack"),
-                _component("oxide_layer", "Gate Oxide SiO2", material_id="SiO2", dimensions={"dx": 50.0, "dy": 50.0, "dz": 0.001}, mother_volume="sensor_stack"),
+                _component(
+                    "top_electrode",
+                    "Top Aluminum Electrode",
+                    material_id="G4_Al",
+                    mother_volume="sensor_stack",
+                ),
+                _component(
+                    "oxide_layer",
+                    "Gate Oxide SiO2",
+                    material_id="SiO2",
+                    dimensions={"dx": 50.0, "dy": 50.0, "dz": 0.001},
+                    mother_volume="sensor_stack",
+                ),
                 _component("silicon_bulk", "Silicon Bulk", mother_volume="sensor_stack"),
-                _component("sensitive_region", "Sensitive Active Region", mother_volume="silicon_bulk", roles=["edep_region"]),
-                _component("bottom_electrode", "Bottom Aluminum Electrode", material_id="G4_Al", mother_volume="sensor_stack"),
+                _component(
+                    "sensitive_region",
+                    "Sensitive Active Region",
+                    mother_volume="silicon_bulk",
+                    roles=["edep_region"],
+                ),
+                _component(
+                    "bottom_electrode",
+                    "Bottom Aluminum Electrode",
+                    material_id="G4_Al",
+                    mother_volume="sensor_stack",
+                ),
             ],
             materials=[
                 _mat("G4_AIR", "G4_AIR", 0.001214),
@@ -144,10 +165,24 @@ class TestNoSimplificationGateHard:
                 _world(),
                 _component("pcb", "PCB Board", material_id="FR4"),
                 _component("sensor_stack", "Sensor Stack", comp_type="assembly"),
-                _component("oxide_layer", "Gate Oxide", material_id="SiO2", mother_volume="sensor_stack"),
-                _component("top_electrode", "Top Metal", material_id="G4_Al", mother_volume="sensor_stack"),
-                _component("sensitive", "Sensitive Region", mother_volume="sensor_stack", roles=["edep_region"]),
-                _component("bottom_electrode", "Bottom Metal", material_id="G4_Al", mother_volume="sensor_stack"),
+                _component(
+                    "oxide_layer", "Gate Oxide", material_id="SiO2", mother_volume="sensor_stack"
+                ),
+                _component(
+                    "top_electrode", "Top Metal", material_id="G4_Al", mother_volume="sensor_stack"
+                ),
+                _component(
+                    "sensitive",
+                    "Sensitive Region",
+                    mother_volume="sensor_stack",
+                    roles=["edep_region"],
+                ),
+                _component(
+                    "bottom_electrode",
+                    "Bottom Metal",
+                    material_id="G4_Al",
+                    mother_volume="sensor_stack",
+                ),
             ],
             materials=_basic_materials(),
             ledger=ConstructionLedger(),

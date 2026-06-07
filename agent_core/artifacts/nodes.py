@@ -87,10 +87,11 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
     if ir_path and Path(ir_path).exists():
         model_ir = json.loads(Path(ir_path).read_text())
         policy = model_ir.get("simplification_policy", {})
+        allow_simp = policy.get("allow_simplification", False)
         no_simp = {
-            "allow_simplification": policy.get("allow_simplification", False),
+            "allow_simplification": allow_simp,
             "approved_simplifications": policy.get("approved_simplifications", []),
-            "status": "NO_SIMPLIFICATION" if not policy.get("allow_simplification") else "HAS_APPROVED",
+            "status": "HAS_APPROVED" if allow_simp else "NO_SIMPLIFICATION",
         }
         (output_dir / "no_simplification_report.json").write_text(
             json.dumps(no_simp, indent=2)
@@ -121,10 +122,11 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
     if ir_path and Path(ir_path).exists():
         model_ir = json.loads(Path(ir_path).read_text())
         evidence = model_ir.get("evidence", {})
+        is_dict = isinstance(evidence, dict)
         et_report = {
-            "decision": evidence.get("evidence_decision", "unknown") if isinstance(evidence, dict) else "none",
-            "geometry_evidence_count": len(evidence.get("geometry", [])) if isinstance(evidence, dict) else 0,
-            "materials_evidence_count": len(evidence.get("materials", [])) if isinstance(evidence, dict) else 0,
+            "decision": evidence.get("evidence_decision", "unknown") if is_dict else "none",
+            "geometry_evidence_count": len(evidence.get("geometry", [])) if is_dict else 0,
+            "materials_evidence_count": len(evidence.get("materials", [])) if is_dict else 0,
         }
         (output_dir / "evidence_traceability_report.json").write_text(
             json.dumps(et_report, indent=2)
