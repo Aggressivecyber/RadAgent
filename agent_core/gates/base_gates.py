@@ -6,6 +6,7 @@ Gates 7-11 CANNOT auto-pass in mvp1_acceptance mode.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from pathlib import Path
 from typing import Any
@@ -140,17 +141,59 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         "message": "Patch applied" if patch_exists else "No applied patch found",
     })
 
-    # Gate 4: File Permission
+    # Gate 4: File Permission — validate patch file zones
+    from agent_core.validators.file_permission_validator import FilePermissionValidator
+    fpv = FilePermissionValidator()
+
+    # Try to read patch data from applied_patch.json or proposed_patch
+    patch_data: dict[str, Any] = {}
+    if applied_path and Path(applied_path).exists():
+        try:
+            patch_data = json.loads(Path(applied_path).read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    changed_files = patch_data.get("changed_files", [])
+    if not changed_files:
+        # Try loading from the proposed patch if available
+        proposed_path = state.get("proposed_patch_path", "")
+        if proposed_path and Path(proposed_path).exists():
+            try:
+                proposed_data = json.loads(Path(proposed_path).read_text())
+                changed_files = proposed_data.get("changed_files", [])
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    if changed_files:
+        perm_valid, perm_errors = fpv.validate_patch_permissions(changed_files)
+        red_files = [f.get("path", "?") for f in changed_files if f.get("zone") == "red"]
+        g4_status = "pass" if perm_valid else "fail"
+        g4_checked = [
+            {"item": "all files in green zone", "result": "pass" if perm_valid else "fail"},
+        ]
+        if red_files:
+            g4_checked.append(
+                {"item": f"red zone files: {len(red_files)}", "result": "fail"}
+            )
+    else:
+        # No patch data available — cannot validate, mark as skipped
+        perm_valid = False
+        perm_errors = ["No patch data available for permission check"]
+        g4_status = "skipped" if execution_mode != "mvp1_acceptance" else "fail"
+        g4_checked = [{"item": "patch file zones", "result": g4_status}]
+        if g4_status == "skipped":
+            skipped.append({"gate_id": 4, "reason": "No patch data"})
+
     gate_results.append({
         "gate_id": 4, "name": gate_name(4),
-        "status": "pass",
-        "checked_items": [{"item": "all files in green zone", "result": "pass"}],
-        "passed_items": ["all files green zone"],
-        "failed_items": [],
+        "status": g4_status,
+        "checked_items": g4_checked,
+        "passed_items": ["all files green zone"] if perm_valid else [],
+        "failed_items": perm_errors if not perm_valid else [],
         "warnings": [],
-        "evidence": [],
+        "evidence": [f"checked {len(changed_files)} files"] if changed_files else [],
         "file_paths": [],
-        "message": "All green zone",
+        "message": "; ".join(perm_errors) if perm_errors else "All files in green zone",
     })
 
     # Gate 5: Static Structure

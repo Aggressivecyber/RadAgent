@@ -53,8 +53,14 @@ async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
     results_path.write_text(json.dumps(gate_results, indent=2, ensure_ascii=False))
 
     # Determine status
-    if not failed_gates:
+    # VERIFIED requires ALL gates passed (no failures, no skips)
+    # PARTIAL means no failures but some gates were skipped (dev mode)
+    # FAILED means at least one gate failed
+    skipped_count = len(skipped) if isinstance(skipped, list) else 0
+    if not failed_gates and skipped_count == 0:
         status = "VERIFIED"
+    elif not failed_gates and skipped_count > 0:
+        status = "PARTIAL"
     elif len(failed_gates) <= 2:
         status = "PARTIAL"
     else:
