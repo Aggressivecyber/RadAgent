@@ -223,8 +223,8 @@ class TestSDCppStatic:
             if not fname.endswith(".cc"):
                 continue
             includes = [
-                l.strip() for l in content.splitlines()
-                if l.strip().startswith("#include")
+                line.strip() for line in content.splitlines()
+                if line.strip().startswith("#include")
             ]
             if includes:
                 # First include should be the module's own header

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 
-
 def _minimal_model_ir_for_output() -> dict[str, Any]:
     """Return a minimal model IR with scoring for OutputManager tests."""
     return {

@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from agent_core.validators.patch_validator import PatchValidator
 
 

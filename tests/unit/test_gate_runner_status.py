@@ -15,9 +15,8 @@ import json
 from pathlib import Path
 
 import pytest
-
-from agent_core.gates.gate_runner import finalize_gate_results
 from agent_core.gates.base_gates import run_base_gates
+from agent_core.gates.gate_runner import finalize_gate_results
 
 
 class TestFinalizeStatusStrategy:

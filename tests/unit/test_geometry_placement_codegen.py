@@ -428,7 +428,9 @@ class TestGeometryCppStatic:
                 if not fname.endswith(".cc"):
                     continue
                 includes = [
-                    l.strip() for l in code.splitlines() if l.strip().startswith("#include")
+                    line.strip()
+                    for line in code.splitlines()
+                    if line.strip().startswith("#include")
                 ]
                 if includes:
                     class_name = fname.split("::")[1].replace(".cc", "")

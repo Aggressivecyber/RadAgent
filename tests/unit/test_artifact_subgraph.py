@@ -13,7 +13,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from agent_core.artifacts.nodes import (
     collect_artifacts,
     generate_artifact_manifest,

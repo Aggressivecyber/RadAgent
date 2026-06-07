@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from agent_core.visualization.graph_visualizer import (
-    SubgraphSpec,
-    NodeSpec,
     EdgeSpec,
+    NodeSpec,
+    SubgraphSpec,
     draw_all,
     draw_combined,
     draw_main_graph,
@@ -18,7 +17,6 @@ from agent_core.visualization.graph_visualizer import (
     get_all_subgraph_specs,
     get_main_graph_spec,
 )
-
 
 # ─── Topology completeness tests ─────────────────────────────────────
 

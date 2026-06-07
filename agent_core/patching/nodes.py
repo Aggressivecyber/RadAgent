@@ -12,13 +12,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from agent_core.config.workspace import get_job_dir
 from agent_core.validators.file_permission_validator import FilePermissionValidator
 from agent_core.validators.patch_validator import PatchValidator
 
 from .schemas import PatchSubgraphState
+
+logger = logging.getLogger(__name__)
 
 
 async def load_proposed_patch(state: PatchSubgraphState) -> dict[str, Any]:

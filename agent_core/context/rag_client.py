@@ -14,6 +14,7 @@ Rules:
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,11 +24,11 @@ from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
-# --- Configuration ---
+# --- Configuration (environment-variable driven) ---
 
-OLLAMA_BASE_URL = "http://localhost:11434"
-EMBED_MODEL = "bge-m3"
-EMBED_TIMEOUT_S = 60.0
+OLLAMA_BASE_URL = os.getenv("RADAGENT_OLLAMA_BASE_URL", "http://localhost:11434")
+EMBED_MODEL = os.getenv("RADAGENT_EMBED_MODEL", "bge-m3")
+EMBED_TIMEOUT_S = float(os.getenv("RADAGENT_EMBED_TIMEOUT_S", "60"))
 DEFAULT_TOP_K = 5
 MIN_RELEVANCE_SCORE = 0.3
 
@@ -176,17 +177,37 @@ class DocumentIndex:
         """Add documents with their pre-computed embeddings.
 
         Only adds documents where embedding is not None.
+
+        Raises:
+            ValueError: If embedding dimensions are inconsistent or
+                mismatch with existing index.
         """
         valid_docs: list[RAGDocument] = []
         valid_embs: list[NDArray[np.floating[Any]]] = []
 
         for doc, emb in zip(documents, embeddings):
-            if emb is not None:
-                valid_docs.append(doc)
-                valid_embs.append(emb)
+            if emb is None:
+                continue
+            if emb.ndim != 1:
+                raise ValueError(f"Embedding must be 1-D, got shape {emb.shape}")
+            valid_docs.append(doc)
+            valid_embs.append(emb)
 
         if not valid_docs:
             return
+
+        dims = {int(emb.shape[0]) for emb in valid_embs}
+        if len(dims) != 1:
+            raise ValueError(f"Inconsistent embedding dimensions: {sorted(dims)}")
+
+        new_dim = next(iter(dims))
+
+        if self._embeddings.size != 0:
+            existing_dim = int(self._embeddings.shape[1])
+            if existing_dim != new_dim:
+                raise ValueError(
+                    f"Embedding dimension mismatch: existing={existing_dim}, new={new_dim}"
+                )
 
         new_embs = np.stack(valid_embs)
         if self._embeddings.size == 0:
@@ -255,10 +276,17 @@ class RAGClient:
     def index(self) -> DocumentIndex:
         return self._index
 
+    async def backend_available(self) -> bool:
+        """Check if the Ollama backend is reachable."""
+        return await self._embedder.is_available()
+
+    def index_ready(self) -> bool:
+        """Check if the document index is populated."""
+        return self._index.size > 0
+
     async def is_available(self) -> bool:
         """Check if the RAG system is usable (Ollama reachable + index populated)."""
-        ollama_ok = await self._embedder.is_available()
-        return ollama_ok and self._index.size > 0
+        return await self.backend_available() and self.index_ready()
 
     async def search(
         self,

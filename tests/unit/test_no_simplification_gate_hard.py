@@ -8,7 +8,6 @@ Validates that the gate can detect:
 
 from __future__ import annotations
 
-
 from agent_core.g4_modeling.schemas.component_spec import ComponentSpec
 from agent_core.g4_modeling.schemas.g4_model_ir import (
     ConstructionLedger,

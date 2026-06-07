@@ -123,7 +123,7 @@ class TestCppIncludeGuard:
         header = code["OutputManager::OutputManager.hh"]
 
         # Last non-empty line should be #endif
-        lines = [l.strip() for l in header.splitlines() if l.strip()]
+        lines = [line.strip() for line in header.splitlines() if line.strip()]
         assert lines[-1] == "#endif"
 
 
@@ -135,8 +135,8 @@ class TestCppIncludeOrder:
         source = code["OutputManager::OutputManager.cc"]
 
         include_lines = [
-            l.strip() for l in source.splitlines()
-            if l.strip().startswith("#include")
+            line.strip() for line in source.splitlines()
+            if line.strip().startswith("#include")
         ]
         assert len(include_lines) > 0, "No includes found in source"
 

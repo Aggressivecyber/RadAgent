@@ -12,6 +12,7 @@ Rules:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -29,6 +30,39 @@ from .rag_client import (
 from .schemas import ContextSubgraphState
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# RAG coverage categories — required for complex Geant4 modelling
+# ---------------------------------------------------------------------------
+
+REQUIRED_RAG_CATEGORIES: dict[str, list[str]] = {
+    "geometry": [
+        "G4Box", "G4Tubs", "G4LogicalVolume", "G4PVPlacement",
+        "solid", "logical volume", "physical volume", "geometry",
+    ],
+    "materials": [
+        "G4Material", "G4NistManager", "density", "element", "material",
+    ],
+    "source": [
+        "G4ParticleGun", "G4GeneralParticleSource", "GPS",
+        "primary generator", "particle source",
+    ],
+    "physics": [
+        "physics list", "FTFP_BERT", "QGSP", "electromagnetic", "hadronic",
+    ],
+    "scoring": [
+        "sensitive detector", "G4VSensitiveDetector", "scorer",
+        "dose", "edep", "energy deposition",
+    ],
+    "output": [
+        "RunAction", "analysis manager", "CSV", "output", "file",
+    ],
+}
+
+HARD_REQUIRED_CATEGORIES = {"geometry", "materials", "source", "scoring"}
+
+# Concurrency lock for index building
+_index_lock = asyncio.Lock()
 
 # Module-level singleton — index once, reuse across calls
 _rag_client: RAGClient | None = None
@@ -53,23 +87,32 @@ def reset_rag_client() -> None:
 
 
 async def _ensure_indexed(client: RAGClient) -> bool:
-    """Ensure Geant4 documents are indexed. Returns True if index is populated."""
+    """Ensure Geant4 documents are indexed. Returns True if index is populated.
+
+    Uses ``_index_lock`` to prevent concurrent jobs from building the
+    index simultaneously.
+    """
     if client.index.size > 0:
         return True
 
-    store = Geant4DocStore()
-    docs = store.get_documents()
-    if not docs:
-        logger.warning("Geant4 doc store returned 0 documents")
-        return False
+    async with _index_lock:
+        # Double-check after acquiring lock
+        if client.index.size > 0:
+            return True
 
-    try:
-        count = await client.index_documents(docs)
-        logger.info("Indexed %d/%d Geant4 documents", count, len(docs))
-        return count > 0
-    except Exception as exc:
-        logger.error("Failed to index Geant4 documents: %s", exc)
-        return False
+        store = Geant4DocStore()
+        docs = store.get_documents()
+        if not docs:
+            logger.warning("Geant4 doc store returned 0 documents")
+            return False
+
+        try:
+            count = await client.index_documents(docs)
+            logger.info("Indexed %d/%d Geant4 documents", count, len(docs))
+            return count > 0
+        except Exception as exc:
+            logger.error("Failed to index Geant4 documents: %s", exc)
+            return False
 
 
 def _get_context_dir(job_id: str) -> Path:
@@ -109,7 +152,7 @@ async def retrieve_rag_context(state: ContextSubgraphState) -> dict[str, Any]:
     client = _get_rag_client()
 
     # Step 1: Check Ollama availability
-    ollama_available = await client.embedder.is_available()
+    ollama_available = await client.backend_available()
     rag_report["ollama_available"] = ollama_available
 
     if not ollama_available:
@@ -167,9 +210,12 @@ async def retrieve_rag_context(state: ContextSubgraphState) -> dict[str, Any]:
     # Sort by score descending
     rag_context.sort(key=lambda x: x.get("score", 0.0), reverse=True)
 
-    # Step 5: Score based on result quality
-    score = _compute_rag_score(rag_context)
+    # Step 5: Score based on result quality and coverage
+    score, coverage_report = _compute_rag_score(rag_context)
     rag_report["score"] = score
+    rag_report["coverage"] = coverage_report["coverage"]
+    rag_report["missing_categories"] = coverage_report["missing_categories"]
+    rag_report["missing_hard_required"] = coverage_report["missing_hard_required"]
     rag_report["result_count"] = len(rag_context)
     rag_report["top_scores"] = [r.get("score", 0.0) for r in rag_context[:5]]
 
@@ -202,29 +248,67 @@ def _generate_search_queries(user_query: str) -> list[str]:
     return queries[:3]
 
 
-def _compute_rag_score(rag_context: list[dict[str, Any]]) -> float:
-    """Compute RAG sufficiency score from results.
+def compute_rag_coverage(
+    rag_context: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Check whether RAG results cover all required Geant4 modelling categories."""
+    combined_text = "\n".join(
+        f"{item.get('title', '')}\n{item.get('content', '')}\n{item.get('snippet', '')}"
+        for item in rag_context
+    ).lower()
 
-    Scoring:
-      - 0 results → 0.0
-      - 1+ results with score >= 0.7 → up to 1.0
-      - Results with lower scores → proportional
+    coverage: dict[str, bool] = {}
+    for category, keywords in REQUIRED_RAG_CATEGORIES.items():
+        coverage[category] = any(
+            keyword.lower() in combined_text
+            for keyword in keywords
+        )
+
+    missing_categories = sorted(
+        cat for cat, covered in coverage.items() if not covered
+    )
+    missing_hard_required = sorted(
+        cat for cat in HARD_REQUIRED_CATEGORIES if not coverage.get(cat, False)
+    )
+
+    return {
+        "coverage": coverage,
+        "covered_count": sum(1 for v in coverage.values() if v),
+        "missing_categories": missing_categories,
+        "missing_hard_required": missing_hard_required,
+    }
+
+
+def _compute_rag_score(
+    rag_context: list[dict[str, Any]],
+) -> tuple[float, dict[str, Any]]:
+    """Compute RAG sufficiency score — similarity + coverage.
+
+    Returns (score, coverage_report).  Hard-required categories missing
+    caps the score at 0.49 so ``allow_rag`` is never granted.
     """
     if not rag_context:
-        return 0.0
+        return 0.0, {
+            "coverage": {},
+            "covered_count": 0,
+            "missing_categories": list(REQUIRED_RAG_CATEGORIES),
+            "missing_hard_required": list(HARD_REQUIRED_CATEGORIES),
+        }
 
-    top_scores = [r.get("score", 0.0) for r in rag_context[:5]]
-    max_score = max(top_scores) if top_scores else 0.0
+    top_scores = [float(r.get("score", 0.0)) for r in rag_context[:5]]
     avg_score = sum(top_scores) / len(top_scores) if top_scores else 0.0
+    max_score = max(top_scores) if top_scores else 0.0
 
-    # Weighted: 60% best result, 40% average of top-5
-    raw_score = 0.6 * max_score + 0.4 * avg_score
+    coverage_report = compute_rag_coverage(rag_context)
+    covered_count = int(coverage_report["covered_count"])
+    coverage_score = covered_count / len(REQUIRED_RAG_CATEGORIES)
 
-    # Bonus for multiple high-quality results
-    high_quality_count = sum(1 for s in top_scores if s >= 0.7)
-    bonus = min(0.2, high_quality_count * 0.05)
+    score = 0.45 * max_score + 0.25 * avg_score + 0.30 * coverage_score
 
-    return min(1.0, raw_score + bonus)
+    if coverage_report["missing_hard_required"]:
+        score = min(score, 0.49)
+
+    return round(min(1.0, score), 4), coverage_report
 
 
 def _save_rag_files(
@@ -242,20 +326,92 @@ def _save_rag_files(
 
 
 async def score_rag_context(state: ContextSubgraphState) -> dict[str, Any]:
-    """Score RAG context sufficiency."""
-    score = state.get("rag_score", 0.0)
-    needs_web = score < 0.5
+    """Score RAG context sufficiency.
 
-    if score >= 0.7:
-        decision = "allow_rag"
-    elif needs_web:
-        decision = "needs_web"  # Internal signal, not final
-    else:
-        decision = "allow_rag"
+    ``allow_rag`` is only granted when score >= 0.7 **and** no
+    hard-required categories are missing.
+    """
+    score = float(state.get("rag_score", 0.0))
+    rag_report = state.get("rag_report", {})
+    missing_hard = rag_report.get("missing_hard_required", [])
+
+    if score >= 0.7 and not missing_hard:
+        return {
+            "context_decision": "allow_rag",
+            "needs_web_supplement": False,
+        }
 
     return {
-        "context_decision": decision if not needs_web else "needs_web",
-        "needs_web_supplement": needs_web,
+        "context_decision": "needs_web",
+        "needs_web_supplement": True,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Web quality gate (Phase 3)
+# ---------------------------------------------------------------------------
+
+TRUSTED_WEB_DOMAINS = [
+    "geant4.web.cern.ch",
+    "cern.ch",
+    "github.com/Geant4",
+    "geant4-userdoc.web.cern.ch",
+]
+
+WEB_KEYWORDS = [
+    "Geant4", "G4Material", "G4PVPlacement", "G4ParticleGun",
+    "G4GeneralParticleSource", "G4VSensitiveDetector", "dose",
+    "energy deposition", "physics list",
+]
+
+
+def score_web_quality(
+    web_context: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Evaluate web search result quality.
+
+    Requires:
+      - At least 2 items with valid URLs
+      - At least 1 from a trusted domain
+      - At least 2 with Geant4 keyword hits
+    """
+    valid_items: list[dict[str, Any]] = []
+    trusted_items: list[dict[str, Any]] = []
+    keyword_items: list[dict[str, Any]] = []
+
+    for item in web_context:
+        url = str(item.get("url", ""))
+        if not url.startswith(("http://", "https://")):
+            continue
+
+        valid_items.append(item)
+
+        if any(domain in url for domain in TRUSTED_WEB_DOMAINS):
+            trusted_items.append(item)
+
+        text = (
+            str(item.get("title", ""))
+            + " "
+            + str(item.get("snippet", ""))
+            + " "
+            + str(item.get("content", ""))
+        ).lower()
+
+        if any(keyword.lower() in text for keyword in WEB_KEYWORDS):
+            keyword_items.append(item)
+
+    sufficient = (
+        len(valid_items) >= 2
+        and len(trusted_items) >= 1
+        and len(keyword_items) >= 2
+    )
+
+    return {
+        "sufficient": sufficient,
+        "valid_url_count": len(valid_items),
+        "trusted_source_count": len(trusted_items),
+        "keyword_hit_count": len(keyword_items),
+        "trusted_urls": [i.get("url", "") for i in trusted_items],
     }
 
 
@@ -300,33 +456,35 @@ async def retrieve_web_context(state: ContextSubgraphState) -> dict[str, Any]:
 
 
 async def score_combined_context(state: ContextSubgraphState) -> dict[str, Any]:
-    """Score combined RAG + Web context and make final decision."""
-    rag_score = state.get("rag_score", 0.0)
+    """Score combined RAG + Web context and make final decision.
+
+    Decision logic:
+      - RAG sufficient (score >= 0.7, no hard-required missing) → allow_rag
+      - Web quality sufficient → allow_with_web_supplement
+      - Otherwise → block_no_context
+    """
+    rag_score = float(state.get("rag_score", 0.0))
+    rag_report = state.get("rag_report", {})
+    missing_hard = rag_report.get("missing_hard_required", [])
+
     web_context = state.get("web_context", [])
-    web_urls = state.get("web_urls", [])
-    _web_available = state.get("web_search_available", False)  # noqa: F841
+    web_quality = score_web_quality(web_context)
 
-    context_dir = _get_context_dir(state.get("job_id", "unknown"))
-
-    # Combined scoring
-    web_bonus = min(0.3, len(web_context) * 0.06)
-    combined_score = rag_score + web_bonus
-
-    if combined_score >= 0.5:
-        decision = "allow_with_web_supplement" if web_context else "allow_rag"
-    elif rag_score >= 0.3:
+    if rag_score >= 0.7 and not missing_hard:
+        decision = "allow_rag"
+    elif web_quality["sufficient"]:
         decision = "allow_with_web_supplement"
     else:
         decision = "block_no_context"
 
     report = {
         "rag_score": rag_score,
-        "web_results": len(web_context),
-        "web_urls": web_urls,
-        "combined_score": combined_score,
+        "rag_missing_hard_required": missing_hard,
+        "web_quality": web_quality,
         "decision": decision,
     }
 
+    context_dir = _get_context_dir(state.get("job_id", "unknown"))
     (context_dir / "context_sufficiency_report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False)
     )

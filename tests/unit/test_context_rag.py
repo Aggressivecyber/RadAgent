@@ -6,7 +6,7 @@ Verifies:
   - OllamaEmbedder graceful failure on bad endpoint
   - Geant4DocStore has correct document structure
   - retrieve_rag_context produces real results (or graceful degradation)
-  - _compute_rag_score scoring logic
+  - _compute_rag_score scoring logic with coverage
   - _generate_search_queries query expansion
   - retrieve_rag_context falls back when Ollama unavailable
 """
@@ -14,19 +14,21 @@ Verifies:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
-
 from agent_core.context.doc_store import Geant4DocStore
 from agent_core.context.nodes import (
     _compute_rag_score,
     _generate_search_queries,
-    retrieve_rag_context,
+    compute_rag_coverage,
     reset_rag_client,
+    retrieve_rag_context,
+    score_web_quality,
 )
 from agent_core.context.rag_client import (
     DocumentIndex,
@@ -35,7 +37,6 @@ from agent_core.context.rag_client import (
     RAGDocument,
     cosine_similarity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -200,20 +201,6 @@ class TestRAGClient:
         assert count == 2
         assert idx.size == 2
 
-    async def test_is_available_checks_ollama_and_index(self) -> None:
-        embedder = AsyncMock(spec=OllamaEmbedder)
-        embedder.is_available = AsyncMock(return_value=True)
-
-        idx = DocumentIndex()
-        client = RAGClient(embedder=embedder, index=idx)
-
-        # Empty index → not available
-        assert await client.is_available() is False
-
-        # Add a doc
-        idx.add_documents([_make_doc("d1", "A", "a")], [np.array([1.0])])
-        assert await client.is_available() is True
-
 
 # ---------------------------------------------------------------------------
 # OllamaEmbedder tests (unit, no real network)
@@ -278,32 +265,103 @@ class TestGeant4DocStore:
 
 
 # ---------------------------------------------------------------------------
-# _compute_rag_score tests
+# _compute_rag_score tests (now returns tuple[float, dict])
 # ---------------------------------------------------------------------------
 
 
 class TestComputeRAGScore:
     def test_empty_context_returns_zero(self) -> None:
-        assert _compute_rag_score([]) == 0.0
+        score, report = _compute_rag_score([])
+        assert score == 0.0
+        assert sorted(report["missing_hard_required"]) == sorted(
+            ["geometry", "materials", "scoring", "source"]
+        )
 
-    def test_single_high_score_result(self) -> None:
-        ctx = [{"score": 0.9}]
-        score = _compute_rag_score(ctx)
-        assert 0.5 < score <= 1.0
+    def test_single_high_score_but_missing_coverage(self) -> None:
+        """High similarity but only geometry covered → score capped at 0.49."""
+        ctx = [{"title": "Geant4 geometry", "content": "G4Box G4PVPlacement", "score": 0.95}]
+        score, report = _compute_rag_score(ctx)
+        assert score < 0.5
+        assert "materials" in report["missing_hard_required"]
+        assert "source" in report["missing_hard_required"]
+        assert "scoring" in report["missing_hard_required"]
 
-    def test_single_low_score_result(self) -> None:
-        ctx = [{"score": 0.1}]
-        score = _compute_rag_score(ctx)
-        assert score < 0.3
-
-    def test_multiple_high_scores_get_bonus(self) -> None:
-        ctx_many = [{"score": 0.8}, {"score": 0.8}, {"score": 0.8}]
-        ctx_one = [{"score": 0.8}]
-        assert _compute_rag_score(ctx_many) > _compute_rag_score(ctx_one)
+    def test_all_categories_covered_allows_high_score(self) -> None:
+        """All categories covered + high similarity → score >= 0.7."""
+        ctx = [{
+            "title": "Geant4 detector",
+            "content": (
+                "G4Box G4PVPlacement G4LogicalVolume "
+                "G4Material G4NistManager density "
+                "G4ParticleGun primary generator "
+                "physics list FTFP_BERT "
+                "G4VSensitiveDetector sensitive detector dose edep "
+                "RunAction CSV output"
+            ),
+            "score": 0.85,
+        }]
+        score, report = _compute_rag_score(ctx)
+        assert score >= 0.7
+        assert report["missing_hard_required"] == []
 
     def test_score_capped_at_one(self) -> None:
-        ctx = [{"score": 1.0}] * 10
-        assert _compute_rag_score(ctx) <= 1.0
+        ctx = [{
+            "title": "All topics",
+            "content": (
+                "G4Box G4PVPlacement G4LogicalVolume G4Material G4NistManager density "
+                "G4ParticleGun primary generator physics list FTFP_BERT "
+                "G4VSensitiveDetector sensitive detector dose edep RunAction CSV output"
+            ),
+            "score": 1.0,
+        }] * 10
+        score, _report = _compute_rag_score(ctx)
+        assert score <= 1.0
+
+    def test_multiple_results_with_partial_coverage(self) -> None:
+        """Multiple results covering some categories."""
+        ctx = [
+            {"title": "Geant4 geometry", "content": "G4Box G4PVPlacement", "score": 0.8},
+            {"title": "Geant4 material", "content": "G4Material G4NistManager", "score": 0.75},
+        ]
+        score, report = _compute_rag_score(ctx)
+        # geometry + materials covered, source + scoring missing → capped
+        assert score < 0.5
+        assert "source" in report["missing_hard_required"]
+        assert "scoring" in report["missing_hard_required"]
+
+
+# ---------------------------------------------------------------------------
+# compute_rag_coverage tests
+# ---------------------------------------------------------------------------
+
+
+class TestComputeRAGCoverage:
+    def test_empty_context_misses_all(self) -> None:
+        report = compute_rag_coverage([])
+        assert report["covered_count"] == 0
+        assert len(report["missing_categories"]) == 6
+
+    def test_single_category_covered(self) -> None:
+        ctx = [{"title": "Geometry", "content": "G4Box solid geometry detector"}]
+        report = compute_rag_coverage(ctx)
+        assert report["coverage"]["geometry"] is True
+        assert report["covered_count"] >= 1
+
+    def test_all_categories_covered(self) -> None:
+        ctx = [{
+            "title": "Complete Geant4",
+            "content": (
+                "G4Box G4PVPlacement G4LogicalVolume "
+                "G4Material G4NistManager density "
+                "G4ParticleGun primary generator "
+                "physics list FTFP_BERT "
+                "G4VSensitiveDetector sensitive detector dose edep "
+                "RunAction CSV output"
+            ),
+        }]
+        report = compute_rag_coverage(ctx)
+        assert report["missing_hard_required"] == []
+        assert report["covered_count"] == 6
 
 
 # ---------------------------------------------------------------------------
@@ -434,11 +492,72 @@ class TestRetrieveRAGContext:
 
 
 # ---------------------------------------------------------------------------
-# Live Ollama test (marked integration — only runs if Ollama is up)
+# score_web_quality tests (Phase 3)
 # ---------------------------------------------------------------------------
 
 
+class TestScoreWebQuality:
+    def test_web_quality_rejects_no_urls(self) -> None:
+        result = score_web_quality([
+            {"title": "Geant4", "url": "", "snippet": "G4Material"},
+        ])
+        assert result["sufficient"] is False
+
+    def test_web_quality_requires_trusted_source(self) -> None:
+        result = score_web_quality([
+            {
+                "title": "Geant4 material",
+                "url": "https://random.com/a",
+                "snippet": "G4Material",
+            },
+            {
+                "title": "Geant4 geometry",
+                "url": "https://example.com/b",
+                "snippet": "G4PVPlacement",
+            },
+        ])
+        assert result["sufficient"] is False
+
+    def test_web_quality_accepts_trusted_geant4_sources(self) -> None:
+        result = score_web_quality([
+            {
+                "title": "Geant4 geometry",
+                "url": "https://geant4.web.cern.ch/documentation",
+                "snippet": "G4PVPlacement G4Material",
+            },
+            {
+                "title": "Geant4 scoring",
+                "url": "https://github.com/Geant4/geant4",
+                "snippet": "G4VSensitiveDetector dose scoring",
+            },
+        ])
+        assert result["sufficient"] is True
+
+    def test_web_quality_insufficient_keyword_hits(self) -> None:
+        result = score_web_quality([
+            {
+                "title": "Geant4 overview",
+                "url": "https://geant4.web.cern.ch/",
+                "snippet": "simulation toolkit",
+            },
+        ])
+        # Has trusted source but only 1 valid item + 0 keyword hits
+        assert result["sufficient"] is False
+
+
+# ---------------------------------------------------------------------------
+# Live Ollama test (marked integration — only runs with explicit env var)
+# ---------------------------------------------------------------------------
+
+
+_live_ollama_skip = pytest.mark.skipif(
+    os.getenv("RADAGENT_RUN_LIVE_OLLAMA_TESTS") != "1",
+    reason="Live Ollama tests disabled by default. Set RADAGENT_RUN_LIVE_OLLAMA_TESTS=1 to enable.",
+)
+
+
 @pytest.mark.integration
+@_live_ollama_skip
 class TestLiveOllamaRAG:
     async def test_live_embed_and_search(self) -> None:
         """Live test: embed query via Ollama, search Geant4 doc store."""
