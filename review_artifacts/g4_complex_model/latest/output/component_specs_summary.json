@@ -1,12 +1,32 @@
 {
-  "total_components": 4,
+  "total_components": 9,
   "component_ids": [
     "world",
-    "target_scatterer",
-    "silicon_detector_1",
-    "silicon_detector_2"
+    "housing",
+    "pcb",
+    "sensor_stack",
+    "top_electrode",
+    "oxide_layer",
+    "silicon_bulk",
+    "sensitive_region",
+    "bottom_electrode"
   ],
-  "materials_count": 3,
+  "materials_count": 5,
+  "materials": [
+    "G4_AIR",
+    "G4_Al",
+    "FR4",
+    "G4_Si",
+    "SiO2"
+  ],
   "sources_count": 1,
-  "scoring_count": 2
+  "source_particle": "proton",
+  "source_energy_MeV": 10.0,
+  "scoring_count": 4,
+  "scoring_ids": [
+    "sensitive_edep",
+    "oxide_dose",
+    "bulk_dose_3d",
+    "event_table"
+  ]
 }

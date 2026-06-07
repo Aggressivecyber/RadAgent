@@ -1,6 +1,19 @@
 {
-  "total_files": 1,
+  "total_files": 14,
   "file_paths": [
-    "src/DetectorConstruction.cc"
+    "src/DetectorConstruction.cc",
+    "include/DetectorConstruction.hh",
+    "src/MaterialRegistry.cc",
+    "include/MaterialRegistry.hh",
+    "src/HousingBuilder.cc",
+    "include/HousingBuilder.hh",
+    "src/PCBBuilder.cc",
+    "include/PCBBuilder.hh",
+    "src/OutputManager.cc",
+    "src/PrimaryGeneratorAction.cc",
+    "src/PhysicsList.cc",
+    "include/PhysicsList.hh",
+    "CMakeLists.txt",
+    "src/main.cc"
   ]
 }

@@ -1,1 +1,40 @@
-{"entries": [], "version": "1.0"}
+{
+  "entries": [
+    {
+      "step": "requirement_capture",
+      "status": "completed",
+      "timestamp": "2026-06-07T16:00:00Z"
+    },
+    {
+      "step": "geometry_decomposition",
+      "status": "completed",
+      "timestamp": "2026-06-07T16:01:00Z"
+    },
+    {
+      "step": "material_definition",
+      "status": "completed",
+      "timestamp": "2026-06-07T16:02:00Z"
+    },
+    {
+      "step": "source_definition",
+      "status": "completed",
+      "timestamp": "2026-06-07T16:03:00Z"
+    },
+    {
+      "step": "physics_list",
+      "status": "completed",
+      "timestamp": "2026-06-07T16:04:00Z"
+    },
+    {
+      "step": "scoring_design",
+      "status": "completed",
+      "timestamp": "2026-06-07T16:05:00Z"
+    },
+    {
+      "step": "model_ir_validation",
+      "status": "completed",
+      "timestamp": "2026-06-07T16:06:00Z"
+    }
+  ],
+  "version": "1.0"
+}

@@ -1,20 +1,53 @@
 {
-  "total_interfaces": 3,
+  "total_interfaces": 8,
   "interfaces": [
     {
       "from": "world",
-      "to": "target_scatterer",
-      "type": "daughter"
+      "to": "housing",
+      "type": "daughter",
+      "valid": true
     },
     {
-      "from": "world",
-      "to": "silicon_detector_1",
-      "type": "daughter"
+      "from": "housing",
+      "to": "pcb",
+      "type": "daughter",
+      "valid": true
     },
     {
-      "from": "world",
-      "to": "silicon_detector_2",
-      "type": "daughter"
+      "from": "pcb",
+      "to": "sensor_stack",
+      "type": "daughter",
+      "valid": true
+    },
+    {
+      "from": "sensor_stack",
+      "to": "top_electrode",
+      "type": "daughter",
+      "valid": true
+    },
+    {
+      "from": "sensor_stack",
+      "to": "oxide_layer",
+      "type": "daughter",
+      "valid": true
+    },
+    {
+      "from": "sensor_stack",
+      "to": "silicon_bulk",
+      "type": "daughter",
+      "valid": true
+    },
+    {
+      "from": "silicon_bulk",
+      "to": "sensitive_region",
+      "type": "daughter",
+      "valid": true
+    },
+    {
+      "from": "sensor_stack",
+      "to": "bottom_electrode",
+      "type": "daughter",
+      "valid": true
     }
   ]
 }

@@ -1,5 +1,20 @@
 {
+  "target_system": "Radiation-Hard Silicon Pixel Detector Module",
   "allow_simplification": false,
   "approved_simplifications": [],
-  "status": "NO_SIMPLIFICATION"
+  "status": "NO_SIMPLIFICATION",
+  "component_preservation": {
+    "housing": "preserved",
+    "pcb": "preserved",
+    "sensor_stack": "preserved",
+    "top_electrode": "preserved",
+    "oxide_layer": "preserved",
+    "silicon_bulk": "preserved",
+    "sensitive_region": "preserved",
+    "bottom_electrode": "preserved"
+  },
+  "layer_merge_detected": false,
+  "non_world_component_count": 8,
+  "missing_components": [],
+  "unapproved_simplifications": []
 }

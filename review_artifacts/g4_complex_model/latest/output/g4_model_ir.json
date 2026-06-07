@@ -1,8 +1,8 @@
 {
-  "model_ir_id": "complex_dev_e2e",
+  "model_ir_id": "complex_detector_v1",
   "job_id": "complex_dev",
   "modeling_mode": "realistic",
-  "target_system": "Proton Therapy Beamline Detector",
+  "target_system": "Radiation-Hard Silicon Pixel Detector Module",
   "simplification_policy": {
     "allow_simplification": false,
     "requires_user_approval": true,
@@ -15,75 +15,196 @@
       "component_type": "world",
       "geometry_type": "box",
       "dimensions": {
-        "dx": 5000,
-        "dy": 5000,
-        "dz": 5000
+        "dx": 5000.0,
+        "dy": 5000.0,
+        "dz": 5000.0
       },
       "material_id": "G4_AIR",
+      "mother_volume": null,
       "roles": [],
-      "open_issues": [],
       "source_evidence": [
-        "default"
+        {
+          "source": "geant4_convention",
+          "desc": "Standard world volume"
+        }
       ]
     },
     {
-      "component_id": "target_scatterer",
-      "display_name": "Target Scatterer",
-      "component_type": "volume",
-      "geometry_type": "cylinder",
-      "dimensions": {
-        "rmin": 0,
-        "rmax": 25,
-        "dz": 2
-      },
-      "material_id": "G4_Pb",
-      "mother_volume": "world",
-      "roles": [
-        "scatterer"
-      ],
-      "open_issues": [],
-      "source_evidence": [
-        "user_specification"
-      ]
-    },
-    {
-      "component_id": "silicon_detector_1",
-      "display_name": "Silicon Detector Layer 1",
+      "component_id": "housing",
+      "display_name": "Aluminum Housing",
       "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
-        "dx": 50,
-        "dy": 50,
-        "dz": 0.3
+        "dx": 100.0,
+        "dy": 100.0,
+        "dz": 50.0
       },
-      "material_id": "G4_Si",
+      "material_id": "G4_Al",
       "mother_volume": "world",
       "roles": [
-        "edep_region"
+        "shielding",
+        "mechanical_support"
       ],
-      "open_issues": [],
       "source_evidence": [
-        "user_specification"
+        {
+          "source": "user_specification",
+          "desc": "Al housing for radiation shielding"
+        }
       ]
     },
     {
-      "component_id": "silicon_detector_2",
-      "display_name": "Silicon Detector Layer 2",
+      "component_id": "pcb",
+      "display_name": "FR4 PCB Carrier",
       "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
-        "dx": 50,
-        "dy": 50,
-        "dz": 0.3
+        "dx": 80.0,
+        "dy": 80.0,
+        "dz": 5.0
+      },
+      "material_id": "FR4",
+      "mother_volume": "housing",
+      "roles": [
+        "mechanical_support"
+      ],
+      "source_evidence": [
+        {
+          "source": "user_specification",
+          "desc": "FR4 carrier board"
+        }
+      ]
+    },
+    {
+      "component_id": "sensor_stack",
+      "display_name": "Sensor Stack Assembly",
+      "component_type": "assembly",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 50.0,
+        "dy": 50.0,
+        "dz": 20.0
+      },
+      "material_id": "G4_AIR",
+      "mother_volume": "pcb",
+      "roles": [
+        "assembly_container"
+      ],
+      "source_evidence": [
+        {
+          "source": "user_specification",
+          "desc": "Sensor stack container"
+        }
+      ]
+    },
+    {
+      "component_id": "top_electrode",
+      "display_name": "Top Aluminum Electrode",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 50.0,
+        "dy": 50.0,
+        "dz": 1.0
+      },
+      "material_id": "G4_Al",
+      "mother_volume": "sensor_stack",
+      "roles": [
+        "electrode"
+      ],
+      "source_evidence": [
+        {
+          "source": "detector_design",
+          "desc": "Al top electrode 1mm"
+        }
+      ]
+    },
+    {
+      "component_id": "oxide_layer",
+      "display_name": "Gate Oxide SiO2",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 50.0,
+        "dy": 50.0,
+        "dz": 0.001
+      },
+      "material_id": "SiO2",
+      "mother_volume": "sensor_stack",
+      "roles": [
+        "dielectric"
+      ],
+      "source_evidence": [
+        {
+          "source": "detector_design",
+          "desc": "SiO2 gate oxide 1um"
+        }
+      ]
+    },
+    {
+      "component_id": "silicon_bulk",
+      "display_name": "Silicon Bulk",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 50.0,
+        "dy": 50.0,
+        "dz": 10.0
       },
       "material_id": "G4_Si",
-      "mother_volume": "world",
+      "mother_volume": "sensor_stack",
       "roles": [
-        "edep_region"
+        "active_material"
       ],
-      "open_issues": [],
       "source_evidence": [
-        "user_specification"
+        {
+          "source": "detector_design",
+          "desc": "Si bulk 10mm"
+        }
+      ]
+    },
+    {
+      "component_id": "sensitive_region",
+      "display_name": "Sensitive Active Region",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 48.0,
+        "dy": 48.0,
+        "dz": 5.0
+      },
+      "material_id": "G4_Si",
+      "mother_volume": "silicon_bulk",
+      "roles": [
+        "edep_region",
+        "active_detector"
+      ],
+      "source_evidence": [
+        {
+          "source": "detector_design",
+          "desc": "Sensitive volume inside Si bulk"
+        }
+      ]
+    },
+    {
+      "component_id": "bottom_electrode",
+      "display_name": "Bottom Aluminum Electrode",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 50.0,
+        "dy": 50.0,
+        "dz": 1.0
+      },
+      "material_id": "G4_Al",
+      "mother_volume": "sensor_stack",
+      "roles": [
+        "electrode"
+      ],
+      "source_evidence": [
+        {
+          "source": "detector_design",
+          "desc": "Al bottom electrode 1mm"
+        }
       ]
     }
   ],
@@ -94,20 +215,73 @@
       "classification": "nist",
       "nist_name": "G4_AIR",
       "density_g_cm3": 0.001214,
-      "custom": false,
       "source_evidence": [
-        "NIST"
+        {
+          "source": "NIST",
+          "desc": "Standard NIST air"
+        }
       ]
     },
     {
-      "material_id": "G4_Pb",
-      "name": "G4_Pb",
+      "material_id": "G4_Al",
+      "name": "G4_Al",
       "classification": "nist",
-      "nist_name": "G4_Pb",
-      "density_g_cm3": 11.35,
-      "custom": false,
+      "nist_name": "G4_Al",
+      "density_g_cm3": 2.699,
       "source_evidence": [
-        "NIST"
+        {
+          "source": "NIST",
+          "desc": "Standard NIST aluminum"
+        }
+      ]
+    },
+    {
+      "material_id": "FR4",
+      "name": "FR4_Epoxy",
+      "classification": "custom",
+      "composition": {
+        "type": "fraction",
+        "elements": [
+          {
+            "symbol": "C",
+            "fraction": 0.188
+          },
+          {
+            "symbol": "H",
+            "fraction": 0.013
+          },
+          {
+            "symbol": "O",
+            "fraction": 0.331
+          },
+          {
+            "symbol": "Si",
+            "fraction": 0.156
+          },
+          {
+            "symbol": "Al",
+            "fraction": 0.04
+          },
+          {
+            "symbol": "Ca",
+            "fraction": 0.05
+          },
+          {
+            "symbol": "Mg",
+            "fraction": 0.004
+          },
+          {
+            "symbol": "Fe",
+            "fraction": 0.003
+          }
+        ]
+      },
+      "density_g_cm3": 1.85,
+      "source_evidence": [
+        {
+          "source": "material_database",
+          "desc": "FR4 fiberglass epoxy composite"
+        }
       ]
     },
     {
@@ -116,9 +290,36 @@
       "classification": "nist",
       "nist_name": "G4_Si",
       "density_g_cm3": 2.329,
-      "custom": false,
       "source_evidence": [
-        "NIST"
+        {
+          "source": "NIST",
+          "desc": "Standard NIST silicon"
+        }
+      ]
+    },
+    {
+      "material_id": "SiO2",
+      "name": "SiO2",
+      "classification": "custom",
+      "composition": {
+        "type": "stoichiometric",
+        "elements": [
+          {
+            "symbol": "Si",
+            "n_atoms": 1
+          },
+          {
+            "symbol": "O",
+            "n_atoms": 2
+          }
+        ]
+      },
+      "density_g_cm3": 2.2,
+      "source_evidence": [
+        {
+          "source": "material_database",
+          "desc": "Thermal SiO2"
+        }
       ]
     }
   ],
@@ -127,130 +328,169 @@
       "source_id": "proton_beam",
       "particle_type": "proton",
       "energy": {
-        "value": 150.0,
+        "value": 10.0,
         "unit": "MeV",
-        "distribution": "gaussian",
-        "sigma": 1.5
+        "distribution": "mono"
       },
       "beam": {
         "position": [
-          0,
-          0,
-          4000
+          0.0,
+          0.0,
+          4900.0
         ],
         "direction": [
-          0,
-          0,
-          -1
+          0.0,
+          0.0,
+          -1.0
         ],
-        "sigma_position_um": 5.0,
-        "surface_shape": "circle",
-        "surface_size": [
-          5.0
-        ]
+        "shape": "point"
       },
       "generator_type": "gps",
       "source_evidence": [
-        "user_specification"
+        {
+          "source": "user_specification",
+          "desc": "10 MeV proton vertical incidence"
+        }
       ]
     }
   ],
   "physics": {
     "physics_list": "QGSP_BIC_HP",
-    "selection_reasoning": "QGSP_BIC_HP chosen for proton therapy: binary cascade for p < 10 GeV, high-precision neutron, standard EM.",
+    "selection_reasoning": "QGSP_BIC_HP: standard EM + hadronic for proton simulation with high-precision neutron",
     "source_evidence": [
-      "geant4_physics_guide"
+      {
+        "source": "geant4_physics_guide",
+        "desc": "Recommended for proton therapy range"
+      }
     ]
   },
   "scoring": [
     {
-      "scoring_id": "edep_det1",
+      "scoring_id": "sensitive_edep",
       "scoring_type": "region",
       "quantities": [
+        "event_id",
         "edep_MeV",
-        "dose_Gy"
+        "n_entries"
       ],
-      "target_component_id": "silicon_detector_1",
+      "region_scores": [
+        "sensitive_region"
+      ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification"
+        {
+          "source": "user_specification",
+          "desc": "Energy deposition in sensitive region"
+        }
       ]
     },
     {
-      "scoring_id": "edep_det2",
+      "scoring_id": "oxide_dose",
       "scoring_type": "region",
       "quantities": [
-        "edep_MeV",
-        "dose_Gy"
+        "event_id",
+        "dose_Gy",
+        "edep_MeV"
       ],
-      "target_component_id": "silicon_detector_2",
+      "region_scores": [
+        "oxide_layer"
+      ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification"
+        {
+          "source": "user_specification",
+          "desc": "TID dose in gate oxide"
+        }
+      ]
+    },
+    {
+      "scoring_id": "bulk_dose_3d",
+      "scoring_type": "mesh",
+      "quantities": [
+        "voxel_id",
+        "x_mm",
+        "y_mm",
+        "z_mm",
+        "dose_Gy",
+        "edep_MeV"
+      ],
+      "region_scores": [
+        "silicon_bulk"
+      ],
+      "output_format": "csv",
+      "mesh": {
+        "nx": 10,
+        "ny": 10,
+        "nz": 10,
+        "voxel_size_mm": 5.0
+      },
+      "source_evidence": [
+        {
+          "source": "user_specification",
+          "desc": "3D dose map in silicon bulk"
+        }
+      ]
+    },
+    {
+      "scoring_id": "event_table",
+      "scoring_type": "region",
+      "quantities": [
+        "event_id",
+        "edep_MeV",
+        "x_mm",
+        "y_mm",
+        "z_mm"
+      ],
+      "region_scores": [
+        "sensitive_region"
+      ],
+      "output_format": "csv",
+      "source_evidence": [
+        {
+          "source": "user_specification",
+          "desc": "Per-event hit table"
+        }
       ]
     }
   ],
-  "interfaces": [
-    {
-      "parent_component": "world",
-      "child_component": "target_scatterer",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "world",
-      "child_component": "silicon_detector_1",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "world",
-      "child_component": "silicon_detector_2",
-      "interface_type": "daughter"
-    }
-  ],
-  "open_issues": [],
-  "evidence": {
-    "evidence_decision": "allow_rag",
-    "geometry": [
-      {
-        "source": "user_specification",
-        "desc": "beamline layout"
-      }
-    ],
-    "materials": [
-      {
-        "source": "NIST",
-        "desc": "G4_AIR"
-      },
-      {
-        "source": "NIST",
-        "desc": "G4_Pb"
-      },
-      {
-        "source": "NIST",
-        "desc": "G4_Si"
-      }
-    ],
-    "source": [
-      {
-        "source": "user_specification",
-        "desc": "150 MeV proton with Gaussian spread"
-      }
-    ],
-    "physics": [
-      {
-        "source": "geant4_physics_guide",
-        "desc": "QGSP_BIC_HP for proton therapy"
-      }
-    ],
-    "scoring": [
-      {
-        "source": "user_specification",
-        "desc": "edep in both silicon layers"
-      }
-    ]
-  },
   "ledger": {
-    "entries": [],
+    "entries": [
+      {
+        "step": "requirement_capture",
+        "status": "completed",
+        "timestamp": "2026-06-07T16:00:00Z"
+      },
+      {
+        "step": "geometry_decomposition",
+        "status": "completed",
+        "timestamp": "2026-06-07T16:01:00Z"
+      },
+      {
+        "step": "material_definition",
+        "status": "completed",
+        "timestamp": "2026-06-07T16:02:00Z"
+      },
+      {
+        "step": "source_definition",
+        "status": "completed",
+        "timestamp": "2026-06-07T16:03:00Z"
+      },
+      {
+        "step": "physics_list",
+        "status": "completed",
+        "timestamp": "2026-06-07T16:04:00Z"
+      },
+      {
+        "step": "scoring_design",
+        "status": "completed",
+        "timestamp": "2026-06-07T16:05:00Z"
+      },
+      {
+        "step": "model_ir_validation",
+        "status": "completed",
+        "timestamp": "2026-06-07T16:06:00Z"
+      }
+    ],
     "version": "1.0"
   }
 }

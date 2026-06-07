@@ -1,9 +1,73 @@
 {
   "artifact_type": "g4_complex_model",
   "job_id": "complex_dev",
-  "validation_status": "VERIFIED",
+  "is_stub": false,
+  "run_type": "dev",
+  "source_query": "模拟辐射加固硅像素探测器模块",
+  "validation_status": "PARTIAL",
+  "model_components": [
+    "world",
+    "housing",
+    "pcb",
+    "sensor_stack",
+    "top_electrode",
+    "oxide_layer",
+    "silicon_bulk",
+    "sensitive_region",
+    "bottom_electrode"
+  ],
+  "components_count": 9,
+  "materials_count": 5,
+  "materials": [
+    "G4_AIR",
+    "G4_Al",
+    "FR4",
+    "G4_Si",
+    "SiO2"
+  ],
+  "scoring_count": 4,
+  "scoring_ids": [
+    "sensitive_edep",
+    "oxide_dose",
+    "bulk_dose_3d",
+    "event_table"
+  ],
+  "source_particle": "proton",
+  "source_energy_MeV": 10.0,
+  "physics_list": "QGSP_BIC_HP",
   "artifacts_collected": 11,
   "has_model_ir": true,
   "has_gate_results": true,
-  "has_model_review": true
+  "has_model_review": true,
+  "known_limitations": [
+    "Dev mode (dev_no_geant4_env): Gates 0, 3, 4, 6, 7, 9, 10, 11 skipped — require Geant4 runtime",
+    "No actual simulation run — scoring outputs are planned, not populated with data",
+    "C++ code is generated but not compiled or tested",
+    "Smoke test (Gate 9) skipped — acceptance-only gate"
+  ],
+  "failed_gates": [],
+  "skipped_gates": [
+    0,
+    3,
+    4,
+    6,
+    7,
+    9,
+    10,
+    11
+  ],
+  "passed_gates": [
+    1,
+    2,
+    5,
+    8,
+    "G4-A",
+    "G4-B",
+    "G4-C",
+    "G4-D",
+    "G4-E",
+    "G4-F",
+    "G4-G"
+  ],
+  "note": "NOT VERIFIED — 8 gates skipped due to dev mode. Cannot claim VERIFIED without acceptance tests."
 }

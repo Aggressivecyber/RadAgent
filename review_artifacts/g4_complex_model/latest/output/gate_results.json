@@ -1,116 +1,799 @@
 [
   {
     "gate_id": 0,
-    "gate_name": "Gate 0",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Context Sufficiency",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "RAG context available",
+        "result": "skipped"
+      },
+      {
+        "item": "Web supplement checked",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: context subgraph not executed"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped in dev_no_geant4_env mode"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: dev mode, no RAG/Web retrieval"
   },
   {
     "gate_id": 1,
-    "gate_name": "Gate 1",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Task Spec Schema",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "job_id present",
+        "result": "pass"
+      },
+      {
+        "item": "user_query present",
+        "result": "pass"
+      },
+      {
+        "item": "simulation_scope valid",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "job_id present",
+      "user_query present",
+      "simulation_scope valid"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "task_spec",
+        "desc": "All required fields present"
+      }
+    ],
+    "file_paths": [
+      "task_spec.json"
+    ],
+    "message": "Task spec schema valid"
   },
   {
     "gate_id": 2,
-    "gate_name": "Gate 2",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Simulation IR Schema",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "model_ir_id present",
+        "result": "pass"
+      },
+      {
+        "item": "components non-empty",
+        "result": "pass"
+      },
+      {
+        "item": "materials non-empty",
+        "result": "pass"
+      },
+      {
+        "item": "sources non-empty",
+        "result": "pass"
+      },
+      {
+        "item": "physics present",
+        "result": "pass"
+      },
+      {
+        "item": "scoring non-empty",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "model_ir_id present",
+      "components non-empty",
+      "materials non-empty",
+      "sources non-empty",
+      "physics present",
+      "scoring non-empty"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "g4_model_ir.json",
+        "desc": "9 components, 5 materials, 1 source, 4 scoring"
+      }
+    ],
+    "file_paths": [
+      "g4_model_ir.json"
+    ],
+    "message": "Model IR schema complete: 9 components, 5 materials, 4 scoring"
   },
   {
     "gate_id": 3,
-    "gate_name": "Gate 3",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Patch Format",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "patch structure valid",
+        "result": "skipped"
+      },
+      {
+        "item": "file list non-empty",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: no patch applied"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped in dev mode"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: dev mode, no patch to validate"
   },
   {
     "gate_id": 4,
-    "gate_name": "Gate 4",
-    "severity": "pass",
-    "message": "OK"
+    "name": "File Permission",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "no path traversal",
+        "result": "skipped"
+      },
+      {
+        "item": "no absolute paths",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: no files written"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped in dev mode"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: dev mode, no file permissions to check"
   },
   {
     "gate_id": 5,
-    "gate_name": "Gate 5",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Static Check",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "src/ directory present",
+        "result": "pass"
+      },
+      {
+        "item": "include/ directory present",
+        "result": "pass"
+      },
+      {
+        "item": "CMakeLists.txt present",
+        "result": "pass"
+      },
+      {
+        "item": "DetectorConstruction module",
+        "result": "pass"
+      },
+      {
+        "item": "MaterialRegistry module",
+        "result": "pass"
+      },
+      {
+        "item": "PrimaryGenerator module",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "src/ directory present",
+      "include/ directory present",
+      "CMakeLists.txt present",
+      "DetectorConstruction module",
+      "MaterialRegistry module",
+      "PrimaryGenerator module"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "code_module_plan.json",
+        "desc": "All core modules planned"
+      }
+    ],
+    "file_paths": [
+      "code_module_plan.json"
+    ],
+    "message": "Static structure check passed: 6 core modules verified"
   },
   {
     "gate_id": 6,
-    "gate_name": "Gate 6",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Build/Parse",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "C++ syntax valid",
+        "result": "skipped"
+      },
+      {
+        "item": "CMake parses",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: no Geant4 environment for compilation"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped: no Geant4 build environment"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: dev mode, cannot compile without Geant4"
   },
   {
     "gate_id": 7,
-    "gate_name": "Gate 7",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Unit Tests",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "test executables found",
+        "result": "skipped"
+      },
+      {
+        "item": "all tests pass",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: no compiled tests to run"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped: acceptance-only gate"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: acceptance mode gate, not auto-passable"
   },
   {
     "gate_id": 8,
-    "gate_name": "Gate 8",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Data Contract",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "g4_summary.json declared",
+        "result": "pass"
+      },
+      {
+        "item": "provenance.json declared",
+        "result": "pass"
+      },
+      {
+        "item": "run_log.txt declared",
+        "result": "pass"
+      },
+      {
+        "item": "scoring CSVs match spec",
+        "result": "pass"
+      },
+      {
+        "item": "no invented fields",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "g4_summary.json declared",
+      "provenance.json declared",
+      "run_log.txt declared",
+      "scoring CSVs match spec",
+      "no invented fields"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "output_manager_contract.json",
+        "desc": "Output files match scoring specs"
+      }
+    ],
+    "file_paths": [
+      "output_manager_contract.json"
+    ],
+    "message": "Data contract satisfied: all output files match scoring spec"
   },
   {
     "gate_id": 9,
-    "gate_name": "Gate 9",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Smoke Simulation",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "smoke run completed",
+        "result": "skipped"
+      },
+      {
+        "item": "output files produced",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: no Geant4 runtime"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped: acceptance-only gate"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: acceptance mode gate, not auto-passable"
   },
   {
     "gate_id": 10,
-    "gate_name": "Gate 10",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Benchmark Regression",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "baseline benchmark exists",
+        "result": "skipped"
+      },
+      {
+        "item": "regression within tolerance",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: no benchmark data"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped: no baseline to compare"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: no benchmark baseline available"
   },
   {
     "gate_id": 11,
-    "gate_name": "Gate 11",
-    "severity": "pass",
-    "message": "OK"
+    "name": "Physics Sanity",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "no NaN in outputs",
+        "result": "skipped"
+      },
+      {
+        "item": "no Inf in outputs",
+        "result": "skipped"
+      },
+      {
+        "item": "no negative energy",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Dev mode: no simulation output to check"
+    ],
+    "evidence": [
+      {
+        "source": "dev_mode",
+        "desc": "Skipped: no simulation output"
+      }
+    ],
+    "file_paths": [],
+    "message": "Skipped: no simulation output to validate"
   },
   {
-    "gate_id": 12,
-    "gate_name": "Gate 12",
-    "severity": "pass",
-    "message": "OK"
+    "gate_id": "G4-A",
+    "name": "Model Completeness",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "world component present",
+        "result": "pass"
+      },
+      {
+        "item": "housing component present",
+        "result": "pass"
+      },
+      {
+        "item": "pcb component present",
+        "result": "pass"
+      },
+      {
+        "item": "sensor_stack assembly present",
+        "result": "pass"
+      },
+      {
+        "item": "top_electrode present",
+        "result": "pass"
+      },
+      {
+        "item": "oxide_layer present",
+        "result": "pass"
+      },
+      {
+        "item": "silicon_bulk present",
+        "result": "pass"
+      },
+      {
+        "item": "sensitive_region present",
+        "result": "pass"
+      },
+      {
+        "item": "bottom_electrode present",
+        "result": "pass"
+      },
+      {
+        "item": "5 materials defined",
+        "result": "pass"
+      },
+      {
+        "item": "1 source defined",
+        "result": "pass"
+      },
+      {
+        "item": "physics_list specified",
+        "result": "pass"
+      },
+      {
+        "item": "4 scoring defined",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "world component present",
+      "housing component present",
+      "pcb component present",
+      "sensor_stack assembly present",
+      "top_electrode present",
+      "oxide_layer present",
+      "silicon_bulk present",
+      "sensitive_region present",
+      "bottom_electrode present",
+      "5 materials defined",
+      "1 source defined",
+      "physics_list specified",
+      "4 scoring defined"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "g4_model_ir.json",
+        "desc": "9 components, 5 materials, 1 proton source, QGSP_BIC_HP, 4 scoring"
+      }
+    ],
+    "file_paths": [
+      "g4_model_ir.json"
+    ],
+    "message": "Model complete: all required components, materials, source, physics, scoring present"
   },
   {
-    "gate_id": 13,
-    "gate_name": "Gate 13",
-    "severity": "pass",
-    "message": "OK"
+    "gate_id": "G4-B",
+    "name": "No Unapproved Simplification",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "housing preserved",
+        "result": "pass"
+      },
+      {
+        "item": "pcb preserved",
+        "result": "pass"
+      },
+      {
+        "item": "oxide_layer preserved",
+        "result": "pass"
+      },
+      {
+        "item": "top_electrode preserved",
+        "result": "pass"
+      },
+      {
+        "item": "bottom_electrode preserved",
+        "result": "pass"
+      },
+      {
+        "item": "sensitive_region preserved",
+        "result": "pass"
+      },
+      {
+        "item": "no layer merge detected",
+        "result": "pass"
+      },
+      {
+        "item": "8 non-world components (complex)",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "housing preserved",
+      "pcb preserved",
+      "oxide_layer preserved",
+      "top_electrode preserved",
+      "bottom_electrode preserved",
+      "sensitive_region preserved",
+      "no layer merge detected",
+      "8 non-world components (complex)"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "no_simplification_report.json",
+        "desc": "All components preserved, no merges detected"
+      }
+    ],
+    "file_paths": [
+      "no_simplification_report.json",
+      "g4_model_ir.json"
+    ],
+    "message": "No simplification detected: all 8 non-world components preserved individually",
+    "missing_components": [],
+    "unapproved_simplifications": []
   },
   {
-    "gate_id": 14,
-    "gate_name": "Gate 14",
-    "severity": "pass",
-    "message": "OK"
+    "gate_id": "G4-C",
+    "name": "Geometry Interface",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "world->housing mother-daughter valid",
+        "result": "pass"
+      },
+      {
+        "item": "housing->pcb mother-daughter valid",
+        "result": "pass"
+      },
+      {
+        "item": "pcb->sensor_stack mother-daughter valid",
+        "result": "pass"
+      },
+      {
+        "item": "sensor_stack->top_electrode valid",
+        "result": "pass"
+      },
+      {
+        "item": "sensor_stack->oxide_layer valid",
+        "result": "pass"
+      },
+      {
+        "item": "sensor_stack->silicon_bulk valid",
+        "result": "pass"
+      },
+      {
+        "item": "silicon_bulk->sensitive_region valid",
+        "result": "pass"
+      },
+      {
+        "item": "sensor_stack->bottom_electrode valid",
+        "result": "pass"
+      },
+      {
+        "item": "all mother_volume refs resolvable",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "world->housing mother-daughter valid",
+      "housing->pcb mother-daughter valid",
+      "pcb->sensor_stack mother-daughter valid",
+      "sensor_stack->top_electrode valid",
+      "sensor_stack->oxide_layer valid",
+      "sensor_stack->silicon_bulk valid",
+      "silicon_bulk->sensitive_region valid",
+      "sensor_stack->bottom_electrode valid",
+      "all mother_volume refs resolvable"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "geometry_interface_report.json",
+        "desc": "8 mother-daughter interfaces verified"
+      }
+    ],
+    "file_paths": [
+      "geometry_interface_report.json"
+    ],
+    "message": "All 8 geometry interfaces valid: mother volumes resolvable, no orphan references"
   },
   {
-    "gate_id": 15,
-    "gate_name": "Gate 15",
-    "severity": "pass",
-    "message": "OK"
+    "gate_id": "G4-D",
+    "name": "Overlap Policy",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "no sibling overlap detected",
+        "result": "pass"
+      },
+      {
+        "item": "daughter within mother bounds",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "no sibling overlap detected",
+      "daughter within mother bounds"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "geometry_check",
+        "desc": "All daughters smaller than mothers, no sibling overlaps"
+      }
+    ],
+    "file_paths": [
+      "g4_model_ir.json"
+    ],
+    "message": "No overlaps detected: all daughters within mother bounds"
   },
   {
-    "gate_id": 16,
-    "gate_name": "Gate 16",
-    "severity": "pass",
-    "message": "OK"
+    "gate_id": "G4-E",
+    "name": "Evidence Traceability",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "housing source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "pcb source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "oxide_layer source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "material FR4 source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "material SiO2 source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "physics_list source_evidence present",
+        "result": "pass"
+      },
+      {
+        "item": "all scoring source_evidence present",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "housing source_evidence present",
+      "pcb source_evidence present",
+      "oxide_layer source_evidence present",
+      "material FR4 source_evidence present",
+      "material SiO2 source_evidence present",
+      "physics_list source_evidence present",
+      "all scoring source_evidence present"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "evidence_traceability_report.json",
+        "desc": "All components/materials/scoring have source_evidence"
+      }
+    ],
+    "file_paths": [
+      "evidence_traceability_report.json"
+    ],
+    "message": "All parameters have traceable evidence sources"
   },
   {
-    "gate_id": 17,
-    "gate_name": "Gate 17",
-    "severity": "pass",
-    "message": "OK"
+    "gate_id": "G4-F",
+    "name": "Code Module Boundary",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "DetectorConstruction module defined",
+        "result": "pass"
+      },
+      {
+        "item": "MaterialRegistry module defined",
+        "result": "pass"
+      },
+      {
+        "item": "PrimaryGenerator module defined",
+        "result": "pass"
+      },
+      {
+        "item": "OutputManager module defined",
+        "result": "pass"
+      },
+      {
+        "item": "ScoringManager module defined",
+        "result": "pass"
+      },
+      {
+        "item": "modules have src/ and include/ paths",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "DetectorConstruction module defined",
+      "MaterialRegistry module defined",
+      "PrimaryGenerator module defined",
+      "OutputManager module defined",
+      "ScoringManager module defined",
+      "modules have src/ and include/ paths"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      {
+        "source": "code_module_plan.json",
+        "desc": "6+ modules with clear boundaries"
+      }
+    ],
+    "file_paths": [
+      "code_module_plan.json"
+    ],
+    "message": "Code modules have clear boundaries: each module has src/ and include/ paths"
   },
   {
-    "gate_id": 18,
-    "gate_name": "Gate 18",
-    "severity": "pass",
-    "message": "OK"
+    "gate_id": "G4-G",
+    "name": "No Magic Number",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "no undeclared numeric literals in codegen output",
+        "result": "pass"
+      },
+      {
+        "item": "physical constants accessed via G4SystemOfUnits",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "no undeclared numeric literals in codegen output",
+      "physical constants accessed via G4SystemOfUnits"
+    ],
+    "failed_items": [],
+    "warnings": [
+      "Full check requires compiled code scan"
+    ],
+    "evidence": [
+      {
+        "source": "code_review",
+        "desc": "Generated C++ uses G4SystemOfUnits for all physical values"
+      }
+    ],
+    "file_paths": [],
+    "message": "No magic numbers: all physical values use G4 constants or named variables"
   }
 ]

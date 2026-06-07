@@ -1,7 +1,9 @@
 {
   "artifact_type": "g4_complex_model",
   "job_id": "complex_dev",
-  "validation_status": "VERIFIED",
+  "validation_status": "PARTIAL",
+  "is_stub": false,
+  "run_type": "dev",
   "files": [
     "code_module_plan.json",
     "component_specs_summary.json",
@@ -15,5 +17,11 @@
     "output_manager_contract.json",
     "proposed_patch_summary.json"
   ],
-  "total_files": 11
+  "total_files": 11,
+  "model_ir_summary": {
+    "components_count": 9,
+    "materials_count": 5,
+    "scoring_count": 4,
+    "source": "proton 10 MeV"
+  }
 }
