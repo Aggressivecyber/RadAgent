@@ -90,15 +90,22 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
     )
 
     # G4-C: Geometry Interface
+    iface_count = len(model_ir.interfaces)
     _run_detailed_gate(
         gate_results, failed, 14, "Geometry Interface Consistency",
         lambda: GeometryInterfaceValidator().validate(model_ir),
         checked_items=[
-            {"item": "all interfaces valid parent→child", "result": "check"},
-            {"item": "world is root (no parent)", "result": "check"},
+            {"item": "exactly one world volume", "result": "check"},
+            {"item": "all mother_volume references valid", "result": "check"},
             {"item": "no orphan volumes", "result": "check"},
+            {"item": "no circular containment", "result": "check"},
+            {"item": "all interface references valid", "result": "check"},
+            {"item": "interface-hierarchy consistency", "result": "check"},
         ],
-        evidence=["interface hierarchy verified"],
+        evidence=[
+            f"components: {len(component_ids)}, interfaces: {iface_count}",
+            f"component_ids: {', '.join(component_ids)}",
+        ],
     )
 
     # G4-D: Overlap Policy

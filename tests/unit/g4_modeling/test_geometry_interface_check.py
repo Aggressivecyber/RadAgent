@@ -125,3 +125,135 @@ class TestGeometryInterfaceValidator:
         passed, errors = validator.validate(ir)
         assert not passed
         assert any("nonexistent" in e for e in errors)
+
+    def test_contains_interface_matches_hierarchy(self):
+        """'contains' interface where A is mother of B should pass."""
+        iface = GeometryInterfaceSpec(
+            interface_id="world_sensor",
+            component_a="world",
+            component_b="sensor",
+            relationship="contains",
+        )
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            components=[_world(), _layer("sensor")],
+            interfaces=[iface],
+            materials=[_mat("air"), _mat("silicon")],
+        )
+        validator = GeometryInterfaceValidator()
+        passed, errors = validator.validate(ir)
+        assert passed, f"Errors: {errors}"
+
+    def test_contains_interface_mismatch_fails(self):
+        """'contains' interface where A is NOT mother of B should fail."""
+        # world 'contains' housing, housing is mother of sensor
+        # But interface says world 'contains' sensor (skips housing)
+        # This should PASS because world IS an ancestor of sensor (transitive)
+        housing = ComponentSpec(
+            component_id="housing",
+            display_name="Housing",
+            component_type="assembly",
+            geometry_type="box",
+            dimensions={"dx": 1000, "dy": 1000, "dz": 1000},
+            material_id="air",
+            mother_volume="world",
+            source_evidence=["user_spec"],
+        )
+        sensor = ComponentSpec(
+            component_id="sensor",
+            display_name="Sensor",
+            component_type="layer",
+            geometry_type="box",
+            dimensions={"dx": 100, "dy": 100, "dz": 10},
+            material_id="silicon",
+            mother_volume="housing",
+            source_evidence=["user_spec"],
+        )
+        iface = GeometryInterfaceSpec(
+            interface_id="world_sensor_transitive",
+            component_a="world",
+            component_b="sensor",
+            relationship="contains",
+        )
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            components=[_world(), housing, sensor],
+            interfaces=[iface],
+            materials=[_mat("air"), _mat("silicon")],
+        )
+        validator = GeometryInterfaceValidator()
+        passed, errors = validator.validate(ir)
+        assert passed, f"Transitive contains should pass: {errors}"
+
+    def test_contains_interface_wrong_direction_fails(self):
+        """'contains' interface where B is mother of A (reversed) should fail."""
+        # Interface says sensor 'contains' world — wrong direction
+        iface = GeometryInterfaceSpec(
+            interface_id="sensor_world_bad",
+            component_a="sensor",
+            component_b="world",
+            relationship="contains",
+        )
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            components=[_world(), _layer("sensor")],
+            interfaces=[iface],
+            materials=[_mat("air"), _mat("silicon")],
+        )
+        validator = GeometryInterfaceValidator()
+        passed, errors = validator.validate(ir)
+        assert not passed
+        assert any("not a descendant" in e for e in errors)
+
+    def test_stacked_above_different_mothers_fails(self):
+        """'stacked_above' with different mother volumes should fail."""
+        layer1 = ComponentSpec(
+            component_id="layer1",
+            display_name="Layer 1",
+            component_type="layer",
+            geometry_type="box",
+            dimensions={"dx": 100, "dy": 100, "dz": 10},
+            material_id="silicon",
+            mother_volume="world",
+            source_evidence=["user_spec"],
+        )
+        housing = ComponentSpec(
+            component_id="housing",
+            display_name="Housing",
+            component_type="assembly",
+            geometry_type="box",
+            dimensions={"dx": 500, "dy": 500, "dz": 500},
+            material_id="air",
+            mother_volume="world",
+            source_evidence=["user_spec"],
+        )
+        layer2 = ComponentSpec(
+            component_id="layer2",
+            display_name="Layer 2",
+            component_type="layer",
+            geometry_type="box",
+            dimensions={"dx": 100, "dy": 100, "dz": 10},
+            material_id="silicon",
+            mother_volume="housing",
+            source_evidence=["user_spec"],
+        )
+        iface = GeometryInterfaceSpec(
+            interface_id="layer1_above_layer2",
+            component_a="layer1",
+            component_b="layer2",
+            relationship="stacked_above",
+        )
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            components=[_world(), layer1, housing, layer2],
+            interfaces=[iface],
+            materials=[_mat("air"), _mat("silicon")],
+        )
+        validator = GeometryInterfaceValidator()
+        passed, errors = validator.validate(ir)
+        assert not passed
+        assert any("different mother" in e for e in errors)
