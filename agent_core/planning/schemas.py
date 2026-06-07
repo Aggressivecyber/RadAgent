@@ -35,6 +35,9 @@ class TaskPlanningState(TypedDict, total=False):
     task_spec_errors: list[str]
     simulation_scope: list[str]
 
+    # Retry counter for parse_task loop
+    _parse_retry_count: int
+
     # Output paths
     task_spec_path: str
     task_planning_status: str

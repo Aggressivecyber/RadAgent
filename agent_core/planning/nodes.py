@@ -142,10 +142,14 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
     if not particle:
         errors.append("Cannot determine particle type from query")
 
+    # Increment retry counter for loop guard
+    retry_count = state.get("_parse_retry_count", 0) + 1
+
     return {
         "task_spec": task_spec,
         "task_spec_errors": errors,
         "simulation_scope": scope,
+        "_parse_retry_count": retry_count,
     }
 
 

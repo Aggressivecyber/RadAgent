@@ -25,4 +25,4 @@ if [ -d .venv ]; then
 fi
 
 # 启动 REPL
-exec python -m agent_core.main -i "$@"
+exec python -m agent_core.main -i --mode mvp1_acceptance "$@"
