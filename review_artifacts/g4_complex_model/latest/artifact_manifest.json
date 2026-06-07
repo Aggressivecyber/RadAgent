@@ -3,10 +3,10 @@
   "artifact_type": "g4_complex_model",
   "job_id": "hc_test",
   "validation_status": "PARTIAL",
-  "generated_at": "2026-06-07T15:36:31.232057+00:00",
+  "generated_at": "2026-06-07T15:44:52.085832+00:00",
   "is_stub": false,
   "run_type": "dev",
-  "source_commit": "1c19784",
+  "source_commit": "6e2875b",
   "source_job_id": "hc_test",
   "files": [
     {

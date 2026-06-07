@@ -3,7 +3,7 @@
   "artifact_type": "g4_complex_model",
   "job_id": "hc_test",
   "validation_status": "PARTIAL",
-  "generated_at": "2026-06-07T15:36:31.232179+00:00",
+  "generated_at": "2026-06-07T15:44:52.086014+00:00",
   "is_stub": false,
   "run_type": "dev",
   "artifacts_collected": 14,
