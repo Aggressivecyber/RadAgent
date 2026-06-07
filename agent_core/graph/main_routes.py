@@ -25,6 +25,11 @@ def route_after_task_planning(state: RadAgentMainState) -> str:
     with a clear message that these are reserved for later MVP phases.
     """
     status = state.get("task_planning_status", "failed")
+
+    # Reserved scope (TCAD/SPICE/full_chain) → report immediately
+    if status == "reserved":
+        return "report_subgraph"
+
     if status == "failed":
         return "report_subgraph"
 
