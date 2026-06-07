@@ -88,25 +88,25 @@ class TestFallbackSlug:
 
 
 class TestGenerateJobTitle:
-    """Verify generate_job_title with mocked LLM calls."""
+    """Verify generate_job_title with mocked model gateway calls."""
 
     @pytest.mark.asyncio
     async def test_llm_returns_valid_title(self) -> None:
-        with patch("agent_core.naming._call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch("agent_core.naming._call_model_gateway", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = "proton_detector_sim"
             result = await generate_job_title("建立质子探测器模型")
             assert result == "proton_detector_sim"
 
     @pytest.mark.asyncio
     async def test_llm_returns_mixed_case(self) -> None:
-        with patch("agent_core.naming._call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch("agent_core.naming._call_model_gateway", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = "Proton_Detector_Sim"
             result = await generate_job_title("proton detector")
             assert result == "proton_detector_sim"
 
     @pytest.mark.asyncio
     async def test_llm_fails_fallback(self) -> None:
-        with patch("agent_core.naming._call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch("agent_core.naming._call_model_gateway", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = ""
             result = await generate_job_title("Build a proton detector with Geant4")
             # Fallback: first 3 English words
@@ -114,7 +114,7 @@ class TestGenerateJobTitle:
 
     @pytest.mark.asyncio
     async def test_llm_fails_no_english_fallback(self) -> None:
-        with patch("agent_core.naming._call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch("agent_core.naming._call_model_gateway", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = ""
             result = await generate_job_title("建立探测器模型")
             assert result == ""

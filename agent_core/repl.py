@@ -168,15 +168,82 @@ class RadAgentREPL:
     # ── Input dispatch ──────────────────────────────────────────────
 
     async def handle_input(self, text: str) -> None:
-        """Dispatch input: slash command or natural-language query."""
+        """Dispatch input: slash command or natural-language query.
+
+        Natural language input goes through the LLM Intent Router first.
+        Only simulation_request intents are treated as /run.
+        """
         if text.startswith("/"):
             parts = text.split(maxsplit=1)
             cmd = parts[0].lower()
             arg = parts[1] if len(parts) > 1 else ""
             await self._dispatch_command(cmd, arg)
         else:
-            # Natural language → treat as /run
+            # Natural language → classify intent first
+            await self._handle_natural_language(text)
+
+    async def _handle_natural_language(self, text: str) -> None:
+        """Handle natural language input via LLM Intent Router."""
+        from agent_core.intent.router import classify_intent_with_lite_model
+
+        has_active_job = bool(self.state.get("job_id"))
+
+        self.console.print("  [dim]Classifying intent...[/dim]", end=" ")
+
+        intent_result = await classify_intent_with_lite_model(
+            text,
+            has_active_job=has_active_job,
+        )
+
+        self.console.print(f"[dim]{intent_result.intent}[/dim]")
+
+        if intent_result.intent == "smalltalk":
+            self.console.print(
+                "[green]你好，我是 RadAgent，可以帮你进行 Geant4 辐照仿真建模。[/green]"
+            )
+            return
+
+        if intent_result.intent == "help":
+            await self.cmd_help()
+            return
+
+        if intent_result.intent == "status_query":
+            await self.cmd_status()
+            return
+
+        if intent_result.intent == "capability_query":
+            self.console.print(
+                "[green]当前主要支持 Geant4 辐照仿真建模，包括几何、材料、源项、"
+                "敏感探测器、scoring、代码生成和门禁检查。[/green]"
+            )
+            return
+
+        if intent_result.intent == "simulation_request":
+            # Only simulation requests are treated as /run
             await self.cmd_run(text)
+            return
+
+        if intent_result.intent == "human_confirmation_response":
+            # Check if there's a pending confirmation
+            if self.state.get("confirmation_request_path"):
+                await self.cmd_confirm()
+            else:
+                self.console.print(
+                    "[yellow]当前没有待确认的方案。[/yellow]"
+                )
+            return
+
+        if intent_result.intent == "unknown":
+            self.console.print(
+                "[yellow]我还不能确定你想做什么。[/yellow]\n"
+                "如果要建模，请描述仿真任务，例如：\n"
+                "  建立一个 9 组件硅探测器，10 MeV proton 入射\n"
+                "如果要聊天，直接说就好。"
+            )
+            return
+
+        # Default: treat as simulation request
+        await self.cmd_run(text)
 
     async def _dispatch_command(self, cmd: str, arg: str) -> None:
         """Route slash commands to handler methods."""
@@ -364,11 +431,30 @@ class RadAgentREPL:
             self.console.print(
                 "[green]No assumptions to confirm — all set![/green]"
             )
-            self.state["raw_human_response"] = {
-                "user_decision": "approve",
-                "edits": [],
-                "user_notes": "Auto-approved: no questions",
-            }
+            # Still require explicit user approval even with no questions
+            self.console.print(
+                "[yellow]Please type 'approve' to confirm or 'reject' to cancel:[/yellow]"
+            )
+            answer = await asyncio.to_thread(
+                self._prompt_choice,
+                "[a]pprove / [r]eject?",
+                ("a", "r"),
+                "a",
+            )
+            if answer == "a":
+                self.state["raw_human_response"] = {
+                    "user_decision": "approve",
+                    "edits": [],
+                    "user_notes": "User approved (no questions)",
+                }
+                self.console.print("  [green]✓ Approved[/green]")
+            else:
+                self.state["raw_human_response"] = {
+                    "user_decision": "reject",
+                    "edits": [],
+                    "user_notes": "User rejected",
+                }
+                self.console.print("  [red]✗ Rejected[/red]")
             return
 
         # Interactive Q&A
@@ -686,7 +772,9 @@ class RadAgentREPL:
             "[bold]/jobs[/bold]          List existing jobs\n"
             "[bold]/help[/bold]          Show this help\n"
             "[bold]/quit[/bold]          Exit REPL\n"
-            "\n[dim]Natural language input is treated as /run <query>.[/dim]",
+            "\n[dim]Natural language input is classified by intent router.[/dim]\n"
+            "[dim]Simulation requests (e.g. '建立9组件硅探测器') start the pipeline.[/dim]\n"
+            "[dim]Casual chat (e.g. '你好') gets a friendly response.[/dim]",
             title="RadAgent Commands",
             border_style="cyan",
         ))

@@ -5,15 +5,19 @@ It never processes geometry details, C++ code, Gate specifics, or
 artifact content directly. All domain logic lives in subgraphs.
 
 Flow:
-    prepare_workspace
-      → context_subgraph
-      → task_planning_subgraph
-      → g4_modeling_subgraph
-      → g4_codegen_subgraph
-      → patch_subgraph
-      → gate_subgraph
-      → artifact_subgraph
-      → report_subgraph
+    initialize_request
+      → intent_router
+      → [smalltalk/help/status/capability/clarification] → END
+      → prepare_workspace
+        → context_subgraph
+        → task_planning_subgraph
+        → g4_modeling_subgraph
+        → human_confirmation_subgraph
+        → g4_codegen_subgraph
+        → patch_subgraph
+        → gate_subgraph
+        → artifact_subgraph
+        → report_subgraph
 """
 
 from __future__ import annotations
@@ -22,7 +26,6 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
-from agent_core.config.workspace import ensure_job_dirs
 from agent_core.graph.main_routes import (
     route_after_artifact,
     route_after_context,
@@ -30,10 +33,22 @@ from agent_core.graph.main_routes import (
     route_after_g4_modeling,
     route_after_gates,
     route_after_human_confirmation,
+    route_after_intent,
     route_after_patch,
     route_after_task_planning,
 )
 from agent_core.graph.main_state import RadAgentMainState
+
+# ─── Initialize request node ─────────────────────────────────────────
+
+
+async def initialize_request(state: RadAgentMainState) -> dict[str, Any]:
+    """Initialize the request — pass through state to intent router."""
+    return {
+        "user_query": state.get("user_query", ""),
+        "current_node": "initialize_request",
+    }
+
 
 # ─── Workspace preparation node ──────────────────────────────────────
 
@@ -345,16 +360,70 @@ def _make_report_subgraph_node() -> Any:
     return _run
 
 
+# ─── Intent router and response node wrappers ────────────────────────
+
+
+def _make_intent_router_node() -> Any:
+    """Create the intent router node wrapper."""
+    from agent_core.intent.nodes import intent_router_node
+
+    return intent_router_node
+
+
+def _make_chat_response_node() -> Any:
+    """Create the chat response node wrapper."""
+    from agent_core.response.nodes import chat_response_node
+
+    return chat_response_node
+
+
+def _make_help_response_node() -> Any:
+    """Create the help response node wrapper."""
+    from agent_core.response.nodes import help_response_node
+
+    return help_response_node
+
+
+def _make_status_response_node() -> Any:
+    """Create the status response node wrapper."""
+    from agent_core.response.nodes import status_response_node
+
+    return status_response_node
+
+
+def _make_capability_response_node() -> Any:
+    """Create the capability response node wrapper."""
+    from agent_core.response.nodes import capability_response_node
+
+    return capability_response_node
+
+
+def _make_clarification_node() -> Any:
+    """Create the clarification node wrapper."""
+    from agent_core.response.nodes import clarification_node
+
+    return clarification_node
+
+
 # ─── Main graph builder ──────────────────────────────────────────────
 
 
 def build_main_graph() -> StateGraph:
     """Build the main orchestration graph.
 
-    The main graph is a simple linear sequence with conditional routing.
-    Each node is a subgraph wrapper that handles domain logic internally.
+    The main graph routes through intent_router first, then either
+    responds directly (smalltalk/help/status) or enters the simulation pipeline.
     """
     graph = StateGraph(RadAgentMainState)
+
+    # Add initialization and intent routing nodes
+    graph.add_node("initialize_request", initialize_request)
+    graph.add_node("intent_router", _make_intent_router_node())
+    graph.add_node("chat_response_node", _make_chat_response_node())
+    graph.add_node("help_response_node", _make_help_response_node())
+    graph.add_node("status_response_node", _make_status_response_node())
+    graph.add_node("capability_response_node", _make_capability_response_node())
+    graph.add_node("clarification_node", _make_clarification_node())
 
     # Add workspace preparation (not a subgraph — just directory setup)
     graph.add_node("prepare_workspace", prepare_workspace)
@@ -371,7 +440,32 @@ def build_main_graph() -> StateGraph:
     graph.add_node("report_subgraph", _make_report_subgraph_node())
 
     # Set entry point
-    graph.set_entry_point("prepare_workspace")
+    graph.set_entry_point("initialize_request")
+
+    # initialize_request → intent_router
+    graph.add_edge("initialize_request", "intent_router")
+
+    # Conditional: intent_router → response nodes or pipeline
+    graph.add_conditional_edges(
+        "intent_router",
+        route_after_intent,
+        {
+            "chat_response_node": "chat_response_node",
+            "help_response_node": "help_response_node",
+            "status_response_node": "status_response_node",
+            "capability_response_node": "capability_response_node",
+            "clarification_node": "clarification_node",
+            "human_confirmation_subgraph": "human_confirmation_subgraph",
+            "prepare_workspace": "prepare_workspace",
+        },
+    )
+
+    # Response nodes → END
+    graph.add_edge("chat_response_node", END)
+    graph.add_edge("help_response_node", END)
+    graph.add_edge("status_response_node", END)
+    graph.add_edge("capability_response_node", END)
+    graph.add_edge("clarification_node", END)
 
     # Linear edges: workspace → context
     graph.add_edge("prepare_workspace", "context_subgraph")

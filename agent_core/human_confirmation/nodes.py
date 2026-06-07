@@ -582,7 +582,8 @@ async def merge_user_confirmation(
 
     Handles four decision types:
     - approve: Mark all fields as confirmed
-    - edit: Apply user edits, mark edited fields as user-provided (source_type="user", confidence=1.0)
+    - edit: Apply user edits, mark edited fields as user-provided
+      (source_type="user", confidence=1.0)
     - reject: Set status to rejected, stop processing
     - ask_more: Increment round, continue to next round
 

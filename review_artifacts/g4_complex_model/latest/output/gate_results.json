@@ -1,1 +1,122 @@
-[{"gate_id": 0, "status": "pass", "checked_items": []}, {"gate_id": 1, "status": "pass", "checked_items": []}, {"gate_id": 2, "status": "pass", "checked_items": []}, {"gate_id": 3, "status": "pass", "checked_items": []}, {"gate_id": 4, "status": "pass", "checked_items": []}, {"gate_id": 5, "status": "pass", "checked_items": []}, {"gate_id": 6, "status": "pass", "checked_items": []}, {"gate_id": 7, "status": "pass", "checked_items": []}, {"gate_id": 8, "status": "pass", "checked_items": []}, {"gate_id": 9, "status": "pass", "checked_items": []}, {"gate_id": 10, "status": "pass", "checked_items": []}, {"gate_id": 11, "status": "pass", "checked_items": []}, {"gate_id": 12, "status": "pass", "checked_items": []}, {"gate_id": 13, "status": "pass", "checked_items": []}, {"gate_id": 14, "status": "pass", "checked_items": []}, {"gate_id": 15, "status": "pass", "checked_items": []}, {"gate_id": 16, "status": "pass", "checked_items": []}, {"gate_id": 17, "status": "pass", "checked_items": []}, {"gate_id": 18, "status": "pass", "checked_items": []}, {"gate_id": 19, "status": "pass", "checked_items": []}]
+[
+  {
+    "gate_id": 0,
+    "gate_name": "Gate 0",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 1,
+    "gate_name": "Gate 1",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 2,
+    "gate_name": "Gate 2",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 3,
+    "gate_name": "Gate 3",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 4,
+    "gate_name": "Gate 4",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 5,
+    "gate_name": "Gate 5",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 6,
+    "gate_name": "Gate 6",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 7,
+    "gate_name": "Gate 7",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 8,
+    "gate_name": "Gate 8",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 9,
+    "gate_name": "Gate 9",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 10,
+    "gate_name": "Gate 10",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 11,
+    "gate_name": "Gate 11",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 12,
+    "gate_name": "Gate 12",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 13,
+    "gate_name": "Gate 13",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 14,
+    "gate_name": "Gate 14",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 15,
+    "gate_name": "Gate 15",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 16,
+    "gate_name": "Gate 16",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 17,
+    "gate_name": "Gate 17",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 18,
+    "gate_name": "Gate 18",
+    "severity": "pass",
+    "message": "OK"
+  },
+  {
+    "gate_id": 19,
+    "gate_name": "Gate 19",
+    "severity": "pass",
+    "message": "OK"
+  }
+]

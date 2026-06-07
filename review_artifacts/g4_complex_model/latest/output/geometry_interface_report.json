@@ -1,4 +1,61 @@
 {
-  "total_interfaces": 0,
-  "interfaces": []
+  "total_interfaces": 8,
+  "interfaces": [
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "?",
+      "component_a": "?",
+      "component_b": "?",
+      "relationship": "unknown",
+      "overlap_check_enabled": true
+    }
+  ]
 }

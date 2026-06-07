@@ -1,0 +1,1276 @@
+N818 Exception name `_QuitREPL` should be named with an Error suffix
+  --> agent_core/repl.py:76:7
+   |
+76 | class _QuitREPL(Exception):
+   |       ^^^^^^^^^
+77 |     """Signal to exit the REPL loop."""
+   |
+
+F401 [*] `json` imported but unused
+  --> agent_core/workspace/io.py:9:8
+   |
+ 7 | from __future__ import annotations
+ 8 |
+ 9 | import json
+   |        ^^^^
+10 | from pathlib import Path
+11 | from typing import Any
+   |
+help: Remove unused import: `json`
+
+E501 Line too long (111 > 100)
+  --> scripts/acceptance_check_artifacts.py:62:101
+   |
+60 |     check("file exists", sum_path.exists())
+61 |     summary = json.loads(sum_path.read_text()) if sum_path.exists() else {}
+62 |     check("  total_components = 9", summary.get("total_components") == 9, str(summary.get("total_components")))
+   |                                                                                                     ^^^^^^^^^^^
+63 |     sum_ids = summary.get("component_ids", [])
+64 |     for comp in ["housing", "pcb", "oxide_layer", "silicon_bulk", "sensitive_region", "bottom_electrode"]:
+   |
+
+E501 Line too long (106 > 100)
+  --> scripts/acceptance_check_artifacts.py:64:101
+   |
+62 |     check("  total_components = 9", summary.get("total_components") == 9, str(summary.get("total_components")))
+63 |     sum_ids = summary.get("component_ids", [])
+64 |     for comp in ["housing", "pcb", "oxide_layer", "silicon_bulk", "sensitive_region", "bottom_electrode"]:
+   |                                                                                                     ^^^^^^
+65 |         check(f"  has '{comp}'", comp in sum_ids, str(sum_ids))
+66 |     check("  materials_count = 5", summary.get("materials_count") == 5, str(summary.get("materials_count")))
+   |
+
+E501 Line too long (108 > 100)
+  --> scripts/acceptance_check_artifacts.py:66:101
+   |
+64 |     for comp in ["housing", "pcb", "oxide_layer", "silicon_bulk", "sensitive_region", "bottom_electrode"]:
+65 |         check(f"  has '{comp}'", comp in sum_ids, str(sum_ids))
+66 |     check("  materials_count = 5", summary.get("materials_count") == 5, str(summary.get("materials_count")))
+   |                                                                                                     ^^^^^^^^
+67 |     check("  scoring_count = 4", summary.get("scoring_count") == 4, str(summary.get("scoring_count")))
+   |
+
+E501 Line too long (102 > 100)
+  --> scripts/acceptance_check_artifacts.py:67:101
+   |
+65 |         check(f"  has '{comp}'", comp in sum_ids, str(sum_ids))
+66 |     check("  materials_count = 5", summary.get("materials_count") == 5, str(summary.get("materials_count")))
+67 |     check("  scoring_count = 4", summary.get("scoring_count") == 4, str(summary.get("scoring_count")))
+   |                                                                                                     ^^
+68 |
+69 |     # ── P0-3: confirmation_record ─────────────────────────────────────
+   |
+
+E501 Line too long (104 > 100)
+  --> scripts/acceptance_check_artifacts.py:89:101
+   |
+87 |     if "remaining_unconfirmed_fields" in record:
+88 |         check("  remaining_unconfirmed_fields empty",
+89 |               record["remaining_unconfirmed_fields"] == [], str(record["remaining_unconfirmed_fields"]))
+   |                                                                                                     ^^^^
+90 |     if "confirmation_history" in record:
+91 |         check("  confirmation_history >= 1 round",
+   |
+
+E501 Line too long (106 > 100)
+   --> scripts/acceptance_check_artifacts.py:186:101
+    |
+184 |     ms = manifest.get("model_ir_summary", {})
+185 |     ms_ids = [c.get("component_id") for c in ms.get("components", [])]
+186 |     for comp in ["housing", "pcb", "oxide_layer", "silicon_bulk", "sensitive_region", "bottom_electrode"]:
+    |                                                                                                     ^^^^^^
+187 |         check(f"  summary has '{comp}'", comp in ms_ids, str(ms_ids))
+188 |     check("  summary materials_count = 5", ms.get("materials_count") == 5, str(ms.get("materials_count")))
+    |
+
+E501 Line too long (106 > 100)
+   --> scripts/acceptance_check_artifacts.py:188:101
+    |
+186 |     for comp in ["housing", "pcb", "oxide_layer", "silicon_bulk", "sensitive_region", "bottom_electrode"]:
+187 |         check(f"  summary has '{comp}'", comp in ms_ids, str(ms_ids))
+188 |     check("  summary materials_count = 5", ms.get("materials_count") == 5, str(ms.get("materials_count")))
+    |                                                                                                     ^^^^^^
+189 |     check("  summary scoring_count = 4", ms.get("scoring_count") == 4, str(ms.get("scoring_count")))
+190 |     mf_names = [f.get("name", "") for f in manifest.get("files", [])]
+    |
+
+E501 Line too long (103 > 100)
+   --> scripts/acceptance_check_artifacts.py:191:101
+    |
+189 |     check("  summary scoring_count = 4", ms.get("scoring_count") == 4, str(ms.get("scoring_count")))
+190 |     mf_names = [f.get("name", "") for f in manifest.get("files", [])]
+191 |     for f in ["confirmation_record.json", "confirmed_model_plan.json", "human_confirmation_report.md"]:
+    |                                                                                                     ^^^
+192 |         check(f"  files contains '{f}'", f in mf_names, str(mf_names))
+    |
+
+E501 Line too long (102 > 100)
+   --> scripts/generate_complex_model_artifact.py:289:101
+    |
+287 |         ],
+288 |         "interfaces": [
+289 |             {"parent_component": "world", "child_component": "housing", "interface_type": "daughter"},
+    |                                                                                                     ^^
+290 |             {"parent_component": "housing", "child_component": "pcb", "interface_type": "daughter"},
+291 |             {"parent_component": "pcb", "child_component": "sensor_stack", "interface_type": "daughter"},
+    |
+
+E501 Line too long (105 > 100)
+   --> scripts/generate_complex_model_artifact.py:291:101
+    |
+289 |             {"parent_component": "world", "child_component": "housing", "interface_type": "daughter"},
+290 |             {"parent_component": "housing", "child_component": "pcb", "interface_type": "daughter"},
+291 |             {"parent_component": "pcb", "child_component": "sensor_stack", "interface_type": "daughter"},
+    |                                                                                                     ^^^^^
+292 |             {"parent_component": "sensor_stack", "child_component": "top_electrode", "interface_type": "daughter"},
+293 |             {"parent_component": "sensor_stack", "child_component": "oxide_layer", "interface_type": "daughter"},
+    |
+
+E501 Line too long (115 > 100)
+   --> scripts/generate_complex_model_artifact.py:292:101
+    |
+290 |             {"parent_component": "housing", "child_component": "pcb", "interface_type": "daughter"},
+291 |             {"parent_component": "pcb", "child_component": "sensor_stack", "interface_type": "daughter"},
+292 |             {"parent_component": "sensor_stack", "child_component": "top_electrode", "interface_type": "daughter"},
+    |                                                                                                     ^^^^^^^^^^^^^^^
+293 |             {"parent_component": "sensor_stack", "child_component": "oxide_layer", "interface_type": "daughter"},
+294 |             {"parent_component": "sensor_stack", "child_component": "silicon_bulk", "interface_type": "daughter"},
+    |
+
+E501 Line too long (113 > 100)
+   --> scripts/generate_complex_model_artifact.py:293:101
+    |
+291 |             {"parent_component": "pcb", "child_component": "sensor_stack", "interface_type": "daughter"},
+292 |             {"parent_component": "sensor_stack", "child_component": "top_electrode", "interface_type": "daughter"},
+293 |             {"parent_component": "sensor_stack", "child_component": "oxide_layer", "interface_type": "daughter"},
+    |                                                                                                     ^^^^^^^^^^^^^
+294 |             {"parent_component": "sensor_stack", "child_component": "silicon_bulk", "interface_type": "daughter"},
+295 |             {"parent_component": "silicon_bulk", "child_component": "sensitive_region", "interface_type": "daughter"},
+    |
+
+E501 Line too long (114 > 100)
+   --> scripts/generate_complex_model_artifact.py:294:101
+    |
+292 |             {"parent_component": "sensor_stack", "child_component": "top_electrode", "interface_type": "daughter"},
+293 |             {"parent_component": "sensor_stack", "child_component": "oxide_layer", "interface_type": "daughter"},
+294 |             {"parent_component": "sensor_stack", "child_component": "silicon_bulk", "interface_type": "daughter"},
+    |                                                                                                     ^^^^^^^^^^^^^^
+295 |             {"parent_component": "silicon_bulk", "child_component": "sensitive_region", "interface_type": "daughter"},
+296 |             {"parent_component": "sensor_stack", "child_component": "bottom_electrode", "interface_type": "daughter"},
+    |
+
+E501 Line too long (118 > 100)
+   --> scripts/generate_complex_model_artifact.py:295:101
+    |
+293 |             {"parent_component": "sensor_stack", "child_component": "oxide_layer", "interface_type": "daughter"},
+294 |             {"parent_component": "sensor_stack", "child_component": "silicon_bulk", "interface_type": "daughter"},
+295 |             {"parent_component": "silicon_bulk", "child_component": "sensitive_region", "interface_type": "daughter"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^
+296 |             {"parent_component": "sensor_stack", "child_component": "bottom_electrode", "interface_type": "daughter"},
+297 |         ],
+    |
+
+E501 Line too long (118 > 100)
+   --> scripts/generate_complex_model_artifact.py:296:101
+    |
+294 |             {"parent_component": "sensor_stack", "child_component": "silicon_bulk", "interface_type": "daughter"},
+295 |             {"parent_component": "silicon_bulk", "child_component": "sensitive_region", "interface_type": "daughter"},
+296 |             {"parent_component": "sensor_stack", "child_component": "bottom_electrode", "interface_type": "daughter"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^
+297 |         ],
+298 |         "open_issues": [
+    |
+
+E501 Line too long (139 > 100)
+   --> scripts/generate_complex_model_artifact.py:304:101
+    |
+302 | …
+303 | …
+304 | …": "detector stack layout: housing → pcb → sensor_stack → electrodes/oxide/silicon"},
+    |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+305 | …
+306 | …
+    |
+
+E501 Line too long (107 > 100)
+   --> scripts/generate_complex_model_artifact.py:308:101
+    |
+306 |             "materials": [
+307 |                 {"source": "NIST", "desc": "G4_AIR, G4_Al, G4_Si standard definitions"},
+308 |                 {"source": "user_specification", "desc": "FR4 custom composition from PDG material table"},
+    |                                                                                                     ^^^^^^^
+309 |                 {"source": "NIST", "desc": "SiO2 stoichiometric composition, density 2.200 g/cm³"},
+310 |             ],
+    |
+
+E501 Line too long (109 > 100)
+   --> scripts/generate_complex_model_artifact.py:312:101
+    |
+310 |             ],
+311 |             "source": [
+312 |                 {"source": "user_specification", "desc": "10 MeV mono-energetic proton, vertical incidence"},
+    |                                                                                                     ^^^^^^^^^
+313 |             ],
+314 |             "physics": [
+    |
+
+E501 Line too long (116 > 100)
+   --> scripts/generate_complex_model_artifact.py:315:101
+    |
+313 |             ],
+314 |             "physics": [
+315 |                 {"source": "geant4_physics_guide", "desc": "QGSP_BIC_HP for low-energy proton detector simulation"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^
+316 |             ],
+317 |             "scoring": [
+    |
+
+E501 Line too long (125 > 100)
+   --> scripts/generate_complex_model_artifact.py:318:101
+    |
+316 |             ],
+317 |             "scoring": [
+318 |                 {"source": "user_specification", "desc": "sensitive region edep, oxide dose, bulk 3D dose map, event table"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+319 |             ],
+320 |         },
+    |
+
+E501 Line too long (103 > 100)
+   --> scripts/generate_complex_model_artifact.py:327:101
+    |
+325 |                     "action": "create",
+326 |                     "target": "rad_hard_detector_v1",
+327 |                     "description": "Initial complex detector model IR created from user specification",
+    |                                                                                                     ^^^
+328 |                     "timestamp": "2026-06-07T16:30:00Z",
+329 |                 },
+    |
+
+E501 Line too long (117 > 100)
+   --> scripts/generate_complex_model_artifact.py:362:101
+    |
+360 |             {"item": "RAG pipeline accessible", "result": "pass"},
+361 |         ],
+362 |         "passed_items": ["context_decision == allow_rag", "sufficient context retrieved", "RAG pipeline accessible"],
+    |                                                                                                     ^^^^^^^^^^^^^^^^^
+363 |         "failed_items": [],
+364 |         "warnings": [],
+    |
+
+E501 Line too long (124 > 100)
+   --> scripts/generate_complex_model_artifact.py:396:101
+    |
+394 |         "status": "pass" if not missing_comp and not missing_mat else "fail",
+395 |         "checked_items": [
+396 |             {"item": f"required components ({len(required_components)})", "result": "pass" if not missing_comp else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^
+397 |             {"item": f"required materials ({len(required_materials)})", "result": "pass" if not missing_mat else "fail"},
+398 |             {"item": "simplification_policy defined", "result": "pass"},
+    |
+
+E501 Line too long (121 > 100)
+   --> scripts/generate_complex_model_artifact.py:397:101
+    |
+395 |         "checked_items": [
+396 |             {"item": f"required components ({len(required_components)})", "result": "pass" if not missing_comp else "fail"},
+397 |             {"item": f"required materials ({len(required_materials)})", "result": "pass" if not missing_mat else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^
+398 |             {"item": "simplification_policy defined", "result": "pass"},
+399 |             {"item": "evidence pack present", "result": "pass"},
+    |
+
+E501 Line too long (147 > 100)
+   --> scripts/generate_complex_model_artifact.py:416:101
+    |
+414 | …
+415 | …latest/output/g4_model_ir.json"],
+416 | …)} components, {len(material_ids)} materials, {len(model_ir['scoring'])} scoring specs.",
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+417 | …
+    |
+
+E501 Line too long (115 > 100)
+   --> scripts/generate_complex_model_artifact.py:432:101
+    |
+430 |             {"item": "all ScoringSpec valid", "result": "pass"},
+431 |         ],
+432 |         "passed_items": ["G4ModelIR", "ComponentSpec", "MaterialSpec", "SourceSpec", "PhysicsSpec", "ScoringSpec"],
+    |                                                                                                     ^^^^^^^^^^^^^^^
+433 |         "failed_items": [],
+434 |         "warnings": [],
+    |
+
+E501 Line too long (111 > 100)
+   --> scripts/generate_complex_model_artifact.py:451:101
+    |
+449 |             {"item": "interface hierarchy valid", "result": "pass"},
+450 |         ],
+451 |         "passed_items": ["world exists", "mothers defined", "tree connected", "no cycles", "interfaces valid"],
+    |                                                                                                     ^^^^^^^^^^^
+452 |         "failed_items": [],
+453 |         "warnings": [],
+    |
+
+F541 [*] f-string without any placeholders
+   --> scripts/generate_complex_model_artifact.py:454:22
+    |
+452 |         "failed_items": [],
+453 |         "warnings": [],
+454 |         "evidence": [f"interface chain: world → housing → pcb → sensor_stack → components"],
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+455 |         "file_paths": [],
+456 |         "message": "Construction rules satisfied. Geometry tree has valid root-to-leaf paths.",
+    |
+help: Remove extraneous `f` prefix
+
+E501 Line too long (121 > 100)
+   --> scripts/generate_complex_model_artifact.py:494:101
+    |
+492 |         "evidence": ["code_module_plan lists all required modules"],
+493 |         "file_paths": ["code_module_plan.json", "CMakeLists.txt"],
+494 |         "message": f"Geant4 code structure complete: {len(required_src)} source files, {len(required_include)} headers.",
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^
+495 |     })
+    |
+
+E501 Line too long (136 > 100)
+   --> scripts/generate_complex_model_artifact.py:589:101
+    |
+587 | …} required components present"],
+588 | …
+589 | …ed_components)} required components present with {len(scoring_ids)} scoring specs.",
+    |                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+590 | …
+    |
+
+E501 Line too long (112 > 100)
+   --> scripts/generate_complex_model_artifact.py:600:101
+    |
+598 |         "status": "pass" if not missing_comp_b and not missing_scoring_b else "fail",
+599 |         "checked_items": [
+600 |             {"item": "housing NOT simplified away", "result": "pass" if "housing" in component_ids else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^
+601 |             {"item": "pcb NOT simplified away", "result": "pass" if "pcb" in component_ids else "fail"},
+602 |             {"item": "oxide_layer NOT simplified away", "result": "pass" if "oxide_layer" in component_ids else "fail"},
+    |
+
+E501 Line too long (104 > 100)
+   --> scripts/generate_complex_model_artifact.py:601:101
+    |
+599 |         "checked_items": [
+600 |             {"item": "housing NOT simplified away", "result": "pass" if "housing" in component_ids else "fail"},
+601 |             {"item": "pcb NOT simplified away", "result": "pass" if "pcb" in component_ids else "fail"},
+    |                                                                                                     ^^^^
+602 |             {"item": "oxide_layer NOT simplified away", "result": "pass" if "oxide_layer" in component_ids else "fail"},
+603 |             {"item": "top_electrode NOT simplified away", "result": "pass" if "top_electrode" in component_ids else "fail"},
+    |
+
+E501 Line too long (120 > 100)
+   --> scripts/generate_complex_model_artifact.py:602:101
+    |
+600 |             {"item": "housing NOT simplified away", "result": "pass" if "housing" in component_ids else "fail"},
+601 |             {"item": "pcb NOT simplified away", "result": "pass" if "pcb" in component_ids else "fail"},
+602 |             {"item": "oxide_layer NOT simplified away", "result": "pass" if "oxide_layer" in component_ids else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^
+603 |             {"item": "top_electrode NOT simplified away", "result": "pass" if "top_electrode" in component_ids else "fail"},
+604 |             {"item": "bottom_electrode NOT simplified away", "result": "pass" if "bottom_electrode" in component_ids else "fail"},
+    |
+
+E501 Line too long (124 > 100)
+   --> scripts/generate_complex_model_artifact.py:603:101
+    |
+601 |             {"item": "pcb NOT simplified away", "result": "pass" if "pcb" in component_ids else "fail"},
+602 |             {"item": "oxide_layer NOT simplified away", "result": "pass" if "oxide_layer" in component_ids else "fail"},
+603 |             {"item": "top_electrode NOT simplified away", "result": "pass" if "top_electrode" in component_ids else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^
+604 |             {"item": "bottom_electrode NOT simplified away", "result": "pass" if "bottom_electrode" in component_ids else "fail"},
+605 |             {"item": "sensitive_region NOT simplified away", "result": "pass" if "sensitive_region" in component_ids else "fail"},
+    |
+
+E501 Line too long (130 > 100)
+   --> scripts/generate_complex_model_artifact.py:604:101
+    |
+602 |             {"item": "oxide_layer NOT simplified away", "result": "pass" if "oxide_layer" in component_ids else "fail"},
+603 |             {"item": "top_electrode NOT simplified away", "result": "pass" if "top_electrode" in component_ids else "fail"},
+604 |             {"item": "bottom_electrode NOT simplified away", "result": "pass" if "bottom_electrode" in component_ids else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+605 |             {"item": "sensitive_region NOT simplified away", "result": "pass" if "sensitive_region" in component_ids else "fail"},
+606 |             {"item": "multi-layer stack NOT merged into single silicon box", "result": "pass"},
+    |
+
+E501 Line too long (130 > 100)
+   --> scripts/generate_complex_model_artifact.py:605:101
+    |
+603 |             {"item": "top_electrode NOT simplified away", "result": "pass" if "top_electrode" in component_ids else "fail"},
+604 |             {"item": "bottom_electrode NOT simplified away", "result": "pass" if "bottom_electrode" in component_ids else "fail"},
+605 |             {"item": "sensitive_region NOT simplified away", "result": "pass" if "sensitive_region" in component_ids else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+606 |             {"item": "multi-layer stack NOT merged into single silicon box", "result": "pass"},
+607 |             {"item": "all user-requested scoring regions exist", "result": "pass" if not missing_scoring_b else "fail"},
+    |
+
+E501 Line too long (120 > 100)
+   --> scripts/generate_complex_model_artifact.py:607:101
+    |
+605 |             {"item": "sensitive_region NOT simplified away", "result": "pass" if "sensitive_region" in component_ids else "fail"},
+606 |             {"item": "multi-layer stack NOT merged into single silicon box", "result": "pass"},
+607 |             {"item": "all user-requested scoring regions exist", "result": "pass" if not missing_scoring_b else "fail"},
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^
+608 |             {"item": "no unapproved simplifications detected", "result": "pass"},
+609 |         ],
+    |
+
+E501 Line too long (105 > 100)
+   --> scripts/generate_complex_model_artifact.py:626:101
+    |
+624 |         ],
+625 |         "file_paths": ["g4_model_ir.json", "no_simplification_report.json"],
+626 |         "message": "No unapproved simplifications detected. All complex structure components preserved.",
+    |                                                                                                     ^^^^^
+627 |     })
+    |
+
+E501 Line too long (140 > 100)
+   --> scripts/generate_complex_model_artifact.py:796:101
+    |
+794 | … model_ir["materials"] if m.get("custom")],
+795 | …
+796 | …or_stack → {top_electrode, oxide, silicon_bulk → sensitive_region, bottom_electrode}",
+    |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+797 | …
+    |
+
+E501 Line too long (108 > 100)
+   --> scripts/generate_complex_model_artifact.py:869:101
+    |
+867 |                 "filename": "g4_summary.json",
+868 |                 "source": "RunAction",
+869 |                 "fields": ["n_events", "beam_particle", "beam_energy_MeV", "physics_list", "run_timestamp"],
+    |                                                                                                     ^^^^^^^^
+870 |             },
+871 |             {
+    |
+
+E501 Line too long (102 > 100)
+    --> scripts/generate_complex_model_artifact.py:1025:101
+     |
+1023 | ## Model
+1024 | - **Target**: Radiation-hard silicon pixel detector
+1025 | - **Components**: world, housing, PCB, sensor stack, electrodes, oxide, silicon bulk, sensitive region
+     |                                                                                                     ^^
+1026 | - **Source**: 10 MeV proton, vertical incidence
+1027 | - **Scoring**: edep, dose, 3D dose map, event table
+     |
+
+F541 [*] f-string without any placeholders
+    --> scripts/generate_complex_model_artifact.py:1102:11
+     |
+1100 |     print(f"  Gates: {len(gate_results)}")
+1101 |     print(f"  Missing required components: {missing if missing else 'NONE'}")
+1102 |     print(f"  is_stub: False")
+     |           ^^^^^^^^^^^^^^^^^^^
+     |
+help: Remove extraneous `f` prefix
+
+E402 Module level import not at top of file
+  --> scripts/regenerate_fixtures.py:41:1
+   |
+39 | sys.path.insert(0, str(ROOT))
+40 |
+41 | from agent_core.gates.base_gates import GATE_NAMES, run_base_gates
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+42 | from agent_core.gates.gate_runner import compute_validation_status
+   |
+
+E402 Module level import not at top of file
+  --> scripts/regenerate_fixtures.py:42:1
+   |
+41 | from agent_core.gates.base_gates import GATE_NAMES, run_base_gates
+42 | from agent_core.gates.gate_runner import compute_validation_status
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+43 |
+44 | ARTIFACT_DIR = ROOT / "review_artifacts" / "g4_complex_model" / "latest"
+   |
+
+E501 Line too long (113 > 100)
+   --> scripts/regenerate_fixtures.py:413:101
+    |
+411 | - **Materials**: {len(COMPLEX_MODEL_IR["materials"])} (G4_AIR, G4_Al, FR4, G4_Si, SiO2)
+412 | - **Source**: 10 MeV proton pencil beam
+413 | - **Scoring**: {len(COMPLEX_MODEL_IR["scoring"])} scorers (sensitive_edep, oxide_dose, bulk_dose_3d, event_table)
+    |                                                                                                     ^^^^^^^^^^^^^
+414 | - **Confirmed Fields**: {len(CONFIRMED_FIELD_IDS)}
+415 | - **Edited Fields**: 0
+    |
+
+F541 [*] f-string without any placeholders
+   --> scripts/regenerate_fixtures.py:682:11
+    |
+680 |     assert len(ir["scoring"]) == 4, f"Expected 4 scoring, got {len(ir['scoring'])}"
+681 |     assert "10 MeV" in ir["sources"][0]["energy"], ir["sources"][0]
+682 |     print(f"  model_ir: 9 components, 5 materials, 1 source (10 MeV), 4 scoring ✓")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+683 |
+684 |     # Verify confirmation_record
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> scripts/regenerate_fixtures.py:697:11
+    |
+695 |     assert len(plan["scoring"]) == 4
+696 |     assert plan["remaining_unconfirmed_fields"] == []
+697 |     print(f"  confirmed_model_plan: 9 components, 5 materials, 4 scoring ✓")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+698 |
+699 |     # Verify report
+    |
+help: Remove extraneous `f` prefix
+
+F541 [*] f-string without any placeholders
+   --> scripts/regenerate_fixtures.py:721:11
+    |
+719 |     assert review["human_confirmation"]["required"] is True
+720 |     assert review["human_confirmation"]["status"] == "approved"
+721 |     print(f"  review_report: has_hc=true, required=true, status=approved ✓")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+722 |
+723 |     # Verify manifest
+    |
+help: Remove extraneous `f` prefix
+
+E402 Module level import not at top of file
+  --> scripts/run_pipeline.py:20:1
+   |
+18 | sys.path.insert(0, str(ROOT))
+19 |
+20 | from agent_core.graph.main_graph import compile_main_graph
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+E501 Line too long (120 > 100)
+  --> scripts/view_graph.py:96:101
+   |
+95 | <div class="legend">
+96 |   <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
+   |                                                                                                     ^^^^^^^^^^^^^^^^^^^^
+97 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+98 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+   |
+
+E501 Line too long (117 > 100)
+  --> scripts/view_graph.py:97:101
+   |
+95 | <div class="legend">
+96 |   <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
+97 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+   |                                                                                                     ^^^^^^^^^^^^^^^^^
+98 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+99 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+   |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:98:101
+    |
+ 96 |   <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
+ 97 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+ 98 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+ 99 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+100 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+    |
+
+E501 Line too long (123 > 100)
+   --> scripts/view_graph.py:99:101
+    |
+ 97 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+ 98 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+ 99 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+100 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+101 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+    |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:100:101
+    |
+ 98 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+ 99 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+100 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+101 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+102 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+    |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:101:101
+    |
+ 99 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+100 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+101 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+102 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+103 |   <div class="legend-item"><div class="legend-swatch" style="background:#F5F5F5;border-color:#757575"></div>子图包装</div>
+    |
+
+E501 Line too long (123 > 100)
+   --> scripts/view_graph.py:102:101
+    |
+100 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+101 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+102 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+103 |   <div class="legend-item"><div class="legend-swatch" style="background:#F5F5F5;border-color:#757575"></div>子图包装</div>
+104 | </div>
+    |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:103:101
+    |
+101 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+102 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+103 |   <div class="legend-item"><div class="legend-swatch" style="background:#F5F5F5;border-color:#757575"></div>子图包装</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+104 | </div>
+    |
+
+E501 Line too long (120 > 100)
+   --> scripts/view_graph.py:203:101
+    |
+202 | <div class="legend">
+203 |   <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^
+204 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+205 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+    |
+
+E501 Line too long (117 > 100)
+   --> scripts/view_graph.py:204:101
+    |
+202 | <div class="legend">
+203 |   <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
+204 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^
+205 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+206 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+    |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:205:101
+    |
+203 |   <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
+204 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+205 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+206 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+207 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+    |
+
+E501 Line too long (123 > 100)
+   --> scripts/view_graph.py:206:101
+    |
+204 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+205 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+206 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+207 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+208 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+    |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:207:101
+    |
+205 |   <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+206 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+207 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+208 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+209 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+    |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:208:101
+    |
+206 |   <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+207 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+208 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+209 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+210 |   <div class="legend-item"><div class="legend-swatch" style="background:#F5F5F5;border-color:#757575"></div>子图包装</div>
+    |
+
+E501 Line too long (123 > 100)
+   --> scripts/view_graph.py:209:101
+    |
+207 |   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
+208 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+209 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+210 |   <div class="legend-item"><div class="legend-swatch" style="background:#F5F5F5;border-color:#757575"></div>子图包装</div>
+211 | </div>
+    |
+
+E501 Line too long (122 > 100)
+   --> scripts/view_graph.py:210:101
+    |
+208 |   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
+209 |   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
+210 |   <div class="legend-item"><div class="legend-swatch" style="background:#F5F5F5;border-color:#757575"></div>子图包装</div>
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+211 | </div>
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_hello_does_not_crash.py:7:1
+   |
+ 5 |   """
+ 6 |
+ 7 | / from __future__ import annotations
+ 8 | |
+ 9 | | from unittest.mock import AsyncMock, patch
+10 | |
+11 | | import pytest
+12 | |
+13 | | from agent_core.graph.main_graph import compile_main_graph
+14 | | from agent_core.models.gateway import reset_model_gateway
+15 | | from agent_core.models.schemas import (
+16 | |     ModelCallResult,
+17 | |     ModelProvider,
+18 | |     ModelTask,
+19 | |     ModelTier,
+20 | | )
+   | |_^
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_pipeline_blocks_without_human_response.py:13:1
+   |
+11 |   """
+12 |
+13 | / from __future__ import annotations
+14 | |
+15 | | import json
+16 | | from pathlib import Path
+17 | | from typing import Any
+18 | |
+19 | | import pytest
+20 | |
+21 | | from agent_core.graph.main_routes import route_after_human_confirmation
+   | |_______________________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `json` imported but unused
+  --> tests/e2e/test_pipeline_blocks_without_human_response.py:15:8
+   |
+13 | from __future__ import annotations
+14 |
+15 | import json
+   |        ^^^^
+16 | from pathlib import Path
+17 | from typing import Any
+   |
+help: Remove unused import: `json`
+
+F401 [*] `typing.Any` imported but unused
+  --> tests/e2e/test_pipeline_blocks_without_human_response.py:17:20
+   |
+15 | import json
+16 | from pathlib import Path
+17 | from typing import Any
+   |                    ^^^
+18 |
+19 | import pytest
+   |
+help: Remove unused import: `typing.Any`
+
+E501 Line too long (104 > 100)
+  --> tests/e2e/test_pipeline_blocks_without_human_response.py:58:101
+   |
+57 |     @pytest.mark.asyncio
+58 |     async def test_interrupt_node_returns_received_with_explicit_response(self, tmp_path: Path) -> None:
+   |                                                                                                     ^^^^
+59 |         """human_interrupt_node must return 'received' ONLY when explicit response exists."""
+60 |         from agent_core.human_confirmation.nodes import human_interrupt_node
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_pipeline_complex_detector_dev.py:17:1
+   |
+15 |   """
+16 |
+17 | / from __future__ import annotations
+18 | |
+19 | | import json
+20 | | from pathlib import Path
+21 | | from typing import Any
+22 | | from unittest.mock import AsyncMock, patch
+23 | |
+24 | | import pytest
+25 | | from langgraph.graph import StateGraph
+26 | |
+27 | | from agent_core.graph.main_state import RadAgentMainState
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `unittest.mock.AsyncMock` imported but unused
+  --> tests/e2e/test_pipeline_complex_detector_dev.py:22:27
+   |
+20 | from pathlib import Path
+21 | from typing import Any
+22 | from unittest.mock import AsyncMock, patch
+   |                           ^^^^^^^^^
+23 |
+24 | import pytest
+   |
+help: Remove unused import
+
+F401 [*] `unittest.mock.patch` imported but unused
+  --> tests/e2e/test_pipeline_complex_detector_dev.py:22:38
+   |
+20 | from pathlib import Path
+21 | from typing import Any
+22 | from unittest.mock import AsyncMock, patch
+   |                                      ^^^^^
+23 |
+24 | import pytest
+   |
+help: Remove unused import
+
+F401 [*] `langgraph.graph.StateGraph` imported but unused
+  --> tests/e2e/test_pipeline_complex_detector_dev.py:25:29
+   |
+24 | import pytest
+25 | from langgraph.graph import StateGraph
+   |                             ^^^^^^^^^^
+26 |
+27 | from agent_core.graph.main_state import RadAgentMainState
+   |
+help: Remove unused import: `langgraph.graph.StateGraph`
+
+F401 [*] `agent_core.graph.main_state.RadAgentMainState` imported but unused
+  --> tests/e2e/test_pipeline_complex_detector_dev.py:27:41
+   |
+25 | from langgraph.graph import StateGraph
+26 |
+27 | from agent_core.graph.main_state import RadAgentMainState
+   |                                         ^^^^^^^^^^^^^^^^^
+   |
+help: Remove unused import: `agent_core.graph.main_state.RadAgentMainState`
+
+E501 Line too long (109 > 100)
+   --> tests/e2e/test_pipeline_complex_detector_dev.py:254:101
+    |
+252 |         ],
+253 |         "interfaces": [
+254 |             {"parent_component": "world", "child_component": c["component_id"], "interface_type": "daughter"}
+    |                                                                                                     ^^^^^^^^^
+255 |             for c in [
+256 |                 {"component_id": "housing"},
+    |
+
+E501 Line too long (127 > 100)
+   --> tests/e2e/test_pipeline_complex_detector_dev.py:270:101
+    |
+268 |             "evidence_decision": "allow_rag",
+269 |             "geometry": ["user_specification: beamline layout"],
+270 |             "materials": ["NIST: G4_AIR", "NIST: G4_Al", "user_specification: FR4", "NIST: G4_Si", "user_specification: SiO2"],
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+271 |             "source": ["user_specification: 10 MeV proton"],
+272 |             "physics": ["standard_physics: FTFP_BERT"],
+    |
+
+E501 Line too long (102 > 100)
+   --> tests/e2e/test_pipeline_complex_detector_dev.py:331:101
+    |
+329 |     code_dir.mkdir(parents=True, exist_ok=True)
+330 |     (code_dir / "code_module_plan.json").write_text(
+331 |         json.dumps({"modules": ["DetectorConstruction", "PhysicsList", "PrimaryGenerator"]}, indent=2)
+    |                                                                                                     ^^
+332 |     )
+333 |     patch_dir = job_dir / "08_gate_validation"
+    |
+
+E501 Line too long (102 > 100)
+   --> tests/e2e/test_pipeline_complex_detector_dev.py:353:101
+    |
+353 | def _write_confirmation_files(job_dir: Path, job_id: str, status: str = "approved") -> dict[str, str]:
+    |                                                                                                     ^^
+354 |     """Write human confirmation output files."""
+355 |     hc_dir = job_dir / "04_human_confirmation"
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+   --> tests/e2e/test_pipeline_complex_detector_dev.py:459:9
+    |
+458 |           # ── Step 3: Test routing functions directly ──
+459 | /         from agent_core.graph.main_routes import (
+460 | |             route_after_context,
+461 | |             route_after_g4_modeling,
+462 | |             route_after_human_confirmation,
+463 | |             route_after_gates,
+464 | |             route_after_artifact,
+465 | |         )
+    | |_________^
+466 |
+467 |           # Context allows RAG → task planning
+    |
+help: Organize imports
+
+E501 Line too long (108 > 100)
+   --> tests/e2e/test_pipeline_complex_detector_dev.py:486:101
+    |
+485 |         # Gates VERIFIED → artifact
+486 |         assert route_after_gates({"validation_status": "VERIFIED", "retry_count": 0}) == "artifact_subgraph"
+    |                                                                                                     ^^^^^^^^
+487 |
+488 |         # Artifact → report
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+   --> tests/e2e/test_pipeline_complex_detector_dev.py:574:9
+    |
+572 |       ) -> None:
+573 |           """Verify WorkspaceManager creates correct directory structure for dev pipeline."""
+574 | /         from agent_core.workspace.manager import WorkspaceManager
+575 | |         from agent_core.workspace.paths import STAGE_INPUT, STAGE_HUMAN_CONFIRMATION, STAGE_MODEL_IR
+    | |____________________________________________________________________________________________________^
+576 |
+577 |           workspace = tmp_path / "ws"
+    |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_pipeline_human_edit.py:12:1
+   |
+10 |   """
+11 |
+12 | / from __future__ import annotations
+13 | |
+14 | | import json
+15 | | from pathlib import Path
+16 | | from typing import Any
+17 | |
+18 | | import pytest
+19 | |
+20 | | from agent_core.human_confirmation.nodes import (
+21 | |     HumanConfirmationState,
+22 | |     build_proposed_model_completion,
+23 | |     generate_confirmation_request,
+24 | |     merge_user_confirmation,
+25 | |     parse_confirmation_response,
+26 | |     validate_confirmation_completeness,
+27 | | )
+28 | | from agent_core.graph.main_routes import route_after_human_confirmation
+   | |_______________________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+  --> tests/e2e/test_pipeline_human_edit.py:16:20
+   |
+14 | import json
+15 | from pathlib import Path
+16 | from typing import Any
+   |                    ^^^
+17 |
+18 | import pytest
+   |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_repl_hello_does_not_crash.py:3:1
+   |
+ 1 |   """E2E test: REPL with '你好' should not crash."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from unittest.mock import AsyncMock, MagicMock, patch
+ 6 | |
+ 7 | | import pytest
+ 8 | |
+ 9 | | from agent_core.intent.schemas import IntentResult
+10 | | from agent_core.repl import RadAgentREPL
+   | |________________________________________^
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_run_pipeline_hello.py:3:1
+   |
+ 1 |   """E2E test: run_pipeline with '你好' should not enter simulation pipeline."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | from unittest.mock import AsyncMock, patch
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.graph.main_graph import compile_main_graph
+11 | | from agent_core.models.gateway import reset_model_gateway
+12 | | from agent_core.models.schemas import (
+13 | |     ModelCallResult,
+14 | |     ModelProvider,
+15 | |     ModelTask,
+16 | |     ModelTier,
+17 | | )
+   | |_^
+   |
+help: Organize imports
+
+F401 [*] `json` imported but unused
+ --> tests/e2e/test_run_pipeline_hello.py:5:8
+  |
+3 | from __future__ import annotations
+4 |
+5 | import json
+  |        ^^^^
+6 | from unittest.mock import AsyncMock, patch
+  |
+help: Remove unused import: `json`
+
+F401 [*] `agent_core.models.schemas.ModelCallResult` imported but unused
+  --> tests/e2e/test_run_pipeline_hello.py:13:5
+   |
+11 | from agent_core.models.gateway import reset_model_gateway
+12 | from agent_core.models.schemas import (
+13 |     ModelCallResult,
+   |     ^^^^^^^^^^^^^^^
+14 |     ModelProvider,
+15 |     ModelTask,
+   |
+help: Remove unused import
+
+F401 [*] `agent_core.models.schemas.ModelProvider` imported but unused
+  --> tests/e2e/test_run_pipeline_hello.py:14:5
+   |
+12 | from agent_core.models.schemas import (
+13 |     ModelCallResult,
+14 |     ModelProvider,
+   |     ^^^^^^^^^^^^^
+15 |     ModelTask,
+16 |     ModelTier,
+   |
+help: Remove unused import
+
+F401 [*] `agent_core.models.schemas.ModelTask` imported but unused
+  --> tests/e2e/test_run_pipeline_hello.py:15:5
+   |
+13 |     ModelCallResult,
+14 |     ModelProvider,
+15 |     ModelTask,
+   |     ^^^^^^^^^
+16 |     ModelTier,
+17 | )
+   |
+help: Remove unused import
+
+F401 [*] `agent_core.models.schemas.ModelTier` imported but unused
+  --> tests/e2e/test_run_pipeline_hello.py:16:5
+   |
+14 |     ModelProvider,
+15 |     ModelTask,
+16 |     ModelTier,
+   |     ^^^^^^^^^
+17 | )
+   |
+help: Remove unused import
+
+I001 [*] Import block is un-sorted or un-formatted
+ --> tests/unit/test_artifact_subgraph_human_confirmation.py:3:1
+  |
+1 |   """Tests that artifact collection includes human confirmation files."""
+2 |
+3 | / import json
+4 | | from pathlib import Path
+5 | |
+6 | | import pytest
+7 | |
+8 | | from agent_core.artifacts.nodes import collect_artifacts, generate_artifact_manifest
+  | |____________________________________________________________________________________^
+  |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_intent_router.py:3:1
+   |
+ 1 |   """Tests for agent_core.intent — LLM Intent Router."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from unittest.mock import AsyncMock, patch
+ 6 | |
+ 7 | | import pytest
+ 8 | |
+ 9 | | from agent_core.intent.fallback_rules import fallback_intent
+10 | | from agent_core.intent.router import classify_intent_with_lite_model
+11 | | from agent_core.intent.schemas import IntentResult
+12 | | from agent_core.models.gateway import get_model_gateway, reset_model_gateway
+13 | | from agent_core.models.schemas import (
+14 | |     ModelCallResult,
+15 | |     ModelProvider,
+16 | |     ModelTask,
+17 | |     ModelTier,
+18 | | )
+   | |_^
+   |
+help: Organize imports
+
+F401 [*] `agent_core.intent.schemas.IntentResult` imported but unused
+  --> tests/unit/test_intent_router.py:11:39
+   |
+ 9 | from agent_core.intent.fallback_rules import fallback_intent
+10 | from agent_core.intent.router import classify_intent_with_lite_model
+11 | from agent_core.intent.schemas import IntentResult
+   |                                       ^^^^^^^^^^^^
+12 | from agent_core.models.gateway import get_model_gateway, reset_model_gateway
+13 | from agent_core.models.schemas import (
+   |
+help: Remove unused import: `agent_core.intent.schemas.IntentResult`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_model_gateway.py:3:1
+   |
+ 1 |   """Tests for agent_core.models.gateway — model gateway."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from unittest.mock import AsyncMock, patch
+ 6 | |
+ 7 | | import pytest
+ 8 | |
+ 9 | | from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+10 | | from agent_core.models.schemas import (
+11 | |     ModelCallResult,
+12 | |     ModelProvider,
+13 | |     ModelTask,
+14 | |     ModelTier,
+15 | | )
+   | |_^
+   |
+help: Organize imports
+
+F401 [*] `agent_core.models.gateway.ModelGateway` imported but unused
+  --> tests/unit/test_model_gateway.py:9:39
+   |
+ 7 | import pytest
+ 8 |
+ 9 | from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+   |                                       ^^^^^^^^^^^^
+10 | from agent_core.models.schemas import (
+11 |     ModelCallResult,
+   |
+help: Remove unused import: `agent_core.models.gateway.ModelGateway`
+
+F401 [*] `agent_core.models.schemas.ModelProvider` imported but unused
+  --> tests/unit/test_model_gateway.py:12:5
+   |
+10 | from agent_core.models.schemas import (
+11 |     ModelCallResult,
+12 |     ModelProvider,
+   |     ^^^^^^^^^^^^^
+13 |     ModelTask,
+14 |     ModelTier,
+   |
+help: Remove unused import: `agent_core.models.schemas.ModelProvider`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_repl.py:3:1
+   |
+ 1 |   """Unit tests for agent_core.repl — RadAgentREPL."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | from pathlib import Path
+ 7 | | from unittest.mock import AsyncMock, MagicMock, patch
+ 8 | |
+ 9 | | import pytest
+10 | |
+11 | | from agent_core.repl import (
+12 | |     _AUTO_PHASES,
+13 | |     _INTERACTIVE_PHASES,
+14 | |     _PIPELINE_PHASES,
+15 | |     _QuitREPL,
+16 | |     RadAgentREPL,
+17 | | )
+   | |_^
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_workspace_manager.py:3:1
+   |
+ 1 |   """Tests for agent_core.workspace module — WorkspaceManager, JobWorkspace, paths."""
+ 2 |
+ 3 | / import json
+ 4 | | from pathlib import Path
+ 5 | |
+ 6 | | import pytest
+ 7 | |
+ 8 | | from agent_core.workspace.manager import JobWorkspace, WorkspaceManager
+ 9 | | from agent_core.workspace.paths import (
+10 | |     ALL_STAGES,
+11 | |     GEANT4_SUBDIRS,
+12 | |     STAGE_CODEGEN,
+13 | |     STAGE_HUMAN_CONFIRMATION,
+14 | |     STAGE_INPUT,
+15 | |     STAGE_MODEL_IR,
+16 | |     STAGE_PATCH,
+17 | |     HC_CONFIRMATION_RECORD,
+18 | | )
+   | |_^
+   |
+help: Organize imports
+
+F401 [*] `json` imported but unused
+ --> tests/unit/test_workspace_manager.py:3:8
+  |
+1 | """Tests for agent_core.workspace module — WorkspaceManager, JobWorkspace, paths."""
+2 |
+3 | import json
+  |        ^^^^
+4 | from pathlib import Path
+  |
+help: Remove unused import: `json`
+
+F401 [*] `agent_core.workspace.paths.STAGE_MODEL_IR` imported but unused
+  --> tests/unit/test_workspace_manager.py:15:5
+   |
+13 |     STAGE_HUMAN_CONFIRMATION,
+14 |     STAGE_INPUT,
+15 |     STAGE_MODEL_IR,
+   |     ^^^^^^^^^^^^^^
+16 |     STAGE_PATCH,
+17 |     HC_CONFIRMATION_RECORD,
+   |
+help: Remove unused import
+
+F401 [*] `agent_core.workspace.paths.STAGE_PATCH` imported but unused
+  --> tests/unit/test_workspace_manager.py:16:5
+   |
+14 |     STAGE_INPUT,
+15 |     STAGE_MODEL_IR,
+16 |     STAGE_PATCH,
+   |     ^^^^^^^^^^^
+17 |     HC_CONFIRMATION_RECORD,
+18 | )
+   |
+help: Remove unused import
+
+E501 Line too long (103 > 100)
+   --> tests/unit/test_workspace_manager.py:167:101
+    |
+166 | class TestBackwardCompat:
+167 |     def test_config_workspace_reexports(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    |                                                                                                     ^^^
+168 |         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+169 |         from agent_core.config.workspace import (
+    |
+
+Found 105 errors.
+[*] 37 fixable with the `--fix` option.

@@ -1,1 +1,61 @@
-{"confirmation_status": "approved"}
+{
+  "job_id": "dev-complex-001",
+  "confirmation_status": "approved",
+  "assumptions_confirmed": true,
+  "components": [
+    {
+      "component_id": "world",
+      "display_name": "World Volume",
+      "component_type": "world",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 5000,
+        "dy": 5000,
+        "dz": 5000
+      },
+      "material_id": "G4_AIR",
+      "roles": [],
+      "source_evidence": [
+        "default"
+      ]
+    },
+    {
+      "component_id": "housing",
+      "display_name": "Aluminum Housing",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 200,
+        "dy": 200,
+        "dz": 300
+      },
+      "material_id": "G4_Al",
+      "mother_volume": "world",
+      "roles": [
+        "structural"
+      ],
+      "source_evidence": [
+        "user_specification"
+      ]
+    },
+    {
+      "component_id": "pcb",
+      "display_name": "PCB Board",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 150,
+        "dy": 150,
+        "dz": 1.6
+      },
+      "material_id": "FR4",
+      "mother_volume": "world",
+      "roles": [
+        "structural"
+      ],
+      "source_evidence": [
+        "user_specification"
+      ]
+    }
+  ]
+}

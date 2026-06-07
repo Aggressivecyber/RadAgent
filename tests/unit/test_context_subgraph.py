@@ -45,14 +45,12 @@ class TestRetrieveRagContext:
             "required_sources": ["geant4"],
         }
 
-        # Mock LLM to avoid actual API call
-        mock_response = AsyncMock()
-        mock_response.content = '["proton silicon detector", "Geant4 geometry", "G4Box"]'
+        # Mock RAG client to avoid actual API call
+        with patch("agent_core.context.nodes._get_rag_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.backend_available = AsyncMock(return_value=False)
+            mock_get_client.return_value = mock_client
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
-
-        with patch("agent_core.llm.get_llm", return_value=mock_llm):
             result = await retrieve_rag_context(state)
 
         assert "rag_context" in result

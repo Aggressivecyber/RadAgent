@@ -1,8 +1,8 @@
-"""Intelligent job naming via DeepSeek V4 Lite summarization.
+"""Intelligent job naming via model gateway summarization.
 
 Generates human-readable title suffixes for job IDs by calling the
-dsv4lite model to summarize user input. Falls back to a simple slug
-derived from the first few English words when the LLM is unavailable.
+model gateway (lite tier) to summarize user input. Falls back to a simple
+slug derived from the first few English words when the LLM is unavailable.
 
 Job ID format: ``job_{uuid8}__{title_slug}``
 Example: ``job_a1b2c3__proton_detector_sim``
@@ -10,19 +10,9 @@ Example: ``job_a1b2c3__proton_detector_sim``
 
 from __future__ import annotations
 
-import os
 import re
 import uuid
-from typing import Any
 
-import httpx
-
-# ── Environment-driven configuration ──────────────────────────────────
-
-_NAMING_MODEL = os.environ.get("RADAGENT_NAMING_MODEL", "deepseek-v4-lite")
-_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
-_TIMEOUT_SECONDS = 5
 _MAX_TITLE_LEN = 60
 
 _SYSTEM_PROMPT = (
@@ -61,11 +51,10 @@ def sanitize_title(text: str) -> str:
 
 
 async def generate_job_title(user_query: str) -> str:
-    """Call dsv4lite to summarize *user_query* into a short title slug.
+    """Call model gateway (lite tier) to summarize *user_query* into a short title slug.
 
-    Uses the OpenAI-compatible chat completions API. Falls back to a
-    simple slug derived from the first 3 English words in *user_query*
-    if the API call fails for any reason (network, timeout, bad response).
+    Falls back to a simple slug derived from the first 3 English words
+    if the model call fails for any reason.
 
     Args:
         user_query: The user's natural language simulation request.
@@ -73,7 +62,7 @@ async def generate_job_title(user_query: str) -> str:
     Returns:
         A sanitized title slug (possibly empty if no English words found).
     """
-    title = await _call_llm(user_query)
+    title = await _call_model_gateway(user_query)
     if title:
         return sanitize_title(title)
 
@@ -81,40 +70,29 @@ async def generate_job_title(user_query: str) -> str:
     return _fallback_slug(user_query)
 
 
-async def _call_llm(user_query: str) -> str:
-    """Call the naming LLM and return the raw title string.
+async def _call_model_gateway(user_query: str) -> str:
+    """Call the model gateway (lite tier) and return the raw title string.
 
-    Returns an empty string on any failure (network, timeout, parse error).
+    Returns an empty string on any failure.
     """
-    if not _API_KEY:
-        return ""
-
-    url = f"{_BASE_URL.rstrip('/')}/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload: dict[str, Any] = {
-        "model": _NAMING_MODEL,
-        "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_query},
-        ],
-        "temperature": 0.0,
-        "max_tokens": 32,
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            content: str = (
-                data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
-            return content.strip()
+        from agent_core.models.gateway import get_model_gateway
+        from agent_core.models.schemas import ModelTask, ModelTier
+
+        gateway = get_model_gateway()
+        result = await gateway.call(
+            task=ModelTask.SIMPLE_EXTRACTION,
+            tier=ModelTier.LITE,
+            system_prompt=_SYSTEM_PROMPT,
+            user_prompt=user_query,
+            temperature=0.0,
+            max_tokens=32,
+        )
+
+        if result.error:
+            return ""
+
+        return result.content.strip()
     except Exception:
         return ""
 

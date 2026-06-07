@@ -28,8 +28,22 @@ class RadAgentMainState(TypedDict, total=False):
     # ── Job identification ──
     job_id: str
     user_query: str
-    execution_mode: str  # "dev_no_geant4_env" | "mvp1_acceptance" (legacy, retained for backward compatibility)
+    execution_mode: str  # "dev_no_geant4_env" | "mvp1_acceptance"
     run_mode: str  # "dev" | "acceptance" | "production"
+
+    # ── Intent Router outputs ──
+    intent: str  # IntentType from intent/schemas.py
+    intent_confidence: float
+    intent_routing_reason: str
+    normalized_user_query: str
+    requires_job: bool
+    requires_simulation_pipeline: bool
+    requires_clarification: bool
+
+    # ── Response (for non-simulation intents) ──
+    response_text: str
+    response_status: str  # "answered" | "needs_clarification"
+    pipeline_terminated: bool
 
     # ── Workspace ──
     workspace_root: str  # Path to workspace root directory

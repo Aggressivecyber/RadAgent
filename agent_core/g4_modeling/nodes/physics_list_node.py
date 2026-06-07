@@ -44,12 +44,13 @@ async def physics_list_node(state: RadiationAgentState) -> dict[str, Any]:
     material_names = [m.name for m in model_ir.materials]
     scoring_reqs = [s.scoring_type for s in model_ir.scoring]
 
-    # Try LLM-based selection
+    # Try LLM-based selection via model gateway
     physics: PhysicsSpec | None = None
     try:
-        from agent_core.llm import get_llm
+        from agent_core.models.gateway import get_model_gateway
+        from agent_core.models.schemas import ModelTask, ModelTier
 
-        llm = get_llm(temperature=0)
+        gateway = get_model_gateway()
 
         evidence_text = ""
         if model_ir.evidence and model_ir.evidence.physics:
@@ -65,20 +66,26 @@ async def physics_list_node(state: RadiationAgentState) -> dict[str, Any]:
             scoring_requirements=", ".join(scoring_reqs) if scoring_reqs else "edep, dose",
             evidence=evidence_text or "No specific physics evidence available",
         )
-        response = await llm.ainvoke(prompt)
-        raw_content = response.content
-        if isinstance(raw_content, list):
-            raw_content = " ".join(
-                str(p) if isinstance(p, str) else "" for p in raw_content
-            )
-        content_str: str = raw_content
+        result = await gateway.call(
+            task=ModelTask.G4_MODELING,
+            tier=ModelTier.PRO,
+            system_prompt="You are a Geant4 physics list selection expert.",
+            user_prompt=prompt,
+            response_format="json",
+            temperature=0.0,
+            max_tokens=2048,
+        )
 
-        if "```" in content_str:
-            content_str = content_str.split("```")[1]
-            if content_str.startswith("json"):
-                content_str = content_str[4:]
+        if result.error:
+            raise RuntimeError(result.error)
 
-        raw = json.loads(content_str.strip())
+        raw_content = result.content.strip()
+        if "```" in raw_content:
+            raw_content = raw_content.split("```")[1]
+            if raw_content.startswith("json"):
+                raw_content = raw_content[4:]
+
+        raw = json.loads(raw_content.strip())
         physics = PhysicsSpec.model_validate(raw)
 
     except Exception as exc:

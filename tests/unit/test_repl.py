@@ -109,9 +109,25 @@ class TestHandleInput:
             mock.assert_called_once_with("/run", "1000")
 
     @pytest.mark.asyncio
-    async def test_natural_language_treated_as_run(self, repl: RadAgentREPL) -> None:
-        """Natural language input should be treated as /run."""
-        with patch.object(repl, "cmd_run", new_callable=AsyncMock) as mock:
+    async def test_natural_language_simulation_request_treated_as_run(
+        self, repl: RadAgentREPL
+    ) -> None:
+        """Simulation request natural language should be treated as /run."""
+        from agent_core.intent.schemas import IntentResult
+
+        mock_intent = IntentResult(
+            intent="simulation_request",
+            confidence=0.9,
+            routing_reason="test",
+            normalized_user_query="simulate proton beam",
+            requires_job=True,
+            requires_simulation_pipeline=True,
+        )
+        with (
+            patch("agent_core.intent.router.classify_intent_with_lite_model",
+                  new_callable=AsyncMock, return_value=mock_intent),
+            patch.object(repl, "cmd_run", new_callable=AsyncMock) as mock,
+        ):
             await repl.handle_input("simulate proton beam")
             mock.assert_called_once_with("simulate proton beam")
 
@@ -458,19 +474,22 @@ class TestCmdConfirm:
     """Test /confirm command."""
 
     @pytest.mark.asyncio
-    async def test_confirm_auto_approve_no_questions(
+    async def test_confirm_no_questions_requires_user_input(
         self, repl_with_state: RadAgentREPL, tmp_path: Path
     ) -> None:
-        """Confirm with no questions should auto-approve."""
+        """Confirm with no questions should still require explicit user approval."""
         request_path = tmp_path / "confirmation_request.json"
         request_data = {"round_id": 1, "questions": []}
         request_path.write_text(json.dumps(request_data), encoding="utf-8")
         repl_with_state.state["confirmation_request_path"] = str(request_path)
 
-        await repl_with_state.cmd_confirm()
+        # Mock input to return 'a' (approve)
+        with patch("builtins.input", return_value="a"):
+            await repl_with_state.cmd_confirm()
 
         response = repl_with_state.state["raw_human_response"]
         assert response["user_decision"] == "approve"
+        assert "User approved" in response["user_notes"]
 
     @pytest.mark.asyncio
     async def test_confirm_interactive_qa(

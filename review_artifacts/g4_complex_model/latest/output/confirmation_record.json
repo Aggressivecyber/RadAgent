@@ -1,1 +1,11 @@
-{"final_status": "approved", "remaining_unconfirmed_fields": []}
+{
+  "job_id": "dev-complex-001",
+  "final_status": "approved",
+  "total_rounds": 1,
+  "confirmation_history": [
+    {
+      "round_id": 1,
+      "decision": "approved"
+    }
+  ]
+}

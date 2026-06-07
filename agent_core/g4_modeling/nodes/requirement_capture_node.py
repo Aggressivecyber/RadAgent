@@ -59,32 +59,31 @@ async def requirement_capture_node(state: RadiationAgentState) -> dict[str, Any]
         modified_fields=["model_ir_id", "job_id", "modeling_mode"],
     )
 
-    # Try LLM-based requirement extraction
+    # Try LLM-based requirement extraction via model gateway
     requirements: dict[str, Any] = {}
     try:
-        from agent_core.llm import get_llm
+        from agent_core.models.gateway import get_model_gateway
+        from agent_core.models.schemas import ModelTask, ModelTier
 
-        llm = get_llm(temperature=0)
+        gateway = get_model_gateway()
         prompt = REQUIREMENT_CAPTURE_PROMPT.format(
             user_query=user_query,
             task_spec=json.dumps(task_spec, indent=2, ensure_ascii=False),
         )
-        response = await llm.ainvoke(prompt)
-        raw_content = response.content
-        # Handle list content (multimodal responses)
-        if isinstance(raw_content, list):
-            raw_content = " ".join(
-                str(p) if isinstance(p, str) else "" for p in raw_content
-            )
-        content_str: str = raw_content
+        result = await gateway.call(
+            task=ModelTask.G4_MODELING,
+            tier=ModelTier.PRO,
+            system_prompt="You are a Geant4 simulation requirement extraction expert.",
+            user_prompt=prompt,
+            response_format="json",
+            temperature=0.0,
+            max_tokens=4096,
+        )
 
-        # Strip markdown code fences if present
-        if "```" in content_str:
-            content_str = content_str.split("```")[1]
-            if content_str.startswith("json"):
-                content_str = content_str[4:]
+        if result.error:
+            raise RuntimeError(result.error)
 
-        requirements = json.loads(content_str.strip())
+        requirements = result.parsed_json or json.loads(result.content.strip())
         model_ir.target_system = requirements.get("target_system", "")
 
     except Exception as exc:

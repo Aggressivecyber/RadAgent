@@ -38,12 +38,13 @@ async def geometry_decomposition_node(
 
     model_ir = G4ModelIR.model_validate(model_ir_dict)
 
-    # Try LLM-based decomposition
+    # Try LLM-based decomposition via model gateway
     components: list[ComponentSpec] = []
     try:
-        from agent_core.llm import get_llm
+        from agent_core.models.gateway import get_model_gateway
+        from agent_core.models.schemas import ModelTask, ModelTier
 
-        llm = get_llm(temperature=0)
+        gateway = get_model_gateway()
 
         # Prepare context
         evidence_text = _summarize_evidence(model_ir)
@@ -61,20 +62,26 @@ async def geometry_decomposition_node(
             evidence=evidence_text,
             coordinate_system=coord_text,
         )
-        response = await llm.ainvoke(prompt)
-        raw_content = response.content
-        if isinstance(raw_content, list):
-            raw_content = " ".join(
-                str(p) if isinstance(p, str) else "" for p in raw_content
-            )
-        content_str: str = raw_content
+        result = await gateway.call(
+            task=ModelTask.G4_MODELING,
+            tier=ModelTier.PRO,
+            system_prompt="You are a Geant4 geometry decomposition expert.",
+            user_prompt=prompt,
+            response_format="json",
+            temperature=0.0,
+            max_tokens=4096,
+        )
 
-        if "```" in content_str:
-            content_str = content_str.split("```")[1]
-            if content_str.startswith("json"):
-                content_str = content_str[4:]
+        if result.error:
+            raise RuntimeError(result.error)
 
-        raw_components = json.loads(content_str.strip())
+        raw_content = result.content.strip()
+        if "```" in raw_content:
+            raw_content = raw_content.split("```")[1]
+            if raw_content.startswith("json"):
+                raw_content = raw_content[4:]
+
+        raw_components = json.loads(raw_content.strip())
         if isinstance(raw_components, list):
             for raw in raw_components:
                 try:
