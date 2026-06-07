@@ -194,7 +194,16 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
     # Determine known limitations
     known_limitations: list[str] = []
     validation_status = state.get("validation_status", "UNKNOWN")
-    if validation_status == "PARTIAL":
+
+    # CRITICAL: dev 模式禁止 VERIFIED 状态
+    # 如果 run_type 是 dev 且 validation_status 是 VERIFIED，强制降级为 PARTIAL
+    if run_type == "dev" and validation_status == "VERIFIED":
+        validation_status = "PARTIAL"
+        known_limitations.append(
+            "Dev mode run — validation status downgraded from VERIFIED to PARTIAL"
+        )
+
+    if validation_status == "PARTIAL" and "Some gates skipped" not in " ".join(known_limitations):
         known_limitations.append("Some gates skipped — not all validations ran")
     if skipped_gates:
         known_limitations.append(

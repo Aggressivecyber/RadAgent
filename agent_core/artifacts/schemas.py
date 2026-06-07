@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 class ArtifactSubgraphState(TypedDict, total=False):
@@ -17,6 +17,11 @@ class ArtifactSubgraphState(TypedDict, total=False):
     code_module_plan_path: str
     proposed_patch_path: str
     validation_status: str
+
+    # Runtime context
+    execution_mode: str  # "dev" or "acceptance"
+    gate_results: list[dict[str, Any]]  # Gate check results for skipped_gates extraction
+    g4_model_ir: dict[str, Any]  # Direct Model IR data (alternative to path)
 
     # Output
     review_artifact_dir: str

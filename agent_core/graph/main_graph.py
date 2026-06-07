@@ -38,12 +38,17 @@ from agent_core.graph.main_state import RadAgentMainState
 
 
 async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
-    """Create job directory structure and initialize state."""
-    job_id = state.get("job_id", "")
-    if not job_id:
-        import uuid
+    """Create job directory structure and initialize state.
 
-        job_id = f"job_{uuid.uuid4().hex[:8]}"
+    Generates a job_id with a human-readable title suffix via dsv4lite
+    when no explicit job_id is provided by the user.
+    """
+    from agent_core.naming import build_job_id
+
+    job_id = await build_job_id(
+        state.get("job_id", ""),
+        state.get("user_query", ""),
+    )
 
     job_dir = ensure_job_dirs(job_id)
     request_dir = job_dir / "00_request"

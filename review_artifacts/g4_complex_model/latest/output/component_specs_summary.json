@@ -1,10 +1,15 @@
 {
-  "total_components": 4,
+  "total_components": 9,
   "component_ids": [
     "world",
-    "target_scatterer",
-    "silicon_detector_1",
-    "silicon_detector_2"
+    "target",
+    "shield_1",
+    "shield_2",
+    "detector_1",
+    "detector_2",
+    "detector_3",
+    "collimator",
+    "housing"
   ],
   "materials_count": 3,
   "sources_count": 1,

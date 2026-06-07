@@ -59,7 +59,11 @@ def compute_validation_status(
         "VERIFIED", "PARTIAL", or "FAILED".
     """
     failed = [g for g in gate_results if g.get("status") == "fail"]
-    skipped = [g for g in gate_results if g.get("status") == "skipped"]
+    # Handle both 'skip' and 'skipped' for backward compatibility
+    skipped = [
+        g for g in gate_results
+        if g.get("status") in ("skip", "skipped")
+    ]
 
     if failed:
         return "FAILED"
@@ -101,7 +105,11 @@ async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
     status = compute_validation_status(gate_results, execution_mode)
 
     failed_gates = [g for g in gate_results if g.get("status") == "fail"]
-    skipped_gates = [g for g in gate_results if g.get("status") == "skipped"]
+    # Handle both 'skip' and 'skipped' for backward compatibility
+    skipped_gates = [
+        g for g in gate_results
+        if g.get("status") in ("skip", "skipped")
+    ]
 
     return {
         "gate_results_path": str(results_path),

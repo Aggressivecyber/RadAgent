@@ -1,9 +1,9 @@
 {
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
-  "job_id": "complex_dev",
-  "validation_status": "VERIFIED",
-  "generated_at": "2026-06-07T14:41:50.748011+00:00",
+  "job_id": "complex_test",
+  "validation_status": "PARTIAL",
+  "generated_at": "2026-06-07T14:56:09.692552+00:00",
   "is_stub": false,
   "run_type": "dev",
   "artifacts_collected": 11,
@@ -13,5 +13,7 @@
   "has_manifest": false,
   "file_count": 11,
   "skipped_gates": [],
-  "known_limitations": []
+  "known_limitations": [
+    "Some gates skipped — not all validations ran"
+  ]
 }
