@@ -7,9 +7,12 @@ to the final project — patches must go through this subgraph.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from agent_core.config.workspace import get_job_dir
 from agent_core.validators.file_permission_validator import FilePermissionValidator
@@ -98,8 +101,21 @@ async def apply_patch(state: PatchSubgraphState) -> dict[str, Any]:
         if not isinstance(file_entry, dict):
             continue
         path = file_entry.get("path", "")
-        content = file_entry.get("content", "")
+        content = file_entry.get("new_content")
+
+        # Backward compat: deprecated 'content' field
+        if content is None and "content" in file_entry:
+            logger.warning(
+                "Deprecated patch field 'content' used for: %s. "
+                "Use 'new_content' instead.",
+                path,
+            )
+            content = file_entry["content"]
+
         if not path:
+            continue
+        if content is None:
+            errors.append(f"Patch file entry missing new_content: {path}")
             continue
 
         # Security: prevent path traversal
@@ -122,6 +138,7 @@ async def apply_patch(state: PatchSubgraphState) -> dict[str, Any]:
         "files_count": len(applied_files),
     }
     applied_path = job_dir / "09_validation" / "applied_patch.json"
+    applied_path.parent.mkdir(parents=True, exist_ok=True)
     applied_path.write_text(json.dumps(applied_record, indent=2, ensure_ascii=False))
 
     status = "applied" if applied_files else "failed"

@@ -35,7 +35,7 @@ async def integration_assembler_node(state: RadiationAgentState) -> dict[str, An
     model_ir = G4ModelIR.model_validate(model_ir_dict)
 
     # Collect all generated files from codegen modules
-    patches: list[dict[str, str]] = []
+    changed_files: list[dict[str, str]] = []
     module_summary: list[str] = []
 
     for mod in code_modules:
@@ -51,7 +51,7 @@ async def integration_assembler_node(state: RadiationAgentState) -> dict[str, An
             f"{len(config_files)} cfg"
         )
 
-        # Each file needs path and content from the codegen node
+        # Each file needs path and new_content from the codegen node
         for files_list, prefix in [
             (source_files, "src"),
             (header_files, "include"),
@@ -61,20 +61,28 @@ async def integration_assembler_node(state: RadiationAgentState) -> dict[str, An
                 file_key = f"{module_name}::{f}"
                 content = mod.get("generated_content", {}).get(file_key, "")
                 if content:
-                    patches.append({
+                    changed_files.append({
                         "path": f"{prefix}/{f}",
-                        "content": content,
+                        "operation": "create_or_replace",
+                        "new_content": content,
+                        "zone": "green",
                     })
 
-    # Build the code patch compatible with existing pipeline
+    # Build the code patch compatible with CodePatch schema
     code_patch: dict[str, Any] = {
-        "patch_type": "g4_complex_model",
-        "model_ir_id": model_ir.model_ir_id,
+        "patch_type": "json_file_replacement",
+        "patch_id": f"g4_complex_{model_ir.model_ir_id}",
         "job_id": job_id,
-        "files": patches,
+        "description": f"Geant4 complex model: {model_ir.model_ir_id}",
+        "change_type": "create",
+        "risk_level": "low",
+        "changed_files": changed_files,
+        "test_plan": ["compile_check"],
+        "expected_outputs": [],
         "metadata": {
+            "source": "g4_codegen_subgraph",
             "total_modules": len(code_modules),
-            "total_files": len(patches),
+            "total_files": len(changed_files),
             "module_summary": "\n".join(module_summary),
         },
     }
@@ -83,7 +91,7 @@ async def integration_assembler_node(state: RadiationAgentState) -> dict[str, An
         node_name="integration_assembler_node",
         action="create",
         target_id="code_patch",
-        description=f"Assembled {len(patches)} files from "
+        description=f"Assembled {len(changed_files)} files from "
         f"{len(code_modules)} codegen modules",
         modified_fields=[],
     )
