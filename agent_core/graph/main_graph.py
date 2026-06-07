@@ -152,7 +152,7 @@ def _make_human_confirmation_subgraph_node() -> Any:
         build_human_confirmation_subgraph,
     )
 
-    subgraph = build_human_confirmation_subgraph().compile()
+    subgraph = build_human_confirmation_subgraph()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
         result = await subgraph.ainvoke({
@@ -161,16 +161,25 @@ def _make_human_confirmation_subgraph_node() -> Any:
             "g4_model_ir_path": state.get("g4_model_ir_path", ""),
             "evidence_map_path": state.get("evidence_map_path", ""),
             "human_confirmation_round": state.get("human_confirmation_round", 1),
+            "raw_human_response": state.get("raw_human_response", {}),
+            "confirmation_request_path": state.get("confirmation_request_path", ""),
+            "confirmation_response_path": state.get("confirmation_response_path", ""),
+            "confirmation_record_path": state.get("confirmation_record_path", ""),
+            "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
         })
         return {
+            "confirmation_status": result.get("confirmation_status", "failed"),
+            "confirmation_request_path": result.get("confirmation_request_path", ""),
+            "confirmation_response_path": result.get("confirmation_response_path", ""),
             "confirmation_record_path": result.get("confirmation_record_path", ""),
             "confirmed_model_plan_path": result.get("confirmed_model_plan_path", ""),
-            "confirmation_report_path": result.get("confirmation_report_path", ""),
-            "confirmation_status": result.get("confirmation_status", "failed"),
+            "unconfirmed_assumptions_count": result.get("unconfirmed_count", 0),
             "human_confirmation_required": result.get("requires_human_confirmation", False),
             "human_confirmation_round": state.get("human_confirmation_round", 1) + (
                 1 if result.get("confirmation_status") == "pending" else 0
             ),
+            "confirmation_report_path": result.get("confirmation_report_path", ""),
+            "human_confirmation_edited_fields": result.get("edited_fields", []),
             "current_node": "human_confirmation_subgraph",
         }
 

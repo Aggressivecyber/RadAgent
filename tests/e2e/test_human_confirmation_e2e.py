@@ -466,7 +466,12 @@ class TestConfirmationRoutingE2E:
         """Test routing to codegen after approval."""
         from agent_core.graph.main_routes import route_after_human_confirmation
 
-        state = {"confirmation_status": "approved"}
+        state = {
+            "confirmation_status": "approved",
+            "confirmation_record_path": "/tmp/record.json",
+            "confirmed_model_plan_path": "/tmp/plan.json",
+            "unconfirmed_assumptions_count": 0,
+        }
         result = route_after_human_confirmation(state)
         assert result == "g4_codegen_subgraph"
 

@@ -198,96 +198,30 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
         "message": "Deferred: magic number check runs after codegen",
     })
 
-    # G4-H: Human Confirmation
-    g4_h_status = "pass"
-    g4_h_checked_items: list[dict[str, str]] = []
-    g4_h_passed_items: list[str] = []
-    g4_h_failed_items: list[str] = []
-    g4_h_warnings: list[str] = []
-    g4_h_evidence: list[str] = []
-    g4_h_file_paths: list[str] = []
+    # G4-H: Human Confirmation Completeness
+    from agent_core.human_confirmation.validators import validate_human_confirmation_state
 
-    # Check for unconfirmed fields at IR level
-    unconfirmed_fields = model_ir.unconfirmed_fields or []
-    confirmed_fields = model_ir.confirmed_fields or []
-
-    # Check for components requiring confirmation
-    components_needing_confirmation = [
-        c.component_id for c in model_ir.components
-        if c.requires_confirmation and not c.confirmed_by_user
-    ]
-
-    if unconfirmed_fields:
-        g4_h_status = "fail"
-        g4_h_failed_items.extend([f"Unconfirmed field: {f}" for f in unconfirmed_fields])
-        g4_h_evidence.append(f"unconfirmed_fields: {', '.join(unconfirmed_fields)}")
-
-    if components_needing_confirmation:
-        g4_h_status = "fail"
-        g4_h_failed_items.extend([
-            f"Component needs confirmation: {cid}"
-            for cid in components_needing_confirmation
-        ])
-        g4_h_evidence.append(
-            f"components_pending_confirmation: {', '.join(components_needing_confirmation)}"
-        )
-
-    # Build checked items with proper line breaks
-    g4_h_checked_items = [
-        {
-            "item": f"unconfirmed_fields count ({len(unconfirmed_fields)})",
-            "result": "pass" if not unconfirmed_fields else "fail",
-        },
-        {"item": f"confirmed_fields count ({len(confirmed_fields)})", "result": "pass"},
-        {
-            "item": f"components pending confirmation ({len(components_needing_confirmation)})",
-            "result": "pass" if not components_needing_confirmation else "fail",
-        },
-        {
-            "item": "assumptions_confirmed",
-            "result": "pass" if model_ir.assumptions_confirmed else "fail",
-        },
-    ]
-
-    g4_h_passed_items = [
-        f"confirmed_fields ({len(confirmed_fields)})",
-    ] if confirmed_fields else []
-
-    if not model_ir.assumptions_confirmed:
-        g4_h_failed_items.append("Assumptions not confirmed by user")
-
-    # Check for human confirmation directory
-    job_id = state.get("job_id", "unknown")
-    from agent_core.config.workspace import get_job_dir
-    job_dir = get_job_dir(job_id)
-    confirmation_dir = job_dir / "04_human_confirmation"
-    confirmation_record_path = confirmation_dir / "confirmation_record.json"
-
-    if confirmation_record_path.exists():
-        g4_h_file_paths.append(str(confirmation_record_path))
-        g4_h_evidence.append(f"confirmation_record found: {confirmation_record_path}")
-
+    hc_result = validate_human_confirmation_state(state)
     gate_results.append({
         "gate_id": 19,
         "name": gate_name(19),
-        "status": g4_h_status,
-        "checked_items": g4_h_checked_items,
-        "passed_items": g4_h_passed_items,
-        "failed_items": g4_h_failed_items,
-        "warnings": g4_h_warnings,
-        "evidence": g4_h_evidence,
-        "file_paths": g4_h_file_paths,
-        "message": (
-            f"Human confirmation check: {len(confirmed_fields)} confirmed, "
-            f"{len(unconfirmed_fields)} unconfirmed, "
-            f"{len(components_needing_confirmation)} components pending"
-        ) if g4_h_status == "pass" else (
-            f"Human confirmation required: {len(unconfirmed_fields)} unconfirmed fields, "
-            f"{len(components_needing_confirmation)} components pending confirmation"
-        ),
+        "status": "pass" if hc_result["passed"] else "fail",
+        "checked_items": [
+            {"item": item, "result": "pass" if hc_result["passed"] else "fail"}
+            for item in hc_result["checked_items"]
+        ],
+        "passed_items": hc_result["checked_items"] if hc_result["passed"] else [],
+        "failed_items": hc_result["failed_items"],
+        "warnings": [],
+        "evidence": [state.get("confirmation_record_path", "")],
+        "file_paths": [
+            state.get("confirmation_record_path", ""),
+            state.get("confirmed_model_plan_path", ""),
+        ],
+        "message": hc_result["message"],
     })
 
-    if g4_h_status == "fail":
+    if not hc_result["passed"]:
         failed.append(gate_name(19))
 
     return {"gate_results": gate_results, "failed_gates": failed}

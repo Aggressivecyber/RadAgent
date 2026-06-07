@@ -4,6 +4,11 @@ Backends:
   - DuckDuckGo HTML (default, no API key required)
   - Exa API (optional, requires EXA_API_KEY env var)
 
+Proxy:
+  - Set RADAGENT_PROXY (e.g. "http://127.0.0.1:7892") to route requests
+    through a local proxy like mihomo/Clash.
+  - Falls back to http_proxy / https_proxy / ALL_PROXY env vars.
+
 Set DISABLE_WEB_SEARCH=1 to disable all web search.
 """
 
@@ -56,12 +61,34 @@ class WebSearchTool:
 
     Only used as supplement to RAG, never as primary source.
     All web results carry mandatory disclosure tags.
+
+    Proxy configuration (priority order):
+      1. RADAGENT_PROXY env var (e.g. "http://127.0.0.1:7892")
+      2. http_proxy / https_proxy / ALL_PROXY env vars
+      3. No proxy (direct connection)
     """
 
     def __init__(self) -> None:
         self.search_count: int = 0
         self.disclosure_required: bool = True
         self._backend: str = self._detect_backend()
+        self._proxy: str | None = self._detect_proxy()
+
+    def _detect_proxy(self) -> str | None:
+        """Detect proxy from environment variables."""
+        proxy = os.environ.get("RADAGENT_PROXY")
+        if proxy:
+            return proxy
+        proxy = os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
+        if proxy:
+            return proxy
+        proxy = os.environ.get("http_proxy") or os.environ.get("HTTP_PROXY")
+        if proxy:
+            return proxy
+        proxy = os.environ.get("ALL_PROXY")
+        if proxy:
+            return proxy
+        return None
 
     @property
     def search_available(self) -> bool:
@@ -116,7 +143,9 @@ class WebSearchTool:
             ),
         }
         try:
-            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                timeout=15.0, follow_redirects=True, proxy=self._proxy,
+            ) as client:
                 resp = await client.post(
                     url, data={"q": query, "b": ""}, headers=headers,
                 )
@@ -186,7 +215,9 @@ class WebSearchTool:
             return await self._search_duckduckgo(query, max_results)
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(
+                timeout=15.0, proxy=self._proxy,
+            ) as client:
                 resp = await client.post(
                     "https://api.exa.ai/search",
                     json={

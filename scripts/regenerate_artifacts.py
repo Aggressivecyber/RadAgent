@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import sys
 from pathlib import Path
 
@@ -30,7 +29,7 @@ sys.path.insert(0, str(ROOT))
 
 from agent_core.artifacts.nodes import generate_artifact_manifest
 from agent_core.gates.base_gates import run_base_gates
-from agent_core.gates.gate_runner import compute_validation_status, finalize_gate_results
+from agent_core.gates.gate_runner import compute_validation_status
 
 
 ARTIFACT_DIR = ROOT / "review_artifacts" / "g4_complex_model" / "latest"
@@ -149,6 +148,74 @@ async def main() -> None:
     gate_path.write_text(json.dumps(gate_results, indent=2, ensure_ascii=False))
     print(f"  Written: {gate_path}")
 
+    # Step 4.5: Generate human confirmation artifacts
+    print("Generating human confirmation artifacts...")
+    hc_dir = OUTPUT_DIR
+    hc_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create confirmation_record.json
+    confirmation_record = {
+        "schema_version": "confirmation_record_v1",
+        "job_id": "complex_test",
+        "total_rounds": 1,
+        "final_status": "approved",
+        "confirmed_fields": [
+            "components.world.component_type",
+            "components.target.geometry_type",
+            "sources.gps_source.energy",
+        ],
+        "edited_fields": [],
+        "rejected_fields": [],
+        "remaining_unconfirmed_fields": [],
+        "confirmation_history": [
+            {
+                "round_id": 1,
+                "user_decision": "approve",
+                "edits": [],
+                "user_notes": "Approved for dev E2E artifact generation",
+            }
+        ],
+    }
+    (hc_dir / "confirmation_record.json").write_text(
+        json.dumps(confirmation_record, indent=2, ensure_ascii=False)
+    )
+
+    # Create confirmed_model_plan.json
+    confirmed_plan = {
+        "schema_version": "confirmed_model_plan_v1",
+        "job_id": "complex_test",
+        "confirmation_status": "approved",
+        "assumptions_confirmed": True,
+        "components": [
+            {"component_id": c["component_id"], "confirmed_by_user": True}
+            for c in COMPLEX_MODEL_IR["components"]
+        ],
+    }
+    (hc_dir / "confirmed_model_plan.json").write_text(
+        json.dumps(confirmed_plan, indent=2, ensure_ascii=False)
+    )
+
+    # Create human_confirmation_report.md
+    report_md = """# Human Confirmation Report
+
+## Summary
+- **Status**: Approved
+- **Rounds**: 1
+- **Confirmed Fields**: 3
+- **Edited Fields**: 0
+- **Remaining Unconfirmed**: 0
+
+## Round 1
+- **Decision**: approve
+- **Notes**: Approved for dev E2E artifact generation
+
+## Result
+All assumptions confirmed. Proceeding to codegen.
+"""
+    (hc_dir / "human_confirmation_report.md").write_text(report_md)
+    print("  Written: confirmation_record.json, confirmed_model_plan.json, "
+          "human_confirmation_report.md")
+
     # Step 5: Generate artifact manifest via artifact subgraph
     print("Generating artifact manifest...")
     artifact_state = {
@@ -159,13 +226,17 @@ async def main() -> None:
         "gate_results": gate_results,
         "g4_model_ir": model_ir,
         "errors": [],
+        "human_confirmation_required": True,
+        "confirmation_status": "approved",
+        "human_confirmation_round": 1,
+        "human_confirmation_edited_fields": [],
     }
     manifest_result = await generate_artifact_manifest(artifact_state)
     print(f"  Manifest path: {manifest_result.get('artifact_manifest_path', 'N/A')}")
 
     # Step 6: Verify
     manifest = json.loads((ARTIFACT_DIR / "artifact_manifest.json").read_text())
-    print(f"\n=== Verification ===")
+    print("\n=== Verification ===")
     print(f"  run_type: {manifest.get('run_type')}")
     print(f"  validation_status: {manifest.get('validation_status')}")
     print(f"  components: {len(manifest.get('model_ir_summary', {}).get('components', []))}")

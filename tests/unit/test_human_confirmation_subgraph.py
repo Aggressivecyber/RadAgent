@@ -190,25 +190,29 @@ class TestHumanInterruptNode:
     """Test human_interrupt_node function."""
 
     @pytest.mark.asyncio
-    async def test_human_interrupt_with_response(self, base_state):
-        """Test interrupt node with pre-existing response."""
+    async def test_human_interrupt_without_response_returns_pending(self, base_state):
+        """No raw_human_response must return pending, NOT approve."""
+        # Ensure no raw_human_response
+        base_state.pop("raw_human_response", None)
+        # Set confirmation_request_path for interrupt_payload
+        base_state["confirmation_request_path"] = "/fake/request.json"
+
+        result = await human_interrupt_node(base_state)
+        assert result["confirmation_status"] == "pending"
+        assert result["human_confirmation_required"] is True
+        assert result.get("raw_human_response", {}).get("user_decision") != "approve"
+
+    @pytest.mark.asyncio
+    async def test_human_interrupt_with_explicit_response_passes_through(self, base_state):
+        """Explicit user response passes through."""
         base_state["raw_human_response"] = {
             "user_decision": "approve",
             "edits": [],
+            "user_notes": "confirmed by test user",
         }
         result = await human_interrupt_node(base_state)
+        assert result["confirmation_status"] == "received"
         assert result["raw_human_response"]["user_decision"] == "approve"
-
-    @pytest.mark.asyncio
-    async def test_human_interrupt_default_approve(self, base_state):
-        """Test interrupt node creates default approve in non-interactive mode."""
-        # Clear any existing response
-        base_state.pop("raw_human_response", None)
-
-        result = await human_interrupt_node(base_state)
-        assert "raw_human_response" in result
-        assert result["raw_human_response"]["user_decision"] == "approve"
-        assert "Non-interactive mode" in result.get("notes", "")
 
 
 class TestParseConfirmationResponse:

@@ -1,13 +1,13 @@
 {
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
-  "job_id": "complex_test",
+  "job_id": "hc_test",
   "validation_status": "PARTIAL",
-  "generated_at": "2026-06-07T15:19:05.284352+00:00",
+  "generated_at": "2026-06-07T15:36:31.232057+00:00",
   "is_stub": false,
   "run_type": "dev",
-  "source_commit": "e533c74",
-  "source_job_id": "complex_test",
+  "source_commit": "1c19784",
+  "source_job_id": "hc_test",
   "files": [
     {
       "name": "code_module_plan.json",
@@ -16,8 +16,18 @@
     },
     {
       "name": "component_specs_summary.json",
-      "size_bytes": 266,
-      "sha256": "fa0bc604a73cab3d7d6b450d0434ae6ecd99d127ab6bfe67b7081977c0831bf5"
+      "size_bytes": 133,
+      "sha256": "2dc38dc6155f1810ead8546d0107817a16c8522701a7388e7e2e456e3cf54d3a"
+    },
+    {
+      "name": "confirmation_record.json",
+      "size_bytes": 64,
+      "sha256": "6b636c79fae34a6c562b78abf84ec57860eb52ee5997b462c8009061658b5eda"
+    },
+    {
+      "name": "confirmed_model_plan.json",
+      "size_bytes": 35,
+      "sha256": "f7df84e45c4a974affe81eeebd76ceea0a58624a7a8db2064cba95979e338e60"
     },
     {
       "name": "construction_ledger.json",
@@ -31,18 +41,23 @@
     },
     {
       "name": "g4_model_ir.json",
-      "size_bytes": 878,
-      "sha256": "698c7aa5b5a295c74bbfdc0a5fa6bc741ab9d1f03083e24df0149ec7f58eb289"
+      "size_bytes": 90,
+      "sha256": "d0352f637ede743882d0de574fa6b166b218c52672061d0cecb7a8b8519f8c19"
     },
     {
       "name": "gate_results.json",
-      "size_bytes": 1882,
-      "sha256": "55cf0f8da460c05845a0dfb8cbd0923e7d87724fba445ba90c114c61655f6cd8"
+      "size_bytes": 1110,
+      "sha256": "fd7408f07bb47d4725a071a99df8c03f4f4b1c1b1297986d83cf79344ba39aa0"
     },
     {
       "name": "geometry_interface_report.json",
       "size_bytes": 47,
       "sha256": "e20abd6958e83b2df55fff1dee67b9bdc8c827ddc627797ff58a3d100c860dd0"
+    },
+    {
+      "name": "human_confirmation_report.md",
+      "size_bytes": 9,
+      "sha256": "497b7725a00101d6cf82489ef502fb0918962b10aaa7279962ab5ec3edc62533"
     },
     {
       "name": "model_review_report.md",
@@ -67,12 +82,15 @@
   ],
   "sha256": {
     "output/code_module_plan.json": "690b5cbe6d016f4903383211d63299bf4f8bce3b4db9e890d400fe4ac78a1257",
-    "output/component_specs_summary.json": "fa0bc604a73cab3d7d6b450d0434ae6ecd99d127ab6bfe67b7081977c0831bf5",
+    "output/component_specs_summary.json": "2dc38dc6155f1810ead8546d0107817a16c8522701a7388e7e2e456e3cf54d3a",
+    "output/confirmation_record.json": "6b636c79fae34a6c562b78abf84ec57860eb52ee5997b462c8009061658b5eda",
+    "output/confirmed_model_plan.json": "f7df84e45c4a974affe81eeebd76ceea0a58624a7a8db2064cba95979e338e60",
     "output/construction_ledger.json": "68fa1756264016dc29910bc0fa7660ae0df8737c8243f54ec0a27a30a1ac0cbe",
     "output/evidence_traceability_report.json": "07cf65e9d440e765920baeaa5969abdcb37fdc0920e84fe285cf764cda567b7e",
-    "output/g4_model_ir.json": "698c7aa5b5a295c74bbfdc0a5fa6bc741ab9d1f03083e24df0149ec7f58eb289",
-    "output/gate_results.json": "55cf0f8da460c05845a0dfb8cbd0923e7d87724fba445ba90c114c61655f6cd8",
+    "output/g4_model_ir.json": "d0352f637ede743882d0de574fa6b166b218c52672061d0cecb7a8b8519f8c19",
+    "output/gate_results.json": "fd7408f07bb47d4725a071a99df8c03f4f4b1c1b1297986d83cf79344ba39aa0",
     "output/geometry_interface_report.json": "e20abd6958e83b2df55fff1dee67b9bdc8c827ddc627797ff58a3d100c860dd0",
+    "output/human_confirmation_report.md": "497b7725a00101d6cf82489ef502fb0918962b10aaa7279962ab5ec3edc62533",
     "output/model_review_report.md": "d400268a7992af90b990f4ad7b3f178df39316d9faebded27b663f32169061d6",
     "output/no_simplification_report.json": "c5d671c9c31b350cf11a9adc6048645e97fbc54a1ee520cb42f39732d1717b7e",
     "output/output_manager_contract.json": "2a04b1255bf549abdef205ebcb3bad6c6e2ed043d1dc60bd8eb2ad9e8d67edaf",
@@ -80,68 +98,31 @@
   },
   "size_bytes": {
     "output/code_module_plan.json": 37,
-    "output/component_specs_summary.json": 266,
+    "output/component_specs_summary.json": 133,
+    "output/confirmation_record.json": 64,
+    "output/confirmed_model_plan.json": 35,
     "output/construction_ledger.json": 33,
     "output/evidence_traceability_report.json": 92,
-    "output/g4_model_ir.json": 878,
-    "output/gate_results.json": 1882,
+    "output/g4_model_ir.json": 90,
+    "output/gate_results.json": 1110,
     "output/geometry_interface_report.json": 47,
+    "output/human_confirmation_report.md": 9,
     "output/model_review_report.md": 41,
     "output/no_simplification_report.json": 102,
     "output/output_manager_contract.json": 2166,
     "output/proposed_patch_summary.json": 79
   },
-  "total_files": 11,
+  "total_files": 14,
   "model_ir_summary": {
     "components": [
       {
         "component_id": "world",
-        "component_type": "world",
-        "geometry_type": "box"
-      },
-      {
-        "component_id": "target",
-        "component_type": "volume",
-        "geometry_type": "cylinder"
-      },
-      {
-        "component_id": "shield_1",
-        "component_type": "volume",
-        "geometry_type": "box"
-      },
-      {
-        "component_id": "shield_2",
-        "component_type": "volume",
-        "geometry_type": "box"
-      },
-      {
-        "component_id": "detector_1",
-        "component_type": "volume",
-        "geometry_type": "box"
-      },
-      {
-        "component_id": "detector_2",
-        "component_type": "volume",
-        "geometry_type": "box"
-      },
-      {
-        "component_id": "detector_3",
-        "component_type": "volume",
-        "geometry_type": "box"
-      },
-      {
-        "component_id": "collimator",
-        "component_type": "volume",
-        "geometry_type": "tube"
-      },
-      {
-        "component_id": "housing",
-        "component_type": "volume",
-        "geometry_type": "box"
+        "component_type": "?",
+        "geometry_type": "?"
       }
     ],
-    "materials_count": 3,
-    "scoring_count": 2
+    "materials_count": 0,
+    "scoring_count": 0
   },
   "skipped_gates": [],
   "known_limitations": [

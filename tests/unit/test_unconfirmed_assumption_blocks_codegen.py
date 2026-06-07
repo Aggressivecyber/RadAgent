@@ -1,7 +1,7 @@
 """Tests that unconfirmed assumptions block codegen."""
 
 
-
+from agent_core.graph.main_routes import route_after_human_confirmation
 from agent_core.human_confirmation.validators import validate_human_confirmation
 
 
@@ -182,3 +182,64 @@ class TestUnconfirmedAssumptionBlocksCodegen:
         assert result.passed is True
         assert len(result.warnings) == 1
         assert "assumptions_confirmed is False" in result.warnings[0]
+
+
+class TestRouteAfterHumanConfirmationBlocking:
+    """Test that main route blocks codegen on incomplete confirmation."""
+
+    def test_approved_without_record_blocks_codegen(self):
+        """Test that approved without confirmation_record blocks codegen."""
+        state = {
+            "confirmation_status": "approved",
+            "confirmed_model_plan_path": "x/confirmed_model_plan.json",
+            "unconfirmed_assumptions_count": 0,
+        }
+        assert route_after_human_confirmation(state) == "report_subgraph"
+
+    def test_approved_without_confirmed_plan_blocks_codegen(self):
+        """Test that approved without confirmed_plan blocks codegen."""
+        state = {
+            "confirmation_status": "approved",
+            "confirmation_record_path": "x/confirmation_record.json",
+            "unconfirmed_assumptions_count": 0,
+        }
+        assert route_after_human_confirmation(state) == "report_subgraph"
+
+    def test_unconfirmed_assumptions_blocks_codegen(self):
+        """Test that unconfirmed_assumptions_count > 0 blocks codegen."""
+        state = {
+            "confirmation_status": "approved",
+            "confirmation_record_path": "x/confirmation_record.json",
+            "confirmed_model_plan_path": "x/confirmed_model_plan.json",
+            "unconfirmed_assumptions_count": 1,
+        }
+        assert route_after_human_confirmation(state) == "report_subgraph"
+
+    def test_edited_without_confirmed_plan_blocks_codegen(self):
+        """Test that edited without confirmed_plan blocks codegen."""
+        state = {
+            "confirmation_status": "edited",
+            "confirmation_record_path": "x/confirmation_record.json",
+            "unconfirmed_assumptions_count": 0,
+        }
+        assert route_after_human_confirmation(state) == "report_subgraph"
+
+    def test_approved_with_record_and_plan_goes_to_codegen(self):
+        """Test that complete approval proceeds to codegen."""
+        state = {
+            "confirmation_status": "approved",
+            "confirmation_record_path": "x/confirmation_record.json",
+            "confirmed_model_plan_path": "x/confirmed_model_plan.json",
+            "unconfirmed_assumptions_count": 0,
+        }
+        assert route_after_human_confirmation(state) == "g4_codegen_subgraph"
+
+    def test_ask_more_routes_to_context(self):
+        """Test that ask_more routes to context."""
+        state = {"confirmation_status": "ask_more"}
+        assert route_after_human_confirmation(state) == "context_subgraph"
+
+    def test_pending_routes_back_to_confirmation(self):
+        """Test that pending routes back to confirmation."""
+        state = {"confirmation_status": "pending"}
+        assert route_after_human_confirmation(state) == "human_confirmation_subgraph"

@@ -57,3 +57,49 @@ def validate_human_confirmation(model_ir: dict[str, Any]) -> ConfirmationValidat
         unconfirmed_components=unconfirmed_components,
         unconfirmed_fields=unconfirmed_fields,
     )
+
+
+def validate_human_confirmation_state(state: dict[str, Any]) -> dict[str, Any]:
+    """Validate human confirmation completeness from pipeline state.
+
+    Returns dict with: passed, checked_items, failed_items, message
+    """
+    errors: list[str] = []
+    checked_items: list[str] = []
+
+    required = state.get("human_confirmation_required", False)
+    status = state.get("confirmation_status", "not_required")
+
+    checked_items.append(f"confirmation_required={required}")
+    checked_items.append(f"confirmation_status={status}")
+
+    if not required:
+        return {
+            "passed": True,
+            "checked_items": checked_items,
+            "failed_items": [],
+            "message": "Human confirmation not required.",
+        }
+
+    if status not in {"approved", "edited"}:
+        errors.append(f"Invalid confirmation status: {status}")
+
+    if state.get("unconfirmed_assumptions_count", 0) > 0:
+        errors.append("Unconfirmed assumptions remain.")
+
+    if not state.get("confirmation_record_path"):
+        errors.append("Missing confirmation_record_path.")
+
+    if not state.get("confirmed_model_plan_path"):
+        errors.append("Missing confirmed_model_plan_path.")
+
+    return {
+        "passed": not errors,
+        "checked_items": checked_items,
+        "failed_items": errors,
+        "message": (
+            "All required confirmations complete."
+            if not errors
+            else "Human confirmation incomplete."
+        ),
+    }

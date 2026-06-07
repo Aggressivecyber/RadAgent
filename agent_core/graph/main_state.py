@@ -57,6 +57,9 @@ class RadAgentMainState(TypedDict, total=False):
     unconfirmed_assumptions_count: int
     human_confirmation_required: bool
     human_confirmation_round: int
+    raw_human_response: dict[str, Any]  # Raw response from human
+    confirmation_report_path: str  # Path to confirmation report
+    human_confirmation_edited_fields: list[str]  # Fields edited by user
 
     # ── G4 Codegen Subgraph outputs ──
     code_module_plan_path: str

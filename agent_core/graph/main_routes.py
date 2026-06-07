@@ -67,16 +67,32 @@ def route_after_g4_modeling(state: RadAgentMainState) -> str:
 
 
 def route_after_human_confirmation(state: RadAgentMainState) -> str:
-    """Route after Human Confirmation Subgraph."""
+    """Route after Human Confirmation Subgraph.
+
+    Only proceed to codegen when confirmation is complete:
+    - status is approved/edited
+    - confirmation_record_path exists
+    - confirmed_model_plan_path exists
+    - unconfirmed_assumptions_count == 0
+    """
     status = state.get("confirmation_status", "failed")
+
     if status in {"approved", "edited"}:
+        if state.get("unconfirmed_assumptions_count", 0) > 0:
+            return "report_subgraph"
+        if not state.get("confirmation_record_path"):
+            return "report_subgraph"
+        if not state.get("confirmed_model_plan_path"):
+            return "report_subgraph"
         return "g4_codegen_subgraph"
+
     if status == "ask_more":
         return "context_subgraph"
-    if status in {"rejected", "failed", "expired"}:
-        return "report_subgraph"
+
     if status == "pending":
         return "human_confirmation_subgraph"
+
+    # rejected, failed, expired, or unknown
     return "report_subgraph"
 
 

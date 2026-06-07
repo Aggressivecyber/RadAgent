@@ -484,36 +484,35 @@ def _sort_questions_by_priority(
 async def human_interrupt_node(state: HumanConfirmationState) -> dict[str, Any]:
     """Interrupt execution for human input.
 
-    In a real LangGraph environment, this would call interrupt().
-    For testing and non-interactive mode, it checks for raw_human_response
-    in state or creates a default approve response.
+    In production, this uses LangGraph interrupt().
+    Without raw_human_response, returns pending status — NEVER auto-approves.
 
-    Returns dict with raw_human_response.
+    Returns dict with confirmation_status and optional interrupt_payload.
     """
     errors: list[str] = []
 
-    # Check if state already has human response (for testing)
+    # Check if state already has human response (explicit user input)
     if "raw_human_response" in state and state["raw_human_response"]:
-        return {"raw_human_response": state["raw_human_response"]}
+        return {
+            "raw_human_response": state["raw_human_response"],
+            "confirmation_status": "received",
+        }
 
-    # Non-interactive mode: create default approve response
-    # This allows tests to proceed without actual human input
-    job_id = state["job_id"]
-    round_n = state.get("human_confirmation_round", 1)
-
-    default_response: dict[str, Any] = {
-        "schema_version": "confirmation_response_v1",
-        "job_id": job_id,
-        "round_id": round_n,
-        "user_decision": "approve",
-        "edits": [],
-        "user_notes": "Auto-approved in non-interactive mode",
-    }
+    # No user response available — return pending, NOT auto-approve
+    request_path = state.get("confirmation_request_path", "")
+    request = None
+    if request_path:
+        request = _load_json(Path(request_path))
 
     return {
-        "raw_human_response": default_response,
-        "notes": "Non-interactive mode: using default approve response",
+        "confirmation_status": "pending",
+        "human_confirmation_required": True,
+        "confirmation_request_path": request_path,
         "errors": errors,
+        "interrupt_payload": {
+            "type": "human_confirmation_required",
+            "confirmation_request": request,
+        },
     }
 
 
@@ -583,11 +582,11 @@ async def merge_user_confirmation(
 
     Handles four decision types:
     - approve: Mark all fields as confirmed
-    - edit: Apply user edits, mark edited fields as user-provided
+    - edit: Apply user edits, mark edited fields as user-provided (source_type="user", confidence=1.0)
     - reject: Set status to rejected, stop processing
     - ask_more: Increment round, continue to next round
 
-    Returns dict with all output paths and final status.
+    Returns dict with all output paths, final status, and unconfirmed_assumptions_count.
     """
     errors: list[str] = []
     job_id = state["job_id"]
@@ -629,6 +628,9 @@ async def merge_user_confirmation(
     edited_fields: list[str] = []
     rejected_fields: list[str] = []
 
+    # Track all fields requiring confirmation to calculate unconfirmed count
+    total_fields_requiring_confirmation: set[str] = set()
+
     # Handle rejection
     if user_decision == "reject":
         confirmed_plan["confirmation_status"] = "rejected"
@@ -655,6 +657,7 @@ async def merge_user_confirmation(
                 "placement": comp.get("placement", {}),
                 "roles": comp.get("roles", []),
                 "confirmed_by_user": False,
+                "parameters": [],  # Include parameters with metadata
             }
 
             # Check for edits
@@ -662,58 +665,104 @@ async def merge_user_confirmation(
             for param in comp.get("parameters", []):
                 field_path = param["field_path"]
 
+                # Track fields requiring confirmation
+                if param.get("requires_confirmation", False):
+                    total_fields_requiring_confirmation.add(field_path)
+
                 # Check if user edited this field
                 edit = next((e for e in edits if e["field_path"] == field_path), None)
 
                 if edit:
-                    # Apply edit
+                    # Apply edit and mark as user-provided
                     _apply_edit_to_component(confirmed_comp, field_path, edit["new_value"])
                     edited_fields.append(field_path)
                     confirmed_comp["confirmed_by_user"] = True
+                    # Store parameter with user-provenance metadata
+                    confirmed_comp["parameters"].append({
+                        "field_path": field_path,
+                        "value": edit["new_value"],
+                        "source_type": "user",
+                        "confidence": 1.0,
+                        "requires_confirmation": False,
+                    })
                 elif user_decision == "approve":
                     # Mark as confirmed
                     confirmed_fields.append(field_path)
                     confirmed_comp["confirmed_by_user"] = True
+                    # Store parameter with original metadata
+                    confirmed_comp["parameters"].append({
+                        "field_path": field_path,
+                        "value": param.get("proposed_value"),
+                        "source_type": param.get("source_type", "rag"),
+                        "confidence": param.get("confidence", 0.8),
+                        "requires_confirmation": False,  # Now confirmed
+                    })
 
             confirmed_plan["components"].append(confirmed_comp)
 
         # Process sources
         for src in proposal.get("proposed_sources", []) if proposal else []:
+            field_path = src["field_path"]
+
+            # Track fields requiring confirmation
+            if src.get("requires_confirmation", False):
+                total_fields_requiring_confirmation.add(field_path)
+
             confirmed_src = {
                 "source_id": src.get("field_path", "primary").split(".")[-1],
-                "confirmed_by_user": user_decision == "approve",
+                "confirmed_by_user": False,
             }
 
-            field_path = src["field_path"]
             edit = next((e for e in (response.get("edits", []) if response else [])
                         if e["field_path"] == field_path), None)
 
             if edit:
                 confirmed_src["proposed_value"] = edit["new_value"]
+                confirmed_src["source_type"] = "user"
+                confirmed_src["confidence"] = 1.0
+                confirmed_src["requires_confirmation"] = False
                 edited_fields.append(field_path)
                 confirmed_src["confirmed_by_user"] = True
             elif user_decision == "approve":
                 confirmed_fields.append(field_path)
+                confirmed_src["source_type"] = src.get("source_type", "rag")
+                confirmed_src["confidence"] = src.get("confidence", 0.8)
+                confirmed_src["requires_confirmation"] = False
+                confirmed_src["confirmed_by_user"] = True
+                confirmed_src["proposed_value"] = src.get("proposed_value")
 
             confirmed_plan["sources"].append(confirmed_src)
 
         # Process scoring
         for sc in proposal.get("proposed_scoring", []) if proposal else []:
+            field_path = sc["field_path"]
+
+            # Track fields requiring confirmation
+            if sc.get("requires_confirmation", False):
+                total_fields_requiring_confirmation.add(field_path)
+
             confirmed_sc = {
                 "scoring_id": sc.get("field_path", "dose").split(".")[-1],
-                "confirmed_by_user": user_decision == "approve",
+                "confirmed_by_user": False,
             }
 
-            field_path = sc["field_path"]
             edit = next((e for e in (response.get("edits", []) if response else [])
                         if e["field_path"] == field_path), None)
 
             if edit:
                 confirmed_sc["proposed_value"] = edit["new_value"]
+                confirmed_sc["source_type"] = "user"
+                confirmed_sc["confidence"] = 1.0
+                confirmed_sc["requires_confirmation"] = False
                 edited_fields.append(field_path)
                 confirmed_sc["confirmed_by_user"] = True
             elif user_decision == "approve":
                 confirmed_fields.append(field_path)
+                confirmed_sc["source_type"] = sc.get("source_type", "rag")
+                confirmed_sc["confidence"] = sc.get("confidence", 0.8)
+                confirmed_sc["requires_confirmation"] = False
+                confirmed_sc["confirmed_by_user"] = True
+                confirmed_sc["proposed_value"] = sc.get("proposed_value")
 
             confirmed_plan["scoring"].append(confirmed_sc)
 
@@ -724,6 +773,13 @@ async def merge_user_confirmation(
         elif user_decision == "edit":
             confirmed_plan["confirmation_status"] = "edited"
             confirmed_plan["assumptions_confirmed"] = True
+
+    # Calculate remaining unconfirmed assumptions/fields
+    # Count = total requiring - (confirmed + edited)
+    unconfirmed_count = max(
+        0,
+        len(total_fields_requiring_confirmation) - len(confirmed_fields) - len(edited_fields)
+    )
 
     # Save confirmed model plan
     plan_path = conf_dir / "confirmed_model_plan.json"
@@ -739,6 +795,7 @@ async def merge_user_confirmation(
         "edited_fields": edited_fields,
         "rejected_fields": rejected_fields,
         "remaining_unconfirmed_fields": [],
+        "unconfirmed_assumptions_count": unconfirmed_count,
         "confirmation_history": [
             {
                 "round_id": round_n,
@@ -763,8 +820,10 @@ async def merge_user_confirmation(
         "confirmation_report_path": report_path,
         "confirmation_status": confirmed_plan["confirmation_status"],
         "confirmed_fields_count": len(confirmed_fields),
+        "edited_fields": edited_fields,
         "edited_fields_count": len(edited_fields),
         "rejected_fields_count": len(rejected_fields),
+        "unconfirmed_assumptions_count": unconfirmed_count,
         "errors": errors,
     }
 

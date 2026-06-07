@@ -15,23 +15,31 @@ from agent_core.human_confirmation.nodes import (
 )
 
 
-def route_after_parse(state: HumanConfirmationState) -> str:
-    """Route after parsing user response."""
-    decision = state.get("user_decision", "")
-    if decision == "ask_more":
+def route_after_merge(state: HumanConfirmationState) -> str:
+    """Route after merging user confirmation — uses confirmation_status, NOT user_decision."""
+    status = state.get("confirmation_status", "")
+
+    if status == "ask_more":
         return "generate_confirmation_request"
-    if decision in ("approved", "edited"):
+
+    if status in {"approved", "edited", "pending"}:
         return "validate_confirmation_completeness"
-    # reject → END
+
+    # rejected, failed, expired → END
     return END
 
 
 def route_after_validate(state: HumanConfirmationState) -> str:
-    """Route after validation."""
+    """Route after validation — uses confirmation_status."""
     status = state.get("confirmation_status", "")
     if status == "pending":
         return "generate_confirmation_request"
     return END
+
+
+def _route_after_interrupt(state: HumanConfirmationState) -> str:
+    """Route after human interrupt — only proceed to parse if user responded."""
+    return "parse_confirmation_response" if state.get("confirmation_status") == "received" else END
 
 
 def build_human_confirmation_subgraph() -> StateGraph:
@@ -48,10 +56,13 @@ def build_human_confirmation_subgraph() -> StateGraph:
     graph.set_entry_point("build_proposed_model_completion")
     graph.add_edge("build_proposed_model_completion", "generate_confirmation_request")
     graph.add_edge("generate_confirmation_request", "human_interrupt_node")
-    graph.add_edge("human_interrupt_node", "parse_confirmation_response")
+
+    # interrupt → only proceed to parse if status is "received" (user responded)
+    # if pending, subgraph ends (main graph handles re-entry)
+    graph.add_conditional_edges("human_interrupt_node", _route_after_interrupt)
     graph.add_edge("parse_confirmation_response", "merge_user_confirmation")
 
-    graph.add_conditional_edges("merge_user_confirmation", route_after_parse)
+    graph.add_conditional_edges("merge_user_confirmation", route_after_merge)
     graph.add_conditional_edges("validate_confirmation_completeness", route_after_validate)
 
-    return graph
+    return graph.compile()

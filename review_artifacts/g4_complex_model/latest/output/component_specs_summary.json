@@ -1,17 +1,9 @@
 {
-  "total_components": 9,
+  "total_components": 1,
   "component_ids": [
-    "world",
-    "target",
-    "shield_1",
-    "shield_2",
-    "detector_1",
-    "detector_2",
-    "detector_3",
-    "collimator",
-    "housing"
+    "world"
   ],
-  "materials_count": 3,
-  "sources_count": 1,
-  "scoring_count": 2
+  "materials_count": 0,
+  "sources_count": 0,
+  "scoring_count": 0
 }

@@ -54,3 +54,4 @@ review_artifacts/archive/*
 # OS
 .DS_Store
 Thumbs.db
+.env
