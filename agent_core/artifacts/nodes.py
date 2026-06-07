@@ -6,8 +6,10 @@ large simulation output files.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -102,15 +104,17 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
             "total_interfaces": len(interfaces),
             "interfaces": [
                 {
-                    "from": i.get("parent_component", "?"),
-                    "to": i.get("child_component", "?"),
-                    "type": i.get("interface_type", "unknown"),
+                    "interface_id": i.get("interface_id", "?"),
+                    "component_a": i.get("component_a", "?"),
+                    "component_b": i.get("component_b", "?"),
+                    "relationship": i.get("relationship", "unknown"),
+                    "overlap_check_enabled": i.get("overlap_check_enabled", True),
                 }
                 for i in interfaces
             ],
         }
         (output_dir / "geometry_interface_report.json").write_text(
-            json.dumps(gi_report, indent=2)
+            json.dumps(gi_report, indent=2, ensure_ascii=False)
         )
 
     # Generate evidence traceability report
@@ -133,45 +137,73 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
 
 
 async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, Any]:
-    """Generate artifact manifest for the review directory."""
+    """Generate rich artifact manifest with checksums and metadata."""
     artifact_dir = Path(state.get("review_artifact_dir", ""))
     output_dir = artifact_dir / "output"
     errors = list(state.get("errors", []))
 
-    # List all files in artifact dir
-    files: list[str] = []
+    # Build rich file entries with sha256 + size
+    file_entries: list[dict[str, Any]] = []
     if output_dir.exists():
         for f in sorted(output_dir.iterdir()):
             if f.is_file():
-                files.append(f.name)
+                content = f.read_bytes()
+                sha = hashlib.sha256(content).hexdigest()
+                file_entries.append({
+                    "name": f.name,
+                    "size_bytes": len(content),
+                    "sha256": sha,
+                })
+
+    # Get git commit if available
+    source_commit = ""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            source_commit = result.stdout.strip()
+    except Exception:
+        pass
 
     manifest = {
+        "schema_version": "v2",
         "artifact_type": "g4_complex_model",
         "job_id": state.get("job_id", "unknown"),
         "validation_status": state.get("validation_status", "UNKNOWN"),
-        "files": files,
-        "total_files": len(files),
+        "generated_at": datetime.now(UTC).isoformat(),
+        "source_commit": source_commit,
+        "files": file_entries,
+        "total_files": len(file_entries),
     }
 
     manifest_path = artifact_dir / "artifact_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2))
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 
-    # Generate review_report.json
+    # Generate review_report.json (rich version)
+    file_names = [e["name"] for e in file_entries]
     review_report = {
+        "schema_version": "v2",
         "artifact_type": "g4_complex_model",
         "job_id": state.get("job_id", "unknown"),
         "validation_status": state.get("validation_status", "UNKNOWN"),
-        "artifacts_collected": len(files),
-        "has_model_ir": "g4_model_ir.json" in files,
-        "has_gate_results": "gate_results.json" in files,
-        "has_model_review": "model_review_report.md" in files,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "is_stub": False,
+        "artifacts_collected": len(file_entries),
+        "has_model_ir": "g4_model_ir.json" in file_names,
+        "has_gate_results": "gate_results.json" in file_names,
+        "has_model_review": "model_review_report.md" in file_names,
+        "has_manifest": "artifact_manifest.json" in file_names,
+        "file_count": len(file_entries),
     }
     (artifact_dir / "review_report.json").write_text(
-        json.dumps(review_report, indent=2)
+        json.dumps(review_report, indent=2, ensure_ascii=False)
     )
 
-    status = "collected" if files else "failed"
-    if errors and files:
+    status = "collected" if file_entries else "failed"
+    if errors and file_entries:
         status = "partial"
 
     return {
