@@ -132,6 +132,20 @@ async def run_module_agent_node(
     ctx = module_contexts.get(module_name, {})
     job_id = state.get("job_id", "unknown")
 
+    # Build summaries from completed modules so this agent knows
+    # what has already been generated.
+    summaries: list[dict[str, Any]] = []
+    completed = state.get("module_results", {})
+    for prev_module, prev_result in completed.items():
+        if prev_module == module_name:
+            continue
+        for f in prev_result.get("generated_files", []):
+            summaries.append(_extract_file_summary(prev_module, f))
+
+    # Inject summaries into the context dict
+    ctx = dict(ctx)
+    ctx["existing_generated_file_summaries"] = summaries
+
     # Import and run the appropriate agent
     agent_fn = _get_agent_function(module_name)
     result = await agent_fn(ctx)
@@ -147,6 +161,44 @@ async def run_module_agent_node(
         "module_results": module_results,
         "current_node": f"run_{module_name}_agent",
     }
+
+
+# ── File summary extraction ──────────────────────────────────────────
+
+
+def _extract_file_summary(module_name: str, file_data: dict[str, Any]) -> dict[str, Any]:
+    """Extract a lightweight summary from a generated file for cross-module context."""
+    content = file_data.get("new_content", "") or file_data.get("content", "")
+    return {
+        "module_name": module_name,
+        "path": file_data.get("path", ""),
+        "generated_by": file_data.get("generated_by", f"{module_name}_module_agent"),
+        "classes": _extract_classes(content),
+        "public_methods": _extract_public_methods(content),
+        "includes": _extract_includes(content),
+        "provided_symbols": _extract_classes(content),  # symbols ≈ class names
+    }
+
+
+def _extract_includes(content: str) -> list[str]:
+    """Extract #include directives from C++ content."""
+    import re
+    return re.findall(r'#include\s+[<"]([^>"]+)[>"]', content)
+
+
+def _extract_classes(content: str) -> list[str]:
+    """Extract class names from C++ content."""
+    import re
+    return re.findall(r'\bclass\s+(\w+)', content)
+
+
+def _extract_public_methods(content: str) -> list[str]:
+    """Extract public method names from C++ content."""
+    import re
+    # Match methods after 'public:' keyword
+    return re.findall(r'\bpublic:\s*(?:.*?)?\b(\w+)\s*\(', content, re.DOTALL)
+
+
 
 
 def _get_agent_function(module_name: str):  # type: ignore[no-untyped-def]
@@ -472,7 +524,12 @@ async def persist_codegen_output_node(
     cross_hard = state.get("cross_file_hard_gate", {})
     cross_llm = state.get("cross_file_llm_gate", {})
 
+    # Check static semantic scan status
+    static_scan = state.get("static_semantic_scan", {})
+
     if not has_code:
+        status = "failed"
+    elif static_scan.get("status") == "fail":
         status = "failed"
     elif cross_hard.get("status") == "fail":
         status = "failed"
@@ -481,9 +538,14 @@ async def persist_codegen_output_node(
     else:
         status = "passed"
 
+    # Target directory for generated Geant4 files is 08_geant4
+    geant4_dir = job_dir / "08_geant4"
+    geant4_dir.mkdir(parents=True, exist_ok=True)
+    generated_code_dir = str(geant4_dir)
+
     return {
         "proposed_patch_path": str(patch_path),
-        "generated_code_dir": str(codegen_dir),
+        "generated_code_dir": generated_code_dir,
         "g4_codegen_status": status,
         "current_node": "persist_codegen_output",
     }

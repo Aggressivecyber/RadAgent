@@ -103,18 +103,19 @@ async def apply_patch(state: PatchSubgraphState) -> dict[str, Any]:
         path = file_entry.get("path", "")
         content = file_entry.get("new_content")
 
-        # Backward compat: deprecated 'content' field
-        if content is None and "content" in file_entry:
-            logger.warning(
-                "Deprecated patch field 'content' used for: %s. "
-                "Use 'new_content' instead.",
+        # Reject deprecated 'content' field — only 'new_content' is allowed
+        if "content" in file_entry and "new_content" not in file_entry:
+            logger.error(
+                "Rejected patch entry with deprecated 'content' field (use 'new_content'): %s",
                 path,
             )
-            content = file_entry["content"]
+            errors.append(f"Patch file entry uses deprecated 'content' field: {path}")
+            continue
 
         if not path:
             continue
         if content is None:
+            logger.error("Patch file entry missing new_content: %s", path)
             errors.append(f"Patch file entry missing new_content: {path}")
             continue
 

@@ -49,14 +49,19 @@ class ModelGateway:
         start = time.time()
 
         try:
-            if profile.provider == ModelProvider.OPENAI_COMPATIBLE:
+            if profile.provider == ModelProvider.MOCK:
+                from agent_core.models.mock import call_mock_model
+                mock_result = call_mock_model(req.task, req.metadata)
+                content = json.dumps(mock_result.parsed_json or {})
+                parsed_json = mock_result.parsed_json
+                usage = {"mock": True}
+            elif profile.provider == ModelProvider.OPENAI_COMPATIBLE:
                 content, usage = await call_openai_compatible_model(profile, req)
+                parsed_json = None
+                if response_format == "json":
+                    parsed_json = _safe_parse_json(content)
             else:
                 raise NotImplementedError(f"Unsupported provider: {profile.provider}")
-
-            parsed_json = None
-            if response_format == "json":
-                parsed_json = _safe_parse_json(content)
 
             return ModelCallResult(
                 task=task,

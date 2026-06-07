@@ -202,7 +202,7 @@ class TestCodegenPatchContract:
     async def test_apply_patch_warns_on_deprecated_content(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """apply_patch must warn when deprecated 'content' field is used."""
+        """apply_patch must REJECT deprecated 'content' field (no longer supported)."""
         from agent_core.patching.nodes import apply_patch
 
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -225,10 +225,8 @@ class TestCodegenPatchContract:
         }
 
         result = await apply_patch(state)
-        assert result["patch_status"] == "applied"
-
-        written = (code_dir / "src" / "old.cc").read_text()
-        assert "old format" in written
+        # content-only entries should now be rejected (missing new_content)
+        assert result["patch_status"] != "applied" or not (code_dir / "src" / "old.cc").exists()
 
     @pytest.mark.asyncio
     async def test_apply_patch_rejects_missing_both_fields(

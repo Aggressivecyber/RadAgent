@@ -146,7 +146,7 @@ class ChatAgent:
 
             if not self._web:
                 self._web = WebSearchTool()
-            if not self._web.is_available:
+            if not self._web.search_available:
                 return []
             results = await self._web.search(query, max_results=3)
             return [

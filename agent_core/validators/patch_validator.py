@@ -31,6 +31,12 @@ class PatchValidator:
             missing_f = FILE_REQUIRED_FIELDS - set(f.keys())
             if missing_f:
                 errors.append(f"changed_files[{idx}] missing: {sorted(missing_f)}")
+            # Reject deprecated 'content' field — only 'new_content' is allowed
+            if "content" in f:
+                errors.append(
+                    f"changed_files[{idx}] ({f.get('path', '?')}): "
+                    "deprecated 'content' field found; use 'new_content' instead"
+                )
             # Enforce new_content is non-empty (json_file_replacement mode)
             if f.get("new_content") is not None and not f["new_content"]:
                 errors.append(

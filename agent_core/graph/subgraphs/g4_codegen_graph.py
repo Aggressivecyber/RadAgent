@@ -139,13 +139,27 @@ def build_g4_codegen_subgraph() -> StateGraph:
             },
         )
 
-        # Repair → back to hard gate
-        graph.add_edge(f"repair_{module_name}", f"{module_name}_hard_gate")
+        # Repair → conditional: hard gate or skip to next module
+        graph.add_conditional_edges(
+            f"repair_{module_name}",
+            _route_after_repair(module_name),
+            {
+                f"{module_name}_hard_gate": f"{module_name}_hard_gate",
+                _next_module_or_integration(i): _next_module_or_integration(i),
+            },
+        )
 
     # ── Flow: Integration ─────────────────────────────────────────────
     graph.add_edge("build_interface_contracts", "integration_assembler")
     graph.add_edge("integration_assembler", "static_semantic_scanner")
-    graph.add_edge("static_semantic_scanner", "cross_file_hard_gate")
+    graph.add_conditional_edges(
+        "static_semantic_scanner",
+        _route_after_static_scan,
+        {
+            "cross_file_hard_gate": "cross_file_hard_gate",
+            "persist_codegen_output": "persist_codegen_output",
+        },
+    )
     graph.add_conditional_edges(
         "cross_file_hard_gate",
         _route_after_cross_hard_gate,
@@ -241,3 +255,24 @@ def _route_after_cross_hard_gate(state: G4CodegenSubgraphState) -> str:
 def _route_after_cross_llm_gate(state: G4CodegenSubgraphState) -> str:
     """Route after cross-file LLM gate."""
     return "persist_codegen_output"
+
+
+def _route_after_static_scan(state: G4CodegenSubgraphState) -> str:
+    """Route after static semantic scan: pass → cross_file_hard_gate, fail → persist."""
+    scan = state.get("static_semantic_scan", {})
+    if scan.get("status") == "pass":
+        return "cross_file_hard_gate"
+    return "persist_codegen_output"
+
+
+def _route_after_repair(module_name: str) -> Any:
+    """Route after repair: success → hard gate, failed → skip to next module."""
+    def _route(state: G4CodegenSubgraphState) -> str:
+        repair_results = state.get("module_repair_results", {})
+        repair = repair_results.get(module_name, {})
+        if repair.get("status") == "failed":
+            # Repair failed — skip to next module or integration
+            idx = MODULE_ORDER.index(module_name)
+            return _next_module_or_integration(idx)
+        return f"{module_name}_hard_gate"
+    return _route

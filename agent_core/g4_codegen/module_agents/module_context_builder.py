@@ -18,6 +18,7 @@ def build_module_context(
     job_id: str,
     run_mode: str = "dev",
     previous_failures: list[dict[str, Any]] | None = None,
+    existing_file_summaries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build context for a module agent.
 
@@ -38,7 +39,7 @@ def build_module_context(
         code_architecture_plan=code_architecture_plan,
         rag_snippets=[],
         geant4_api_rules=api_rules,
-        existing_generated_file_summaries=[],
+        existing_generated_file_summaries=existing_file_summaries or [],
         previous_failures=previous_failures or [],
         run_mode=run_mode,
     )

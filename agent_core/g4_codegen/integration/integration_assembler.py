@@ -38,10 +38,22 @@ def assemble_proposed_patch(
 
         # Include files from passed modules
         for f in result.get("generated_files", []):
+            raw_path = f["path"]
+            # Security: reject path traversal
+            if ".." in raw_path or raw_path.startswith("/"):
+                continue
+            # Strip any leading directory prefix so path is relative to 08_geant4
+            clean_path = raw_path.lstrip("/")
+            if clean_path.startswith("08_geant4/"):
+                clean_path = clean_path[len("08_geant4/"):]
+            elif clean_path.startswith("08_geant4"):
+                clean_path = clean_path[len("08_geant4"):].lstrip("/")
+
             changed_files.append({
-                "path": f["path"],
-                "operation": f.get("operation", "create_or_replace"),
+                "path": clean_path,
+                "operation": f.get("operation", "create"),
                 "new_content": f["new_content"],
+                "zone": "green",
                 "generated_by": f.get("generated_by", f"{module_name}_module_agent"),
                 "module_name": f.get("module_name", module_name),
                 "rationale": f.get("rationale", ""),
@@ -53,8 +65,21 @@ def assemble_proposed_patch(
             agent_file_count += 1
 
     patch = {
+        "patch_id": f"patch_{job_id}_g4_codegen",
+        "job_id": job_id,
+        "description": "Agent-generated Geant4 project files from module-level codegen",
+        "change_type": "create_or_replace",
+        "risk_level": "medium",
         "patch_type": "json_file_replacement",
         "changed_files": changed_files,
+        "test_plan": [
+            "Verify all generated files compile with Geant4 toolchain",
+            "Run dry-run simulation to confirm geometry/material setup",
+        ],
+        "expected_outputs": [
+            "All files written to 08_geant4 directory",
+            "No compilation errors in generated C++ code",
+        ],
         "metadata": {
             "source": "g4_codegen_agent_modules",
             "module_agent_count": len(module_results),

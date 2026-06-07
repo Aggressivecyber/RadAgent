@@ -115,7 +115,7 @@ class TestApplyPatch:
                 "changed_files": [
                     {
                         "path": "src/main.cc",
-                        "content": "#include <iostream>\nint main() { return 0; }",
+                        "new_content": "#include <iostream>\nint main() { return 0; }",
                     },
                 ],
             },

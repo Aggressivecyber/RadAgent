@@ -73,7 +73,7 @@ def scan_generated_code(
 
         # Scan for patterns
         for pattern, issue_name in SCAN_PATTERNS:
-            if re.search(pattern, content, re.IGNORECASE):
+            if re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
                 findings.append({
                     "file": path,
                     "issue": issue_name,

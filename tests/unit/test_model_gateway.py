@@ -16,8 +16,9 @@ from agent_core.models.schemas import (
 
 
 @pytest.fixture(autouse=True)
-def reset_gateway() -> None:
-    """Reset gateway singleton before each test."""
+def reset_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reset gateway singleton and ensure non-mock provider for standard tests."""
+    monkeypatch.delenv("RADAGENT_MODEL_PROVIDER", raising=False)
     reset_model_gateway()
     yield
     reset_model_gateway()

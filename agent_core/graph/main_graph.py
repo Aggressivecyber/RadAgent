@@ -232,6 +232,11 @@ def _make_g4_codegen_subgraph_node() -> Any:
             "g4_model_ir_path": state.get("g4_model_ir_path", ""),
             "component_specs_dir": state.get("component_specs_dir", ""),
             "construction_ledger_path": state.get("construction_ledger_path", ""),
+            "run_mode": state.get("run_mode", "dev"),
+            "execution_mode": state.get("execution_mode", ""),
+            "confirmation_record_path": state.get("confirmation_record_path", ""),
+            "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
+            "human_confirmation_status": state.get("human_confirmation_status", ""),
         })
         return {
             "code_module_plan_path": result.get("code_module_plan_path", ""),

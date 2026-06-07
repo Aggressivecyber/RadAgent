@@ -5,11 +5,20 @@ import os
 from agent_core.models.schemas import ModelProfile, ModelProvider, ModelTier
 
 
+def _get_provider() -> ModelProvider:
+    """Detect provider from env; return MOCK if requested."""
+    env_provider = os.getenv("RADAGENT_MODEL_PROVIDER", "").lower()
+    if env_provider == "mock":
+        return ModelProvider.MOCK
+    return ModelProvider.OPENAI_COMPATIBLE
+
+
 def load_model_profiles() -> dict[ModelTier, ModelProfile]:
+    provider = _get_provider()
     return {
         ModelTier.LITE: ModelProfile(
             tier=ModelTier.LITE,
-            provider=ModelProvider.OPENAI_COMPATIBLE,
+            provider=provider,
             model_name=os.getenv("RADAGENT_MODEL_LITE", "deepseek-v4-flash"),
             base_url=os.getenv("RADAGENT_LITE_BASE_URL", os.getenv("RADAGENT_MODEL_BASE_URL", "")),
             api_key_env=os.getenv("RADAGENT_LITE_API_KEY_ENV", "RADAGENT_API_KEY"),
@@ -20,7 +29,7 @@ def load_model_profiles() -> dict[ModelTier, ModelProfile]:
         ),
         ModelTier.PRO: ModelProfile(
             tier=ModelTier.PRO,
-            provider=ModelProvider.OPENAI_COMPATIBLE,
+            provider=provider,
             model_name=os.getenv("RADAGENT_MODEL_PRO", "deepseek-v4-pro"),
             base_url=os.getenv("RADAGENT_PRO_BASE_URL", os.getenv("RADAGENT_MODEL_BASE_URL", "")),
             api_key_env=os.getenv("RADAGENT_PRO_API_KEY_ENV", "RADAGENT_API_KEY"),
@@ -31,7 +40,7 @@ def load_model_profiles() -> dict[ModelTier, ModelProfile]:
         ),
         ModelTier.MAX: ModelProfile(
             tier=ModelTier.MAX,
-            provider=ModelProvider.OPENAI_COMPATIBLE,
+            provider=provider,
             model_name=os.getenv("RADAGENT_MODEL_MAX", "deepseek-v4-pro"),
             base_url=os.getenv("RADAGENT_MAX_BASE_URL", os.getenv("RADAGENT_MODEL_BASE_URL", "")),
             api_key_env=os.getenv("RADAGENT_MAX_API_KEY_ENV", "RADAGENT_API_KEY"),

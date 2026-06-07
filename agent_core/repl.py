@@ -255,6 +255,13 @@ class RadAgentREPL:
         # Default: treat as simulation request
         await self.cmd_run(text)
 
+    async def _chat_reply(self, text: str) -> None:
+        """Send text to the chat agent and display the response."""
+        agent = self._get_chat_agent()
+        with self.console.status("[dim]思考中...[/dim]"):
+            response = await agent.chat(text)
+        self.console.print(f"\n[green]{response}[/green]\n")
+
     async def _dispatch_command(self, cmd: str, arg: str) -> None:
         """Route slash commands to handler methods."""
         handlers: dict[str, Any] = {
@@ -269,6 +276,7 @@ class RadAgentREPL:
             "/results": lambda: self.cmd_results(),
             "/gates": lambda: self.cmd_gates(),
             "/jobs": lambda: self.cmd_jobs(),
+            "/chat": lambda: self.cmd_chat(arg),
             "/help": lambda: self.cmd_help(),
             "/quit": self._cmd_quit,
         }
@@ -302,6 +310,10 @@ class RadAgentREPL:
         self.current_phase_idx = 0
         self._completed_phases = []
 
+        # Reset chat history for new job
+        if self._chat_agent is not None:
+            self._chat_agent.reset()
+
         # Phase 0: prepare_workspace
         await self._run_phase("prepare_workspace")
 
@@ -326,6 +338,21 @@ class RadAgentREPL:
 
         # Continue: codegen → patch → gate → artifact → report
         await self._auto_remaining()
+
+    async def cmd_chat(self, message: str) -> None:
+        """Chat with the AI assistant. Usage: /chat [message] or /chat reset."""
+        if message.strip() == "reset":
+            if self._chat_agent is not None:
+                self._chat_agent.reset()
+            self.console.print("[dim]对话历史已清空。[/dim]")
+            return
+        if message.strip():
+            await self._chat_reply(message.strip())
+        else:
+            self.console.print(
+                "[dim]用法: /chat <消息> — 与 AI 对话\n"
+                "      /chat reset — 清空对话历史[/dim]"
+            )
 
     async def cmd_step(self) -> None:
         """Execute the next single pipeline phase."""
@@ -782,11 +809,12 @@ class RadAgentREPL:
             "[bold]/results[/bold]       Show simulation output\n"
             "[bold]/gates[/bold]         Show gate-check results\n"
             "[bold]/jobs[/bold]          List existing jobs\n"
+            "[bold]/chat <msg>[/bold]    Chat with AI (with RAG + web + history)\n"
+            "[bold]/chat reset[/bold]    Clear conversation history\n"
             "[bold]/help[/bold]          Show this help\n"
             "[bold]/quit[/bold]          Exit REPL\n"
             "\n[dim]Natural language input is classified by intent router.[/dim]\n"
-            "[dim]Simulation requests (e.g. '建立9组件硅探测器') start the pipeline.[/dim]\n"
-            "[dim]Casual chat (e.g. '你好') gets a friendly response.[/dim]",
+            "[dim]Simulation requests → pipeline.  Chat/questions → AI assistant.[/dim]",
             title="RadAgent Commands",
             border_style="cyan",
         ))

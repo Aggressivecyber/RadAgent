@@ -3,10 +3,10 @@
   "artifact_type": "g4_complex_model",
   "job_id": "dev-complex-001",
   "validation_status": "PARTIAL",
-  "generated_at": "2026-06-07T17:26:58.515853+00:00",
+  "generated_at": "2026-06-07T19:34:16.826430+00:00",
   "is_stub": false,
   "run_type": "dev",
-  "source_commit": "69cc1d5",
+  "source_commit": "3a81a0f",
   "source_job_id": "dev-complex-001",
   "files": [
     {

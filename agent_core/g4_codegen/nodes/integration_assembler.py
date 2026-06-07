@@ -5,6 +5,14 @@ Produces the proposed patch with all C++ files and a CMakeLists.txt.
 
 from __future__ import annotations
 
+import warnings
+
+warnings.warn(
+    "This module is deprecated. Use agent_core.g4_codegen.integration.integration_assembler instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from typing import Any
 
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
