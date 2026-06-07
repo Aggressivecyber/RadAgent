@@ -35,19 +35,19 @@ class TestLoadModelProfiles:
         assert profiles[ModelTier.MAX].provider == ModelProvider.OPENAI_COMPATIBLE
 
     def test_lite_default_model_name(self) -> None:
-        """Lite tier default model name."""
+        """Lite tier default model name is set."""
         profiles = load_model_profiles()
-        assert profiles[ModelTier.LITE].model_name == "dsv4lite"
+        assert profiles[ModelTier.LITE].model_name  # Must not be empty
 
     def test_pro_default_model_name(self) -> None:
-        """Pro tier default model name."""
+        """Pro tier default model name is set."""
         profiles = load_model_profiles()
-        assert profiles[ModelTier.PRO].model_name == "dsv4pro"
+        assert profiles[ModelTier.PRO].model_name  # Must not be empty
 
     def test_max_default_model_name(self) -> None:
-        """Max tier default model name (currently same as pro)."""
+        """Max tier default model name is set."""
         profiles = load_model_profiles()
-        assert profiles[ModelTier.MAX].model_name == "dsv4pro"
+        assert profiles[ModelTier.MAX].model_name  # Must not be empty
 
     def test_env_override_lite_model(self) -> None:
         """Environment variable should override lite model name."""

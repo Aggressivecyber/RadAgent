@@ -1,0 +1,150 @@
+"""Base class and utilities for module agents."""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult
+from agent_core.models.gateway import get_model_gateway
+from agent_core.models.schemas import ModelTask, ModelTier
+
+logger = logging.getLogger(__name__)
+
+MODULE_CODEGEN_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 C++ 模块级编码 Agent。
+
+你不是模板填空器。
+你只负责当前模块。
+你必须根据 ModuleContract、ModuleContext、G4ModelIR 子集、规则、RAG 参考片段和 Geant4 API 约束，生成当前模块需要的完整文件内容。
+
+严格要求：
+1. 只生成当前模块负责的文件。
+2. 不要生成整个工程。
+3. 每个文件必须是完整文件内容。
+4. 不得输出 Markdown fence。
+5. 不得出现空 include。
+6. 不得出现 TODO、NotImplemented、stub、dummy、PLACEHOLDER。
+7. 不得使用未带类型的 std::map。
+8. 不得实例化 Geant4 抽象基类。
+9. 使用单位时必须 include G4SystemOfUnits.hh。
+10. 不得把 unsupported geometry 简化成 G4Box。
+11. 不得伪造 CAD/GDML 转换。
+12. 不得伪造 TCAD/SPICE 结果。
+13. 必须说明 rationale、dependencies、satisfies、risk_notes、used_references。
+14. 输出 JSON，不要输出额外文字。
+
+返回格式：
+{
+  "module_name": "...",
+  "status": "generated",
+  "generated_files": [
+    {
+      "path": "08_geant4/include/XXX.hh",
+      "operation": "create_or_replace",
+      "new_content": "完整文件内容",
+      "generated_by": "xxx_module_agent",
+      "module_name": "xxx",
+      "rationale": "...",
+      "dependencies": [],
+      "satisfies": [],
+      "risk_notes": [],
+      "used_references": []
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}
+"""
+
+
+async def run_module_agent(
+    module_name: str,
+    module_context: dict[str, Any],
+    system_prompt: str = MODULE_CODEGEN_SYSTEM_PROMPT,
+) -> ModuleAgentResult:
+    """Run a module agent to generate code for a single module.
+
+    This is the standard entry point for all module agents.
+    Uses ModelGateway with CODEGEN task and PRO tier.
+    """
+    gateway = get_model_gateway()
+
+    user_prompt = f"""模块上下文：
+{json.dumps(module_context, indent=2, ensure_ascii=False)}
+
+请根据 ModuleContract 和 ModuleContext 生成当前模块的完整文件内容。
+输出 JSON，不要输出额外文字。"""
+
+    result = await gateway.call(
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        response_format="json",
+        max_tokens=65536,
+        metadata={"module_name": module_name},
+    )
+
+    if result.error:
+        return ModuleAgentResult(
+            module_name=module_name,
+            status="failed",
+            generated_files=[],
+            errors=[f"Model call failed: {result.error}"],
+        )
+
+    # Parse response
+    try:
+        data = result.parsed_json or json.loads(result.content.strip())
+    except (json.JSONDecodeError, TypeError) as exc:
+        return ModuleAgentResult(
+            module_name=module_name,
+            status="failed",
+            generated_files=[],
+            errors=[f"Invalid JSON response: {exc}"],
+        )
+
+    # Build result
+    generated_files: list[GeneratedModuleFile] = []
+    for f in data.get("generated_files", []):
+        try:
+            generated_files.append(GeneratedModuleFile(
+                path=f["path"],
+                operation=f.get("operation", "create_or_replace"),
+                new_content=f["new_content"],
+                generated_by=f.get("generated_by", f"{module_name}_module_agent"),
+                module_name=f.get("module_name", module_name),
+                rationale=f.get("rationale", ""),
+                dependencies=f.get("dependencies", []),
+                satisfies=f.get("satisfies", []),
+                risk_notes=f.get("risk_notes", []),
+                used_references=f.get("used_references", []),
+            ))
+        except (KeyError, TypeError) as exc:
+            logger.warning("Skipping invalid file entry: %s", exc)
+
+    return ModuleAgentResult(
+        module_name=module_name,
+        status=data.get("status", "generated"),
+        generated_files=generated_files,
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
+
+
+def save_module_result(
+    result: ModuleAgentResult,
+    job_id: str,
+) -> Path:
+    """Persist module agent result to disk."""
+    from agent_core.config.workspace import get_job_dir
+    output_dir = get_job_dir(job_id) / "06_codegen" / "module_outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / f"{result.module_name}.json"
+    output_path.write_text(
+        json.dumps(result.model_dump(), indent=2, ensure_ascii=False)
+    )
+    return output_path

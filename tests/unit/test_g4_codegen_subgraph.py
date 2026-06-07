@@ -25,7 +25,7 @@ class TestG4CodegenSubgraphCompilation:
         from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 
         annotations = G4CodegenSubgraphState.__annotations__
-        required = ["job_id", "g4_model_ir_path", "code_modules", "proposed_patch"]
+        required = ["job_id", "g4_model_ir_path", "proposed_patch", "g4_codegen_status"]
         for field in required:
             assert field in annotations, f"Missing field: {field}"
 

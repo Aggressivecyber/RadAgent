@@ -1,0 +1,35 @@
+"""Placement module agent — generates PlacementManager.hh/cc."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from agent_core.g4_codegen.module_agents.base import run_module_agent
+from agent_core.g4_codegen.schemas import ModuleAgentResult
+
+PLACEMENT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 放置模块编码 Agent。
+
+你只负责 PlacementManager.hh 和 PlacementManager.cc。
+
+职责：
+1. 管理 G4PVPlacement 实例
+2. 处理 mother-child 关系
+3. 应用平移和旋转
+4. checkOverlaps 配置
+
+严格要求：
+1. 只生成 PlacementManager 相关文件
+2. 不得生成 source、physics 等
+3. 输出 JSON 格式
+"""
+
+
+async def run_placement_agent(
+    module_context: dict[str, Any],
+) -> ModuleAgentResult:
+    """Run placement module agent."""
+    return await run_module_agent(
+        module_name="placement",
+        module_context=module_context,
+        system_prompt=PLACEMENT_SYSTEM_PROMPT,
+    )

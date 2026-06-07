@@ -1,94 +1,243 @@
-"""G4 Codegen Subgraph — generates modular C++ from Geant4 Model IR.
-
-Reads ONLY the Model IR (no user query re-interpretation).
-Each codegen node produces exactly one module.
-The integration assembler combines all modules into a buildable project.
+"""G4 Codegen Subgraph — module agent pipeline for Geant4 code generation.
 
 Flow:
     load_model_ir
-    → geometry_builder_plan
-    → material_registry_codegen
-    → component_geometry_codegen
-    → placement_codegen
-    → source_codegen
-    → physics_macro_codegen
-    → sensitive_detector_codegen
-    → scoring_codegen
-    → output_manager_codegen
+    → build_codegen_plan
+    → plan_geometry_strategy
+    → plan_code_architecture
+    → build_module_contracts
+    → build_module_contexts
+    → [for each module: agent → hard_gate → llm_gate → repair_if_needed]
+    → build_interface_contracts
     → integration_assembler
-    → geometry_validation
+    → static_semantic_scanner
+    → cross_file_hard_gate
+    → cross_file_llm_gate
     → persist_codegen_output
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 from langgraph.graph import END, StateGraph
 
-from agent_core.g4_codegen import load_model_ir, persist_codegen_output
-from agent_core.g4_codegen.nodes.code_module_planner import code_module_planner
-from agent_core.g4_codegen.nodes.integration_assembler import integration_assembler
+from agent_core.g4_codegen import load_model_ir
+from agent_core.g4_codegen.graph_nodes import (
+    build_codegen_plan_node,
+    build_interface_contracts_node,
+    build_module_contracts_node,
+    build_module_contexts_node,
+    cross_file_hard_gate_node,
+    cross_file_llm_gate_node,
+    integration_assembler_node,
+    persist_codegen_output_node,
+    plan_code_architecture_node,
+    plan_geometry_strategy_node,
+    repair_module_node,
+    run_module_agent_node,
+    run_module_hard_gate_node,
+    run_module_llm_gate_node,
+    static_semantic_scanner_node,
+)
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
-from agent_core.g4_modeling.codegen import (
-    component_geometry_codegen,
-    material_registry_codegen,
-    output_manager_codegen,
-    physics_macro_codegen,
-    placement_codegen,
-    scoring_codegen,
-    sensitive_detector_codegen,
-    source_codegen,
-)
-from agent_core.g4_modeling.nodes import (
-    geometry_builder_plan_node,
-    geometry_validation_node,
-)
+
+# Module execution order
+MODULE_ORDER = [
+    "material",
+    "geometry",
+    "placement",
+    "source",
+    "physics",
+    "sensitive_detector",
+    "scoring",
+    "output_manager",
+    "action_initialization",
+    "main_cmake",
+]
 
 
 def build_g4_codegen_subgraph() -> StateGraph:
-    """Build the G4 Codegen Subgraph."""
+    """Build the G4 Codegen Subgraph with module agent pipeline."""
     graph = StateGraph(G4CodegenSubgraphState)
 
-    # I/O adapters
+    # ── I/O nodes ─────────────────────────────────────────────────────
     graph.add_node("load_model_ir", load_model_ir)
-    graph.add_node("persist_codegen_output", persist_codegen_output)
 
-    # Code module planner (determines which modules to generate)
-    graph.add_node("code_module_planner", code_module_planner)
+    # ── Planning nodes ────────────────────────────────────────────────
+    graph.add_node("build_codegen_plan", build_codegen_plan_node)
+    graph.add_node("plan_geometry_strategy", plan_geometry_strategy_node)
+    graph.add_node("plan_code_architecture", plan_code_architecture_node)
+    graph.add_node("build_module_contracts", build_module_contracts_node)
+    graph.add_node("build_module_contexts", build_module_contexts_node)
 
-    # Builder plan node
-    graph.add_node("geometry_builder_plan_node", geometry_builder_plan_node)
+    # ── Module agent nodes (one per module) ───────────────────────────
+    for module_name in MODULE_ORDER:
+        # Agent node
+        graph.add_node(
+            f"run_{module_name}_agent",
+            _make_module_agent_node(module_name),
+        )
+        # Hard gate node
+        graph.add_node(
+            f"{module_name}_hard_gate",
+            _make_hard_gate_node(module_name),
+        )
+        # LLM gate node
+        graph.add_node(
+            f"{module_name}_llm_gate",
+            _make_llm_gate_node(module_name),
+        )
+        # Repair node
+        graph.add_node(
+            f"repair_{module_name}",
+            _make_repair_node(module_name),
+        )
 
-    # 8 codegen nodes (each produces one module)
-    graph.add_node("material_registry_codegen", material_registry_codegen)
-    graph.add_node("component_geometry_codegen", component_geometry_codegen)
-    graph.add_node("placement_codegen", placement_codegen)
-    graph.add_node("source_codegen", source_codegen)
-    graph.add_node("physics_macro_codegen", physics_macro_codegen)
-    graph.add_node("sensitive_detector_codegen", sensitive_detector_codegen)
-    graph.add_node("scoring_codegen", scoring_codegen)
-    graph.add_node("output_manager_codegen", output_manager_codegen)
+    # ── Integration nodes ─────────────────────────────────────────────
+    graph.add_node("build_interface_contracts", build_interface_contracts_node)
+    graph.add_node("integration_assembler", integration_assembler_node)
+    graph.add_node("static_semantic_scanner", static_semantic_scanner_node)
+    graph.add_node("cross_file_hard_gate", cross_file_hard_gate_node)
+    graph.add_node("cross_file_llm_gate", cross_file_llm_gate_node)
+    graph.add_node("persist_codegen_output", persist_codegen_output_node)
 
-    # Assembly and validation (using g4_codegen nodes)
-    graph.add_node("integration_assembler_node", integration_assembler)
-    graph.add_node("geometry_validation_node", geometry_validation_node)
-
-    # Flow
+    # ── Flow: Planning ────────────────────────────────────────────────
     graph.set_entry_point("load_model_ir")
-    graph.add_edge("load_model_ir", "code_module_planner")
-    graph.add_edge("code_module_planner", "geometry_builder_plan_node")
+    graph.add_edge("load_model_ir", "build_codegen_plan")
+    graph.add_edge("build_codegen_plan", "plan_geometry_strategy")
+    graph.add_edge("plan_geometry_strategy", "plan_code_architecture")
+    graph.add_edge("plan_code_architecture", "build_module_contracts")
+    graph.add_edge("build_module_contracts", "build_module_contexts")
 
-    graph.add_edge("geometry_builder_plan_node", "material_registry_codegen")
-    graph.add_edge("material_registry_codegen", "component_geometry_codegen")
-    graph.add_edge("component_geometry_codegen", "placement_codegen")
-    graph.add_edge("placement_codegen", "source_codegen")
-    graph.add_edge("source_codegen", "physics_macro_codegen")
-    graph.add_edge("physics_macro_codegen", "sensitive_detector_codegen")
-    graph.add_edge("sensitive_detector_codegen", "scoring_codegen")
-    graph.add_edge("scoring_codegen", "output_manager_codegen")
-    graph.add_edge("output_manager_codegen", "integration_assembler_node")
+    # ── Flow: Module agents (sequential) ──────────────────────────────
+    # First module connects from build_module_contexts
+    graph.add_edge("build_module_contexts", f"run_{MODULE_ORDER[0]}_agent")
 
-    graph.add_edge("integration_assembler_node", "geometry_validation_node")
-    graph.add_edge("geometry_validation_node", "persist_codegen_output")
+    for i, module_name in enumerate(MODULE_ORDER):
+        # Agent → Hard gate
+        graph.add_edge(f"run_{module_name}_agent", f"{module_name}_hard_gate")
+
+        # Hard gate → conditional: LLM gate or repair or next module
+        graph.add_conditional_edges(
+            f"{module_name}_hard_gate",
+            _route_after_hard_gate(module_name),
+            {
+                f"{module_name}_llm_gate": f"{module_name}_llm_gate",
+                f"repair_{module_name}": f"repair_{module_name}",
+                _next_module_or_integration(i): _next_module_or_integration(i),
+            },
+        )
+
+        # LLM gate → conditional: next module or repair
+        graph.add_conditional_edges(
+            f"{module_name}_llm_gate",
+            _route_after_llm_gate(module_name),
+            {
+                _next_module_or_integration(i): _next_module_or_integration(i),
+                f"repair_{module_name}": f"repair_{module_name}",
+            },
+        )
+
+        # Repair → back to hard gate
+        graph.add_edge(f"repair_{module_name}", f"{module_name}_hard_gate")
+
+    # ── Flow: Integration ─────────────────────────────────────────────
+    graph.add_edge("build_interface_contracts", "integration_assembler")
+    graph.add_edge("integration_assembler", "static_semantic_scanner")
+    graph.add_edge("static_semantic_scanner", "cross_file_hard_gate")
+    graph.add_conditional_edges(
+        "cross_file_hard_gate",
+        _route_after_cross_hard_gate,
+        {
+            "cross_file_llm_gate": "cross_file_llm_gate",
+            "persist_codegen_output": "persist_codegen_output",
+        },
+    )
+    graph.add_conditional_edges(
+        "cross_file_llm_gate",
+        _route_after_cross_llm_gate,
+        {
+            "persist_codegen_output": "persist_codegen_output",
+        },
+    )
     graph.add_edge("persist_codegen_output", END)
 
     return graph
+
+
+# ── Node factories ───────────────────────────────────────────────────
+
+
+def _make_module_agent_node(module_name: str) -> Any:
+    """Create a module agent node function."""
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return await run_module_agent_node(state, module_name)
+    return _run
+
+
+def _make_hard_gate_node(module_name: str) -> Any:
+    """Create a hard gate node function."""
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return await run_module_hard_gate_node(state, module_name)
+    return _run
+
+
+def _make_llm_gate_node(module_name: str) -> Any:
+    """Create an LLM gate node function."""
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return await run_module_llm_gate_node(state, module_name)
+    return _run
+
+
+def _make_repair_node(module_name: str) -> Any:
+    """Create a repair node function."""
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return await repair_module_node(state, module_name)
+    return _run
+
+
+# ── Routing functions ────────────────────────────────────────────────
+
+
+def _next_module_or_integration(current_index: int) -> str:
+    """Get the next module name or integration node."""
+    if current_index + 1 < len(MODULE_ORDER):
+        return f"run_{MODULE_ORDER[current_index + 1]}_agent"
+    return "build_interface_contracts"
+
+
+def _route_after_hard_gate(module_name: str) -> Any:
+    """Route after hard gate: pass → LLM gate, fail → repair."""
+    def _route(state: G4CodegenSubgraphState) -> str:
+        gate_results = state.get("module_gate_results", {})
+        hard_gate = gate_results.get(module_name, {}).get("hard", {})
+        if hard_gate.get("status") == "pass":
+            return f"{module_name}_llm_gate"
+        return f"repair_{module_name}"
+    return _route
+
+
+def _route_after_llm_gate(module_name: str) -> Any:
+    """Route after LLM gate: pass → next, fail → repair."""
+    def _route(state: G4CodegenSubgraphState) -> str:
+        gate_results = state.get("module_gate_results", {})
+        llm_gate = gate_results.get(module_name, {}).get("llm", {})
+        if llm_gate.get("status") == "pass":
+            idx = MODULE_ORDER.index(module_name)
+            return _next_module_or_integration(idx)
+        return f"repair_{module_name}"
+    return _route
+
+
+def _route_after_cross_hard_gate(state: G4CodegenSubgraphState) -> str:
+    """Route after cross-file hard gate."""
+    gate = state.get("cross_file_hard_gate", {})
+    if gate.get("status") == "pass":
+        return "cross_file_llm_gate"
+    return "persist_codegen_output"
+
+
+def _route_after_cross_llm_gate(state: G4CodegenSubgraphState) -> str:
+    """Route after cross-file LLM gate."""
+    return "persist_codegen_output"

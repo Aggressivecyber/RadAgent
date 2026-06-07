@@ -105,6 +105,7 @@ class RadAgentREPL:
         self.current_phase_idx: int = 0
         self._completed_phases: list[str] = []
         self._subgraph_nodes: dict[str, Any] | None = None
+        self._chat_agent: Any = None  # lazy-initialized ChatAgent
         # Persistent command history across inputs
         self._history: Any = None
         try:
@@ -122,6 +123,14 @@ class RadAgentREPL:
 
             self._subgraph_nodes = build_subgraph_nodes()
         return self._subgraph_nodes
+
+    def _get_chat_agent(self):
+        """Lazy-initialize the conversational chat agent."""
+        if self._chat_agent is None:
+            from agent_core.chat.agent import ChatAgent
+
+            self._chat_agent = ChatAgent()
+        return self._chat_agent
 
     # ── Main loop ───────────────────────────────────────────────────
 
@@ -158,12 +167,20 @@ class RadAgentREPL:
 
     def _read_input(self) -> str:
         """Read a line from stdin (runs in a thread for async compat)."""
+        job_id = self.state.get("job_id", "")
+        # Show short job ID in prompt (truncate long title slugs)
+        if job_id:
+            short = job_id if len(job_id) <= 32 else job_id[:29] + "..."
+            prompt_text = f"RadAgent[{short}]> "
+        else:
+            prompt_text = "RadAgent> "
+
         try:
             from prompt_toolkit import prompt as pt_prompt
 
-            return pt_prompt("RadAgent> ", history=self._history)
+            return pt_prompt(prompt_text, history=self._history)
         except ImportError:
-            return input("RadAgent> ")
+            return input(prompt_text)
 
     # ── Input dispatch ──────────────────────────────────────────────
 
@@ -198,9 +215,7 @@ class RadAgentREPL:
         self.console.print(f"[dim]{intent_result.intent}[/dim]")
 
         if intent_result.intent == "smalltalk":
-            self.console.print(
-                "[green]你好，我是 RadAgent，可以帮你进行 Geant4 辐照仿真建模。[/green]"
-            )
+            await self._chat_reply(text)
             return
 
         if intent_result.intent == "help":
@@ -234,12 +249,7 @@ class RadAgentREPL:
             return
 
         if intent_result.intent == "unknown":
-            self.console.print(
-                "[yellow]我还不能确定你想做什么。[/yellow]\n"
-                "如果要建模，请描述仿真任务，例如：\n"
-                "  建立一个 9 组件硅探测器，10 MeV proton 入射\n"
-                "如果要聊天，直接说就好。"
-            )
+            await self._chat_reply(text)
             return
 
         # Default: treat as simulation request
@@ -748,13 +758,15 @@ class RadAgentREPL:
             self.console.print("[dim]No jobs found.[/dim]")
             return
 
+        current_job = self.state.get("job_id", "")
         for job in jobs:
             if not job.is_dir():
                 continue
             report = job / "10_report" / "final_report.md"
             marker = "DONE" if report.exists() else "WIP"
             style = "green" if marker == "DONE" else "yellow"
-            self.console.print(f"  [{style}][{marker}][/{style}] {job.name}")
+            current = " ◀ current" if job.name == current_job else ""
+            self.console.print(f"  [{style}][{marker}][/{style}] {job.name}[bold cyan]{current}[/bold cyan]")
 
     async def cmd_help(self) -> None:
         """Show help text."""
@@ -819,6 +831,15 @@ class RadAgentREPL:
         self._completed_phases.append(phase)
         self.current_phase_idx = _PIPELINE_PHASES.index(phase) + 1
         self.console.print("[green]✓[/green]")
+
+        # Show job ID prominently after workspace is created
+        if phase == "prepare_workspace" and self.state.get("job_id"):
+            job_id = self.state["job_id"]
+            job_dir = self.state.get("job_workspace", "")
+            self.console.print(
+                f"\n  [bold cyan]📋 Job ID:[/bold cyan] {job_id}"
+                f"\n  [dim]📁 {job_dir}[/dim]\n"
+            )
 
         # Check for human-confirmation interrupt
         if (
