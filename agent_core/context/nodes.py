@@ -1,23 +1,75 @@
 """Context Subgraph nodes — RAG retrieval, web search, evidence management.
 
 Rules:
-1. RAG first
+1. RAG first — real Ollama bge-m3 embedding + cosine similarity search
 2. RAG insufficient → Web supplement
 3. Both insufficient → block_no_context
 4. Never use model built-in knowledge as sole source
 5. All web results must have URLs
 6. All evidence goes to evidence_map
+7. Graceful degradation when Ollama unavailable
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from agent_core.config.workspace import get_job_dir
 
+from .doc_store import Geant4DocStore
+from .rag_client import (
+    DEFAULT_TOP_K,
+    MIN_RELEVANCE_SCORE,
+    OllamaEmbedder,
+    RAGClient,
+)
 from .schemas import ContextSubgraphState
+
+logger = logging.getLogger(__name__)
+
+# Module-level singleton — index once, reuse across calls
+_rag_client: RAGClient | None = None
+
+
+def _get_rag_client() -> RAGClient:
+    """Get or create the singleton RAG client with Geant4 docs indexed."""
+    global _rag_client
+    if _rag_client is not None:
+        return _rag_client
+
+    embedder = OllamaEmbedder()
+    client = RAGClient(embedder=embedder)
+    _rag_client = client
+    return client
+
+
+def reset_rag_client() -> None:
+    """Reset the singleton RAG client (for testing)."""
+    global _rag_client
+    _rag_client = None
+
+
+async def _ensure_indexed(client: RAGClient) -> bool:
+    """Ensure Geant4 documents are indexed. Returns True if index is populated."""
+    if client.index.size > 0:
+        return True
+
+    store = Geant4DocStore()
+    docs = store.get_documents()
+    if not docs:
+        logger.warning("Geant4 doc store returned 0 documents")
+        return False
+
+    try:
+        count = await client.index_documents(docs)
+        logger.info("Indexed %d/%d Geant4 documents", count, len(docs))
+        return count > 0
+    except Exception as exc:
+        logger.error("Failed to index Geant4 documents: %s", exc)
+        return False
 
 
 def _get_context_dir(job_id: str) -> Path:
@@ -34,65 +86,96 @@ async def route_sources(state: ContextSubgraphState) -> dict[str, Any]:
 
 
 async def retrieve_rag_context(state: ContextSubgraphState) -> dict[str, Any]:
-    """Retrieve context from Geant4 RAG (MCP tool).
+    """Retrieve context from Geant4 RAG (Ollama bge-m3 + cosine similarity).
 
-    Uses the geant4-rag MCP server to query domain-specific docs.
+    Real RAG pipeline:
+      1. Ensure Geant4 documents are indexed (with embeddings)
+      2. Embed user query via Ollama
+      3. Search index via cosine similarity
+      4. Score based on result quality and quantity
     """
     user_query = state.get("user_query", "")
     context_dir = _get_context_dir(state.get("job_id", "unknown"))
     context_dir.mkdir(parents=True, exist_ok=True)
 
     rag_context: list[dict[str, Any]] = []
-    rag_report: dict[str, Any] = {"source": "geant4_rag", "queries": []}
+    rag_report: dict[str, Any] = {
+        "source": "geant4_rag",
+        "engine": "ollama_bge_m3",
+        "queries": [user_query],
+        "doc_store_size": 0,
+    }
 
-    try:
-        from agent_core.llm import get_llm
+    client = _get_rag_client()
 
-        llm = get_llm()
-        # Use LLM to generate search queries from user query
-        query_prompt = (
-            f"Generate 3 specific Geant4 documentation search queries "
-            f"for this request:\n{user_query}\n\n"
-            f"Return as JSON array of strings."
-        )
-        response = await llm.ainvoke(query_prompt)
+    # Step 1: Check Ollama availability
+    ollama_available = await client.embedder.is_available()
+    rag_report["ollama_available"] = ollama_available
+
+    if not ollama_available:
+        rag_report["error"] = "Ollama service unavailable at localhost:11434"
+        rag_report["score"] = 0.0
+        rag_report["note"] = "Ollama unavailable — RAG retrieval skipped"
+
+        _save_rag_files(context_dir, rag_context, rag_report)
+        return {
+            "rag_context": rag_context,
+            "rag_score": 0.0,
+            "rag_report": rag_report,
+            "needs_web_supplement": True,
+        }
+
+    # Step 2: Ensure documents are indexed
+    indexed = await _ensure_indexed(client)
+    rag_report["doc_store_size"] = client.index.size
+
+    if not indexed:
+        rag_report["error"] = "Failed to index Geant4 documents"
+        rag_report["score"] = 0.0
+        _save_rag_files(context_dir, rag_context, rag_report)
+        return {
+            "rag_context": rag_context,
+            "rag_score": 0.0,
+            "rag_report": rag_report,
+            "needs_web_supplement": True,
+        }
+
+    # Step 3: Generate refined queries from user query
+    queries = _generate_search_queries(user_query)
+    rag_report["queries"] = queries
+
+    # Step 4: Search for each query and deduplicate
+    seen_ids: set[str] = set()
+    for query in queries:
         try:
-            raw = response.content if hasattr(response, "content") else str(response)
-            queries = json.loads(str(raw))
-            if isinstance(queries, list):
-                queries = [str(q) for q in queries]
-            else:
-                queries = [user_query]
-        except (json.JSONDecodeError, TypeError):
-            queries = [user_query]
+            results = await client.search(
+                query, top_k=DEFAULT_TOP_K, min_score=MIN_RELEVANCE_SCORE,
+            )
+            for r in results:
+                if r.doc_id not in seen_ids:
+                    seen_ids.add(r.doc_id)
+                    rag_context.append({
+                        "doc_id": r.doc_id,
+                        "title": r.title,
+                        "content": r.content,
+                        "source": r.source,
+                        "score": round(r.score, 4),
+                    })
+        except Exception as exc:
+            logger.warning("RAG search failed for query '%s': %s", query, exc)
 
-        rag_report["queries"] = queries
+    # Sort by score descending
+    rag_context.sort(key=lambda x: x.get("score", 0.0), reverse=True)
 
-        # RAG retrieval happens via MCP geant4-rag server at orchestration level.
-        # In the subgraph, we record the queries for the evidence map.
-        # Actual RAG context is populated by the evidence_retrieval_node
-        # in the G4 Modeling subgraph.
-        rag_report["note"] = (
-            "RAG queries generated; actual retrieval via MCP geant4-rag "
-            "in g4_modeling subgraph"
-        )
-
-    except Exception as e:
-        rag_report["error"] = str(e)
-
-    # Save RAG context
-    (context_dir / "rag_context.json").write_text(
-        json.dumps(rag_context, indent=2, ensure_ascii=False)
-    )
-
-    # Score based on context richness
-    score = min(1.0, len(rag_context) / 10.0) if rag_context else 0.0
+    # Step 5: Score based on result quality
+    score = _compute_rag_score(rag_context)
     rag_report["score"] = score
-    (context_dir / "rag_sufficiency.json").write_text(
-        json.dumps(rag_report, indent=2, ensure_ascii=False)
-    )
+    rag_report["result_count"] = len(rag_context)
+    rag_report["top_scores"] = [r.get("score", 0.0) for r in rag_context[:5]]
 
     needs_web = score < 0.5
+
+    _save_rag_files(context_dir, rag_context, rag_report)
 
     return {
         "rag_context": rag_context,
@@ -100,6 +183,62 @@ async def retrieve_rag_context(state: ContextSubgraphState) -> dict[str, Any]:
         "rag_report": rag_report,
         "needs_web_supplement": needs_web,
     }
+
+
+def _generate_search_queries(user_query: str) -> list[str]:
+    """Generate refined search queries from user query.
+
+    Uses the user query directly plus a simplified variant.
+    """
+    queries = [user_query]
+
+    # Add a simplified keyword query
+    keywords = user_query.lower()
+    for filler in ("how to ", "what is ", "create a ", "define ", "show me ", "please "):
+        keywords = keywords.replace(filler, "").strip()
+    if keywords and keywords != user_query.lower():
+        queries.append(keywords)
+
+    return queries[:3]
+
+
+def _compute_rag_score(rag_context: list[dict[str, Any]]) -> float:
+    """Compute RAG sufficiency score from results.
+
+    Scoring:
+      - 0 results → 0.0
+      - 1+ results with score >= 0.7 → up to 1.0
+      - Results with lower scores → proportional
+    """
+    if not rag_context:
+        return 0.0
+
+    top_scores = [r.get("score", 0.0) for r in rag_context[:5]]
+    max_score = max(top_scores) if top_scores else 0.0
+    avg_score = sum(top_scores) / len(top_scores) if top_scores else 0.0
+
+    # Weighted: 60% best result, 40% average of top-5
+    raw_score = 0.6 * max_score + 0.4 * avg_score
+
+    # Bonus for multiple high-quality results
+    high_quality_count = sum(1 for s in top_scores if s >= 0.7)
+    bonus = min(0.2, high_quality_count * 0.05)
+
+    return min(1.0, raw_score + bonus)
+
+
+def _save_rag_files(
+    context_dir: Path,
+    rag_context: list[dict[str, Any]],
+    rag_report: dict[str, Any],
+) -> None:
+    """Save RAG context and report to disk."""
+    (context_dir / "rag_context.json").write_text(
+        json.dumps(rag_context, indent=2, ensure_ascii=False)
+    )
+    (context_dir / "rag_sufficiency.json").write_text(
+        json.dumps(rag_report, indent=2, ensure_ascii=False)
+    )
 
 
 async def score_rag_context(state: ContextSubgraphState) -> dict[str, Any]:
