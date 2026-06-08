@@ -7,6 +7,9 @@ from typing import Any
 
 from agent_core.g4_codegen.schemas import ModuleContract
 
+# P0-2: All paths are relative to 08_geant4 (no 08_geant4/ prefix).
+# file_access_policy allows: include/*.hh, src/*.cc, macros/*.mac,
+# CMakeLists.txt, main.cc — all relative to generated_code_dir (08_geant4).
 MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "material": {
         "module_type": "material",
@@ -17,8 +20,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Material name mapping",
         ],
         "output_files": [
-            "08_geant4/include/MaterialRegistry.hh",
-            "08_geant4/src/MaterialRegistry.cc",
+            "include/MaterialRegistry.hh",
+            "src/MaterialRegistry.cc",
         ],
         "required_symbols": ["MaterialRegistry"],
         "dependencies": [],
@@ -35,8 +38,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Build component hierarchy",
         ],
         "output_files": [
-            "08_geant4/include/DetectorConstruction.hh",
-            "08_geant4/src/DetectorConstruction.cc",
+            "include/DetectorConstruction.hh",
+            "src/DetectorConstruction.cc",
         ],
         "required_symbols": ["DetectorConstruction"],
         "dependencies": ["material", "placement"],
@@ -53,8 +56,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "checkOverlaps configuration",
         ],
         "output_files": [
-            "08_geant4/include/PlacementManager.hh",
-            "08_geant4/src/PlacementManager.cc",
+            "include/PlacementManager.hh",
+            "src/PlacementManager.cc",
         ],
         "required_symbols": ["PlacementManager"],
         "dependencies": ["material"],
@@ -70,8 +73,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Handle multi-source if needed",
         ],
         "output_files": [
-            "08_geant4/include/PrimaryGeneratorAction.hh",
-            "08_geant4/src/PrimaryGeneratorAction.cc",
+            "include/PrimaryGeneratorAction.hh",
+            "src/PrimaryGeneratorAction.cc",
         ],
         "required_symbols": ["PrimaryGeneratorAction"],
         "dependencies": [],
@@ -87,10 +90,11 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Set production cuts",
         ],
         "output_files": [
-            "08_geant4/include/PhysicsList.hh",
-            "08_geant4/src/PhysicsList.cc",
+            "include/PhysicsListFactoryWrapper.hh",
+            "src/PhysicsListFactoryWrapper.cc",
+            "macros/physics_list.mac",
         ],
-        "required_symbols": ["PhysicsList"],
+        "required_symbols": ["PhysicsListFactoryWrapper"],
         "dependencies": [],
         "forbidden_patterns": [
             "G4PVPlacement", "G4ParticleGun",
@@ -105,12 +109,10 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Attach to logical volumes",
         ],
         "output_files": [
-            "08_geant4/include/SensitiveDetector.hh",
-            "08_geant4/src/SensitiveDetector.cc",
-            "08_geant4/include/Hit.hh",
-            "08_geant4/src/Hit.cc",
+            "include/SensitiveDetector.hh",
+            "src/SensitiveDetector.cc",
         ],
-        "required_symbols": ["SensitiveDetector", "Hit"],
+        "required_symbols": ["SensitiveDetector"],
         "dependencies": [],
         "forbidden_patterns": [
             "G4ParticleGun",
@@ -125,8 +127,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Scoring output contract",
         ],
         "output_files": [
-            "08_geant4/include/ScoringManager.hh",
-            "08_geant4/src/ScoringManager.cc",
+            "include/ScoringManager.hh",
+            "src/ScoringManager.cc",
         ],
         "required_symbols": ["ScoringManager"],
         "dependencies": ["sensitive_detector"],
@@ -143,8 +145,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Metadata management",
         ],
         "output_files": [
-            "08_geant4/include/OutputManager.hh",
-            "08_geant4/src/OutputManager.cc",
+            "include/OutputManager.hh",
+            "src/OutputManager.cc",
         ],
         "required_symbols": ["OutputManager"],
         "dependencies": [],
@@ -161,16 +163,19 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Connect OutputManager",
         ],
         "output_files": [
-            "08_geant4/include/ActionInitialization.hh",
-            "08_geant4/src/ActionInitialization.cc",
-            "08_geant4/include/RunAction.hh",
-            "08_geant4/src/RunAction.cc",
-            "08_geant4/include/EventAction.hh",
-            "08_geant4/src/EventAction.cc",
-            "08_geant4/include/SteppingAction.hh",
-            "08_geant4/src/SteppingAction.cc",
+            "include/ActionInitialization.hh",
+            "src/ActionInitialization.cc",
+            "include/RunAction.hh",
+            "src/RunAction.cc",
+            "include/EventAction.hh",
+            "src/EventAction.cc",
+            "include/SteppingAction.hh",
+            "src/SteppingAction.cc",
         ],
-        "required_symbols": ["ActionInitialization", "RunAction", "EventAction", "SteppingAction"],
+        "required_symbols": [
+            "ActionInitialization", "RunAction",
+            "EventAction", "SteppingAction",
+        ],
         "dependencies": ["output_manager", "source"],
         "forbidden_patterns": [],
     },
@@ -183,15 +188,16 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Directory structure",
         ],
         "output_files": [
-            "08_geant4/main.cc",
-            "08_geant4/CMakeLists.txt",
-            "08_geant4/macros/run.mac",
-            "08_geant4/macros/init.mac",
+            "main.cc",
+            "CMakeLists.txt",
+            "macros/run.mac",
+            "macros/init.mac",
         ],
         "required_symbols": ["main"],
         "dependencies": [
             "material", "geometry", "placement", "source", "physics",
-            "sensitive_detector", "scoring", "output_manager", "action_initialization",
+            "sensitive_detector", "scoring", "output_manager",
+            "action_initialization",
         ],
         "forbidden_patterns": [],
     },
