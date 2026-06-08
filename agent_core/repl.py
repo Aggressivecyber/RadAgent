@@ -115,6 +115,52 @@ class RadAgentREPL:
         except ImportError:
             pass
 
+        # Tool call logging — track calls per phase
+        self._phase_start_time: float = 0.0
+        self._setup_tool_logger()
+
+    def _setup_tool_logger(self) -> None:
+        """Initialize tool call logging."""
+        import time
+
+        from agent_core.models.tool_logger import get_tool_logger
+
+        tool_logger = get_tool_logger()
+
+        # Set up log file in workspace
+        log_dir = Path("repair_logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        tool_logger.set_log_file(log_dir / "tool_calls.jsonl")
+
+        self._phase_start_time = time.time()
+
+    def _on_tool_call(self, record: Any) -> None:
+        """Callback for tool call events — displays in REPL."""
+        task = record.task
+        provider = record.provider
+        model = record.model_name
+        latency = record.latency_ms
+        success = "✓" if record.success else "✗"
+        style = "green" if record.success else "red"
+
+        # Format latency
+        if latency > 1000:
+            latency_str = f"{latency / 1000:.1f}s"
+        else:
+            latency_str = f"{latency:.0f}ms"
+
+        # Format metadata
+        meta = record.metadata
+        meta_str = ""
+        if meta.get("module_name"):
+            meta_str = f" [{meta['module_name']}]"
+
+        self.console.print(
+            f"    [dim]🔧 {task}{meta_str}[/dim] "
+            f"[{style}]{success}[/{style}] "
+            f"[dim]{provider}/{model} ({latency_str})[/dim]"
+        )
+
     # ── Lazy-loaded subgraph nodes ──────────────────────────────────
 
     def _get_subgraph_nodes(self) -> dict[str, Any]:
@@ -274,6 +320,7 @@ class RadAgentREPL:
             "/results": lambda: self.cmd_results(),
             "/gates": lambda: self.cmd_gates(),
             "/jobs": lambda: self.cmd_jobs(),
+            "/tools": lambda: self.cmd_tools(),
             "/chat": lambda: self.cmd_chat(arg),
             "/help": lambda: self.cmd_help(),
             "/quit": self._cmd_quit,
@@ -752,6 +799,65 @@ class RadAgentREPL:
                 f"  [{style}][{marker}][/{style}] {job.name}[bold cyan]{current}[/bold cyan]"
             )
 
+    async def cmd_tools(self) -> None:
+        """Show tool call history and summary."""
+        from agent_core.models.tool_logger import get_tool_logger
+
+        tool_logger = get_tool_logger()
+        records = tool_logger.get_records()
+
+        if not records:
+            self.console.print("[dim]No tool calls recorded yet.[/dim]")
+            return
+
+        # Summary
+        summary = tool_logger.summary()
+        self.console.print(
+            f"\n[bold]Tool Call Summary:[/bold] "
+            f"{summary['total_calls']} calls, "
+            f"{summary['total_latency_ms']}ms total, "
+            f"{summary['errors']} errors"
+        )
+
+        # By task
+        if summary.get("by_task"):
+            self.console.print("  [dim]By task:[/dim]")
+            for task, count in summary["by_task"].items():
+                self.console.print(f"    {task}: {count}")
+
+        # Recent calls table
+        table = Table(title="Recent Tool Calls")
+        table.add_column("Task", style="cyan")
+        table.add_column("Module", style="white")
+        table.add_column("Provider", style="dim")
+        table.add_column("Latency", style="green")
+        table.add_column("Status", style="white")
+
+        # Show last 20 calls
+        for record in records[-20:]:
+            task = record.task
+            module = record.metadata.get("module_name", "")
+            provider = f"{record.provider}/{record.model_name}"
+            latency = record.latency_ms
+            if latency > 1000:
+                latency_str = f"{latency / 1000:.1f}s"
+            else:
+                latency_str = f"{latency:.0f}ms"
+            status = "✓" if record.success else "✗"
+            style = "green" if record.success else "red"
+            table.add_row(
+                task, module, provider, latency_str,
+                f"[{style}]{status}[/{style}]"
+            )
+
+        self.console.print(table)
+
+        # Log file location
+        if tool_logger._log_file:
+            self.console.print(
+                f"  [dim]Log: {tool_logger._log_file}[/dim]"
+            )
+
     async def cmd_help(self) -> None:
         """Show help text."""
         self.console.print(
@@ -765,6 +871,7 @@ class RadAgentREPL:
                 "[bold]/build[/bold]         Run cmake + make\n"
                 "[bold]/sim [events][/bold]  Run simulation (default 1000 events)\n"
                 "[bold]/results[/bold]       Show simulation output\n"
+                "[bold]/tools[/bold]         Show LLM/tool call history\n"
                 "[bold]/gates[/bold]         Show gate-check results\n"
                 "[bold]/jobs[/bold]          List existing jobs\n"
                 "[bold]/chat <msg>[/bold]    Chat with AI (with RAG + web + history)\n"
@@ -794,7 +901,14 @@ class RadAgentREPL:
 
         Returns True on success, False on failure or user interrupt.
         """
-        self.console.print(f"  [dim]Phase: {phase}...[/dim]", end=" ")
+
+        from agent_core.models.tool_logger import get_tool_logger
+
+        self.console.print(f"  [dim]Phase: {phase}...[/dim]")
+
+        # Record tool calls before this phase
+        tool_logger = get_tool_logger()
+        calls_before = len(tool_logger.get_records())
 
         try:
             if phase == "prepare_workspace":
@@ -803,13 +917,22 @@ class RadAgentREPL:
                 node_fn = self._get_subgraph_nodes()[phase]
                 result = await node_fn(self.state)
             else:
-                self.console.print(f"[yellow]Unknown phase: {phase}[/yellow]")
+                self.console.print(f"  [yellow]Unknown phase: {phase}[/yellow]")
                 return False
         except Exception as exc:
-            self.console.print("[red]✗ FAILED[/red]")
+            self.console.print("  [red]✗ FAILED[/red]")
             self.console.print(f"  [red]{exc}[/red]")
             logger.exception("Phase %s failed", phase)
             return False
+
+        # Show tool calls made during this phase
+        calls_after = tool_logger.get_records()
+        new_calls = calls_after[calls_before:]
+        if new_calls:
+            for call in new_calls:
+                self._on_tool_call(call)
+        else:
+            self.console.print("  [dim]  (no LLM calls)[/dim]")
 
         # Merge result into state (immutable update pattern)
         if result:
@@ -817,7 +940,7 @@ class RadAgentREPL:
 
         self._completed_phases.append(phase)
         self.current_phase_idx = _PIPELINE_PHASES.index(phase) + 1
-        self.console.print("[green]✓[/green]")
+        self.console.print(f"  [green]✓ {phase}[/green]")
 
         # Show job ID prominently after workspace is created
         if phase == "prepare_workspace" and self.state.get("job_id"):

@@ -64,7 +64,7 @@ class ModelGateway:
             else:
                 raise NotImplementedError(f"Unsupported provider: {profile.provider}")
 
-            return ModelCallResult(
+            result = ModelCallResult(
                 task=task,
                 tier=selected_tier,
                 provider=profile.provider,
@@ -75,7 +75,7 @@ class ModelGateway:
                 latency_ms=(time.time() - start) * 1000,
             )
         except Exception as exc:
-            return ModelCallResult(
+            result = ModelCallResult(
                 task=task,
                 tier=selected_tier,
                 provider=profile.provider,
@@ -86,6 +86,41 @@ class ModelGateway:
                 latency_ms=(time.time() - start) * 1000,
                 error=str(exc),
             )
+
+        # Log the tool call
+        self._log_tool_call(req, result, start)
+
+        return result
+
+    def _log_tool_call(
+        self, req: ModelCallRequest, result: ModelCallResult, start: float
+    ) -> None:
+        """Record tool call to the global tool logger."""
+        try:
+            from agent_core.models.tool_logger import (
+                ToolCallRecord,
+                get_tool_logger,
+            )
+
+            tool_logger = get_tool_logger()
+            record = ToolCallRecord(
+                tool_name="llm_call",
+                task=str(req.task),
+                tier=str(req.tier),
+                provider=str(result.provider),
+                model_name=result.model_name,
+                metadata=req.metadata,
+                start_time=start,
+                end_time=time.time(),
+                latency_ms=result.latency_ms or 0.0,
+                success=result.error is None,
+                error=result.error,
+                content_length=len(result.content) if result.content else 0,
+            )
+            tool_logger.record(record)
+        except Exception:
+            # Never let logging break the actual call
+            pass
 
 
 def _safe_parse_json(content: str) -> dict[str, Any] | None:
