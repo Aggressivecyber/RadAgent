@@ -327,4 +327,27 @@ def _module_review_requirements(module_name: str) -> list[str]:
                 "Hit.cc uses std::setw, std::setprecision, or std::fixed."
             ),
         ]
+    if module_name == "output_manager":
+        return [
+            (
+                "This project's OutputManager contract explicitly requires the stable "
+                "action-facing methods BeginRun(const G4Run*), EndRun(const G4Run*), "
+                "BeginEvent(const G4Event*), EndEvent(const G4Event*), "
+                "RecordStep(const G4Step*), and WriteEvent(const G4Event*)."
+            ),
+            (
+                "Do not fail OutputManager merely because it declares or defines "
+                "RecordStep(const G4Step*); that method is part of the required "
+                "OutputManager interface for action modules."
+            ),
+            (
+                "Do fail OutputManager if RecordStep constructs geometry, queries "
+                "ScoringManager directly, or changes source/physics state. It may only "
+                "record or aggregate output data."
+            ),
+            (
+                "OutputManager must provide a one-argument WriteEvent(const G4Event*) "
+                "adapter even if it also provides overloads with scoring values."
+            ),
+        ]
     return []

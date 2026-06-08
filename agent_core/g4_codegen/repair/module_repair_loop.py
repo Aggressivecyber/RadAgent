@@ -472,6 +472,29 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "object; do not return a list created from a local factory variable."
             ),
         ]
+    if module_name == "output_manager":
+        return [
+            (
+                "OutputManager.hh and OutputManager.cc must provide the stable "
+                "action-facing methods BeginRun(const G4Run*), EndRun(const G4Run*), "
+                "BeginEvent(const G4Event*), EndEvent(const G4Event*), "
+                "RecordStep(const G4Step*), and WriteEvent(const G4Event*)."
+            ),
+            (
+                "RecordStep(const G4Step*) is required by this project contract; keep it "
+                "as an OutputManager method and implement it without querying ScoringManager "
+                "or changing geometry, source, or physics state."
+            ),
+            (
+                "WriteEvent must include a one-argument overload exactly compatible with "
+                "action code: void WriteEvent(const G4Event* event). It may delegate to "
+                "an overload that accepts edep_MeV and dose_Gy."
+            ),
+            (
+                "Keep CSV/JSON writing in OutputManager only, and keep ScoringManager out "
+                "of OutputManager includes and calls."
+            ),
+        ]
     if module_name == "material":
         return [
             (
