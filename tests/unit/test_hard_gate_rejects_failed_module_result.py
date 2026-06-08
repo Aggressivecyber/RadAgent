@@ -45,14 +45,52 @@ def test_none_status_not_checked():
 
 
 def test_module_hard_gate_wrapper_accepts_module_status():
-    file_entry = GeneratedModuleFile(
-        path="include/MaterialRegistry.hh",
-        new_content="#pragma once\nclass MaterialRegistry {};\n",
-        generated_by="material_module_agent",
-        module_name="material",
-        rationale="test",
-    )
+    files = [
+        GeneratedModuleFile(
+            path="include/MaterialRegistry.hh",
+            new_content=(
+                "#pragma once\n"
+                "#include \"G4Material.hh\"\n"
+                "#include \"G4String.hh\"\n"
+                "#include <map>\n"
+                "class MaterialRegistry {\n"
+                "public:\n"
+                "  void AddCustomMaterial(const G4String& name, G4Material* material);\n"
+                "  G4Material* GetMaterial(const G4String& name);\n"
+                "private:\n"
+                "  std::map<G4String, G4Material*> fMaterials;\n"
+                "};\n"
+            ),
+            generated_by="material_module_agent",
+            module_name="material",
+            rationale="test",
+        ),
+        GeneratedModuleFile(
+            path="src/MaterialRegistry.cc",
+            new_content=(
+                "#include \"MaterialRegistry.hh\"\n"
+                "#include \"G4NistManager.hh\"\n"
+                "#include <stdexcept>\n"
+                "void MaterialRegistry::AddCustomMaterial(\n"
+                "    const G4String& name, G4Material* material) {\n"
+                "  if (!material) { throw std::runtime_error(\"missing material\"); }\n"
+                "  fMaterials[name] = material;\n"
+                "}\n"
+                "G4Material* MaterialRegistry::GetMaterial(const G4String& name) {\n"
+                "  auto it = fMaterials.find(name);\n"
+                "  if (it != fMaterials.end()) { return it->second; }\n"
+                "  auto* material = G4NistManager::Instance()->FindOrBuildMaterial(name);\n"
+                "  if (!material) { throw std::runtime_error(\"material unavailable\"); }\n"
+                "  fMaterials[name] = material;\n"
+                "  return material;\n"
+                "}\n"
+            ),
+            generated_by="material_module_agent",
+            module_name="material",
+            rationale="test",
+        ),
+    ]
 
-    result = run_material_hard_gate([file_entry], module_status="generated")
+    result = run_material_hard_gate(files, module_status="generated")
 
     assert result.status == "pass"
