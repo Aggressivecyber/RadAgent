@@ -26,6 +26,7 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
+from agent_core.gates.gate_runner import normalize_run_mode
 from agent_core.graph.main_routes import (
     route_after_artifact,
     route_after_context,
@@ -77,14 +78,15 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
     request_dir = job.stage_dir("00_input")
     (request_dir / "user_query.md").write_text(f"# User Query\n\n{state.get('user_query', '')}\n")
 
-    # Determine execution_mode from run_mode (backward compatibility)
-    run_mode = state.get("run_mode", "dev")
+    # Determine execution_mode from run_mode (no dev mode)
+    run_mode = normalize_run_mode(state.get("run_mode", "strict"))
     execution_mode_map = {
-        "dev": "dev_no_geant4_env",
-        "acceptance": "mvp1_acceptance",
-        "production": "mvp1_acceptance",  # Production uses same acceptance mode
+        "strict": "strict",
+        "test": "test",
+        "acceptance": "acceptance",
+        "production": "production",
     }
-    execution_mode = execution_mode_map.get(run_mode, "dev_no_geant4_env")
+    execution_mode = execution_mode_map.get(run_mode, "strict")
 
     return {
         "job_id": job_id,
@@ -238,7 +240,7 @@ def _make_g4_codegen_subgraph_node() -> Any:
                 "g4_model_ir_path": state.get("g4_model_ir_path", ""),
                 "component_specs_dir": state.get("component_specs_dir", ""),
                 "construction_ledger_path": state.get("construction_ledger_path", ""),
-                "run_mode": state.get("run_mode", "dev"),
+                "run_mode": state.get("run_mode", "strict"),
                 "execution_mode": state.get("execution_mode", ""),
                 "confirmation_record_path": state.get("confirmation_record_path", ""),
                 "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
@@ -293,7 +295,7 @@ def _make_gate_subgraph_node() -> Any:
         result = await subgraph.ainvoke(
             {
                 "job_id": state.get("job_id", ""),
-                "execution_mode": state.get("execution_mode", "dev_no_geant4_env"),
+                "execution_mode": state.get("execution_mode", "strict"),
                 "g4_model_ir_path": state.get("g4_model_ir_path", ""),
                 "generated_code_dir": state.get("generated_code_dir", ""),
                 "applied_patch_path": state.get("applied_patch_path", ""),
@@ -304,11 +306,11 @@ def _make_gate_subgraph_node() -> Any:
             }
         )
         new_retry = state.get("retry_count", 0) + (
-            1 if result.get("validation_status") == "FAILED" else 0
+            1 if result.get("validation_status") == "failed" else 0
         )
         return {
             "gate_results_path": result.get("gate_results_path", ""),
-            "validation_status": result.get("validation_status", "FAILED"),
+            "validation_status": result.get("validation_status", "failed"),
             "failed_gates": result.get("failed_gates", []),
             "skipped_gates": result.get("skipped_gates", []),
             "retry_count": new_retry,
@@ -359,7 +361,7 @@ def _make_report_subgraph_node() -> Any:
             {
                 "job_id": state.get("job_id", ""),
                 "user_query": state.get("user_query", ""),
-                "execution_mode": state.get("execution_mode", "dev_no_geant4_env"),
+                "execution_mode": state.get("execution_mode", "strict"),
                 "context_decision": state.get("context_decision", ""),
                 "validation_status": state.get("validation_status", ""),
                 "g4_model_ir_path": state.get("g4_model_ir_path", ""),

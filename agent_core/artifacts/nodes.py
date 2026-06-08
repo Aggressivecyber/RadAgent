@@ -213,23 +213,19 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
     ]
 
     # Determine run type
-    execution_mode = state.get("execution_mode", "dev")
-    run_type = "dev" if "dev" in execution_mode else "acceptance"
+    execution_mode = state.get("execution_mode", "strict")
+    run_type = (
+        execution_mode
+        if execution_mode in {"strict", "test", "acceptance", "production"}
+        else "strict"
+    )
 
     # Determine known limitations
     known_limitations: list[str] = []
     validation_status = state.get("validation_status", "UNKNOWN")
 
-    # CRITICAL: dev 模式禁止 VERIFIED 状态
-    # 如果 run_type 是 dev 且 validation_status 是 VERIFIED，强制降级为 PARTIAL
-    if run_type == "dev" and validation_status == "VERIFIED":
-        validation_status = "PARTIAL"
-        known_limitations.append(
-            "Dev mode run — validation status downgraded from VERIFIED to PARTIAL"
-        )
-
-    if validation_status == "PARTIAL" and "Some gates skipped" not in " ".join(known_limitations):
-        known_limitations.append("Some gates skipped — not all validations ran")
+    # No dev mode and no partial pass.
+    # Critical skipped gates are failures, not limitations.
     if skipped_gates:
         known_limitations.append(
             f"{len(skipped_gates)} gate(s) skipped: "
@@ -299,8 +295,8 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
     )
 
     status = "collected" if file_entries else "failed"
-    if errors and file_entries:
-        status = "partial"
+    if errors:
+        status = "failed"
 
     return {
         "artifact_manifest_path": str(manifest_path),

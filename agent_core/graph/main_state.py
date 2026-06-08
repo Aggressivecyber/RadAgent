@@ -28,8 +28,8 @@ class RadAgentMainState(TypedDict, total=False):
     # ── Job identification ──
     job_id: str
     user_query: str
-    execution_mode: str  # "dev_no_geant4_env" | "mvp1_acceptance"
-    run_mode: str  # "dev" | "acceptance" | "production"
+    execution_mode: str  # "strict" | "test" | "acceptance" | "production"
+    run_mode: str  # "strict" | "test" | "acceptance" | "production"
 
     # ── Intent Router outputs ──
     intent: str  # IntentType from intent/schemas.py
@@ -94,14 +94,14 @@ class RadAgentMainState(TypedDict, total=False):
 
     # ── Gate Subgraph outputs ──
     gate_results_path: str
-    validation_status: str  # "VERIFIED" | "FAILED" | "PARTIAL"
+    validation_status: str  # "passed" | "failed" | "blocked"
     failed_gates: list[str]
     skipped_gates: list[str]
 
     # ── Artifact Subgraph outputs ──
     review_artifact_dir: str
     artifact_manifest_path: str
-    artifact_status: str  # "collected" | "partial" | "failed"
+    artifact_status: str  # "collected" | "failed"
 
     # ── Report Subgraph outputs ──
     final_report_path: str

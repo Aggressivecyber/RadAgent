@@ -1,7 +1,4 @@
-"""Base gates (Gate 0-11) — context, schema, patch, build, simulation checks.
-
-Gates 7-11 CANNOT auto-pass in mvp1_acceptance mode.
-"""
+"""Base gates (Gate 0-11) — context, schema, patch, build, simulation checks."""
 
 from __future__ import annotations
 
@@ -15,6 +12,7 @@ from agent_core.config.workspace import get_job_dir, get_output_dir
 from agent_core.validators.code_structure_validator import CodeStructureValidator
 from agent_core.validators.schema_validator import SchemaValidator
 
+from .gate_runner import normalize_run_mode
 from .schemas import GateSubgraphState
 
 # Gate name mapping (shared across modules)
@@ -54,7 +52,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     failed: list[str] = list(state.get("failed_gates", []))
 
     job_id = state.get("job_id", "unknown")
-    execution_mode = state.get("execution_mode", "dev_no_geant4_env")
+    normalize_run_mode(state.get("run_mode", "strict"))
     context_decision = state.get("context_decision", "block_no_context")
     task_spec = state.get("task_spec", {})
     model_ir = state.get("g4_model_ir", {})
@@ -113,7 +111,13 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # Gate 2: Simulation IR / Model IR
     if model_ir:
-        ir_valid, ir_errors = sv.validate_simulation_ir(model_ir)
+        try:
+            from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+
+            G4ModelIR.model_validate(model_ir)
+            ir_valid, ir_errors = True, []
+        except Exception as exc:
+            ir_valid, ir_errors = False, [str(exc)]
     else:
         ir_valid, ir_errors = False, ["No model IR loaded"]
     gate_results.append(
@@ -171,6 +175,8 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     if not changed_files:
         # Try loading from the proposed patch if available
         proposed_path = state.get("proposed_patch_path", "")
+        if not proposed_path:
+            proposed_path = str(get_job_dir(job_id) / "06_codegen" / "proposed_patch.json")
         if proposed_path and Path(str(proposed_path)).exists():
             try:
                 proposed_data = json.loads(Path(str(proposed_path)).read_text())
@@ -188,13 +194,11 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         if red_files:
             g4_checked.append({"item": f"red zone files: {len(red_files)}", "result": "fail"})
     else:
-        # No patch data available — cannot validate, mark as skipped
+        # No patch data available — cannot validate.
         perm_valid = False
         perm_errors = ["No patch data available for permission check"]
-        g4_status = "skipped" if execution_mode != "mvp1_acceptance" else "fail"
+        g4_status = "fail"
         g4_checked = [{"item": "patch file zones", "result": g4_status}]
-        if g4_status == "skipped":
-            skipped.append({"gate_id": 4, "reason": "No patch data"})
 
     gate_results.append(
         {
@@ -286,12 +290,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             g6_severity = "pass" if build_valid else "fail"
             g6_message = g6_msg
         else:
-            if execution_mode == "mvp1_acceptance":
-                g6_message = "[MVP1] Geant4 environment required"
-            else:
-                g6_severity = "skipped"
-                g6_message = "Geant4 not available — build NOT verified (dev mode)"
-                skipped.append({"gate_id": 6, "reason": g6_message})
+            g6_message = "Geant4 environment required for build gate"
     except Exception as e:
         g6_message = f"Build check error: {e}"
     gate_results.append(
@@ -312,13 +311,8 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     )
 
     # Gate 7: Unit Test — cannot auto-pass
-    g7_severity = "skipped"
-    g7_message = "Unit tests not run (dev mode)"
-    if execution_mode == "mvp1_acceptance":
-        g7_severity = "fail"
-        g7_message = "[MVP1] Unit tests required"
-    else:
-        skipped.append({"gate_id": 7, "reason": "Geant4 not available"})
+    g7_severity = "fail"
+    g7_message = "Unit tests required; no unit test result artifact found"
     gate_results.append(
         {
             "gate_id": 7,
@@ -371,7 +365,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             {
                 "gate_id": 8,
                 "name": gate_name(8),
-                "status": "skipped" if execution_mode != "mvp1_acceptance" else "fail",
+                "status": "fail",
                 "checked_items": [{"item": "output directory exists", "result": "fail"}],
                 "passed_items": [],
                 "failed_items": ["No simulation output directory"],
@@ -381,14 +375,10 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
                 "message": "No simulation output directory",
             }
         )
-        skipped.append({"gate_id": 8, "reason": "No output dir"})
 
     # Gate 9: Smoke Simulation
-    g9_severity = "skipped"
-    g9_message = "Smoke sim not run"
-    if execution_mode == "mvp1_acceptance":
-        g9_severity = "fail"
-        g9_message = "[MVP1] Smoke sim required"
+    g9_severity = "fail"
+    g9_message = "Smoke simulation required; no smoke simulation result artifact found"
     gate_results.append(
         {
             "gate_id": 9,
@@ -402,13 +392,9 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "warnings": [],
             "evidence": [],
             "file_paths": [],
-            "message": "Smoke sim not run"
-            if g9_severity == "skipped"
-            else "[MVP1] Smoke sim required",
+            "message": g9_message,
         }
     )
-    if g9_severity == "skipped":
-        skipped.append({"gate_id": 9, "reason": "Not run"})
 
     # Gate 10: Benchmark Regression
     gate_results.append(
@@ -416,13 +402,14 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "gate_id": 10,
             "name": gate_name(10),
             "status": "skipped",
+            "critical": False,
             "checked_items": [{"item": "benchmark regression check", "result": "skipped"}],
             "passed_items": [],
             "failed_items": [],
             "warnings": [],
             "evidence": [],
             "file_paths": [],
-            "message": "No matching benchmark case",
+            "message": "No matching benchmark case; explicitly non-critical",
         }
     )
 
@@ -453,6 +440,8 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
                                     break
                 except Exception as e:
                     physics_errors.append(f"Error reading {csv_name}: {e}")
+    if not output_dir.is_dir():
+        physics_errors.append("No simulation output directory for physics sanity checks")
     gate_results.append(
         {
             "gate_id": 11,

@@ -94,9 +94,11 @@ class RadAgentREPL:
     colourised output and prompt_toolkit for history / completion.
     """
 
-    _VALID_MODES: frozenset[str] = frozenset({"dev_no_geant4_env", "mvp1_acceptance"})
+    _VALID_MODES: frozenset[str] = frozenset(
+        {"strict", "test", "acceptance", "production"}
+    )
 
-    def __init__(self, execution_mode: str = "mvp1_acceptance") -> None:
+    def __init__(self, execution_mode: str = "strict") -> None:
         if execution_mode not in self._VALID_MODES:
             raise ValueError(f"Invalid execution_mode: {execution_mode}")
         self.console = Console()
@@ -476,9 +478,7 @@ class RadAgentREPL:
         if ir_path and Path(ir_path).exists():
             model_ir = _load_json_safe(Path(ir_path))
             if model_ir:
-                self.console.print(
-                    "\n[bold cyan]═══ 施工方案报告 ═══[/bold cyan]"
-                )
+                self.console.print("\n[bold cyan]═══ 施工方案报告 ═══[/bold cyan]")
                 self._render_model_summary(model_ir)
                 self.console.print("")
 
@@ -497,17 +497,13 @@ class RadAgentREPL:
 
         request_data = _load_json_safe(Path(request_path))
         if request_data is None:
-            self.console.print(
-                f"[red]Corrupted confirmation request:[/red] {request_path}"
-            )
+            self.console.print(f"[red]Corrupted confirmation request:[/red] {request_path}")
             return
 
         # ── Step 3: Show summary from confirmation request ─────────────
         summary = request_data.get("summary_for_user", "")
         if summary:
-            self.console.print(
-                Panel(summary, title="方案摘要", border_style="cyan")
-            )
+            self.console.print(Panel(summary, title="方案摘要", border_style="cyan"))
 
         questions = request_data.get("questions", [])
 
@@ -516,12 +512,8 @@ class RadAgentREPL:
         all_approved = True
 
         if not questions:
-            self.console.print(
-                "[green]✓ 所有参数已确认，无需额外假设。[/green]"
-            )
-            self.console.print(
-                "\n[bold yellow]请确认施工方案：[/bold yellow]"
-            )
+            self.console.print("[green]✓ 所有参数已确认，无需额外假设。[/green]")
+            self.console.print("\n[bold yellow]请确认施工方案：[/bold yellow]")
             answer = await asyncio.to_thread(
                 self._prompt_choice,
                 "[a]pprove 批准 / [r]eject 拒绝?",
@@ -580,9 +572,7 @@ class RadAgentREPL:
                         }
                     )
                     all_approved = False
-                    self.console.print(
-                        f"  [green]✓ Edited:[/green] {field} → {new_val}"
-                    )
+                    self.console.print(f"  [green]✓ Edited:[/green] {field} → {new_val}")
                 elif answer == "r":
                     edits.append(
                         {
@@ -883,18 +873,13 @@ class RadAgentREPL:
                 latency_str = f"{latency:.0f}ms"
             status = "✓" if record.success else "✗"
             style = "green" if record.success else "red"
-            table.add_row(
-                task, module, provider, latency_str,
-                f"[{style}]{status}[/{style}]"
-            )
+            table.add_row(task, module, provider, latency_str, f"[{style}]{status}[/{style}]")
 
         self.console.print(table)
 
         # Log file location
         if tool_logger._log_file:
-            self.console.print(
-                f"  [dim]Log: {tool_logger._log_file}[/dim]"
-            )
+            self.console.print(f"  [dim]Log: {tool_logger._log_file}[/dim]")
 
     async def cmd_help(self) -> None:
         """Show help text."""
@@ -1018,14 +1003,15 @@ class RadAgentREPL:
             f"# User Query\n\n{self.state.get('user_query', '')}\n",
         )
 
-        # Determine execution_mode from run_mode (backward compatibility)
-        run_mode = self.state.get("run_mode", "dev")
+        # Determine execution_mode from run_mode.
+        run_mode = self.state.get("run_mode", "strict")
         execution_mode_map = {
-            "dev": "dev_no_geant4_env",
-            "acceptance": "mvp1_acceptance",
-            "production": "mvp1_acceptance",
+            "strict": "strict",
+            "test": "test",
+            "acceptance": "acceptance",
+            "production": "production",
         }
-        execution_mode = execution_mode_map.get(run_mode, "dev_no_geant4_env")
+        execution_mode = execution_mode_map.get(run_mode, "strict")
 
         return {
             "job_id": job_id,

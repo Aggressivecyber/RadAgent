@@ -108,12 +108,12 @@ class TestRouteAfterGates:
     """Tests for route_after_gates routing."""
 
     def test_verified_proceeds(self) -> None:
-        state: RadAgentMainState = {"validation_status": "VERIFIED"}
+        state: RadAgentMainState = {"validation_status": "passed"}
         assert route_after_gates(state) == "artifact_subgraph"
 
     def test_failed_with_retry_context(self) -> None:
         state: RadAgentMainState = {
-            "validation_status": "FAILED",
+            "validation_status": "failed",
             "retry_count": 0,
             "failed_gates": ["Gate 0"],
         }
@@ -121,7 +121,7 @@ class TestRouteAfterGates:
 
     def test_failed_with_retry_modeling(self) -> None:
         state: RadAgentMainState = {
-            "validation_status": "FAILED",
+            "validation_status": "failed",
             "retry_count": 0,
             "failed_gates": ["Gate 2"],
         }
@@ -129,7 +129,7 @@ class TestRouteAfterGates:
 
     def test_failed_with_retry_codegen(self) -> None:
         state: RadAgentMainState = {
-            "validation_status": "FAILED",
+            "validation_status": "failed",
             "retry_count": 0,
             "failed_gates": ["Gate 5"],
         }
@@ -137,7 +137,7 @@ class TestRouteAfterGates:
 
     def test_failed_max_retries_reports(self) -> None:
         state: RadAgentMainState = {
-            "validation_status": "FAILED",
+            "validation_status": "failed",
             "retry_count": 5,
             "failed_gates": ["Gate 0"],
         }
@@ -145,7 +145,7 @@ class TestRouteAfterGates:
 
     def test_partial_treated_as_failed(self) -> None:
         state: RadAgentMainState = {
-            "validation_status": "PARTIAL",
+            "validation_status": "failed",
             "retry_count": 0,
             "failed_gates": ["Gate 5"],
         }

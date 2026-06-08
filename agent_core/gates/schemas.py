@@ -10,7 +10,8 @@ class GateSubgraphState(TypedDict, total=False):
 
     # Input
     job_id: str
-    execution_mode: str  # "dev_no_geant4_env" | "mvp1_acceptance"
+    run_mode: str  # "strict" | "test" | "acceptance" | "production"
+    execution_mode: str  # same supported values as run_mode
     g4_model_ir_path: str
     generated_code_dir: str
     applied_patch_path: str
@@ -27,7 +28,7 @@ class GateSubgraphState(TypedDict, total=False):
     # Results
     gate_results: list[dict[str, Any]]
     gate_results_path: str
-    validation_status: str  # "VERIFIED" | "FAILED" | "PARTIAL"
+    validation_status: str  # "passed" | "failed" | "blocked"
     failed_gates: list[str]
     skipped_gates: list[str]
 

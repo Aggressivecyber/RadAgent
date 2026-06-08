@@ -25,14 +25,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 async def run_agent(
     query: str,
     job_id: str | None = None,
-    execution_mode: str = "dev_no_geant4_env",
+    execution_mode: str = "strict",
 ) -> dict[str, object]:
     """Run the full RadAgent pipeline for a user query.
 
     Args:
         query: Natural language simulation request.
         job_id: Optional job ID override.
-        execution_mode: "dev_no_geant4_env" or "mvp1_acceptance".
+        execution_mode: "strict", "test", "acceptance", or "production".
 
     Returns:
         Final state dict from the LangGraph execution.
@@ -112,8 +112,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["dev_no_geant4_env", "mvp1_acceptance"],
-        default="dev_no_geant4_env",
+        choices=["strict", "test", "acceptance", "production"],
+        default="strict",
         help="Execution mode",
     )
 

@@ -146,8 +146,8 @@ def route_after_gates(state: RadAgentMainState) -> str:
     On failure with retries remaining, route back to the appropriate
     subgraph based on the failed gate type.
     """
-    validation_status = state.get("validation_status", "FAILED")
-    if validation_status == "VERIFIED":
+    validation_status = state.get("validation_status", "failed")
+    if validation_status == "passed":
         return "artifact_subgraph"
 
     # Check retry limit

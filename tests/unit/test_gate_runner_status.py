@@ -1,14 +1,12 @@
 """Tests for Gate Runner status strategy and Gate 4 permission validation.
 
 Verifies:
-  - VERIFIED only when 0 failed + 0 skipped
-  - PARTIAL when 0 failed but some non-critical skipped (dev mode)
-  - FAILED when any gate fails
-  - FAILED when critical gates skipped in acceptance mode
-  - PARTIAL when critical gates skipped in dev mode
+  - passed only when critical gates pass and no critical skips
+  - failed when any gate fails
+  - failed when any gate skipped (no dev mode, no partial pass)
   - Gate 4 does NOT bare auto-pass
   - Gate 4 validates zone from patch data
-  - Gate 4 skipped when no patch data available
+  - Gate 4 fails when no patch data available
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ class TestFinalizeStatusStrategy:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """VERIFIED only when 0 failed AND 0 skipped."""
+        """passed only when 0 failed AND 0 skipped."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         job_dir = tmp_path / "jobs" / "test_job" / "09_validation"
         job_dir.mkdir(parents=True)
@@ -43,14 +41,14 @@ class TestFinalizeStatusStrategy:
             "skipped_gates": [],
         }
         result = await finalize_gate_results(state)
-        assert result["validation_status"] == "VERIFIED"
+        assert result["validation_status"] == "passed"
 
-    async def test_partial_when_skipped_but_no_failures(
+    async def test_skipped_gate_means_failed(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """PARTIAL when 0 failed but some skipped (dev mode)."""
+        """failed when any gate is skipped (no dev mode partial pass)."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         job_dir = tmp_path / "jobs" / "test_job2" / "09_validation"
         job_dir.mkdir(parents=True)
@@ -62,17 +60,17 @@ class TestFinalizeStatusStrategy:
                 {"gate_id": 7, "name": "Unit Test", "status": "skipped"},
             ],
             "failed_gates": [],
-            "skipped_gates": [{"gate_id": 7, "reason": "dev mode"}],
+            "skipped_gates": [{"gate_id": 7, "reason": "missing"}],
         }
         result = await finalize_gate_results(state)
-        assert result["validation_status"] == "PARTIAL"
+        assert result["validation_status"] == "failed"
 
     async def test_failed_when_any_gate_fails(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """FAILED when any gate fails, regardless of count."""
+        """failed when any gate fails, regardless of count."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         job_dir = tmp_path / "jobs" / "test_job3" / "09_validation"
         job_dir.mkdir(parents=True)
@@ -86,14 +84,14 @@ class TestFinalizeStatusStrategy:
             "skipped_gates": [],
         }
         result = await finalize_gate_results(state)
-        assert result["validation_status"] == "FAILED"
+        assert result["validation_status"] == "failed"
 
     async def test_failed_when_many_failures(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """FAILED when multiple gates fail."""
+        """failed when multiple gates fail."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         job_dir = tmp_path / "jobs" / "test_job4" / "09_validation"
         job_dir.mkdir(parents=True)
@@ -109,19 +107,19 @@ class TestFinalizeStatusStrategy:
             "skipped_gates": [],
         }
         result = await finalize_gate_results(state)
-        assert result["validation_status"] == "FAILED"
+        assert result["validation_status"] == "failed"
 
-    async def test_dev_mode_gates_produce_partial_not_verified(
+    async def test_strict_mode_skipped_gates_fail(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Dev mode with skipped gates should finalize as PARTIAL, never VERIFIED."""
+        """Strict mode: skipped gates = failed (no partial pass)."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
         state = {
-            "job_id": "dev_test",
-            "execution_mode": "dev_no_geant4_env",
+            "job_id": "strict_test",
+            "run_mode": "strict",
             "context_decision": "allow_rag",
             "task_spec": {"simulation_scope": ["geant4"]},
             "g4_model_ir": {},
@@ -133,26 +131,25 @@ class TestFinalizeStatusStrategy:
 
         base_result = await run_base_gates(state)
 
-        # Now finalize
-        job_dir = tmp_path / "jobs" / "dev_test" / "09_validation"
+        job_dir = tmp_path / "jobs" / "strict_test" / "09_validation"
         job_dir.mkdir(parents=True)
         finalize_state = {
-            "job_id": "dev_test",
+            "job_id": "strict_test",
             **base_result,
         }
         result = await finalize_gate_results(finalize_state)
 
-        # Must NOT be VERIFIED — dev mode always has skipped gates
-        assert result["validation_status"] != "VERIFIED", (
-            f"Dev mode returned VERIFIED despite skipped gates: "
-            f"{base_result.get('skipped_gates', [])}"
-        )
+        # Skipped gates = failed in strict mode
+        if base_result.get("skipped_gates"):
+            assert result["validation_status"] == "failed", (
+                f"Strict mode with skipped gates must be failed, got: {result['validation_status']}"
+            )
 
 
 class TestGate4NoAutoPass:
     """Verify Gate 4 (File Permission) does NOT bare auto-pass."""
 
-    async def test_gate4_skipped_when_no_patch_data(
+    async def test_gate4_fails_when_no_patch_data(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -164,7 +161,7 @@ class TestGate4NoAutoPass:
 
         state = {
             "job_id": "g4test",
-            "execution_mode": "dev_no_geant4_env",
+            "execution_mode": "strict",
             "context_decision": "allow_rag",
             "task_spec": {"simulation_scope": ["geant4"]},
             "g4_model_ir": {},
@@ -206,7 +203,7 @@ class TestGate4NoAutoPass:
 
         state = {
             "job_id": "g4test2",
-            "execution_mode": "dev_no_geant4_env",
+            "execution_mode": "strict",
             "context_decision": "allow_rag",
             "task_spec": {"simulation_scope": ["geant4"]},
             "g4_model_ir": {},
@@ -224,6 +221,51 @@ class TestGate4NoAutoPass:
             f"Gate 4 should pass for green zone files: {gate4['failed_items']}"
         )
         assert gate4.get("evidence"), "Gate 4 must have evidence of zone check"
+
+    async def test_gate4_falls_back_to_codegen_proposed_patch(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Gate 4 should read 06_codegen/proposed_patch.json when applied summary lacks zones."""
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        job_root = tmp_path / "jobs" / "g4test2b"
+        validation_dir = job_root / "09_validation"
+        codegen_dir = job_root / "06_codegen"
+        validation_dir.mkdir(parents=True)
+        codegen_dir.mkdir(parents=True)
+
+        applied_patch = validation_dir / "applied_patch.json"
+        applied_patch.write_text(json.dumps({"files_applied": ["src/test.cc"]}))
+        proposed_patch = codegen_dir / "proposed_patch.json"
+        proposed_patch.write_text(
+            json.dumps(
+                {
+                    "changed_files": [
+                        {"path": "src/test.cc", "zone": "green", "new_content": "// ok"}
+                    ]
+                }
+            )
+        )
+
+        state = {
+            "job_id": "g4test2b",
+            "execution_mode": "strict",
+            "context_decision": "allow_rag",
+            "task_spec": {"simulation_scope": ["geant4"]},
+            "g4_model_ir": {},
+            "generated_code_dir": str(tmp_path / "noexist"),
+            "applied_patch_path": str(applied_patch),
+            "gate_results": [],
+            "skipped_gates": [],
+            "failed_gates": [],
+        }
+
+        result = await run_base_gates(state)
+        gate4 = [g for g in result["gate_results"] if g["gate_id"] == 4][0]
+
+        assert gate4["status"] == "pass"
+        assert gate4["evidence"] == ["checked 1 files"]
 
     async def test_gate4_fails_on_red_zone(
         self,
@@ -247,7 +289,7 @@ class TestGate4NoAutoPass:
 
         state = {
             "job_id": "g4test3",
-            "execution_mode": "dev_no_geant4_env",
+            "execution_mode": "strict",
             "context_decision": "allow_rag",
             "task_spec": {"simulation_scope": ["geant4"]},
             "g4_model_ir": {},
@@ -272,43 +314,45 @@ class TestComputeValidationStatus:
             {"gate_id": 0, "status": "pass"},
             {"gate_id": 7, "status": "pass"},
         ]
-        assert compute_validation_status(gates, "dev") == "VERIFIED"
+        assert compute_validation_status(gates, "strict") == "passed"
 
     def test_any_fail_returns_failed(self) -> None:
         gates = [
             {"gate_id": 0, "status": "pass"},
             {"gate_id": 7, "status": "fail"},
         ]
-        assert compute_validation_status(gates, "dev") == "FAILED"
+        assert compute_validation_status(gates, "strict") == "failed"
 
-    def test_non_critical_skipped_dev_returns_partial(self) -> None:
+    def test_skipped_returns_failed(self) -> None:
+        """Any skipped gate = failed (no dev mode partial pass)."""
         gates = [
             {"gate_id": 0, "status": "pass"},
             {"gate_id": 3, "status": "skipped"},
         ]
-        assert compute_validation_status(gates, "dev") == "PARTIAL"
+        assert compute_validation_status(gates, "strict") == "failed"
 
-    def test_critical_skipped_dev_returns_partial(self) -> None:
+    def test_critical_skipped_returns_failed(self) -> None:
+        """Critical skipped = failed in all modes."""
         gates = [
             {"gate_id": 0, "status": "pass"},
             {"gate_id": 7, "status": "skipped"},
         ]
-        assert compute_validation_status(gates, "dev") == "PARTIAL"
+        assert compute_validation_status(gates, "strict") == "failed"
 
-    def test_critical_skipped_acceptance_returns_failed(self) -> None:
+    def test_skipped_acceptance_returns_failed(self) -> None:
         gates = [
             {"gate_id": 0, "status": "pass"},
             {"gate_id": 7, "status": "skipped"},
         ]
-        assert compute_validation_status(gates, "mvp1_acceptance") == "FAILED"
+        assert compute_validation_status(gates, "acceptance") == "failed"
 
-    def test_non_critical_skipped_acceptance_returns_partial(self) -> None:
+    def test_non_critical_skipped_returns_failed(self) -> None:
+        """Non-critical skipped also = failed (no partial pass)."""
         gates = [
             {"gate_id": 0, "status": "pass"},
             {"gate_id": 3, "status": "skipped"},
         ]
-        # Gate 3 is not critical → still PARTIAL in acceptance
-        assert compute_validation_status(gates, "mvp1_acceptance") == "PARTIAL"
+        assert compute_validation_status(gates, "acceptance") == "failed"
 
     def test_empty_results_returns_verified(self) -> None:
-        assert compute_validation_status([], "dev") == "VERIFIED"
+        assert compute_validation_status([], "strict") == "passed"

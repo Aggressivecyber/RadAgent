@@ -1,4 +1,4 @@
-"""Coordinate consistency validator — Gate G4-C (partial).
+"""Coordinate consistency validator — Gate G4-C.
 
 Ensures coordinate system units are consistent and
 placements are compatible with interface definitions.

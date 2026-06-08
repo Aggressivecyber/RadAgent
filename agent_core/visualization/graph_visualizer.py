@@ -110,7 +110,7 @@ def get_main_graph_spec() -> SubgraphSpec:
             EdgeSpec("g4_codegen_subgraph", "report_subgraph", "失败", "block"),
             EdgeSpec("patch_subgraph", "gate_subgraph", "已应用"),
             EdgeSpec("patch_subgraph", "report_subgraph", "失败", "block"),
-            EdgeSpec("gate_subgraph", "artifact_subgraph", "VERIFIED"),
+            EdgeSpec("gate_subgraph", "artifact_subgraph", "passed"),
             EdgeSpec("gate_subgraph", "context_subgraph", "Gate 0/G4-E 失败", "retry"),
             EdgeSpec("gate_subgraph", "task_planning_subgraph", "Gate 1 失败", "retry"),
             EdgeSpec("gate_subgraph", "g4_modeling_subgraph", "Gate 2/G4-A~D 失败", "retry"),

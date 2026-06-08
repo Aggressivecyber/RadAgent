@@ -62,7 +62,7 @@ class TestMainGraphPassesRunModeToCodegen:
 
         state = {
             "user_query": "Build a silicon detector",
-            "run_mode": "dev",
+            "run_mode": "strict",
         }
 
         with pytest.MonkeyPatch.context() as mp:
@@ -72,4 +72,17 @@ class TestMainGraphPassesRunModeToCodegen:
                 mp.setenv("RADAGENT_WORKSPACE_ROOT", td)
                 result = await prepare_workspace(state)
 
-        assert result["run_mode"] == "dev"
+        assert result["run_mode"] == "strict"
+
+    @pytest.mark.asyncio
+    async def test_prepare_workspace_rejects_dev_run_mode(self) -> None:
+        """prepare_workspace should reject the removed dev run_mode."""
+        from agent_core.graph.main_graph import prepare_workspace
+
+        with pytest.raises(ValueError, match="Unsupported run_mode"):
+            await prepare_workspace(
+                {
+                    "user_query": "Build a silicon detector",
+                    "run_mode": "dev",
+                }
+            )

@@ -1,7 +1,7 @@
 """Report Subgraph nodes — generate final report.
 
 The final report MUST cover:
-1. VERIFIED status
+1. passed validation status
 2. Realistic status
 3. Simplification disclosure
 4. RAG/Web evidence sources
@@ -26,8 +26,8 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     """Generate the comprehensive final report."""
     job_id = state.get("job_id", "unknown")
     user_query = state.get("user_query", "")
-    execution_mode = state.get("execution_mode", "dev_no_geant4_env")
-    validation_status = state.get("validation_status", "UNKNOWN")
+    execution_mode = state.get("execution_mode", "strict")
+    validation_status = state.get("validation_status", "failed")
     context_decision = state.get("context_decision", "unknown")
     simulation_scope = state.get("simulation_scope", [])
     failed_gates = state.get("failed_gates", [])
@@ -50,7 +50,7 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
         gate_results = json.loads(Path(gate_path).read_text())
 
     # Determine verified status
-    verified = validation_status == "VERIFIED"
+    verified = validation_status == "passed"
 
     # Determine termination reason
     if verified:
@@ -94,7 +94,7 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
         "",
         "| Field | Value |",
         "|-------|-------|",
-        f"| **Status** | {'✅ VERIFIED' if verified else '❌ ' + validation_status} |",
+        f"| **Status** | {'passed' if verified else validation_status} |",
         f"| **Execution Mode** | `{execution_mode}` |",
         f"| **Termination Reason** | {termination} |",
         "| **Modeling Mode** | realistic |",
