@@ -92,7 +92,7 @@ class OverlapPolicyValidator:
         Very conservative: uses axis-aligned bounding box check
         based on dimensions and placement position.
         """
-        # Extract dimensions (half-lengths or full sizes depending on convention)
+        # dx/dy/dz in G4ModelIR are full lengths; half_* fields are already half lengths.
         a_dims = getattr(a, "dimensions", {})
         b_dims = getattr(b, "dimensions", {})
         a_pos = getattr(a, "placement", None)
@@ -104,13 +104,12 @@ class OverlapPolicyValidator:
         a_xyz = getattr(a_pos, "position", [0, 0, 0])
         b_xyz = getattr(b_pos, "position", [0, 0, 0])
 
-        # Get half-extents (Geant4 uses half-lengths)
-        a_hx = a_dims.get("dx", a_dims.get("half_x", 0))
-        a_hy = a_dims.get("dy", a_dims.get("half_y", 0))
-        a_hz = a_dims.get("dz", a_dims.get("half_z", 0))
-        b_hx = b_dims.get("dx", b_dims.get("half_x", 0))
-        b_hy = b_dims.get("dy", b_dims.get("half_y", 0))
-        b_hz = b_dims.get("dz", b_dims.get("half_z", 0))
+        a_hx = a_dims.get("half_x", a_dims.get("dx", 0) / 2.0)
+        a_hy = a_dims.get("half_y", a_dims.get("dy", 0) / 2.0)
+        a_hz = a_dims.get("half_z", a_dims.get("dz", 0) / 2.0)
+        b_hx = b_dims.get("half_x", b_dims.get("dx", 0) / 2.0)
+        b_hy = b_dims.get("half_y", b_dims.get("dy", 0) / 2.0)
+        b_hz = b_dims.get("half_z", b_dims.get("dz", 0) / 2.0)
 
         # AABB overlap test
         for i, (ap, ah, bp, bh) in enumerate(

@@ -176,6 +176,38 @@ def build_real_g4_model_ir(job_id: str) -> dict[str, Any]:
                 "hit_fields": [{"name": "edep_MeV", "dtype": "double", "unit": "MeV"}],
             }
         ],
+        "interfaces": [
+            {
+                "interface_id": "world_contains_silicon",
+                "component_a": "world",
+                "component_b": "silicon_detector",
+                "relationship": "contains",
+                "expected_gap_um": 0.0,
+                "overlap_allowed": False,
+                "overlap_check_enabled": True,
+                "source_evidence": evidence,
+            },
+            {
+                "interface_id": "silicon_oxide_stack",
+                "component_a": "silicon_detector",
+                "component_b": "oxide_layer",
+                "relationship": "stacked_above",
+                "expected_gap_um": 10.0,
+                "overlap_allowed": False,
+                "overlap_check_enabled": True,
+                "source_evidence": evidence,
+            },
+            {
+                "interface_id": "world_contains_shield",
+                "component_a": "world",
+                "component_b": "aluminum_shield",
+                "relationship": "contains",
+                "expected_gap_um": 0.0,
+                "overlap_allowed": False,
+                "overlap_check_enabled": True,
+                "source_evidence": evidence,
+            },
+        ],
         "scoring": [
             {
                 "scoring_id": "edep_scoring",

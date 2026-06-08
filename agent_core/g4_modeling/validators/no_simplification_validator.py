@@ -64,10 +64,6 @@ class NoSimplificationValidator:
         approved = set(model_ir.simplification_policy.approved_simplifications)
 
         component_ids = {c.component_id for c in model_ir.components}
-        component_names_lower = {
-            c.component_id.lower() + " " + c.display_name.lower() for c in model_ir.components
-        }
-
         # ── Check 1: Complex model keyword detection ──
         target_lower = model_ir.target_system.lower()
         is_complex_request = any(
@@ -76,10 +72,10 @@ class NoSimplificationValidator:
         )
 
         if is_complex_request:
-            # Check which complex patterns are present
-            for category, patterns in _COMPLEX_MODEL_PATTERNS:
+            for category, patterns in _required_complex_patterns(target_lower):
                 found = any(
-                    any(p in name_lower for p in patterns) for name_lower in component_names_lower
+                    self._component_matches_category(comp, category, patterns)
+                    for comp in model_ir.components
                 )
                 if not found:
                     # Check if user explicitly approved the omission
@@ -173,6 +169,26 @@ class NoSimplificationValidator:
 
         return len(errors) == 0, errors
 
+    def _component_matches_category(
+        self,
+        comp: object,
+        category: str,
+        patterns: set[str],
+    ) -> bool:
+        """Check category by names, type, roles, and explicit sensitive flag."""
+        text = (
+            getattr(comp, "component_id", "").lower()
+            + " "
+            + getattr(comp, "display_name", "").lower()
+            + " "
+            + getattr(comp, "component_type", "").lower()
+            + " "
+            + " ".join(getattr(comp, "roles", []) or []).lower()
+        )
+        if any(pattern in text for pattern in patterns):
+            return True
+        return category == "sensitive" and bool(getattr(comp, "sensitive", False))
+
     def _check_evidence(
         self,
         target_id: str,
@@ -233,3 +249,20 @@ class NoSimplificationValidator:
         """Check for placeholder text in string fields."""
         if _PLACEHOLDER_PATTERNS.search(text):
             errors.append(f"{spec_type} '{target_id}' contains placeholder text: '{text}'")
+
+
+def _required_complex_patterns(target_lower: str) -> list[tuple[str, set[str]]]:
+    """Select only component categories implied by the requested target system."""
+    by_category = dict(_COMPLEX_MODEL_PATTERNS)
+    required: list[tuple[str, set[str]]] = []
+    if any(kw in target_lower for kw in ("detector", "sensor", "radiation", "rad-hard")):
+        required.append(("sensitive", by_category["sensitive"]))
+    if any(kw in target_lower for kw in ("layer", "stack", "oxide", "insulator")):
+        required.append(("oxide", by_category["oxide"]))
+    if any(kw in target_lower for kw in ("shield", "housing", "enclosure", "module")):
+        required.append(("housing", by_category["housing"]))
+    if any(kw in target_lower for kw in ("pcb", "board", "carrier", "electronics", "module")):
+        required.append(("pcb", by_category["pcb"]))
+    if any(kw in target_lower for kw in ("electrode", "contact", "pixel", "strip")):
+        required.append(("electrode", by_category["electrode"]))
+    return required
