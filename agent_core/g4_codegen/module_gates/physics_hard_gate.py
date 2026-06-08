@@ -28,13 +28,19 @@ def _append_physics_ownership_checks(
     generated_files: list[GeneratedModuleFile],
 ) -> None:
     checks: list[dict[str, str]] = []
+    delete_factory_list_pattern = re.compile(r"\bdelete\s+fPhysicsList\s*;")
     for f in generated_files:
         content = f.new_content
+        code_content = _strip_cpp_comments(content)
         if "GetReferencePhysList" in content or "fPhysicsList" in content:
             checks.append(
                 {
                     "check": "physics_wrapper_does_not_delete_factory_list",
-                    "status": "fail" if "delete fPhysicsList" in content else "pass",
+                    "status": (
+                        "fail"
+                        if delete_factory_list_pattern.search(code_content)
+                        else "pass"
+                    ),
                     "message": (
                         "PhysicsListFactoryWrapper must not delete fPhysicsList created "
                         "by G4PhysListFactory"
@@ -95,3 +101,8 @@ def _append_physics_ownership_checks(
         if check["status"] == "fail":
             result.status = "fail"
             result.errors.append(check["message"])
+
+
+def _strip_cpp_comments(content: str) -> str:
+    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+    return re.sub(r"//.*", "", content)

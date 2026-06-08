@@ -449,4 +449,43 @@ def _module_repair_requirements(module_name: str) -> list[str]:
             ),
             "Keep placement code limited to PlacementManager.hh and PlacementManager.cc.",
         ]
+    if module_name == "physics":
+        return [
+            (
+                "Create the reference physics list with "
+                "G4PhysListFactory::GetReferencePhysList and pass ownership to Geant4."
+            ),
+            (
+                "Do not delete fPhysicsList; make the destructor defaulted or give it "
+                "an empty function body."
+            ),
+            (
+                "Do not write the exact text 'delete fPhysicsList' in generated code or "
+                "comments."
+            ),
+            (
+                "Keep the G4PhysListFactory object as a member or another long-lived "
+                "object; do not return a list created from a local factory variable."
+            ),
+        ]
+    if module_name == "material":
+        return [
+            (
+                "Implement MaterialRegistry::Initialize or DefineAllMaterials so it "
+                "actually registers IR materials with FindOrBuildMaterial and the custom "
+                "material API."
+            ),
+            (
+                "Do not use placeholder, dummy, stub, TODO, NotImplemented, 'for now', "
+                "or 'should handle' in code or comments."
+            ),
+            (
+                "When a material cannot be found, throw a concrete exception or return "
+                "through an explicit failure path; do not silently skip registration."
+            ),
+            (
+                "Expose only one GetMaterial string overload, preferably "
+                "GetMaterial(const G4String&), to avoid string literal ambiguity."
+            ),
+        ]
     return []

@@ -92,3 +92,49 @@ def test_physics_hard_gate_rejects_local_factory_in_create_physics_list() -> Non
 
     assert result.status == "fail"
     assert any("local G4PhysListFactory" in error for error in result.errors)
+
+
+def test_physics_hard_gate_allows_delete_phrase_in_comment_only() -> None:
+    result = run_physics_hard_gate(
+        [
+            _file(
+                "include/PhysicsListFactoryWrapper.hh",
+                "#pragma once\nclass PhysicsListFactoryWrapper {};\n",
+            ),
+            _file(
+                "src/PhysicsListFactoryWrapper.cc",
+                '#include "PhysicsListFactoryWrapper.hh"\n'
+                "// Do not delete fPhysicsList; Geant4 owns it.\n"
+                "G4VUserPhysicsList* PhysicsListFactoryWrapper::CreatePhysicsList() {\n"
+                "  return fPhysicsList;\n"
+                "}\n",
+            ),
+            _file("macros/physics_list.mac", "/run/setCut 0.1 mm\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "pass"
+
+
+def test_physics_hard_gate_rejects_real_delete_statement() -> None:
+    result = run_physics_hard_gate(
+        [
+            _file(
+                "include/PhysicsListFactoryWrapper.hh",
+                "#pragma once\nclass PhysicsListFactoryWrapper {};\n",
+            ),
+            _file(
+                "src/PhysicsListFactoryWrapper.cc",
+                '#include "PhysicsListFactoryWrapper.hh"\n'
+                "PhysicsListFactoryWrapper::~PhysicsListFactoryWrapper() {\n"
+                "  delete fPhysicsList;\n"
+                "}\n",
+            ),
+            _file("macros/physics_list.mac", "/run/setCut 0.1 mm\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("must not delete fPhysicsList" in error for error in result.errors)
