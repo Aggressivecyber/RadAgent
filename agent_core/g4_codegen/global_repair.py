@@ -41,6 +41,7 @@ def run_global_code_repair(
     _repair_material_registry(by_path, report)
     _repair_placement_manager(by_path, report)
     _repair_physics_factory(by_path, report)
+    _repair_main_physics_constructor(by_path, report)
     _repair_output_manager(by_path, report)
 
     repaired_patch.setdefault("metadata", {})
@@ -116,22 +117,32 @@ def _repair_material_registry(by_path: dict[str, dict[str, Any]], report: dict[s
     if not header or not source:
         return
 
-    decl = "G4Material* GetMaterial(const std::string& name);"
-    header_changed = _ensure_public_declaration(header, decl, "FindOrBuildMaterial")
+    header_content = header.get("new_content", "")
+    original_header = header_content
+    header_content = re.sub(
+        r"\n\s*G4Material\*\s+GetMaterial\s*\(\s*const\s+std::string&\s+\w+\s*\)\s*;",
+        "",
+        header_content,
+    )
+    header_changed = header_content != original_header
+    if header_changed:
+        header["new_content"] = header_content
 
     source_content = source.get("new_content", "")
-    source_changed = False
-    if "MaterialRegistry::GetMaterial(" not in source_content:
-        source["new_content"] = (
-            source_content.rstrip()
-            + "\n\nG4Material* MaterialRegistry::GetMaterial(const std::string& name) {\n"
-            + "    return FindOrBuildMaterial(name);\n"
-            + "}\n"
-        )
-        source_changed = True
+    original_source = source_content
+    source_content = re.sub(
+        r"\n\s*G4Material\*\s+MaterialRegistry::GetMaterial\s*\("
+        r"\s*const\s+std::string&\s+\w+\s*\)\s*\{.*?\n\}",
+        "",
+        source_content,
+        flags=re.DOTALL,
+    )
+    source_changed = source_content != original_source
+    if source_changed:
+        source["new_content"] = source_content
 
     if header_changed or source_changed:
-        _fixed(report, "MaterialRegistry", "added GetMaterial compatibility adapter")
+        _fixed(report, "MaterialRegistry", "removed ambiguous std::string GetMaterial overload")
 
 
 def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
@@ -208,6 +219,25 @@ def _repair_physics_factory(by_path: dict[str, dict[str, Any]], report: dict[str
 
     if header_content != original_header or source_changed:
         _fixed(report, "PhysicsListFactoryWrapper", "added list compatibility adapter")
+
+
+def _repair_main_physics_constructor(
+    by_path: dict[str, dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    main = by_path.get("main.cc")
+    if not main:
+        return
+
+    content = main.get("new_content", "")
+    updated = re.sub(
+        r"new\s+PhysicsListFactoryWrapper\s*\(\s*\"[^\"]+\"\s*\)",
+        "new PhysicsListFactoryWrapper()",
+        content,
+    )
+    if updated != content:
+        main["new_content"] = updated
+        _fixed(report, "main.cc", "matched PhysicsListFactoryWrapper default constructor")
 
 
 def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:

@@ -105,6 +105,25 @@ def _append_material_contract_checks(
     if not creates_or_accepts_custom_material:
         errors.append("MaterialRegistry must store custom G4Material instances")
 
+    has_g4string_getter = bool(
+        re.search(r"\bGetMaterial\s*\(\s*const\s+G4String\s*&", header_text)
+    )
+    has_std_string_getter = bool(
+        re.search(r"\bGetMaterial\s*\(\s*const\s+std::string\s*&", header_text)
+    )
+    checks.append(
+        {
+            "check": "material_no_ambiguous_getmaterial_overloads",
+            "status": "fail" if has_g4string_getter and has_std_string_getter else "pass",
+            "message": (
+                "Do not overload GetMaterial with both G4String and std::string; "
+                "string literals become ambiguous"
+            ),
+        }
+    )
+    if has_g4string_getter and has_std_string_getter:
+        errors.append("MaterialRegistry has ambiguous GetMaterial overloads")
+
     result.checks.extend(checks)
     if errors:
         result.status = "fail"

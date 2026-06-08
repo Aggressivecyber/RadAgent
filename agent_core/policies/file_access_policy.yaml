@@ -12,6 +12,7 @@ green_zone:
     - "config/*.json"
     - "macros/*.mac"
     - "CMakeLists.txt"
+    - "main.cc"
 
 yellow_zone:
   patterns:

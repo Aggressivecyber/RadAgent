@@ -65,6 +65,17 @@ def _append_main_cmake_checks(
             ),
         }
     )
+    if 'new PhysicsListFactoryWrapper("' in main:
+        checks.append(
+            {
+                "check": "main_physics_wrapper_constructor_matches_contract",
+                "status": "fail",
+                "message": (
+                    "main.cc must not call PhysicsListFactoryWrapper(string) unless "
+                    "the physics module declares that constructor"
+                ),
+            }
+        )
 
     result.checks.extend(checks)
     for check in checks:

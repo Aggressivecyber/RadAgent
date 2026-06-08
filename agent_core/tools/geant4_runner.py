@@ -71,7 +71,11 @@ class Geant4Runner:
         rc, out, err = await self._run(f"make -j{threads}", cwd=build_dir)
         exe: str | None = None
         if rc == 0:
-            candidates = list(Path(build_dir).glob("*.exe")) + list(Path(build_dir).glob("*_sim"))
+            candidates = (
+                list(Path(build_dir).glob("*.exe"))
+                + list(Path(build_dir).glob("*_sim"))
+                + [p for p in Path(build_dir).iterdir() if p.is_file() and os.access(p, os.X_OK)]
+            )
             exe = str(candidates[0]) if candidates else None
         return {"success": rc == 0, "build_output": out, "executable_path": exe, "errors": err}
 
@@ -147,8 +151,10 @@ class Geant4Runner:
                 "warnings": [bld["errors"]],
             }
 
+        macro_path = Path(project_dir) / "macros" / "run.mac"
         sim = await self.simulate(
             bld["executable_path"],
+            macro=str(macro_path) if macro_path.is_file() else None,
             events=events,
             output_dir=_output_dir,
             job_id=job_id,
