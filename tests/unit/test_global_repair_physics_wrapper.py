@@ -171,6 +171,68 @@ def test_global_repair_main_uses_detector_material_registry_constructor(
     assert report["issues_fixed"]
 
 
+def test_global_repair_adds_material_registry_singleton(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    patch = {
+        "changed_files": [
+            {
+                "path": "include/MaterialRegistry.hh",
+                "new_content": (
+                    "#pragma once\n"
+                    "class MaterialRegistry {\n"
+                    "public:\n"
+                    "  void Initialize();\n"
+                    "};\n"
+                ),
+                "module_name": "material",
+                "generated_by": "material_module_agent",
+            },
+            {
+                "path": "src/MaterialRegistry.cc",
+                "new_content": (
+                    '#include "MaterialRegistry.hh"\n'
+                    "void MaterialRegistry::Initialize() {}\n"
+                ),
+                "module_name": "material",
+                "generated_by": "material_module_agent",
+            },
+        ]
+    }
+
+    repaired, report = run_global_code_repair(patch, "job")
+    by_path = {file["path"]: file["new_content"] for file in repaired["changed_files"]}
+
+    assert "static MaterialRegistry& GetInstance();" in by_path["include/MaterialRegistry.hh"]
+    assert "MaterialRegistry& MaterialRegistry::GetInstance()" in by_path[
+        "src/MaterialRegistry.cc"
+    ]
+    assert "static MaterialRegistry registry;" in by_path["src/MaterialRegistry.cc"]
+    assert report["issues_fixed"]
+
+
+def test_global_repair_replaces_g4bestunit_include(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    patch = {
+        "changed_files": [
+            {
+                "path": "src/Hit.cc",
+                "new_content": '#include "Hit.hh"\n#include "G4BestUnit.hh"\n',
+                "module_name": "sensitive_detector",
+                "generated_by": "sensitive_detector_module_agent",
+            },
+        ]
+    }
+
+    repaired, report = run_global_code_repair(patch, "job")
+    hit_source = {file["path"]: file["new_content"] for file in repaired["changed_files"]}[
+        "src/Hit.cc"
+    ]
+
+    assert '#include "G4UnitsTable.hh"' in hit_source
+    assert "G4BestUnit.hh" not in hit_source
+    assert report["issues_fixed"]
+
+
 def test_global_repair_normalizes_two_argument_default_cut(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
     patch = {

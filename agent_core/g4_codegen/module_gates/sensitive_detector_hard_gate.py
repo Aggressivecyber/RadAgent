@@ -282,6 +282,16 @@ def run_sensitive_detector_hard_gate(
             )
 
     if hit_source:
+        if "G4BestUnit.hh" in hit_source.new_content:
+            checks.append(
+                {
+                    "check": "hit_no_g4bestunit_header",
+                    "status": "fail",
+                    "message": "Use G4UnitsTable.hh for G4BestUnit; G4BestUnit.hh does not exist",
+                }
+            )
+            errors.append("Hit.cc must include G4UnitsTable.hh, not G4BestUnit.hh")
+
         uses_iomanip = bool(re.search(r"std::(setw|setprecision|fixed)\b", hit_source.new_content))
         has_iomanip = (
             '#include <iomanip>' in hit_source.new_content

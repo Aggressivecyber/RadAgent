@@ -128,6 +128,13 @@ def _repair_material_registry(by_path: dict[str, dict[str, Any]], report: dict[s
         header_content,
     )
     header_changed = header_content != original_header
+    if "GetInstance(" not in header_content:
+        header_content = _insert_declaration_text(
+            header_content,
+            "static MaterialRegistry& GetInstance();",
+            "Initialize",
+        )
+        header_changed = True
     if header_changed:
         header["new_content"] = header_content
 
@@ -141,11 +148,24 @@ def _repair_material_registry(by_path: dict[str, dict[str, Any]], report: dict[s
         flags=re.DOTALL,
     )
     source_changed = source_content != original_source
+    if "MaterialRegistry::GetInstance(" not in source_content:
+        source_content = (
+            source_content.rstrip()
+            + "\n\nMaterialRegistry& MaterialRegistry::GetInstance() {\n"
+            + "    static MaterialRegistry registry;\n"
+            + "    return registry;\n"
+            + "}\n"
+        )
+        source_changed = True
     if source_changed:
         source["new_content"] = source_content
 
     if header_changed or source_changed:
-        _fixed(report, "MaterialRegistry", "removed ambiguous std::string GetMaterial overload")
+        _fixed(
+            report,
+            "MaterialRegistry",
+            "normalized material registry overloads and singleton adapter",
+        )
 
 
 def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
@@ -546,12 +566,22 @@ def _repair_scoring_manager(by_path: dict[str, dict[str, Any]], report: dict[str
 
 def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
     changed = False
-    for path in ("include/SensitiveDetector.hh", "src/SensitiveDetector.cc", "include/Hit.hh"):
+    for path in (
+        "include/SensitiveDetector.hh",
+        "src/SensitiveDetector.cc",
+        "include/Hit.hh",
+        "src/Hit.cc",
+    ):
         entry = by_path.get(path)
         if not entry:
             continue
         content = entry.get("new_content", "")
-        updated = re.sub(r"\bG4THitsCollection\s*<\s*Hit\s*>", "G4THitsCollection<::Hit>", content)
+        updated = re.sub(
+            r"#include\s+[<\"]G4BestUnit\.hh[>\"]",
+            '#include "G4UnitsTable.hh"',
+            content,
+        )
+        updated = re.sub(r"\bG4THitsCollection\s*<\s*Hit\s*>", "G4THitsCollection<::Hit>", updated)
         updated = re.sub(
             r"\bHit\s*\*\s+hit\s*=\s*new\s+Hit\s*\(\s*\)\s*;",
             "::Hit* hit = new ::Hit();",

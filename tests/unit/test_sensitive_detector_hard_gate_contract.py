@@ -204,3 +204,29 @@ def test_sensitive_detector_hard_gate_rejects_inline_allocator_declarations() ->
 
     assert result.status == "fail"
     assert any("must not be inline" in error for error in result.errors)
+
+
+def test_sensitive_detector_hard_gate_rejects_g4bestunit_header() -> None:
+    result = run_sensitive_detector_hard_gate(
+        [
+            _file(
+                "include/Hit.hh",
+                "#pragma once\n"
+                "class Hit { public: void SetTrackID(int); int GetTrackID() const; };\n",
+            ),
+            _file("src/Hit.cc", '#include "Hit.hh"\n#include "G4BestUnit.hh"\n'),
+            _file("include/SensitiveDetector.hh", "#pragma once\nclass SensitiveDetector {};\n"),
+            _file(
+                "src/SensitiveDetector.cc",
+                "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                "  ::Hit* hit = new ::Hit();\n"
+                "  hit->SetTrackID(step->GetTrack()->GetTrackID());\n"
+                "  return true;\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4UnitsTable.hh" in error for error in result.errors)

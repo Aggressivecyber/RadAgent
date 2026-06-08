@@ -440,6 +440,7 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "ProcessHits must store the track id with "
                 "hit->SetTrackID(step->GetTrack()->GetTrackID())."
             ),
+            "Use G4UnitsTable.hh for G4BestUnit; do not include G4BestUnit.hh.",
         ]
     if module_name == "placement":
         return [
@@ -511,6 +512,10 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "Implement MaterialRegistry::Initialize or DefineAllMaterials so it "
                 "actually registers IR materials with FindOrBuildMaterial and the custom "
                 "material API."
+            ),
+            (
+                "Provide static MaterialRegistry& GetInstance() returning a function-local "
+                "static MaterialRegistry so other modules can share the registry."
             ),
             (
                 "Do not use placeholder, dummy, stub, TODO, NotImplemented, 'for now', "

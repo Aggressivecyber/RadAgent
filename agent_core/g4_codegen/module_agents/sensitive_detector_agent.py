@@ -55,7 +55,8 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
 20. 如果 Hit.hh 声明自定义 allocator 的 operator new/delete，并且定义写在 Hit.cc，
     头文件声明不要加 inline；使用 static void* operator new(size_t);
     static void operator delete(void*);。只有当完整函数体也写在头文件时才允许 inline。
-21. 输出 JSON 格式
+21. G4BestUnit 函数来自 G4UnitsTable.hh；不要 include 不存在的 G4BestUnit.hh。
+22. 输出 JSON 格式
 """
 
 
