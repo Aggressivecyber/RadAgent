@@ -149,44 +149,57 @@ async def run_cross_file_llm_gate(
                 "includes": _extract_includes(f.get("new_content", "")),
                 "classes": _extract_classes(f.get("new_content", "")),
                 "public_methods": _extract_public_methods(f.get("new_content", "")),
-                "content_excerpt": f.get("new_content", "")[:800],
+                "content_excerpt": f.get("new_content", "")[:400],
             }
         )
 
     # ── Build LLM prompt ─────────────────────────────────────────────
     user_prompt = f"""代码审查包：
-{json.dumps(code_review_bundle, indent=2, ensure_ascii=False)[:50000]}
+{json.dumps(code_review_bundle, indent=2, ensure_ascii=False)[:30000]}
 
-请审查全工程语义一致性。返回 JSON。"""
+请审查全工程语义一致性。只返回一个 JSON 对象，不得返回空内容。"""
 
-    llm_result = await gateway.call(
-        task=ModelTask.GATE_EXPLANATION,
-        tier=ModelTier.MAX,
-        system_prompt=CROSS_FILE_LLM_GATE_PROMPT,
-        user_prompt=user_prompt,
-        response_format="json",
-        max_tokens=4096,
-        metadata={"job_id": job_id, "module_name": "cross_file"},
-    )
+    data: dict[str, Any] | None = None
+    parse_errors: list[str] = []
+    llm_error: str | None = None
+    for attempt in range(1, 3):
+        retry_suffix = "" if attempt == 1 else "\n\n上一次返回不是有效 JSON。请只返回 JSON 对象。"
+        llm_result = await gateway.call(
+            task=ModelTask.GATE_EXPLANATION,
+            tier=ModelTier.MAX,
+            system_prompt=CROSS_FILE_LLM_GATE_PROMPT,
+            user_prompt=user_prompt + retry_suffix,
+            response_format="json",
+            max_tokens=4096,
+            metadata={"job_id": job_id, "module_name": "cross_file", "attempt": attempt},
+        )
 
-    if llm_result.error:
+        if llm_result.error:
+            llm_error = llm_result.error
+            break
+
+        try:
+            data = llm_result.parsed_json or _safe_parse_json(llm_result.content) or json.loads(
+                llm_result.content.strip()
+            )
+            break
+        except (json.JSONDecodeError, TypeError) as exc:
+            parse_errors.append(f"attempt {attempt}: {exc}")
+
+    if llm_error:
         gate_result = {
             "status": "fail",
             "checks": [],
-            "errors": [f"LLM gate call failed: {llm_result.error}"],
+            "errors": [f"LLM gate call failed: {llm_error}"],
         }
         _persist_result(gate_result, job_id)
         return gate_result
 
-    try:
-        data = llm_result.parsed_json or _safe_parse_json(llm_result.content) or json.loads(
-            llm_result.content.strip()
-        )
-    except (json.JSONDecodeError, TypeError):
+    if data is None:
         gate_result = {
             "status": "fail",
             "checks": [],
-            "errors": ["Invalid JSON from LLM gate"],
+            "errors": ["Invalid JSON from LLM gate after retry", *parse_errors],
         }
         _persist_result(gate_result, job_id)
         return gate_result
