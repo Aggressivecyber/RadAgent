@@ -119,7 +119,8 @@ check_venv() {
         ok ".venv 已存在"
     fi
 
-    source .venv/bin/activate
+    # shellcheck disable=SC1091
+    source .venv/bin/activate >/dev/null 2>&1
     ok "已激活 (.venv)"
 }
 
@@ -138,7 +139,7 @@ check_api_key() {
     section "API Key"
     # 先加载 .env
     if [[ -f .env ]]; then
-        set -a; source .env; set +a
+        set -a; source .env >/dev/null 2>&1; set +a
     fi
 
     local key_env="${RADAGENT_LITE_API_KEY_ENV:-RADAGENT_API_KEY}"
