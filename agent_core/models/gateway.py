@@ -47,6 +47,7 @@ class ModelGateway:
         )
 
         start = time.time()
+        self._record_model_call_start(req, profile)
 
         try:
             if profile.provider == ModelProvider.MOCK:
@@ -92,9 +93,34 @@ class ModelGateway:
 
         return result
 
-    def _log_tool_call(
-        self, req: ModelCallRequest, result: ModelCallResult, start: float
-    ) -> None:
+    def _record_model_call_start(self, req: ModelCallRequest, profile: Any) -> None:
+        """Record a job-scoped event before the provider call starts."""
+        try:
+            from agent_core.observability import record_event
+
+            job_id = req.metadata.get("job_id")
+            record_event(
+                job_id=job_id,
+                event_type="model_call_start",
+                status="running",
+                phase=str(req.task),
+                module_name=str(req.metadata.get("module_name", "")),
+                summary=f"{req.task} via {profile.provider}",
+                metrics={
+                    "system_prompt_chars": len(req.system_prompt or ""),
+                    "user_prompt_chars": len(req.user_prompt or ""),
+                },
+                details={
+                    "tier": str(req.tier),
+                    "provider": str(profile.provider),
+                    "model_name": profile.model_name,
+                    "metadata": req.metadata,
+                },
+            )
+        except Exception:
+            pass
+
+    def _log_tool_call(self, req: ModelCallRequest, result: ModelCallResult, start: float) -> None:
         """Record tool call to the global tool logger."""
         try:
             from agent_core.models.tool_logger import (
@@ -120,6 +146,33 @@ class ModelGateway:
             tool_logger.record(record)
         except Exception:
             # Never let logging break the actual call
+            pass
+
+        try:
+            from agent_core.observability import record_event
+
+            job_id = req.metadata.get("job_id")
+            record_event(
+                job_id=job_id,
+                event_type="model_call",
+                status="failed" if result.error else "passed",
+                phase=str(req.task),
+                module_name=str(req.metadata.get("module_name", "")),
+                summary=f"{req.task} via {result.provider}",
+                duration_ms=result.latency_ms,
+                metrics={
+                    "content_length": len(result.content or ""),
+                    "parsed_json": result.parsed_json is not None,
+                },
+                errors=[result.error] if result.error else [],
+                details={
+                    "tier": str(req.tier),
+                    "provider": str(result.provider),
+                    "model_name": result.model_name,
+                    "metadata": req.metadata,
+                },
+            )
+        except Exception:
             pass
 
 
