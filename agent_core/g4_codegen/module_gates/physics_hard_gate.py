@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
 from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleGateResult
 
@@ -53,6 +55,20 @@ def _append_physics_ownership_checks(
                     "message": (
                         "Physics header must include G4SystemOfUnits.hh when declarations "
                         "use Geant4 unit constants"
+                    ),
+                }
+            )
+        if f.path.endswith(".mac") and re.search(
+            r"/process/em/setCut\s+[\d.eE+-]+\s+\w+\s+proton\b",
+            content,
+        ):
+            checks.append(
+                {
+                    "check": "physics_macro_valid_proton_cut_command",
+                    "status": "fail",
+                    "message": (
+                        "Physics macros must not use /process/em/setCut for proton cuts; "
+                        "use C++ SetCuts()/SetCutValue or /run/setCutForAGivenParticle"
                     ),
                 }
             )
