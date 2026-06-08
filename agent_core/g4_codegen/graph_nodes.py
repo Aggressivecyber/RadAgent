@@ -242,16 +242,21 @@ async def run_module_hard_gate_node(
     state: G4CodegenSubgraphState,
     module_name: str,
 ) -> dict[str, Any]:
-    """Run hard gate for a specific module."""
+    """Run hard gate for a specific module.
+
+    P0-10: Passes module_status to hard gate so it can reject
+    failed ModuleAgentResult.
+    """
     module_results = state.get("module_results", {})
     result = module_results.get(module_name, {})
     generated_files_data = result.get("generated_files", [])
+    module_status = result.get("status", "unknown")
 
     from agent_core.g4_codegen.schemas import GeneratedModuleFile
     files = [GeneratedModuleFile(**f) for f in generated_files_data]
 
     gate_fn = _get_hard_gate_function(module_name)
-    gate_result = gate_fn(files)
+    gate_result = gate_fn(files, module_status=module_status)
 
     gate_results = dict(state.get("module_gate_results", {}))
     if module_name not in gate_results:
@@ -371,7 +376,14 @@ async def repair_module_node(
     state: G4CodegenSubgraphState,
     module_name: str,
 ) -> dict[str, Any]:
-    """Repair a failed module if needed."""
+    """Repair a failed module if needed.
+
+    P0-14/P0-15: When repair reaches max attempts and still fails:
+    - module status → "failed"
+    - g4_codegen_status → "failed"
+    - codegen_errors updated
+    - Graph routes to persist (not back to hard gate)
+    """
     gate_results = state.get("module_gate_results", {})
     module_gate = gate_results.get(module_name, {})
     hard_gate = module_gate.get("hard", {})
@@ -415,11 +427,28 @@ async def repair_module_node(
         "attempts": len(repaired.repair_attempts),
     }
 
-    return {
+    # P0-14/P0-15: If repair failed, mark codegen as failed
+    updates: dict[str, Any] = {
         "module_results": updated_results,
         "module_repair_results": repair_results,
         "current_node": f"repair_{module_name}",
     }
+
+    if repaired.status == "failed":
+        updates["g4_codegen_status"] = "failed"
+        codegen_errors = list(state.get("codegen_errors", []))
+        codegen_errors.append(
+            f"Module '{module_name}' repair failed after "
+            f"{len(repaired.repair_attempts)} attempts: "
+            + "; ".join(repaired.errors[:3])
+        )
+        updates["codegen_errors"] = codegen_errors
+        logger.warning(
+            "Module %s repair failed — terminating codegen for this module",
+            module_name,
+        )
+
+    return updates
 
 
 # ── Integration nodes ────────────────────────────────────────────────

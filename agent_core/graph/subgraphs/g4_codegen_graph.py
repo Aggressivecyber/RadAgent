@@ -26,8 +26,8 @@ from agent_core.g4_codegen import load_model_ir
 from agent_core.g4_codegen.graph_nodes import (
     build_codegen_plan_node,
     build_interface_contracts_node,
-    build_module_contracts_node,
     build_module_contexts_node,
+    build_module_contracts_node,
     cross_file_hard_gate_node,
     cross_file_llm_gate_node,
     integration_assembler_node,
@@ -266,13 +266,16 @@ def _route_after_static_scan(state: G4CodegenSubgraphState) -> str:
 
 
 def _route_after_repair(module_name: str) -> Any:
-    """Route after repair: success → hard gate, failed → skip to next module."""
+    """Route after repair: success → hard gate, failed → persist (terminate codegen).
+
+    P0-14/P0-15: When repair fails after max attempts, terminate codegen
+    by routing to persist_codegen_output. Do NOT loop back to hard gate.
+    """
     def _route(state: G4CodegenSubgraphState) -> str:
         repair_results = state.get("module_repair_results", {})
         repair = repair_results.get(module_name, {})
         if repair.get("status") == "failed":
-            # Repair failed — skip to next module or integration
-            idx = MODULE_ORDER.index(module_name)
-            return _next_module_or_integration(idx)
+            # P0-15: Repair failed — terminate codegen, go to persist
+            return "persist_codegen_output"
         return f"{module_name}_hard_gate"
     return _route

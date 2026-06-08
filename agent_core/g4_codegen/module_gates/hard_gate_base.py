@@ -30,10 +30,12 @@ def run_hard_gate_checks(
     module_name: str,
     generated_files: list[GeneratedModuleFile],
     forbidden_patterns: list[str] | None = None,
+    module_status: str | None = None,
 ) -> ModuleGateResult:
     """Run deterministic hard gate checks on generated files.
 
     Checks:
+    0. P0-10: module_status must be 'generated' or 'repaired'
     1. new_content is non-empty
     2. path is valid
     3. No Markdown fence
@@ -47,13 +49,37 @@ def run_hard_gate_checks(
     11. generated_by is correct
     12. module_name is correct
     """
+    # P0-10: Reject failed module status
+    if module_status and module_status not in ("generated", "repaired"):
+        return ModuleGateResult(
+            module_name=module_name,
+            gate_type="hard",
+            status="fail",
+            checks=[{
+                "check": "module_status",
+                "status": "fail",
+                "message": (
+                    f"module_status is '{module_status}', "
+                    "expected 'generated' or 'repaired'"
+                ),
+            }],
+            errors=[
+                f"Module status '{module_status}' is not acceptable — "
+                "must be 'generated' or 'repaired'"
+            ],
+        )
+
     # P0-9: Reject empty generated_files
     if not generated_files:
         return ModuleGateResult(
             module_name=module_name,
             gate_type="hard",
             status="fail",
-            checks=[{"check": "non_empty_generated_files", "status": "fail", "message": "generated_files is empty"}],
+            checks=[{
+                "check": "non_empty_generated_files",
+                "status": "fail",
+                "message": "generated_files is empty",
+            }],
             errors=["generated_files is empty — hard gate cannot pass"],
         )
 
@@ -139,9 +165,17 @@ def _check_single_file(
 
     # Check source includes own header
     if f.path.endswith(".cc") or f.path.endswith(".cpp"):
-        header_name = f.path.replace("/src/", "/include/").replace(".cc", ".hh").replace(".cpp", ".h")
+        header_name = (
+            f.path
+            .replace("/src/", "/include/")
+            .replace(".cc", ".hh")
+            .replace(".cpp", ".h")
+        )
         short_header = header_name.split("/")[-1]
-        has_own_include = f'#include "{short_header}"' in content or f'#include <{short_header}>' in content
+        has_own_include = (
+            f'#include "{short_header}"' in content
+            or f'#include <{short_header}>' in content
+        )
         checks.append({
             "check": "source_includes_own_header",
             "status": "pass" if has_own_include else "warn",

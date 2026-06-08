@@ -80,7 +80,7 @@ class TestSubgraphTopology:
             ("context", 6),
             ("task_planning", 3),
             ("g4_modeling", 14),
-            ("g4_codegen", 13),
+            ("g4_codegen", 52),
             ("gate_validation", 4),
             ("patch", 3),
             ("artifact", 3),

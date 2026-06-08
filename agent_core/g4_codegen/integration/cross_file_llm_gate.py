@@ -91,7 +91,11 @@ async def run_cross_file_llm_gate(
         "static_semantic_scan": static_semantic_scan,
         "cross_file_hard_gate": cross_file_hard_gate,
         "file_details": [],
-        "g4_lifecycle_summary": "Geant4 simulation lifecycle: detector construction → physics list → primary generator → run manager → sensitive detector → scoring → output",
+        "g4_lifecycle_summary": (
+            "Geant4 simulation lifecycle: detector construction "
+            "→ physics list → primary generator → run manager "
+            "→ sensitive detector → scoring → output"
+        ),
         "interface_contracts": interface_contracts or {},
     }
 
@@ -112,7 +116,7 @@ async def run_cross_file_llm_gate(
 
 请审查全工程语义一致性。返回 JSON。"""
 
-    result = await gateway.call(
+    llm_result = await gateway.call(
         task=ModelTask.GATE_EXPLANATION,
         tier=ModelTier.MAX,
         system_prompt=CROSS_FILE_LLM_GATE_PROMPT,
@@ -121,17 +125,17 @@ async def run_cross_file_llm_gate(
         max_tokens=4096,
     )
 
-    if result.error:
+    if llm_result.error:
         gate_result = {
             "status": "fail",
             "checks": [],
-            "errors": [f"LLM gate call failed: {result.error}"],
+            "errors": [f"LLM gate call failed: {llm_result.error}"],
         }
         _persist_result(gate_result, job_id)
         return gate_result
 
     try:
-        data = result.parsed_json or json.loads(result.content.strip())
+        data = llm_result.parsed_json or json.loads(llm_result.content.strip())
     except (json.JSONDecodeError, TypeError):
         gate_result = {
             "status": "fail",

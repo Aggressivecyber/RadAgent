@@ -1,3 +1,134 @@
+E501 Line too long (104 > 100)
+ --> agent_core/chat/prompts.py:4:66
+  |
+3 | CHAT_SYSTEM_PROMPT = """\
+4 | 你是 RadAgent 的智能助手，专注于仿真研究领域（Geant4 粒子仿真、TCAD 半导体器件仿真、ngspice 电路仿真）。
+  |                                                                                                     ^^^^
+5 |
+6 | ## 你的能力
+  |
+
+E501 Line too long (128 > 100)
+  --> agent_core/g4_codegen/module_agents/base.py:20:78
+   |
+18 | 你不是模板填空器。
+19 | 你只负责当前模块。
+20 | 你必须根据 ModuleContract、ModuleContext、G4ModelIR 子集、规则、RAG 参考片段和 Geant4 API 约束，生成当前模块需要的完整文件内容。
+   |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+21 |
+22 | 严格要求：
+   |
+
+E501 Line too long (114 > 100)
+  --> agent_core/g4_codegen/module_gates/llm_gate_base.py:15:70
+   |
+13 | 你只审查当前模块，不审查整个工程。
+14 |
+15 | 请根据 ModuleContract、ModuleContext、G4ModelIR 子集、生成文件内容、硬门禁结果，判断当前模块是否可以进入集成阶段。
+   |                                                                                                     ^^^^^^^^^^^^^^
+16 |
+17 | 你必须检查：
+   |
+
+E501 Line too long (102 > 100)
+  --> agent_core/g4_codegen/nodes/integration_assembler.py:11:101
+   |
+10 | warnings.warn(
+11 |     "This module is deprecated. Use agent_core.g4_codegen.integration.integration_assembler instead.",
+   |                                                                                                     ^^
+12 |     DeprecationWarning,
+13 |     stacklevel=2,
+   |
+
+E402 Module level import not at top of file
+  --> agent_core/g4_codegen/nodes/integration_assembler.py:16:1
+   |
+14 | )
+15 |
+16 | from typing import Any
+   | ^^^^^^^^^^^^^^^^^^^^^^
+17 |
+18 | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+   |
+
+E402 Module level import not at top of file
+  --> agent_core/g4_codegen/nodes/integration_assembler.py:18:1
+   |
+16 | from typing import Any
+17 |
+18 | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+E501 Line too long (122 > 100)
+   --> agent_core/g4_codegen/planners/code_architecture_planner.py:139:101
+    |
+137 |     deps: dict[str, list[str]] = {
+138 |         "DetectorConstruction": ["MaterialRegistry", "PlacementManager", "SensitiveDetector"],
+139 |         "ActionInitialization": ["PrimaryGeneratorAction", "RunAction", "EventAction", "SteppingAction", "OutputManager"],
+    |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^
+140 |         "RunAction": ["OutputManager", "ScoringManager"],
+141 |         "EventAction": ["OutputManager"],
+    |
+
+N817 CamelCase `Path` imported as acronym `P`
+  --> agent_core/g4_codegen/planners/geometry_strategy_planner.py:37:37
+   |
+35 |             file_exists = False
+36 |             if file_path:
+37 |                 from pathlib import Path as P
+   |                                     ^^^^^^^^^
+38 |                 file_exists = P(file_path).exists()
+   |
+
+E501 Line too long (128 > 100)
+ --> agent_core/g4_codegen/prompts/module_codegen_prompts.py:7:78
+  |
+5 | 你不是模板填空器。
+6 | 你只负责当前模块。
+7 | 你必须根据 ModuleContract、ModuleContext、G4ModelIR 子集、规则、RAG 参考片段和 Geant4 API 约束，生成当前模块需要的完整文件内容。
+  |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+8 |
+9 | 严格要求：
+  |
+
+E501 Line too long (114 > 100)
+ --> agent_core/g4_codegen/prompts/module_llm_gate_prompts.py:6:70
+  |
+4 | 你只审查当前模块，不审查整个工程。
+5 |
+6 | 请根据 ModuleContract、ModuleContext、G4ModelIR 子集、生成文件内容、硬门禁结果，判断当前模块是否可以进入集成阶段。
+  |                                                                                                     ^^^^^^^^^^^^^^
+7 |
+8 | 你必须检查：
+  |
+
+E501 Line too long (107 > 100)
+  --> agent_core/g4_codegen/repair/module_repair_loop.py:75:95
+   |
+73 |             tier=ModelTier.MAX,
+74 |             system_prompt=REPAIR_SYSTEM_PROMPT,
+75 |             user_prompt=f"修复上下文：\n{json.dumps(repair_context, indent=2, ensure_ascii=False)[:4000]}",
+   |                                                                                                     ^^^^^^^
+76 |             response_format="json",
+77 |             max_tokens=65536,
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+ --> agent_core/models/mock.py:3:1
+  |
+1 |   """Mock model provider — returns deterministic responses for testing."""
+2 |
+3 | / from __future__ import annotations
+4 | |
+5 | | import json
+6 | | from typing import Any
+7 | |
+8 | | from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask
+  | |_______________________________________________________________________________^
+  |
+help: Organize imports
+
 N818 Exception name `_QuitREPL` should be named with an Error suffix
   --> agent_core/repl.py:76:7
    |
@@ -5,6 +136,17 @@ N818 Exception name `_QuitREPL` should be named with an Error suffix
    |       ^^^^^^^^^
 77 |     """Signal to exit the REPL loop."""
    |
+
+E501 Line too long (109 > 100)
+   --> agent_core/repl.py:796:101
+    |
+794 |             style = "green" if marker == "DONE" else "yellow"
+795 |             current = " ◀ current" if job.name == current_job else ""
+796 |             self.console.print(f"  [{style}][{marker}][/{style}] {job.name}[bold cyan]{current}[/bold cyan]")
+    |                                                                                                     ^^^^^^^^^
+797 |
+798 |     async def cmd_help(self) -> None:
+    |
 
 F401 [*] `json` imported but unused
   --> agent_core/workspace/io.py:9:8
@@ -722,6 +864,471 @@ E501 Line too long (122 > 100)
     |
 
 I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:3:1
+   |
+ 1 |   """E2E test — semiconductor detector config codegen pipeline with mock provider."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | from pathlib import Path
+ 7 | | from typing import Any
+ 8 | | from unittest.mock import AsyncMock, patch
+ 9 | |
+10 | | import pytest
+11 | |
+12 | | from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
+13 | | from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
+14 | | from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+15 | | from agent_core.g4_codegen.schemas import GeneratedModuleFile
+16 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `unittest.mock.AsyncMock` imported but unused
+  --> tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:8:27
+   |
+ 6 | from pathlib import Path
+ 7 | from typing import Any
+ 8 | from unittest.mock import AsyncMock, patch
+   |                           ^^^^^^^^^
+ 9 |
+10 | import pytest
+   |
+help: Remove unused import
+
+F401 [*] `unittest.mock.patch` imported but unused
+  --> tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:8:38
+   |
+ 6 | from pathlib import Path
+ 7 | from typing import Any
+ 8 | from unittest.mock import AsyncMock, patch
+   |                                      ^^^^^
+ 9 |
+10 | import pytest
+   |
+help: Remove unused import
+
+E501 Line too long (147 > 100)
+   --> tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:138:101
+    |
+136 | …uction::Construct() {\n'
+137 | …orld", 5000*cm, 5000*cm, 5000*cm);\n'
+138 | …lume(worldSolid, G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+139 | …nt(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
+140 | …
+    |
+
+E501 Line too long (116 > 100)
+   --> tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:139:101
+    |
+137 | …     '  auto* worldSolid = new G4Box("World", 5000*cm, 5000*cm, 5000*cm);\n'
+138 | …     '  auto* worldLV = new G4LogicalVolume(worldSolid, G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
+139 | …     '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
+    |                                                                                   ^^^^^^^^^^^^^^^^
+140 | …     '  return worldPV;\n'
+141 | …     '}\n',
+    |
+
+F811 Redefinition of unused `patch` from line 8
+   --> tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:166:9
+    |
+165 |         # Step 1: Assemble patch
+166 |         patch = assemble_proposed_patch(module_results, gate_results, "semi_e2e")
+    |         ^^^^^ `patch` redefined here
+167 |         assert len(patch["changed_files"]) > 0
+    |
+   ::: tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:8:38
+    |
+  6 | from pathlib import Path
+  7 | from typing import Any
+  8 | from unittest.mock import AsyncMock, patch
+    |                                      ----- previous definition of `patch` here
+  9 |
+ 10 | import pytest
+    |
+help: Remove definition: `patch`
+
+F811 Redefinition of unused `patch` from line 8
+   --> tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:199:9
+    |
+197 |         }
+198 |
+199 |         patch = assemble_proposed_patch(module_results, gate_results, "semi_write")
+    |         ^^^^^ `patch` redefined here
+200 |
+201 |         # Verify patch was persisted
+    |
+   ::: tests/e2e/test_g4_codegen_agent_modules_semiconductor.py:8:38
+    |
+  6 | from pathlib import Path
+  7 | from typing import Any
+  8 | from unittest.mock import AsyncMock, patch
+    |                                      ----- previous definition of `patch` here
+  9 |
+ 10 | import pytest
+    |
+help: Remove definition: `patch`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_agent_modules_shielding.py:3:1
+   |
+ 1 |   """E2E test — shielding config codegen pipeline with mock provider."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | from pathlib import Path
+ 7 | | from typing import Any
+ 8 | |
+ 9 | | import pytest
+10 | |
+11 | | from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
+12 | | from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
+13 | | from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+14 | | from agent_core.g4_codegen.schemas import GeneratedModuleFile
+15 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `json` imported but unused
+ --> tests/e2e/test_g4_codegen_agent_modules_shielding.py:5:8
+  |
+3 | from __future__ import annotations
+4 |
+5 | import json
+  |        ^^^^
+6 | from pathlib import Path
+7 | from typing import Any
+  |
+help: Remove unused import: `json`
+
+E501 Line too long (101 > 100)
+  --> tests/e2e/test_g4_codegen_agent_modules_shielding.py:93:101
+   |
+91 |                         '  auto* worldSolid = new G4Box("World", 5000*cm, 5000*cm, 5000*cm);\n'
+92 |                         '  auto* worldLV = new G4LogicalVolume(worldSolid, '
+93 |                         '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
+   |                                                                                                     ^
+94 |                         '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
+95 |                         '  return worldPV;\n'
+   |
+
+E501 Line too long (116 > 100)
+  --> tests/e2e/test_g4_codegen_agent_modules_shielding.py:94:101
+   |
+92 |                         '  auto* worldLV = new G4LogicalVolume(worldSolid, '
+93 |                         '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
+94 |                         '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
+   |                                                                                                     ^^^^^^^^^^^^^^^^
+95 |                         '  return worldPV;\n'
+96 |                         '}\n',
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:3:1
+   |
+ 1 |   """E2E test — comprehensive mock provider full flow test."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | from pathlib import Path
+ 7 | | from typing import Any
+ 8 | | from unittest.mock import AsyncMock, patch
+ 9 | |
+10 | | import pytest
+11 | |
+12 | | from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
+13 | | from agent_core.g4_codegen.integration.cross_file_hard_gate import run_cross_file_hard_gate
+14 | | from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
+15 | | from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+16 | | from agent_core.g4_codegen.schemas import GeneratedModuleFile
+17 | | from agent_core.g4_codegen.graph_nodes import persist_codegen_output_node
+18 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `json` imported but unused
+ --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:5:8
+  |
+3 | from __future__ import annotations
+4 |
+5 | import json
+  |        ^^^^
+6 | from pathlib import Path
+7 | from typing import Any
+  |
+help: Remove unused import: `json`
+
+F401 [*] `unittest.mock.AsyncMock` imported but unused
+  --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:8:27
+   |
+ 6 | from pathlib import Path
+ 7 | from typing import Any
+ 8 | from unittest.mock import AsyncMock, patch
+   |                           ^^^^^^^^^
+ 9 |
+10 | import pytest
+   |
+help: Remove unused import
+
+F401 [*] `unittest.mock.patch` imported but unused
+  --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:8:38
+   |
+ 6 | from pathlib import Path
+ 7 | from typing import Any
+ 8 | from unittest.mock import AsyncMock, patch
+   |                                      ^^^^^
+ 9 |
+10 | import pytest
+   |
+help: Remove unused import
+
+E501 Line too long (101 > 100)
+   --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:98:101
+    |
+ 96 |                         '  auto* worldSolid = new G4Box("World", 5*m, 5*m, 5*m);\n'
+ 97 |                         '  auto* worldLV = new G4LogicalVolume(worldSolid, '
+ 98 |                         '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
+    |                                                                                                     ^
+ 99 |                         '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
+100 |                         '  return worldPV;\n'
+    |
+
+E501 Line too long (116 > 100)
+   --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:99:101
+    |
+ 97 |                         '  auto* worldLV = new G4LogicalVolume(worldSolid, '
+ 98 |                         '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
+ 99 |                         '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
+    |                                                                                                     ^^^^^^^^^^^^^^^^
+100 |                         '  return worldPV;\n'
+101 |                         '}\n',
+    |
+
+F811 Redefinition of unused `patch` from line 8
+   --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:156:9
+    |
+155 |         # Step 2: Assemble patch
+156 |         patch = assemble_proposed_patch(module_results, gate_results, "mock_full_test")
+    |         ^^^^^ `patch` redefined here
+157 |         assert len(patch["changed_files"]) > 0
+    |
+   ::: tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:8:38
+    |
+  6 | from pathlib import Path
+  7 | from typing import Any
+  8 | from unittest.mock import AsyncMock, patch
+    |                                      ----- previous definition of `patch` here
+  9 |
+ 10 | import pytest
+    |
+help: Remove definition: `patch`
+
+E501 Line too long (111 > 100)
+   --> tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py:186:101
+    |
+184 |         )
+185 |
+186 |         expected_status = "passed" if scan["status"] == "pass" and cross_gate["status"] == "pass" else "failed"
+    |                                                                                                     ^^^^^^^^^^^
+187 |         assert result["g4_codegen_status"] == expected_status
+188 |         assert result["generated_code_dir"].endswith("08_geant4")
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_cad_placeholder_no_conversion.py:3:1
+   |
+ 1 |   """E2E test — CAD/GDML placeholder does not perform real conversion."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.interface_contracts import build_interface_contracts
+11 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/e2e/test_g4_codegen_cad_placeholder_no_conversion.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+E501 Line too long (143 > 100)
+  --> tests/e2e/test_g4_codegen_cad_placeholder_no_conversion.py:89:101
+   |
+87 | …
+88 | …
+89 | …\n// FreeCAD conversion of STEP file\nauto* solid = new G4Box("box", 1*m, 1*m, 1*m);\n',
+   |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+90 | …
+91 | …
+   |
+
+E501 Line too long (104 > 100)
+   --> tests/e2e/test_g4_codegen_cad_placeholder_no_conversion.py:101:101
+    |
+ 99 |             if f["issue"] in ("freecad_reference", "step_conversion_claim")
+100 |         ]
+101 |         assert len(freecad_findings) > 0, "Static scan should detect FreeCAD/STEP conversion references"
+    |                                                                                                     ^^^^
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_module_gate_failure_blocks_patch.py:3:1
+   |
+ 1 |   """E2E test — module gate failure blocks patch generation."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
+11 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/e2e/test_g4_codegen_module_gate_failure_blocks_patch.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_module_repair_failure_terminates.py:3:1
+   |
+ 1 |   """E2E test — module repair failure terminates pipeline."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | | from unittest.mock import AsyncMock, patch
+ 8 | |
+ 9 | | import pytest
+10 | |
+11 | | from agent_core.g4_codegen.repair.module_repair_loop import repair_module
+12 | | from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult, ModuleGateResult
+13 | | from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_repair
+14 | | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+15 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/e2e/test_g4_codegen_module_repair_failure_terminates.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 | from unittest.mock import AsyncMock, patch
+  |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_patch_applies_to_08_geant4.py:3:1
+   |
+ 1 |   """E2E test — patch applies to 08_geant4 directory."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.graph_nodes import persist_codegen_output_node
+11 | | from agent_core.patching.nodes import apply_patch
+12 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/e2e/test_g4_codegen_patch_applies_to_08_geant4.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/e2e/test_g4_codegen_static_scan_blocks_patch.py:3:1
+   |
+ 1 |   """E2E test — static scan failure blocks patch."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.graph_nodes import (
+11 | |     persist_codegen_output_node,
+12 | |     static_semantic_scanner_node,
+13 | | )
+14 | | from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
+15 | | from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_static_scan
+16 | | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+17 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/e2e/test_g4_codegen_static_scan_blocks_patch.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+F401 [*] `agent_core.g4_codegen.graph_nodes.static_semantic_scanner_node` imported but unused
+  --> tests/e2e/test_g4_codegen_static_scan_blocks_patch.py:12:5
+   |
+10 | from agent_core.g4_codegen.graph_nodes import (
+11 |     persist_codegen_output_node,
+12 |     static_semantic_scanner_node,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+13 | )
+14 | from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
+   |
+help: Remove unused import: `agent_core.g4_codegen.graph_nodes.static_semantic_scanner_node`
+
+I001 [*] Import block is un-sorted or un-formatted
   --> tests/e2e/test_hello_does_not_crash.py:7:1
    |
  5 |   """
@@ -1096,6 +1703,282 @@ I001 [*] Import block is un-sorted or un-formatted
 help: Organize imports
 
 I001 [*] Import block is un-sorted or un-formatted
+ --> tests/unit/test_changed_files_have_zone_and_new_content.py:3:1
+  |
+1 |   """P0-3: Every changed_file has zone and new_content."""
+2 |
+3 | / from __future__ import annotations
+4 | |
+5 | | import pytest
+6 | |
+7 | | from agent_core.g4_codegen.integration.integration_assembler import (
+8 | |     assemble_proposed_patch,
+9 | | )
+  | |_^
+  |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_codegen_requires_confirmation_when_needed.py:32:5
+   |
+30 |   def test_main_graph_passes_confirmation_paths():
+31 |       """Verify main_graph passes confirmation paths to codegen subgraph."""
+32 | /     import inspect
+33 | |     from agent_core.graph.main_graph import _make_g4_codegen_subgraph_node
+   | |__________________________________________________________________________^
+34 |
+35 |       # The function exists and can be called
+   |
+help: Organize imports
+
+F401 [*] `inspect` imported but unused
+  --> tests/unit/test_codegen_requires_confirmation_when_needed.py:32:12
+   |
+30 | def test_main_graph_passes_confirmation_paths():
+31 |     """Verify main_graph passes confirmation paths to codegen subgraph."""
+32 |     import inspect
+   |            ^^^^^^^
+33 |     from agent_core.graph.main_graph import _make_g4_codegen_subgraph_node
+   |
+help: Remove unused import: `inspect`
+
+F401 [*] `json` imported but unused
+ --> tests/unit/test_cross_file_llm_gate_blocks_on_fail.py:5:8
+  |
+3 | from __future__ import annotations
+4 |
+5 | import json
+  |        ^^^^
+6 |
+7 | from agent_core.g4_codegen.integration.cross_file_llm_gate import (
+  |
+help: Remove unused import: `json`
+
+F401 [*] `agent_core.g4_codegen.integration.cross_file_llm_gate._persist_result` imported but unused
+ --> tests/unit/test_cross_file_llm_gate_blocks_on_fail.py:8:5
+  |
+7 | from agent_core.g4_codegen.integration.cross_file_llm_gate import (
+8 |     _persist_result,
+  |     ^^^^^^^^^^^^^^^
+9 | )
+  |
+help: Remove unused import: `agent_core.g4_codegen.integration.cross_file_llm_gate._persist_result`
+
+F401 [*] `json` imported but unused
+ --> tests/unit/test_cross_file_llm_gate_does_not_only_use_content_length.py:5:8
+  |
+3 | from __future__ import annotations
+4 |
+5 | import json
+  |        ^^^^
+6 |
+7 | from agent_core.g4_codegen.integration.cross_file_llm_gate import (
+  |
+help: Remove unused import: `json`
+
+F841 Local variable `patch` is assigned to but never used
+  --> tests/unit/test_cross_file_llm_gate_does_not_only_use_content_length.py:14:5
+   |
+12 | def test_gate_builds_code_review_bundle():
+13 |     """Verify the gate builds a code_review_bundle with file details."""
+14 |     patch = {
+   |     ^^^^^
+15 |         "changed_files": [
+16 |             {
+   |
+help: Remove assignment to unused variable `patch`
+
+F841 Local variable `module_gates` is assigned to but never used
+  --> tests/unit/test_cross_file_llm_gate_does_not_only_use_content_length.py:24:5
+   |
+22 |         ],
+23 |     }
+24 |     module_gates = {
+   |     ^^^^^^^^^^^^
+25 |         "material": {"hard": {"status": "pass"}, "llm": {"status": "pass"}},
+26 |     }
+   |
+help: Remove assignment to unused variable `module_gates`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_cross_file_llm_gate_does_not_only_use_content_length.py:39:5
+   |
+37 |   def test_file_details_include_includes_and_classes():
+38 |       """Verify file details extraction includes includes and classes."""
+39 | /     from agent_core.g4_codegen.integration.cross_file_llm_gate import (
+40 | |         _extract_includes,
+41 | |         _extract_classes,
+42 | |         _extract_public_methods,
+43 | |     )
+   | |_____^
+44 |       content = (
+45 |           '#pragma once\n'
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_cross_file_llm_gate_uses_code_review_bundle.py:3:1
+   |
+ 1 |   """Test that cross-file LLM gate uses code_review_bundle, not just content_length."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | from pathlib import Path
+ 7 | | from typing import Any
+ 8 | | from unittest.mock import AsyncMock, patch
+ 9 | |
+10 | | import pytest
+11 | |
+12 | | from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
+13 | |
+14 | | from agent_core.g4_codegen.integration.cross_file_llm_gate import run_cross_file_llm_gate
+15 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_cross_file_llm_gate_uses_code_review_bundle.py:7:20
+  |
+5 | import json
+6 | from pathlib import Path
+7 | from typing import Any
+  |                    ^^^
+8 | from unittest.mock import AsyncMock, patch
+  |
+help: Remove unused import: `typing.Any`
+
+E501 Line too long (124 > 100)
+  --> tests/unit/test_cross_file_llm_gate_uses_code_review_bundle.py:43:101
+   |
+41 |                 {
+42 |                     "path": "src/Detector.cc",
+43 |                     "new_content": '#include "Detector.hh"\nG4VPhysicalVolume* Detector::Construct() { return nullptr; }\n',
+   |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^
+44 |                     "generated_by": "geometry_module_agent",
+45 |                     "module_name": "geometry",
+   |
+
+E501 Line too long (160 > 100)
+  --> tests/unit/test_cross_file_llm_gate_uses_code_review_bundle.py:90:101
+   |
+88 | …
+89 | …
+90 | …isks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": "OK"}',
+   |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+91 | …
+92 | …
+   |
+
+E501 Line too long (158 > 100)
+   --> tests/unit/test_cross_file_llm_gate_uses_code_review_bundle.py:160:101
+    |
+158 | …
+159 | …
+160 | …risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": ""}',
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+161 | …
+162 | …
+    |
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_generated_code_dir_points_to_08_geant4.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+E501 Line too long (108 > 100)
+  --> tests/unit/test_hard_gate_detects_empty_include_multiline.py:46:101
+   |
+44 |         assert result.status == "fail"
+45 |         has_empty_include = any(
+46 |             "empty include" in c.get("message", "").lower() or "empty_include" in c.get("check", "").lower()
+   |                                                                                                     ^^^^^^^^
+47 |             for c in result.checks
+48 |         )
+   |
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_hard_gate_rejects_content_field.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+E501 Line too long (101 > 100)
+  --> tests/unit/test_hard_gate_rejects_content_field.py:44:101
+   |
+42 |             for e in result.get("errors", [])
+43 |         )
+44 |         assert has_content_error, f"Expected 'content' rejection, errors: {result.get('errors', [])}"
+   |                                                                                                     ^
+45 |
+46 |     def test_passes_with_only_new_content(self, workspace: Path) -> None:
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_integration_assembler_outputs_required_patch_fields.py:3:1
+   |
+ 1 |   """P0-2: integration_assembler outputs all required patch fields."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import pytest
+ 6 | |
+ 7 | | from agent_core.g4_codegen.integration.integration_assembler import (
+ 8 | |     assemble_proposed_patch,
+ 9 | | )
+   | |_^
+10 |
+11 |   PATCH_REQUIRED_FIELDS = {
+   |
+help: Organize imports
+
+F401 [*] `json` imported but unused
+ --> tests/unit/test_integration_assembler_patch_validator_contract.py:5:8
+  |
+3 | from __future__ import annotations
+4 |
+5 | import json
+  |        ^^^^
+6 | from pathlib import Path
+7 | from typing import Any
+  |
+help: Remove unused import: `json`
+
+E501 Line too long (113 > 100)
+  --> tests/unit/test_integration_assembler_patch_validator_contract.py:71:101
+   |
+69 |                 {
+70 |                     "path": "src/MaterialRegistry.cc",
+71 |                     "new_content": '#include "MaterialRegistry.hh"\nvoid MaterialRegistry::DefineMaterials() {}',
+   |                                                                                                     ^^^^^^^^^^^^^
+72 |                 },
+73 |             ]),
+   |
+
+E501 Line too long (146 > 100)
+  --> tests/unit/test_integration_assembler_patch_validator_contract.py:77:101
+   |
+75 | …
+76 | …,
+77 | …struction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }',
+   |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+78 | …
+79 | …
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
   --> tests/unit/test_intent_router.py:3:1
    |
  1 |   """Tests for agent_core.intent — LLM Intent Router."""
@@ -1131,6 +2014,240 @@ F401 [*] `agent_core.intent.schemas.IntentResult` imported but unused
 13 | from agent_core.models.schemas import (
    |
 help: Remove unused import: `agent_core.intent.schemas.IntentResult`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_interface_contracts_format.py:3:1
+   |
+ 1 |   """Test interface_contracts produces correct JSON format with all three sections."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | from pathlib import Path
+ 7 | | from typing import Any
+ 8 | |
+ 9 | | import pytest
+10 | |
+11 | | from agent_core.g4_codegen.interface_contracts import build_interface_contracts
+12 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_interface_contracts_format.py:7:20
+  |
+5 | import json
+6 | from pathlib import Path
+7 | from typing import Any
+  |                    ^^^
+8 |
+9 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_main_cmake_context_includes_all_sources.py:3:1
+   |
+ 1 |   """Test that main_cmake context includes all upstream module file summaries."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.graph_nodes import run_module_agent_node
+11 | | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+   | |________________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `agent_core.g4_codegen.graph_nodes.run_module_agent_node` imported but unused
+  --> tests/unit/test_main_cmake_context_includes_all_sources.py:10:47
+   |
+ 8 | import pytest
+ 9 |
+10 | from agent_core.g4_codegen.graph_nodes import run_module_agent_node
+   |                                               ^^^^^^^^^^^^^^^^^^^^^
+11 | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+   |
+help: Remove unused import: `agent_core.g4_codegen.graph_nodes.run_module_agent_node`
+
+F401 [*] `agent_core.g4_codegen.schemas.G4CodegenSubgraphState` imported but unused
+  --> tests/unit/test_main_cmake_context_includes_all_sources.py:11:43
+   |
+10 | from agent_core.g4_codegen.graph_nodes import run_module_agent_node
+11 | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: Remove unused import: `agent_core.g4_codegen.schemas.G4CodegenSubgraphState`
+
+E501 Line too long (123 > 100)
+  --> tests/unit/test_main_cmake_context_includes_all_sources.py:54:101
+   |
+52 |                         {
+53 |                             "path": "src/MaterialRegistry.cc",
+54 |                             "new_content": '#include "MaterialRegistry.hh"\nvoid MaterialRegistry::DefineMaterials() {}\n',
+   |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+55 |                             "generated_by": "material_module_agent",
+56 |                             "module_name": "material",
+   |
+
+E501 Line too long (121 > 100)
+  --> tests/unit/test_main_cmake_context_includes_all_sources.py:60:101
+   |
+58 |                         {
+59 |                             "path": "include/MaterialRegistry.hh",
+60 |                             "new_content": "#pragma once\nclass MaterialRegistry { public: void DefineMaterials(); };\n",
+   |                                                                                                     ^^^^^^^^^^^^^^^^^^^^^
+61 |                             "generated_by": "material_module_agent",
+62 |                             "module_name": "material",
+   |
+
+E501 Line too long (156 > 100)
+  --> tests/unit/test_main_cmake_context_includes_all_sources.py:74:101
+   |
+72 | …
+73 | …cc",
+74 | …Construction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }\n',
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+75 | …gent",
+76 | …
+   |
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_main_graph_passes_run_mode_to_codegen.py:5:20
+  |
+3 | from __future__ import annotations
+4 |
+5 | from typing import Any
+  |                    ^^^
+6 |
+7 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_mock_codegen_returns_module_result.py:3:1
+   |
+ 1 |   """Test that mock CODEGEN returns valid ModuleAgentResult structure."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from unittest.mock import AsyncMock, patch
+ 6 | |
+ 7 | | import pytest
+ 8 | |
+ 9 | | from agent_core.g4_codegen.module_agents.base import run_module_agent
+10 | | from agent_core.g4_codegen.schemas import ModuleAgentResult
+11 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+E501 Line too long (148 > 100)
+  --> tests/unit/test_mock_codegen_returns_module_result.py:34:101
+   |
+32 | …
+33 | …
+34 | …truction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }\n',
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+35 | …",
+36 | …
+   |
+
+E501 Line too long (214 > 100)
+  --> tests/unit/test_mock_codegen_returns_module_result.py:46:101
+   |
+44 | …
+45 | …
+46 | …\nclass DetectorConstruction : public G4VUserDetectorConstruction { public: G4VPhysicalVolume* Construct() override; };\n",
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+47 | …
+48 | …
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_mock_llm_gate_returns_structured_json.py:3:1
+   |
+ 1 |   """Test that mock GATE_EXPLANATION returns correct structured JSON."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from unittest.mock import AsyncMock, patch
+ 6 | |
+ 7 | | import pytest
+ 8 | |
+ 9 | | from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+10 | | from agent_core.models.schemas import ModelTask, ModelTier
+   | |__________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `agent_core.models.gateway.ModelGateway` imported but unused
+  --> tests/unit/test_mock_llm_gate_returns_structured_json.py:9:39
+   |
+ 7 | import pytest
+ 8 |
+ 9 | from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+   |                                       ^^^^^^^^^^^^
+10 | from agent_core.models.schemas import ModelTask, ModelTier
+   |
+help: Remove unused import: `agent_core.models.gateway.ModelGateway`
+
+F841 Local variable `gate_json` is assigned to but never used
+  --> tests/unit/test_mock_llm_gate_returns_structured_json.py:29:9
+   |
+27 |         gw = get_model_gateway()
+28 |
+29 |         gate_json = {
+   |         ^^^^^^^^^
+30 |             "status": "pass",
+31 |             "checks": [
+   |
+help: Remove assignment to unused variable `gate_json`
+
+E501 Line too long (148 > 100)
+  --> tests/unit/test_mock_llm_gate_returns_structured_json.py:45:101
+   |
+43 | …
+44 | …
+45 | … [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": "OK"}',
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+46 | …: 50},
+47 | …
+   |
+
+E501 Line too long (187 > 100)
+  --> tests/unit/test_mock_llm_gate_returns_structured_json.py:75:101
+   |
+73 | …
+74 | …
+75 | …ed_fixes": ["fix missing include"], "requires_human_confirmation": false, "reviewer_notes": "Found issues."}',
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+76 | …
+77 | …
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_model_config.py:3:1
+   |
+ 1 |   """Tests for agent_core.models.config — model profile configuration."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import os
+ 6 | | from unittest.mock import patch
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.models.config import load_model_profiles
+11 | | from agent_core.models.schemas import ModelProvider, ModelTier
+   | |______________________________________________________________^
+   |
+help: Organize imports
 
 I001 [*] Import block is un-sorted or un-formatted
   --> tests/unit/test_model_gateway.py:3:1
@@ -1179,6 +2296,179 @@ F401 [*] `agent_core.models.schemas.ModelProvider` imported but unused
 help: Remove unused import: `agent_core.models.schemas.ModelProvider`
 
 I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_model_gateway_mock_provider.py:3:1
+   |
+ 1 |   """Test ModelGateway with MOCK provider."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import os
+ 6 | | from unittest.mock import AsyncMock, patch
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+11 | | from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
+   | |_________________________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `os` imported but unused
+ --> tests/unit/test_model_gateway_mock_provider.py:5:8
+  |
+3 | from __future__ import annotations
+4 |
+5 | import os
+  |        ^^
+6 | from unittest.mock import AsyncMock, patch
+  |
+help: Remove unused import: `os`
+
+F401 [*] `agent_core.models.gateway.ModelGateway` imported but unused
+  --> tests/unit/test_model_gateway_mock_provider.py:10:39
+   |
+ 8 | import pytest
+ 9 |
+10 | from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+   |                                       ^^^^^^^^^^^^
+11 | from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
+   |
+help: Remove unused import: `agent_core.models.gateway.ModelGateway`
+
+F401 [*] `agent_core.models.config.load_model_profiles` imported but unused
+  --> tests/unit/test_model_gateway_mock_provider.py:38:46
+   |
+37 |         # Patch the config to use MOCK provider
+38 |         from agent_core.models.config import load_model_profiles
+   |                                              ^^^^^^^^^^^^^^^^^^^
+39 |         from agent_core.models.schemas import ModelProfile
+   |
+help: Remove unused import: `agent_core.models.config.load_model_profiles`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_module_context_includes_previous_file_summaries.py:3:1
+   |
+ 1 |   """Test that module context includes previous file summaries."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.module_agents.module_context_builder import build_module_context
+   | |___________________________________________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_module_context_includes_previous_file_summaries.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_module_repair_stops_after_max_attempts.py:3:1
+   |
+ 1 |   """Test that module repair stops after MAX_REPAIR_ATTEMPTS."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | | from unittest.mock import AsyncMock, patch
+ 8 | |
+ 9 | | import pytest
+10 | |
+11 | | from agent_core.g4_codegen.repair.module_repair_loop import (
+12 | |     MAX_REPAIR_ATTEMPTS,
+13 | |     repair_module,
+14 | | )
+15 | | from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult, ModuleGateResult
+16 | | from agent_core.models.gateway import reset_model_gateway
+   | |_________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_module_repair_stops_after_max_attempts.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 | from unittest.mock import AsyncMock, patch
+  |
+help: Remove unused import: `typing.Any`
+
+E501 Line too long (103 > 100)
+  --> tests/unit/test_module_repair_stops_after_max_attempts.py:83:101
+   |
+81 |                 content='{"module_name": "geometry", "status": "repaired", '
+82 |                         '"generated_files": [{"path": "src/Detector.cc", '
+83 |                         '"new_content": "#include \\"Detector.hh\\"\\n// still broken\\n#include\\n", '
+   |                                                                                                     ^^^
+84 |                         '"generated_by": "geometry_module_agent", "module_name": "geometry", '
+85 |                         '"rationale": "repaired"}], '
+   |
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_patch_subgraph_rejects_content_field.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+F841 Local variable `result` is assigned to but never used
+  --> tests/unit/test_patch_subgraph_rejects_content_field.py:67:9
+   |
+65 |         }
+66 |
+67 |         result = await apply_patch(state)
+   |         ^^^^^^
+68 |
+69 |         # Entry has both content and new_content — should be rejected or warned
+   |
+help: Remove assignment to unused variable `result`
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_persist_marks_failed_on_static_scan_fail.py:3:1
+   |
+ 1 |   """Test that persist_codegen_output marks status='failed' when static_semantic_scan fails."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.graph_nodes import persist_codegen_output_node
+   | |_________________________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_persist_marks_failed_on_static_scan_fail.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+I001 [*] Import block is un-sorted or un-formatted
   --> tests/unit/test_repl.py:3:1
    |
  1 |   """Unit tests for agent_core.repl — RadAgentREPL."""
@@ -1201,6 +2491,74 @@ I001 [*] Import block is un-sorted or un-formatted
    | |_^
    |
 help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/unit/test_static_scan_failure_blocks_cross_file_gate.py:3:1
+   |
+ 1 |   """Test that static scan failure blocks cross-file hard gate."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from pathlib import Path
+ 6 | | from typing import Any
+ 7 | |
+ 8 | | import pytest
+ 9 | |
+10 | | from agent_core.g4_codegen.graph_nodes import (
+11 | |     cross_file_hard_gate_node,
+12 | |     persist_codegen_output_node,
+13 | |     static_semantic_scanner_node,
+14 | | )
+15 | | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+   | |________________________________________________________________^
+   |
+help: Organize imports
+
+F401 [*] `typing.Any` imported but unused
+ --> tests/unit/test_static_scan_failure_blocks_cross_file_gate.py:6:20
+  |
+5 | from pathlib import Path
+6 | from typing import Any
+  |                    ^^^
+7 |
+8 | import pytest
+  |
+help: Remove unused import: `typing.Any`
+
+F401 [*] `agent_core.g4_codegen.graph_nodes.cross_file_hard_gate_node` imported but unused
+  --> tests/unit/test_static_scan_failure_blocks_cross_file_gate.py:11:5
+   |
+10 | from agent_core.g4_codegen.graph_nodes import (
+11 |     cross_file_hard_gate_node,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+12 |     persist_codegen_output_node,
+13 |     static_semantic_scanner_node,
+   |
+help: Remove unused import
+
+F401 [*] `agent_core.g4_codegen.graph_nodes.persist_codegen_output_node` imported but unused
+  --> tests/unit/test_static_scan_failure_blocks_cross_file_gate.py:12:5
+   |
+10 | from agent_core.g4_codegen.graph_nodes import (
+11 |     cross_file_hard_gate_node,
+12 |     persist_codegen_output_node,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+13 |     static_semantic_scanner_node,
+14 | )
+   |
+help: Remove unused import
+
+F401 [*] `agent_core.g4_codegen.graph_nodes.static_semantic_scanner_node` imported but unused
+  --> tests/unit/test_static_scan_failure_blocks_cross_file_gate.py:13:5
+   |
+11 |     cross_file_hard_gate_node,
+12 |     persist_codegen_output_node,
+13 |     static_semantic_scanner_node,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+14 | )
+15 | from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+   |
+help: Remove unused import
 
 I001 [*] Import block is un-sorted or un-formatted
   --> tests/unit/test_workspace_manager.py:3:1
@@ -1272,5 +2630,5 @@ E501 Line too long (103 > 100)
 169 |         from agent_core.config.workspace import (
     |
 
-Found 105 errors.
-[*] 37 fixable with the `--fix` option.
+Found 208 errors.
+[*] 97 fixable with the `--fix` option (4 hidden fixes can be enabled with the `--unsafe-fixes` option).

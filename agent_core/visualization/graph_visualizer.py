@@ -214,40 +214,131 @@ def get_g4_modeling_subgraph_spec() -> SubgraphSpec:
 
 
 def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
+    """G4 Codegen subgraph — module agent pipeline.
+
+    P0-27: Updated to reflect the actual module agent flow:
+    codegen_plan → geometry_strategy → architecture_plan →
+    module_contracts → module_contexts →
+    [per module: agent → hard_gate → llm_gate → repair] →
+    interface_contracts → integration_assembler →
+    static_semantic_scanner → cross_file_hard_gate →
+    cross_file_llm_gate → persist_codegen_output
+    """
+    # Module names in execution order
+    modules = [
+        "material", "geometry", "placement", "source", "physics",
+        "sensitive_detector", "scoring", "output_manager",
+        "action_initialization", "main_cmake",
+    ]
+
+    nodes = [
+        NodeSpec("load_model_ir", "加载 Model IR", "io", is_entry=True),
+        NodeSpec("build_codegen_plan", "代码生成规划", "codegen"),
+        NodeSpec("plan_geometry_strategy", "几何策略规划", "codegen"),
+        NodeSpec("plan_code_architecture", "架构规划", "codegen"),
+        NodeSpec("build_module_contracts", "模块契约", "codegen"),
+        NodeSpec("build_module_contexts", "模块上下文", "codegen"),
+    ]
+
+    edges = [
+        EdgeSpec("load_model_ir", "build_codegen_plan"),
+        EdgeSpec("build_codegen_plan", "plan_geometry_strategy"),
+        EdgeSpec("plan_geometry_strategy", "plan_code_architecture"),
+        EdgeSpec("plan_code_architecture", "build_module_contracts"),
+        EdgeSpec("build_module_contracts", "build_module_contexts"),
+    ]
+
+    conditional_edges = []
+
+    # Per-module: agent → hard_gate → llm_gate → repair
+    for i, mod in enumerate(modules):
+        agent = f"run_{mod}_agent"
+        hard = f"{mod}_hard_gate"
+        llm = f"{mod}_llm_gate"
+        repair = f"repair_{mod}"
+
+        nodes.append(NodeSpec(agent, f"{mod} Agent", "codegen"))
+        nodes.append(NodeSpec(hard, f"{mod} 硬门禁", "guard"))
+        nodes.append(NodeSpec(llm, f"{mod} LLM 门禁", "guard"))
+        nodes.append(NodeSpec(repair, f"{mod} 修复", "codegen"))
+
+        # Connect from previous module or build_module_contexts
+        if i == 0:
+            edges.append(EdgeSpec("build_module_contexts", agent))
+        else:
+            prev_llm = f"{modules[i-1]}_llm_gate"
+            edges.append(EdgeSpec(prev_llm, agent))
+
+        # Agent → hard gate (always)
+        edges.append(EdgeSpec(agent, hard))
+
+        # Hard gate → LLM gate (pass) or repair (fail)
+        conditional_edges.append(EdgeSpec(hard, llm, "pass"))
+        conditional_edges.append(EdgeSpec(hard, repair, "fail"))
+
+        # LLM gate → next module (pass) or repair (fail)
+        next_target = (
+            f"run_{modules[i+1]}_agent"
+            if i + 1 < len(modules)
+            else "build_interface_contracts"
+        )
+        conditional_edges.append(EdgeSpec(llm, next_target, "pass"))
+        conditional_edges.append(EdgeSpec(llm, repair, "fail"))
+
+        # Repair → hard gate (repaired) or persist (failed, terminate)
+        conditional_edges.append(EdgeSpec(repair, hard, "repaired"))
+        conditional_edges.append(
+            EdgeSpec(repair, "persist_codegen_output", "failed → 终止", "block")
+        )
+
+    # Integration pipeline
+    nodes.extend([
+        NodeSpec("build_interface_contracts", "接口契约", "codegen"),
+        NodeSpec("integration_assembler", "集成组装", "codegen"),
+        NodeSpec("static_semantic_scanner", "静态语义扫描", "guard"),
+        NodeSpec("cross_file_hard_gate", "跨文件硬门禁", "guard"),
+        NodeSpec("cross_file_llm_gate", "跨文件 LLM 门禁", "guard"),
+        NodeSpec("persist_codegen_output", "持久化输出", "io"),
+    ])
+
+    edges.extend([
+        EdgeSpec("build_interface_contracts", "integration_assembler"),
+        EdgeSpec("integration_assembler", "static_semantic_scanner"),
+    ])
+
+    # Static scan → cross hard gate (pass) or persist (fail)
+    conditional_edges.append(
+        EdgeSpec("static_semantic_scanner", "cross_file_hard_gate", "pass")
+    )
+    conditional_edges.append(
+        EdgeSpec(
+            "static_semantic_scanner", "persist_codegen_output",
+            "fail → 阻断", "block"
+        )
+    )
+
+    # Cross hard gate → cross LLM gate (pass) or persist (fail)
+    conditional_edges.append(
+        EdgeSpec("cross_file_hard_gate", "cross_file_llm_gate", "pass")
+    )
+    conditional_edges.append(
+        EdgeSpec(
+            "cross_file_hard_gate", "persist_codegen_output",
+            "fail → 阻断", "block"
+        )
+    )
+
+    # Cross LLM gate → persist
+    edges.append(EdgeSpec("cross_file_llm_gate", "persist_codegen_output"))
+    edges.append(EdgeSpec("persist_codegen_output", "END"))
+
     return SubgraphSpec(
         name="g4_codegen_subgraph",
         display_name="G4 Codegen 子图",
-        description="模块级 Agent 代码生成流水线 (线性)",
-        nodes=(
-            NodeSpec("build_codegen_plan", "代码生成规划", "codegen", is_entry=True),
-            NodeSpec("plan_geometry_strategy", "几何策略规划", "codegen"),
-            NodeSpec("plan_code_architecture", "架构规划", "codegen"),
-            NodeSpec("build_module_contracts", "模块契约", "codegen"),
-            NodeSpec("build_module_contexts", "模块上下文", "codegen"),
-            NodeSpec("run_module_agents", "模块 Agent 生成", "codegen"),
-            NodeSpec("run_module_gates", "模块门禁", "guard"),
-            NodeSpec("repair_modules", "模块修复", "codegen"),
-            NodeSpec("integration_assembler", "集成组装", "codegen"),
-            NodeSpec("static_semantic_scanner", "静态语义扫描", "guard"),
-            NodeSpec("cross_file_hard_gate", "跨文件硬门禁", "guard"),
-            NodeSpec("cross_file_llm_gate", "跨文件 LLM 门禁", "guard"),
-            NodeSpec("proposed_patch", "Proposed Patch", "codegen"),
-        ),
-        edges=(
-            EdgeSpec("build_codegen_plan", "plan_geometry_strategy"),
-            EdgeSpec("plan_geometry_strategy", "plan_code_architecture"),
-            EdgeSpec("plan_code_architecture", "build_module_contracts"),
-            EdgeSpec("build_module_contracts", "build_module_contexts"),
-            EdgeSpec("build_module_contexts", "run_module_agents"),
-            EdgeSpec("run_module_agents", "run_module_gates"),
-            EdgeSpec("run_module_gates", "repair_modules"),
-            EdgeSpec("repair_modules", "integration_assembler"),
-            EdgeSpec("integration_assembler", "static_semantic_scanner"),
-            EdgeSpec("static_semantic_scanner", "cross_file_hard_gate"),
-            EdgeSpec("cross_file_hard_gate", "cross_file_llm_gate"),
-            EdgeSpec("cross_file_llm_gate", "proposed_patch"),
-            EdgeSpec("proposed_patch", "END"),
-        ),
+        description="模块级 Agent 代码生成流水线 (10 模块 × 4 节点 + 集成)",
+        nodes=tuple(nodes),
+        edges=tuple(edges),
+        conditional_edges=tuple(conditional_edges),
     )
 
 

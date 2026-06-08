@@ -154,3 +154,118 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: pytest tests/unit/g4_modeling/ -v --tb=short
+
+  # ── G4 codegen module agent contract tests ────────────────────────
+  g4-agent-module-contract:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    env:
+      RADAGENT_MODEL_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: python -m compileall agent_core tests
+      - run: >
+          pytest
+          tests/unit/test_integration_assembler_patch_validator_contract.py
+          tests/unit/test_integration_assembler_outputs_required_patch_fields.py
+          tests/unit/test_changed_files_have_zone_and_new_content.py
+          tests/unit/test_no_changed_files_content.py
+          tests/unit/test_patch_subgraph_rejects_content_field.py
+          tests/unit/test_patch_paths_are_relative_to_08_geant4.py
+          tests/unit/test_generated_code_dir_points_to_08_geant4.py
+          -q --tb=short
+
+  # ── G4 codegen module gate tests ──────────────────────────────────
+  g4-agent-module-gates:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    env:
+      RADAGENT_MODEL_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: >
+          pytest
+          tests/unit/test_hard_gate_rejects_empty_generated_files.py
+          tests/unit/test_hard_gate_rejects_failed_module_result.py
+          tests/unit/test_hard_gate_detects_empty_include_multiline.py
+          tests/unit/test_hard_gate_rejects_content_field.py
+          tests/unit/test_static_scan_failure_blocks_cross_file_gate.py
+          tests/unit/test_persist_marks_failed_on_static_scan_fail.py
+          tests/unit/test_module_repair_stops_after_max_attempts.py
+          -q --tb=short
+
+  # ── G4 codegen mock provider tests ────────────────────────────────
+  g4-agent-module-mock:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    env:
+      RADAGENT_MODEL_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: >
+          pytest
+          tests/unit/test_model_gateway_mock_provider.py
+          tests/unit/test_mock_codegen_returns_module_result.py
+          tests/unit/test_mock_llm_gate_returns_structured_json.py
+          tests/unit/test_mock_repair_returns_repaired_module.py
+          -q --tb=short
+
+  # ── G4 codegen module context tests ───────────────────────────────
+  g4-agent-module-context:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    env:
+      RADAGENT_MODEL_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: >
+          pytest
+          tests/unit/test_module_context_includes_previous_file_summaries.py
+          tests/unit/test_main_cmake_context_includes_all_sources.py
+          tests/unit/test_cross_file_llm_gate_uses_code_review_bundle.py
+          tests/unit/test_cross_file_llm_gate_does_not_only_use_content_length.py
+          tests/unit/test_main_graph_passes_run_mode_to_codegen.py
+          -q --tb=short
+
+  # ── G4 codegen E2E tests (mock provider) ──────────────────────────
+  g4-agent-module-e2e:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    env:
+      RADAGENT_MODEL_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: >
+          pytest
+          tests/e2e/test_g4_codegen_agent_modules_semiconductor.py
+          tests/e2e/test_g4_codegen_agent_modules_shielding.py
+          tests/e2e/test_g4_codegen_agent_modules_with_mock_provider.py
+          tests/e2e/test_g4_codegen_cad_placeholder_no_conversion.py
+          tests/e2e/test_g4_codegen_module_gate_failure_blocks_patch.py
+          tests/e2e/test_g4_codegen_patch_applies_to_08_geant4.py
+          -q --tb=short
