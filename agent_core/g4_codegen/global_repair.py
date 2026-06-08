@@ -370,7 +370,7 @@ def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str,
             "EndEvent",
         ),
         (
-            r"\bWriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*\s*\)\s*;",
+            r"\bWriteEvent\s*\(\s*const\s+G4Event\s*\*\s*(?:[A-Za-z_]\w*)?\s*\)\s*;",
             "void WriteEvent(const G4Event* anEvent);",
             "RecordStep",
         ),
@@ -409,7 +409,7 @@ def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str,
     if "OutputManager::RecordStep(" not in source_content:
         additions.append("void OutputManager::RecordStep(const G4Step*) {}\n")
     if not re.search(
-        r"\bOutputManager::WriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*"
+        r"\bOutputManager::WriteEvent\s*\(\s*const\s+G4Event\s*\*\s*(?:[A-Za-z_]\w*)?"
         r"\s*\)",
         source_content,
     ):

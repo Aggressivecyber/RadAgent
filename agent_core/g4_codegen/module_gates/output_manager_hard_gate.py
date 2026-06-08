@@ -111,13 +111,13 @@ def _append_output_manager_interface_checks(
 
     has_one_arg_write_event_decl = bool(
         re.search(
-            r"\bWriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*\s*\)\s*;",
+            r"\bWriteEvent\s*\(\s*const\s+G4Event\s*\*\s*(?:[A-Za-z_]\w*)?\s*\)\s*;",
             header,
         )
     )
     has_one_arg_write_event_def = bool(
         re.search(
-            r"\bOutputManager::WriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*"
+            r"\bOutputManager::WriteEvent\s*\(\s*const\s+G4Event\s*\*\s*(?:[A-Za-z_]\w*)?"
             r"\s*\)",
             source,
         )
