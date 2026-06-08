@@ -5,7 +5,16 @@ from typing import Any
 
 import httpx
 
+from agent_core.config.environment import load_environment
 from agent_core.models.schemas import ModelCallRequest, ModelProfile
+
+
+def _httpx_client_kwargs(profile: ModelProfile) -> dict[str, Any]:
+    env = load_environment()
+    kwargs: dict[str, Any] = {"timeout": profile.timeout_s, "trust_env": False}
+    if env.proxy:
+        kwargs["proxy"] = env.proxy
+    return kwargs
 
 
 async def call_openai_compatible_model(
@@ -42,7 +51,7 @@ async def call_openai_compatible_model(
     last_error = None
     for _ in range(profile.max_retries + 1):
         try:
-            async with httpx.AsyncClient(timeout=profile.timeout_s) as client:
+            async with httpx.AsyncClient(**_httpx_client_kwargs(profile)) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 data = resp.json()
@@ -99,7 +108,7 @@ async def call_multi_turn_chat(
     last_error = None
     for _ in range(profile.max_retries + 1):
         try:
-            async with httpx.AsyncClient(timeout=profile.timeout_s) as client:
+            async with httpx.AsyncClient(**_httpx_client_kwargs(profile)) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 data = resp.json()

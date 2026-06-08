@@ -9,9 +9,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from agent_core.config.environment import load_environment
 
-_G4_SETUP_SCRIPT = "/etc/profile.d/geant4.sh"
+logger = logging.getLogger(__name__)
 
 
 class Geant4Runner:
@@ -21,8 +21,11 @@ class Geant4Runner:
     Detects if Geant4 is available locally.
     """
 
-    def __init__(self, geant4_dir: str = "/usr/local/geant4") -> None:
-        self.geant4_dir = geant4_dir
+    def __init__(self, geant4_dir: str | None = None) -> None:
+        env = load_environment()
+        self.geant4_dir = geant4_dir or env.software.geant4_install_dir
+        self.geant4_config_bin = env.software.geant4_config_bin
+        self.geant4_setup_script = env.software.geant4_setup_script
         self.geant4_available = self._check_geant4()
 
     # ------------------------------------------------------------------
@@ -30,17 +33,19 @@ class Geant4Runner:
     # ------------------------------------------------------------------
 
     def _check_geant4(self) -> bool:
-        config = Path(self.geant4_dir) / "bin" / "geant4-config"
+        config = Path(self.geant4_config_bin)
         if config.is_file() and os.access(config, os.X_OK):
+            return True
+        install_config = Path(self.geant4_dir) / "bin" / "geant4-config"
+        if install_config.is_file() and os.access(install_config, os.X_OK):
             return True
         alt = shutil.which("geant4-config")
         return alt is not None
 
-    @staticmethod
-    async def _run(cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
+    async def _run(self, cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
         """Execute *cmd* inside a bash login shell (sources geant4.sh)."""
-        g4_script = Path(_G4_SETUP_SCRIPT)
-        setup = f"source {_G4_SETUP_SCRIPT} 2>/dev/null; " if g4_script.is_file() else ""
+        g4_script = Path(self.geant4_setup_script)
+        setup = f"source {self.geant4_setup_script} 2>/dev/null; " if g4_script.is_file() else ""
         proc = await asyncio.create_subprocess_shell(
             setup + cmd,
             stdout=asyncio.subprocess.PIPE,
