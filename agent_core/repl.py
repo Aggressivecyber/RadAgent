@@ -486,14 +486,9 @@ class RadAgentREPL:
         request_path = self.state.get("confirmation_request_path")
         if not request_path or not Path(request_path).exists():
             self.console.print("  [dim]Building confirmation request...[/dim]")
-            phase_success = await self._run_phase(
-                "human_confirmation", stop_at_interrupt=True
-            )
-            if not phase_success:
-                self.console.print(
-                    "[yellow]No confirmation needed or failed to build request.[/yellow]"
-                )
-                return
+            # stop_at_interrupt: subgraph returns pending at human_interrupt,
+            # but confirmation_request_path is already set by generate_confirmation_request
+            await self._run_phase("human_confirmation", stop_at_interrupt=True)
             request_path = self.state.get("confirmation_request_path")
 
         if not request_path or not Path(request_path).exists():
