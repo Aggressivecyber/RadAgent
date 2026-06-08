@@ -470,12 +470,25 @@ class RadAgentREPL:
         self._render_model_summary(model_ir)
 
     async def cmd_confirm(self) -> None:
-        """Interactively confirm AI assumptions."""
+        """Interactively confirm AI assumptions and auto-continue to codegen."""
+        # ── Step 1: Show construction report (model IR summary) ────────
+        ir_path = self.state.get("g4_model_ir_path")
+        if ir_path and Path(ir_path).exists():
+            model_ir = _load_json_safe(Path(ir_path))
+            if model_ir:
+                self.console.print(
+                    "\n[bold cyan]═══ 施工方案报告 ═══[/bold cyan]"
+                )
+                self._render_model_summary(model_ir)
+                self.console.print("")
+
+        # ── Step 2: Build confirmation request if needed ───────────────
         request_path = self.state.get("confirmation_request_path")
         if not request_path or not Path(request_path).exists():
-            # Build confirmation request first
             self.console.print("  [dim]Building confirmation request...[/dim]")
-            phase_success = await self._run_phase("human_confirmation", stop_at_interrupt=True)
+            phase_success = await self._run_phase(
+                "human_confirmation", stop_at_interrupt=True
+            )
             if not phase_success:
                 self.console.print(
                     "[yellow]No confirmation needed or failed to build request.[/yellow]"
@@ -489,19 +502,34 @@ class RadAgentREPL:
 
         request_data = _load_json_safe(Path(request_path))
         if request_data is None:
-            self.console.print(f"[red]Corrupted confirmation request:[/red] {request_path}")
+            self.console.print(
+                f"[red]Corrupted confirmation request:[/red] {request_path}"
+            )
             return
 
-        questions = request_data.get("questions", [])
-        if not questions:
-            self.console.print("[green]No assumptions to confirm — all set![/green]")
-            # Still require explicit user approval even with no questions
+        # ── Step 3: Show summary from confirmation request ─────────────
+        summary = request_data.get("summary_for_user", "")
+        if summary:
             self.console.print(
-                "[yellow]Please type 'approve' to confirm or 'reject' to cancel:[/yellow]"
+                Panel(summary, title="方案摘要", border_style="cyan")
+            )
+
+        questions = request_data.get("questions", [])
+
+        # ── Step 4: Handle questions or ask for approval ───────────────
+        edits: list[dict[str, Any]] = []
+        all_approved = True
+
+        if not questions:
+            self.console.print(
+                "[green]✓ 所有参数已确认，无需额外假设。[/green]"
+            )
+            self.console.print(
+                "\n[bold yellow]请确认施工方案：[/bold yellow]"
             )
             answer = await asyncio.to_thread(
                 self._prompt_choice,
-                "[a]pprove / [r]eject?",
+                "[a]pprove 批准 / [r]eject 拒绝?",
                 ("a", "r"),
                 "a",
             )
@@ -511,80 +539,95 @@ class RadAgentREPL:
                     "edits": [],
                     "user_notes": "User approved (no questions)",
                 }
-                self.console.print("  [green]✓ Approved[/green]")
             else:
                 self.state["raw_human_response"] = {
                     "user_decision": "reject",
                     "edits": [],
                     "user_notes": "User rejected",
                 }
-                self.console.print("  [red]✗ Rejected[/red]")
+                self.console.print("  [red]✗ 已拒绝[/red]")
+                return
+        else:
+            # Interactive Q&A
+            for i, q in enumerate(questions, 1):
+                field = q.get("field_path", q.get("field", "unknown"))
+                current = q.get("current_value", q.get("value", "?"))
+                reason = q.get("reason", "")
+                confidence = q.get("confidence", 0)
+
+                self.console.print(
+                    Panel(
+                        f"Field: [cyan]{field}[/cyan]\n"
+                        f"Current: [bold]{current}[/bold]\n"
+                        f"Reason: {reason}\n"
+                        f"Confidence: {confidence:.0%}",
+                        title=f"Assumption {i}/{len(questions)}",
+                        border_style="yellow",
+                    )
+                )
+
+                answer = await asyncio.to_thread(
+                    self._prompt_choice,
+                    "[a]pprove / [e]dit / [r]eject?",
+                    ("a", "e", "r"),
+                    "a",
+                )
+
+                if answer == "e":
+                    new_val = await asyncio.to_thread(
+                        self._prompt_text, f"  New value for {field}: "
+                    )
+                    edits.append(
+                        {
+                            "field_path": field,
+                            "new_value": new_val,
+                            "reason": "User edit in REPL",
+                        }
+                    )
+                    all_approved = False
+                    self.console.print(
+                        f"  [green]✓ Edited:[/green] {field} → {new_val}"
+                    )
+                elif answer == "r":
+                    edits.append(
+                        {
+                            "field_path": field,
+                            "new_value": None,
+                            "reason": "User rejected in REPL",
+                        }
+                    )
+                    all_approved = False
+                    self.console.print(f"  [red]✗ Rejected:[/red] {field}")
+                else:
+                    self.console.print(f"  [green]✓ Approved:[/green] {field}")
+
+            decision = "approve" if all_approved else "edit"
+            self.state["raw_human_response"] = {
+                "schema_version": "confirmation_response_v1",
+                "job_id": self.state.get("job_id", ""),
+                "round_id": request_data.get("round_id", 1),
+                "user_decision": decision,
+                "edits": edits,
+                "user_notes": f"Interactive REPL confirmation ({decision})",
+            }
+
+        # ── Step 5: Run human_confirmation phase to merge ──────────────
+        merge_success = await self._run_phase("human_confirmation")
+        if not merge_success:
+            self.console.print("[red]Failed to merge confirmation.[/red]")
             return
 
-        # Interactive Q&A
-        edits: list[dict[str, Any]] = []
-        all_approved = True
+        # ── Step 6: Show clear success and auto-continue ───────────────
+        self.console.print(
+            "\n"
+            "[bold green]═══════════════════════════════════════════[/bold green]\n"
+            "[bold green]  ✓ 施工方案已批准[/bold green]\n"
+            "[bold green]  正在进入代码生成阶段...[/bold green]\n"
+            "[bold green]═══════════════════════════════════════════[/bold green]\n"
+        )
 
-        for i, q in enumerate(questions, 1):
-            field = q.get("field_path", q.get("field", "unknown"))
-            current = q.get("current_value", q.get("value", "?"))
-            reason = q.get("reason", "")
-            confidence = q.get("confidence", 0)
-
-            self.console.print(
-                Panel(
-                    f"Field: [cyan]{field}[/cyan]\n"
-                    f"Current: [bold]{current}[/bold]\n"
-                    f"Reason: {reason}\n"
-                    f"Confidence: {confidence:.0%}",
-                    title=f"Assumption {i}/{len(questions)}",
-                    border_style="yellow",
-                )
-            )
-
-            answer = await asyncio.to_thread(
-                self._prompt_choice,
-                "[a]pprove / [e]dit / [r]eject?",
-                ("a", "e", "r"),
-                "a",
-            )
-
-            if answer == "e":
-                new_val = await asyncio.to_thread(self._prompt_text, f"  New value for {field}: ")
-                edits.append(
-                    {
-                        "field_path": field,
-                        "new_value": new_val,
-                        "reason": "User edit in REPL",
-                    }
-                )
-                all_approved = False
-                self.console.print(f"  [green]✓ Edited:[/green] {field} → {new_val}")
-            elif answer == "r":
-                edits.append(
-                    {
-                        "field_path": field,
-                        "new_value": None,
-                        "reason": "User rejected in REPL",
-                    }
-                )
-                all_approved = False
-                self.console.print(f"  [red]✗ Rejected:[/red] {field}")
-            else:
-                self.console.print(f"  [green]✓ Approved:[/green] {field}")
-
-        # Build response
-        decision = "approve" if all_approved else "edit"
-        self.state["raw_human_response"] = {
-            "schema_version": "confirmation_response_v1",
-            "job_id": self.state.get("job_id", ""),
-            "round_id": request_data.get("round_id", 1),
-            "user_decision": decision,
-            "edits": edits,
-            "user_notes": f"Interactive REPL confirmation ({decision})",
-        }
-        self.console.print(f"\n  [bold green]✓ Confirmation recorded:[/bold green] {decision}")
-        self.console.print("  [dim]Use /step to continue to codegen.[/dim]")
+        # Auto-continue: codegen → patch → gate → artifact → report
+        await self._auto_remaining()
 
     async def cmd_code(self) -> None:
         """List and preview generated C++ files."""
