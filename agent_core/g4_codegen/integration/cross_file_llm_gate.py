@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from agent_core.models.gateway import _safe_parse_json, get_model_gateway
@@ -109,6 +110,10 @@ async def run_cross_file_llm_gate(
             cross_file_hard_gate = json.loads(hard_gate_path.read_text())
         else:
             cross_file_hard_gate = {}
+    module_gate_results = _complete_module_gate_results_from_disk(
+        module_gate_results,
+        codegen_dir,
+    )
 
     changed_files = proposed_patch.get("changed_files", [])
     module_names = sorted({f.get("module_name", "") for f in changed_files if f.get("module_name")})
@@ -152,6 +157,9 @@ async def run_cross_file_llm_gate(
                 "content_excerpt": f.get("new_content", "")[:400],
             }
         )
+    (codegen_dir / "cross_file_llm_review_bundle.json").write_text(
+        json.dumps(code_review_bundle, indent=2, ensure_ascii=False)
+    )
 
     # ── Build LLM prompt ─────────────────────────────────────────────
     user_prompt = f"""代码审查包：
@@ -234,6 +242,36 @@ def _persist_result(result: dict[str, Any], job_id: str) -> None:
 
     gate_path = codegen_dir / "cross_file_llm_gate.json"
     gate_path.write_text(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def _complete_module_gate_results_from_disk(
+    module_gate_results: dict[str, dict[str, Any]],
+    codegen_dir: Path,
+) -> dict[str, dict[str, Any]]:
+    """Use persisted module gate artifacts to fill missing state summaries."""
+    completed: dict[str, dict[str, Any]] = {
+        module_name: dict(gates)
+        for module_name, gates in (module_gate_results or {}).items()
+        if isinstance(gates, dict)
+    }
+    gate_dir = codegen_dir / "module_gates"
+    if not gate_dir.exists():
+        return completed
+
+    for gate_path in sorted(gate_dir.glob("*_*_gate.json")):
+        stem = gate_path.stem
+        suffix = "_hard_gate" if stem.endswith("_hard_gate") else "_llm_gate"
+        if not stem.endswith(suffix):
+            continue
+        module_name = stem[: -len(suffix)]
+        gate_type = "hard" if suffix == "_hard_gate" else "llm"
+        try:
+            gate_data = json.loads(gate_path.read_text())
+        except json.JSONDecodeError:
+            continue
+        completed.setdefault(module_name, {})
+        completed[module_name].setdefault(gate_type, gate_data)
+    return completed
 
 
 # ── Helper functions for C++ parsing ─────────────────────────────────

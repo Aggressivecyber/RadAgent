@@ -121,36 +121,44 @@ async def run_llm_gate(
 
 请判断当前模块是否可以进入集成阶段。返回 JSON。"""
 
-    result = await gateway.call(
-        task=ModelTask.GATE_EXPLANATION,
-        tier=ModelTier.MAX,
-        system_prompt=MODULE_LLM_GATE_SYSTEM_PROMPT,
-        user_prompt=user_prompt,
-        response_format="json",
-        max_tokens=4096,
-        metadata={"module_name": module_name, "job_id": job_id},
-    )
+    data: dict[str, Any] | None = None
+    parse_errors: list[str] = []
+    for attempt in range(1, 3):
+        retry_suffix = "" if attempt == 1 else "\n\n上一次返回不是有效 JSON。请只返回 JSON 对象。"
+        result = await gateway.call(
+            task=ModelTask.GATE_EXPLANATION,
+            tier=ModelTier.MAX,
+            system_prompt=MODULE_LLM_GATE_SYSTEM_PROMPT,
+            user_prompt=user_prompt + retry_suffix,
+            response_format="json",
+            max_tokens=4096,
+            metadata={"module_name": module_name, "job_id": job_id, "attempt": attempt},
+        )
 
-    if result.error:
+        if result.error:
+            return ModuleGateResult(
+                module_name=module_name,
+                gate_type="llm",
+                status="fail",
+                checks=[],
+                errors=[f"LLM gate call failed: {result.error}"],
+            )
+
+        try:
+            data = result.parsed_json or _safe_parse_json(result.content) or json.loads(
+                result.content.strip()
+            )
+            break
+        except (json.JSONDecodeError, TypeError) as exc:
+            parse_errors.append(f"attempt {attempt}: {exc}")
+
+    if data is None:
         return ModuleGateResult(
             module_name=module_name,
             gate_type="llm",
             status="fail",
             checks=[],
-            errors=[f"LLM gate call failed: {result.error}"],
-        )
-
-    try:
-        data = result.parsed_json or _safe_parse_json(result.content) or json.loads(
-            result.content.strip()
-        )
-    except (json.JSONDecodeError, TypeError):
-        return ModuleGateResult(
-            module_name=module_name,
-            gate_type="llm",
-            status="fail",
-            checks=[],
-            errors=["Invalid JSON from LLM gate"],
+            errors=["Invalid JSON from LLM gate after retry", *parse_errors],
         )
 
     scorecard = _normalize_scorecard(data)
