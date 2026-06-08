@@ -41,7 +41,7 @@ class TestPatchSubgraphRejectsContentField:
 
     @pytest.mark.asyncio
     async def test_rejects_both_content_and_new_content(self, tmp_path: Path) -> None:
-        """apply_patch must reject entries with both 'content' and 'new_content'."""
+        """P0-8/P0-9: apply_patch must reject entries with both 'content' AND 'new_content'."""
         code_dir = tmp_path / "08_geant4"
         code_dir.mkdir()
 
@@ -62,14 +62,23 @@ class TestPatchSubgraphRejectsContentField:
             "errors": [],
         }
 
-        await apply_patch(state)
+        result = await apply_patch(state)
 
-        # Entry has both content and new_content — should be rejected or warned
-        # The patch node treats this as valid since new_content is present
-        # but the review step should catch the deprecated 'content' field
-        # In apply_patch, it only checks if content is present without new_content
-        # So this actually passes through apply_patch. The rejection happens at review.
-        # This test documents the current behavior.
+        # P0-8: Any 'content' field is forbidden, even with new_content present
+        assert result["patch_status"] in ("failed", "rejected"), (
+            f"Expected failed/rejected, got: {result['patch_status']}"
+        )
+        has_content_error = any(
+            "content" in e.lower() for e in result.get("errors", [])
+        )
+        assert has_content_error, (
+            f"Expected content-related error, got: {result.get('errors', [])}"
+        )
+        # File must NOT have been written
+        written_file = code_dir / "src" / "test.cc"
+        assert not written_file.exists(), (
+            f"File should not be written when content field is present: {written_file}"
+        )
 
     @pytest.mark.asyncio
     async def test_accepts_only_new_content(self, tmp_path: Path) -> None:
