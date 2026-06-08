@@ -78,13 +78,13 @@ def _append_placement_api_checks(
         if has_const_rotation:
             errors.append(f"{f.path}: use G4RotationMatrix* for placement rotation parameters")
 
-        direct_const_transform = bool(
-            re.search(
-                r"new\s+G4PVPlacement\s*\(\s*(?:[A-Za-z_]\w*::)?\w*transform\b",
-                content,
-                re.IGNORECASE,
-            )
-            and re.search(r"\bconst\s+G4Transform3D\s*&\s+\w*transform\b", content)
+        const_transform_params = re.findall(
+            r"\bconst\s+G4Transform3D\s*&\s+([A-Za-z_]\w*)\b",
+            content,
+        )
+        direct_const_transform = any(
+            re.search(rf"new\s+G4PVPlacement\s*\(\s*{re.escape(param)}\b", content)
+            for param in const_transform_params
         )
         checks.append(
             {
