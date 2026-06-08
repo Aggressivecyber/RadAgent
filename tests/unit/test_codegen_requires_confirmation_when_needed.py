@@ -29,7 +29,6 @@ def test_plan_can_skip_confirmation():
 
 def test_main_graph_passes_confirmation_paths():
     """Verify main_graph passes confirmation paths to codegen subgraph."""
-    import inspect
     from agent_core.graph.main_graph import _make_g4_codegen_subgraph_node
 
     # The function exists and can be called

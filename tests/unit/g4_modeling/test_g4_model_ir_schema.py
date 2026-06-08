@@ -143,9 +143,11 @@ class TestG4ModelIRValidation:
     """Test G4ModelIR validation rules."""
 
     def test_missing_model_ir_id_fails(self):
-        ir, errors = validate_g4_model_ir({
-            "job_id": "job_001",
-        })
+        ir, errors = validate_g4_model_ir(
+            {
+                "job_id": "job_001",
+            }
+        )
         assert ir is None
         assert len(errors) > 0
 
@@ -235,27 +237,33 @@ class TestPhysicsSpec:
     """Test PhysicsSpec validation."""
 
     def test_valid_physics_spec(self):
-        spec, errors = validate_physics_spec({
-            "physics_list": "FTFP_BERT",
-            "selection_reasoning": "Standard physics for proton simulations",
-            "source_evidence": ["doc:1"],
-        })
+        spec, errors = validate_physics_spec(
+            {
+                "physics_list": "FTFP_BERT",
+                "selection_reasoning": "Standard physics for proton simulations",
+                "source_evidence": ["doc:1"],
+            }
+        )
         assert spec is not None
         assert not errors
 
     def test_short_reasoning_fails(self):
-        spec, errors = validate_physics_spec({
-            "physics_list": "FTFP_BERT",
-            "selection_reasoning": "short",
-            "source_evidence": ["doc:1"],
-        })
+        spec, errors = validate_physics_spec(
+            {
+                "physics_list": "FTFP_BERT",
+                "selection_reasoning": "short",
+                "source_evidence": ["doc:1"],
+            }
+        )
         assert spec is None
         assert any("reasoning" in e.lower() for e in errors)
 
     def test_empty_evidence_fails(self):
-        spec, errors = validate_physics_spec({
-            "physics_list": "FTFP_BERT",
-            "selection_reasoning": "Valid reasoning for proton therapy",
-            "source_evidence": [],
-        })
+        spec, errors = validate_physics_spec(
+            {
+                "physics_list": "FTFP_BERT",
+                "selection_reasoning": "Valid reasoning for proton therapy",
+                "source_evidence": [],
+            }
+        )
         assert spec is None or len(errors) > 0

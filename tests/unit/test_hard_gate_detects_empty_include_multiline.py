@@ -11,7 +11,7 @@ class TestHardGateDetectsEmptyIncludeMultiline:
 
     def test_detects_empty_include_in_multiline_file(self) -> None:
         """Hard gate should detect #include$ (no file) in a multi-line file."""
-        content = '''#include "G4SystemOfUnits.hh"
+        content = """#include "G4SystemOfUnits.hh"
 #include
 #include "DetectorConstruction.hh"
 
@@ -19,7 +19,7 @@ class MyDetector : public G4VUserDetectorConstruction {
 public:
     G4VPhysicalVolume* Construct() override;
 };
-'''
+"""
         files = [
             GeneratedModuleFile(
                 path="src/Detector.cc",
@@ -43,7 +43,8 @@ public:
 
         assert result.status == "fail"
         has_empty_include = any(
-            "empty include" in c.get("message", "").lower() or "empty_include" in c.get("check", "").lower()
+            "empty include" in c.get("message", "").lower()
+            or "empty_include" in c.get("check", "").lower()
             for c in result.checks
         )
         assert has_empty_include, "Hard gate did not detect empty #include"

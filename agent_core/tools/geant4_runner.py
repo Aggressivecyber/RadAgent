@@ -40,11 +40,7 @@ class Geant4Runner:
     async def _run(cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
         """Execute *cmd* inside a bash login shell (sources geant4.sh)."""
         g4_script = Path(_G4_SETUP_SCRIPT)
-        setup = (
-            f"source {_G4_SETUP_SCRIPT} 2>/dev/null; "
-            if g4_script.is_file()
-            else ""
-        )
+        setup = f"source {_G4_SETUP_SCRIPT} 2>/dev/null; " if g4_script.is_file() else ""
         proc = await asyncio.create_subprocess_shell(
             setup + cmd,
             stdout=asyncio.subprocess.PIPE,

@@ -13,9 +13,7 @@ import re
 from typing import Any
 
 
-def validate_code_module_boundary(
-    module_id: str, code: str, header: str
-) -> tuple[bool, list[str]]:
+def validate_code_module_boundary(module_id: str, code: str, header: str) -> tuple[bool, list[str]]:
     """Validate a single code module has clean boundaries.
 
     Returns (is_valid, list_of_issues).
@@ -31,9 +29,7 @@ def validate_code_module_boundary(
         header_basename = header.split("/")[-1] if "/" in header else header
         include_pattern = rf'#include\s+"{re.escape(header_basename)}"'
         if not re.search(include_pattern, code):
-            issues.append(
-                f"{module_id}: does not include its own header '{header_basename}'"
-            )
+            issues.append(f"{module_id}: does not include its own header '{header_basename}'")
 
     # Rule 2: No global mutable state (static non-const variables)
     global_state = re.findall(r"static\s+(?!const|constexpr)\w+\s+\w+\s*=", code)
@@ -52,17 +48,13 @@ def validate_code_module_boundary(
     g4_managed = sum(1 for n in raw_new if n.startswith("new G4") or n.startswith("new CLHEP"))
     unmanaged = len(raw_new) - g4_managed
     if unmanaged > 5:
-        issues.append(
-            f"{module_id}: {unmanaged} unmanaged 'new' allocations (max 5 allowed)"
-        )
+        issues.append(f"{module_id}: {unmanaged} unmanaged 'new' allocations (max 5 allowed)")
 
     is_valid = len(issues) == 0
     return is_valid, issues
 
 
-def validate_all_module_boundaries(
-    modules: list[dict[str, Any]]
-) -> tuple[bool, list[str]]:
+def validate_all_module_boundaries(modules: list[dict[str, Any]]) -> tuple[bool, list[str]]:
     """Validate all code modules have clean boundaries."""
     all_issues: list[str] = []
     all_valid = True

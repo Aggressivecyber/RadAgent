@@ -18,9 +18,7 @@ def build_confirmation_summary(
             cid = c.get("component_id", "?")
             mat = c.get("material_id", "TBD")
             geom = c.get("geometry", {})
-            dims = " × ".join(
-                f"{geom.get(k, '?')}" for k in ("x", "y", "z") if k in geom
-            )
+            dims = " × ".join(f"{geom.get(k, '?')}" for k in ("x", "y", "z") if k in geom)
             if not dims:
                 dims = geom.get("dimensions", "?")
             lines.append(f"- {cid}: {mat}, {dims}")
@@ -80,12 +78,12 @@ MAX_QUESTIONS_PER_ROUND = 8
 
 # Priority ordering for question generation
 QUESTION_PRIORITY = [
-    "source",      # particle / energy / direction
-    "material",    # key materials
-    "dimension",   # key dimensions
-    "placement",   # layer relationships
-    "scoring",     # sensitive region
-    "output",      # scoring/output
-    "voxel",       # voxel size
-    "other",       # other assumptions
+    "source",  # particle / energy / direction
+    "material",  # key materials
+    "dimension",  # key dimensions
+    "placement",  # layer relationships
+    "scoring",  # sensitive region
+    "output",  # scoring/output
+    "voxel",  # voxel size
+    "other",  # other assumptions
 ]

@@ -30,19 +30,25 @@ class BeamProfile(BaseModel):
     """Beam spatial and angular profile."""
 
     position: list[float] = Field(
-        ..., min_length=3, max_length=3,
+        ...,
+        min_length=3,
+        max_length=3,
         description="Beam center position [x, y, z] in um",
     )
     direction: list[float] = Field(
-        ..., min_length=3, max_length=3,
+        ...,
+        min_length=3,
+        max_length=3,
         description="Beam direction vector [dx, dy, dz]",
     )
     sigma_position_um: float | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="Beam spot size sigma in um (None = pencil beam)",
     )
     sigma_direction_rad: float | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="Angular spread sigma in radians (None = parallel)",
     )
     surface_shape: Literal["circle", "rectangle", "point"] = Field(
@@ -62,25 +68,21 @@ class SourceSpec(BaseModel):
     complex General Particle Source (GPS) setups.
     """
 
-    source_id: str = Field(
-        ..., min_length=1, description="Unique source identifier"
-    )
+    source_id: str = Field(..., min_length=1, description="Unique source identifier")
     particle_type: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Geant4 particle name (e.g. 'proton', 'gamma', 'e-')",
     )
-    energy: EnergySpec = Field(
-        ..., description="Energy configuration"
-    )
-    beam: BeamProfile = Field(
-        ..., description="Beam spatial and angular configuration"
-    )
+    energy: EnergySpec = Field(..., description="Energy configuration")
+    beam: BeamProfile = Field(..., description="Beam spatial and angular configuration")
     generator_type: Literal["gun", "gps"] = Field(
         default="gun",
         description="Particle gun for simple beams, GPS for complex sources",
     )
     events: int = Field(
-        default=1000, ge=1,
+        default=1000,
+        ge=1,
         description="Number of events to generate",
     )
     source_evidence: list[str] = Field(

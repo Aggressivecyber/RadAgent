@@ -12,14 +12,10 @@ This is a critical safety test: the pipeline must never auto-approve.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
 import pytest
-
 from agent_core.graph.main_routes import route_after_human_confirmation
-
 
 # ─── Test: human_interrupt_node returns pending when no response ────────
 
@@ -55,7 +51,9 @@ class TestPipelineBlocksWithoutHumanResponse:
         assert result["confirmation_status"] == "pending"
 
     @pytest.mark.asyncio
-    async def test_interrupt_node_returns_received_with_explicit_response(self, tmp_path: Path) -> None:
+    async def test_interrupt_node_returns_received_with_explicit_response(
+        self, tmp_path: Path
+    ) -> None:
         """human_interrupt_node must return 'received' ONLY when explicit response exists."""
         from agent_core.human_confirmation.nodes import human_interrupt_node
 
@@ -76,86 +74,106 @@ class TestPipelineBlocksWithoutHumanResponse:
 
     def test_route_pending_goes_back_to_human_confirmation(self) -> None:
         """Route after confirmation: 'pending' → human_confirmation_subgraph (re-entry)."""
-        result = route_after_human_confirmation({
-            "confirmation_status": "pending",
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "pending",
+            }
+        )
         assert result == "human_confirmation_subgraph"
 
     def test_route_no_paths_blocks_codegen(self) -> None:
         """Triple guard: even 'approved' without record/plan paths → report_subgraph."""
         # Missing confirmation_record_path
-        result = route_after_human_confirmation({
-            "confirmation_status": "approved",
-            "confirmed_model_plan_path": "/tmp/plan.json",
-            "unconfirmed_assumptions_count": 0,
-            # Missing confirmation_record_path
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "approved",
+                "confirmed_model_plan_path": "/tmp/plan.json",
+                "unconfirmed_assumptions_count": 0,
+                # Missing confirmation_record_path
+            }
+        )
         assert result == "report_subgraph"
 
         # Missing confirmed_model_plan_path
-        result = route_after_human_confirmation({
-            "confirmation_status": "approved",
-            "confirmation_record_path": "/tmp/record.json",
-            "unconfirmed_assumptions_count": 0,
-            # Missing confirmed_model_plan_path
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "approved",
+                "confirmation_record_path": "/tmp/record.json",
+                "unconfirmed_assumptions_count": 0,
+                # Missing confirmed_model_plan_path
+            }
+        )
         assert result == "report_subgraph"
 
         # Has unconfirmed assumptions
-        result = route_after_human_confirmation({
-            "confirmation_status": "approved",
-            "confirmation_record_path": "/tmp/record.json",
-            "confirmed_model_plan_path": "/tmp/plan.json",
-            "unconfirmed_assumptions_count": 3,
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "approved",
+                "confirmation_record_path": "/tmp/record.json",
+                "confirmed_model_plan_path": "/tmp/plan.json",
+                "unconfirmed_assumptions_count": 3,
+            }
+        )
         assert result == "report_subgraph"
 
     def test_route_rejected_goes_to_report(self) -> None:
         """Route after confirmation: 'rejected' → report_subgraph."""
-        result = route_after_human_confirmation({
-            "confirmation_status": "rejected",
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "rejected",
+            }
+        )
         assert result == "report_subgraph"
 
     def test_route_failed_goes_to_report(self) -> None:
         """Route after confirmation: 'failed' → report_subgraph."""
-        result = route_after_human_confirmation({
-            "confirmation_status": "failed",
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "failed",
+            }
+        )
         assert result == "report_subgraph"
 
     def test_route_expired_goes_to_report(self) -> None:
         """Route after confirmation: 'expired' → report_subgraph."""
-        result = route_after_human_confirmation({
-            "confirmation_status": "expired",
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "expired",
+            }
+        )
         assert result == "report_subgraph"
 
     def test_route_approved_with_all_guards_goes_to_codegen(self) -> None:
         """Route after confirmation: 'approved' + all guards → codegen."""
-        result = route_after_human_confirmation({
-            "confirmation_status": "approved",
-            "confirmation_record_path": "/tmp/record.json",
-            "confirmed_model_plan_path": "/tmp/plan.json",
-            "unconfirmed_assumptions_count": 0,
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "approved",
+                "confirmation_record_path": "/tmp/record.json",
+                "confirmed_model_plan_path": "/tmp/plan.json",
+                "unconfirmed_assumptions_count": 0,
+            }
+        )
         assert result == "g4_codegen_subgraph"
 
     def test_route_edited_with_all_guards_goes_to_codegen(self) -> None:
         """Route after confirmation: 'edited' + all guards → codegen."""
-        result = route_after_human_confirmation({
-            "confirmation_status": "edited",
-            "confirmation_record_path": "/tmp/record.json",
-            "confirmed_model_plan_path": "/tmp/plan.json",
-            "unconfirmed_assumptions_count": 0,
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "edited",
+                "confirmation_record_path": "/tmp/record.json",
+                "confirmed_model_plan_path": "/tmp/plan.json",
+                "unconfirmed_assumptions_count": 0,
+            }
+        )
         assert result == "g4_codegen_subgraph"
 
     def test_route_ask_more_goes_to_context(self) -> None:
         """Route after confirmation: 'ask_more' → context_subgraph."""
-        result = route_after_human_confirmation({
-            "confirmation_status": "ask_more",
-        })
+        result = route_after_human_confirmation(
+            {
+                "confirmation_status": "ask_more",
+            }
+        )
         assert result == "context_subgraph"
 
 

@@ -112,7 +112,10 @@ class WebSearchTool:
         self.search_count += 1
         logger.info(
             "web search #%d [backend=%s]: %r (max=%d)",
-            self.search_count, self._backend, query, max_results,
+            self.search_count,
+            self._backend,
+            query,
+            max_results,
         )
         if self._backend == "exa":
             return await self._search_exa(query, max_results)
@@ -126,7 +129,9 @@ class WebSearchTool:
     # ------------------------------------------------------------------
 
     async def _search_duckduckgo(
-        self, query: str, max_results: int,
+        self,
+        query: str,
+        max_results: int,
     ) -> list[WebResult]:
         """DuckDuckGo HTML search via httpx. No API key needed."""
         try:
@@ -144,10 +149,14 @@ class WebSearchTool:
         }
         try:
             async with httpx.AsyncClient(
-                timeout=15.0, follow_redirects=True, proxy=self._proxy,
+                timeout=15.0,
+                follow_redirects=True,
+                proxy=self._proxy,
             ) as client:
                 resp = await client.post(
-                    url, data={"q": query, "b": ""}, headers=headers,
+                    url,
+                    data={"q": query, "b": ""},
+                    headers=headers,
                 )
                 resp.raise_for_status()
                 return self._parse_ddg_html(resp.text, max_results)
@@ -169,7 +178,8 @@ class WebSearchTool:
                 # Extract URL from first href in result__a
                 title_match = re.search(
                     r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
-                    block, re.DOTALL,
+                    block,
+                    re.DOTALL,
                 )
                 if not title_match:
                     continue
@@ -178,25 +188,18 @@ class WebSearchTool:
 
                 # DDG wraps URLs through redirect; extract actual URL
                 url_match = re.search(r"uddg=([^&]+)", raw_url)
-                url = (
-                    unquote(_strip_html(url_match.group(1)))
-                    if url_match else raw_url
-                )
+                url = unquote(_strip_html(url_match.group(1))) if url_match else raw_url
 
                 # Extract snippet
                 snippet_match = re.search(
                     r'class="result__snippet"[^>]*>(.*?)</[at]',
-                    block, re.DOTALL,
+                    block,
+                    re.DOTALL,
                 )
-                snippet = (
-                    _strip_html(snippet_match.group(1))[:300]
-                    if snippet_match else ""
-                )
+                snippet = _strip_html(snippet_match.group(1))[:300] if snippet_match else ""
 
                 if title and url.startswith("http"):
-                    results.append(
-                        WebResult(title=title, url=url, snippet=snippet)
-                    )
+                    results.append(WebResult(title=title, url=url, snippet=snippet))
             except Exception:
                 continue
         return results
@@ -216,7 +219,8 @@ class WebSearchTool:
 
         try:
             async with httpx.AsyncClient(
-                timeout=15.0, proxy=self._proxy,
+                timeout=15.0,
+                proxy=self._proxy,
             ) as client:
                 resp = await client.post(
                     "https://api.exa.ai/search",

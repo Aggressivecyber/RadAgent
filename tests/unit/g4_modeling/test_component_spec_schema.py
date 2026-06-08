@@ -60,8 +60,15 @@ class TestComponentSpecValid:
         assert "edep_region" in spec.roles
 
     def test_all_component_types(self):
-        for ctype in ("world", "assembly", "layer", "volume",
-                       "shielding", "electrode", "substrate"):
+        for ctype in (
+            "world",
+            "assembly",
+            "layer",
+            "volume",
+            "shielding",
+            "electrode",
+            "substrate",
+        ):
             data = _valid_world_data()
             data["component_id"] = f"test_{ctype}"
             data["component_type"] = ctype
@@ -71,8 +78,7 @@ class TestComponentSpecValid:
             assert spec is not None, f"Failed for {ctype}: {errors}"
 
     def test_all_geometry_types(self):
-        for gtype in ("box", "sphere", "cylinder", "tubs",
-                       "cons", "polycone", "trapezoid"):
+        for gtype in ("box", "sphere", "cylinder", "tubs", "cons", "polycone", "trapezoid"):
             data = _valid_world_data()
             data["geometry_type"] = gtype
             spec, errors = validate_component_spec(data)

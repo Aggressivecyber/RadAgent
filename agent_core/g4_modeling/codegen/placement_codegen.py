@@ -39,22 +39,21 @@ async def placement_codegen(state: RadiationAgentState) -> dict[str, Any]:
     source = _generate_source(sorted_comps, model_ir)
 
     return {
-        "code_modules": [{
-            "module_name": "PlacementManager",
-            "module_type": "placement",
-            "source_files": ["PlacementManager.cc"],
-            "header_files": ["PlacementManager.hh"],
-            "depends_on": [
-                _to_class_name(c.component_id) + "Builder"
-                for c in sorted_comps
-            ],
-            "linked_component_ids": [c.component_id for c in sorted_comps],
-            "linked_material_ids": [],
-            "generated_content": {
-                "PlacementManager::PlacementManager.hh": header,
-                "PlacementManager::PlacementManager.cc": source,
-            },
-        }],
+        "code_modules": [
+            {
+                "module_name": "PlacementManager",
+                "module_type": "placement",
+                "source_files": ["PlacementManager.cc"],
+                "header_files": ["PlacementManager.hh"],
+                "depends_on": [_to_class_name(c.component_id) + "Builder" for c in sorted_comps],
+                "linked_component_ids": [c.component_id for c in sorted_comps],
+                "linked_material_ids": [],
+                "generated_content": {
+                    "PlacementManager::PlacementManager.hh": header,
+                    "PlacementManager::PlacementManager.cc": source,
+                },
+            }
+        ],
     }
 
 
@@ -65,10 +64,7 @@ def _sort_by_depth(model_ir: Any) -> list[Any]:
         depth_map[comp.component_id] = 0
 
     # BFS to assign depths
-    queue = [
-        c.component_id for c in model_ir.components
-        if c.component_type == "world"
-    ]
+    queue = [c.component_id for c in model_ir.components if c.component_type == "world"]
     visited: set[str] = set(queue)
 
     while queue:
@@ -88,17 +84,13 @@ def _sort_by_depth(model_ir: Any) -> list[Any]:
 
 def _to_class_name(component_id: str) -> str:
     """Convert component_id to PascalCase."""
-    return "".join(
-        word.capitalize()
-        for word in component_id.replace("-", "_").split("_")
-    )
+    return "".join(word.capitalize() for word in component_id.replace("-", "_").split("_"))
 
 
 def _generate_header(sorted_comps: list[Any]) -> str:
     """Generate PlacementManager.hh."""
     builder_includes = "\n".join(
-        f'#include "{_to_class_name(c.component_id)}Builder.hh"'
-        for c in sorted_comps
+        f'#include "{_to_class_name(c.component_id)}Builder.hh"' for c in sorted_comps
     )
 
     return f"""// PlacementManager.hh
@@ -140,9 +132,7 @@ def _generate_source(sorted_comps: list[Any], model_ir: Any) -> str:
         var_name = f"builder_{comp.component_id.replace('-', '_')}"
         builder_map[comp.component_id] = var_name
 
-        builder_inits.append(
-            f"    auto* {var_name} = new {class_name}();"
-        )
+        builder_inits.append(f"    auto* {var_name} = new {class_name}();")
 
         if comp.component_type == "world":
             # World volume gets placed at origin with no rotation
@@ -151,7 +141,7 @@ def _generate_source(sorted_comps: list[Any], model_ir: Any) -> str:
                 f"    auto* phys_world = new G4PVPlacement(\n"
                 f"        nullptr, G4ThreeVector(),\n"
                 f"        {var_name}->GetLogicalVolume(),\n"
-                f"        \"{comp.component_id}_phys\",\n"
+                f'        "{comp.component_id}_phys",\n'
                 f"        nullptr, false, 0\n"
                 f"    );"
             )
@@ -164,27 +154,23 @@ def _generate_source(sorted_comps: list[Any], model_ir: Any) -> str:
             if not mother_var:
                 logger.warning(
                     "Component %s has no valid mother_volume '%s'",
-                    comp.component_id, comp.mother_volume,
+                    comp.component_id,
+                    comp.mother_volume,
                 )
                 continue
 
-            pos_str = (
-                f"G4ThreeVector({pos[0]}*um, {pos[1]}*um, {pos[2]}*um)"
-            )
+            pos_str = f"G4ThreeVector({pos[0]}*um, {pos[1]}*um, {pos[2]}*um)"
             if all(abs(r) < 1e-10 for r in rot):
                 rot_str = "nullptr"
             else:
-                rot_str = (
-                    f"new G4RotationMatrix({rot[0]}*deg, "
-                    f"{rot[1]}*deg, {rot[2]}*deg)"
-                )
+                rot_str = f"new G4RotationMatrix({rot[0]}*deg, {rot[1]}*deg, {rot[2]}*deg)"
 
             placement_calls.append(
                 f"    // Place {comp.component_id} in {comp.mother_volume}\n"
                 f"    new G4PVPlacement(\n"
                 f"        {rot_str}, {pos_str},\n"
                 f"        {var_name}->GetLogicalVolume(),\n"
-                f"        \"{comp.component_id}_phys\",\n"
+                f'        "{comp.component_id}_phys",\n'
                 f"        {mother_var}->GetLogicalVolume(), false, 0\n"
                 f"    );"
             )

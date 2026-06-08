@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from agent_core.patching.nodes import apply_patch
@@ -36,8 +35,7 @@ class TestPatchSubgraphRejectsContentField:
         # Should have errors about content field
         assert result["patch_status"] in ("failed", "rejected")
         has_content_error = any(
-            "content" in e.lower() or "new_content" in e.lower()
-            for e in result.get("errors", [])
+            "content" in e.lower() or "new_content" in e.lower() for e in result.get("errors", [])
         )
         assert has_content_error, f"Expected content-related error, got: {result.get('errors', [])}"
 
@@ -64,7 +62,7 @@ class TestPatchSubgraphRejectsContentField:
             "errors": [],
         }
 
-        result = await apply_patch(state)
+        await apply_patch(state)
 
         # Entry has both content and new_content — should be rejected or warned
         # The patch node treats this as valid since new_content is present

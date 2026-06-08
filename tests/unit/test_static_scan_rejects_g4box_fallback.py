@@ -6,11 +6,23 @@ from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generate
 
 
 def _patch(content: str) -> dict:
-    return {"changed_files": [{"path": "src/Test.cc", "new_content": content, "zone": "green", "module_name": "material", "generated_by": "m"}]}
+    return {
+        "changed_files": [
+            {
+                "path": "src/Test.cc",
+                "new_content": content,
+                "zone": "green",
+                "module_name": "material",
+                "generated_by": "m",
+            }
+        ]
+    }
 
 
 def test_rejects_g4box_fallback():
-    result = scan_generated_code(_patch('auto box = new G4Box("fallback_geometry", 1, 1, 1);\n'), "test")
+    result = scan_generated_code(
+        _patch('auto box = new G4Box("fallback_geometry", 1, 1, 1);\n'), "test"
+    )
     assert result["status"] == "fail"
     assert any(f["issue"] == "g4box_fallback" for f in result["findings"])
 

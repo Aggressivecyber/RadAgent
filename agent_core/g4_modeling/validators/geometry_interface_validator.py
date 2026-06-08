@@ -36,10 +36,7 @@ class GeometryInterfaceValidator:
         if len(worlds) == 0:
             errors.append("No world volume defined")
         elif len(worlds) > 1:
-            errors.append(
-                f"Multiple world volumes: "
-                f"{[w.component_id for w in worlds]}"
-            )
+            errors.append(f"Multiple world volumes: {[w.component_id for w in worlds]}")
 
         # 2. Mother volume references are valid
         for comp in model_ir.components:

@@ -5,8 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+from agent_core.models.gateway import get_model_gateway, reset_model_gateway
 from agent_core.models.schemas import ModelTask, ModelTier
 
 
@@ -26,23 +25,12 @@ class TestMockLlmGateReturnsStructuredJson:
         """Mock GATE_EXPLANATION should return correct JSON with required fields."""
         gw = get_model_gateway()
 
-        gate_json = {
-            "status": "pass",
-            "checks": [
-                {"check": "no_simplification", "status": "pass", "message": "OK"},
-                {"check": "no_missing_includes", "status": "pass", "message": "OK"},
-            ],
-            "risks": [],
-            "required_fixes": [],
-            "requires_human_confirmation": False,
-            "reviewer_notes": "All checks passed.",
-        }
 
         with patch(
             "agent_core.models.gateway.call_openai_compatible_model",
             new_callable=AsyncMock,
             return_value=(
-                '{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": "OK"}',
+                '{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": "OK"}',  # noqa: E501
                 {"prompt_tokens": 100, "completion_tokens": 50},
             ),
         ):
@@ -72,7 +60,7 @@ class TestMockLlmGateReturnsStructuredJson:
             "agent_core.models.gateway.call_openai_compatible_model",
             new_callable=AsyncMock,
             return_value=(
-                '{"status": "fail", "checks": [], "risks": ["risk1"], "required_fixes": ["fix missing include"], "requires_human_confirmation": false, "reviewer_notes": "Found issues."}',
+                '{"status": "fail", "checks": [], "risks": ["risk1"], "required_fixes": ["fix missing include"], "requires_human_confirmation": false, "reviewer_notes": "Found issues."}',  # noqa: E501
                 {"prompt_tokens": 100, "completion_tokens": 50},
             ),
         ):

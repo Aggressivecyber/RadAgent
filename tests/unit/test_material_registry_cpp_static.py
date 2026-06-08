@@ -81,6 +81,7 @@ async def _get_generated() -> dict[str, str]:
     from agent_core.g4_modeling.codegen.material_registry_codegen import (
         material_registry_codegen,
     )
+
     result = await material_registry_codegen({"g4_model_ir": _make_model_ir_with_custom_material()})
     return result["code_modules"][0]["generated_content"]
 

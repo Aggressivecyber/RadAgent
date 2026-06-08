@@ -56,28 +56,28 @@ async def component_geometry_codegen(
         header = _generate_header(class_name, comp)
         source = _generate_source(class_name, comp)
 
-        modules.append({
-            "module_name": class_name,
-            "module_type": "component_geometry",
-            "source_files": [f"{class_name}.cc"],
-            "header_files": [f"{class_name}.hh"],
-            "depends_on": ["MaterialRegistry"],
-            "linked_component_ids": [comp.component_id],
-            "linked_material_ids": [comp.material_id],
-            "generated_content": {
-                f"{class_name}::{class_name}.hh": header,
-                f"{class_name}::{class_name}.cc": source,
-            },
-        })
+        modules.append(
+            {
+                "module_name": class_name,
+                "module_type": "component_geometry",
+                "source_files": [f"{class_name}.cc"],
+                "header_files": [f"{class_name}.hh"],
+                "depends_on": ["MaterialRegistry"],
+                "linked_component_ids": [comp.component_id],
+                "linked_material_ids": [comp.material_id],
+                "generated_content": {
+                    f"{class_name}::{class_name}.hh": header,
+                    f"{class_name}::{class_name}.cc": source,
+                },
+            }
+        )
 
     return {"code_modules": modules}
 
 
 def _to_class_name(component_id: str) -> str:
     """Convert component_id to PascalCase."""
-    return "".join(
-        word.capitalize() for word in component_id.replace("-", "_").split("_")
-    )
+    return "".join(word.capitalize() for word in component_id.replace("-", "_").split("_"))
 
 
 def _build_solid_args(comp: Any) -> tuple[str, str]:
@@ -92,10 +92,7 @@ def _build_solid_args(comp: Any) -> tuple[str, str]:
         dx = dims.get("dx", 1000.0)
         dy = dims.get("dy", 1000.0)
         dz = dims.get("dz", 1000.0)
-        args = (
-            f'"{comp.component_id}_solid", '
-            f"{dx / 2.0}*um, {dy / 2.0}*um, {dz / 2.0}*um"
-        )
+        args = f'"{comp.component_id}_solid", {dx / 2.0}*um, {dy / 2.0}*um, {dz / 2.0}*um'
     elif geometry_type in ("tubs", "cylinder"):
         rmin = dims.get("r_min", 0.0)
         rmax = dims.get("r_max", 500.0)
@@ -127,10 +124,7 @@ def _build_solid_args(comp: Any) -> tuple[str, str]:
         dx = dims.get("dx", 1000.0)
         dy = dims.get("dy", 1000.0)
         dz = dims.get("dz", 1000.0)
-        args = (
-            f'"{comp.component_id}_solid", '
-            f"{dx / 2.0}*um, {dy / 2.0}*um, {dz / 2.0}*um"
-        )
+        args = f'"{comp.component_id}_solid", {dx / 2.0}*um, {dy / 2.0}*um, {dz / 2.0}*um'
 
     solid_type = _GEOMETRY_MAP.get(geometry_type, "G4Box")
     return solid_type, args
@@ -175,9 +169,7 @@ def _generate_source(class_name: str, comp: Any) -> str:
     solid_type, solid_args = _build_solid_args(comp)
 
     # Evidence comment
-    evidence_comment = "\n".join(
-        f"// Evidence: {e}" for e in comp.source_evidence
-    )
+    evidence_comment = "\n".join(f"// Evidence: {e}" for e in comp.source_evidence)
 
     # Determine which solid headers to include
     solid_includes = _solid_includes(solid_type)

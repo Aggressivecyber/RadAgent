@@ -102,6 +102,7 @@ async def _get_generated() -> dict[str, str]:
     from agent_core.g4_modeling.codegen.sensitive_detector_codegen import (
         sensitive_detector_codegen,
     )
+
     result = await sensitive_detector_codegen({"g4_model_ir": _make_model_ir_with_sd()})
     return result["code_modules"][0]["generated_content"]
 

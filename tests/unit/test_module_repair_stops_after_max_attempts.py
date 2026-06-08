@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from agent_core.g4_codegen.repair.module_repair_loop import (
     MAX_REPAIR_ATTEMPTS,
     repair_module,
@@ -79,11 +77,11 @@ class TestModuleRepairStopsAfterMaxAttempts:
             mock_gw.call.return_value = AsyncMock(
                 error=None,
                 content='{"module_name": "geometry", "status": "repaired", '
-                        '"generated_files": [{"path": "src/Detector.cc", '
-                        '"new_content": "#include \\"Detector.hh\\"\\n// still broken\\n#include\\n", '
-                        '"generated_by": "geometry_module_agent", "module_name": "geometry", '
-                        '"rationale": "repaired"}], '
-                        '"errors": [], "warnings": []}',
+                '"generated_files": [{"path": "src/Detector.cc", '
+                '"new_content": "#include \\"Detector.hh\\"\\n// still broken\\n#include\\n", '
+                '"generated_by": "geometry_module_agent", "module_name": "geometry", '
+                '"rationale": "repaired"}], '
+                '"errors": [], "warnings": []}',
                 parsed_json={
                     "module_name": "geometry",
                     "status": "repaired",
@@ -107,8 +105,7 @@ class TestModuleRepairStopsAfterMaxAttempts:
         assert result.status == "failed"
         assert len(result.repair_attempts) == MAX_REPAIR_ATTEMPTS
         assert any(
-            f"Repair failed after {MAX_REPAIR_ATTEMPTS} attempts" in e
-            for e in result.errors
+            f"Repair failed after {MAX_REPAIR_ATTEMPTS} attempts" in e for e in result.errors
         )
 
     @pytest.mark.asyncio

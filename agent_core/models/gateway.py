@@ -51,6 +51,7 @@ class ModelGateway:
         try:
             if profile.provider == ModelProvider.MOCK:
                 from agent_core.models.mock import call_mock_model
+
                 mock_result = call_mock_model(req.task, req.metadata)
                 content = json.dumps(mock_result.parsed_json or {})
                 parsed_json = mock_result.parsed_json
@@ -95,7 +96,7 @@ def _safe_parse_json(content: str) -> dict[str, Any] | None:
         end_idx = content.rfind("}")
         if start_idx >= 0 and end_idx > start_idx:
             try:
-                return json.loads(content[start_idx:end_idx + 1])
+                return json.loads(content[start_idx : end_idx + 1])
             except Exception:
                 return None
     return None

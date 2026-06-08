@@ -16,9 +16,7 @@ import re
 from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
 
 # Patterns that indicate placeholder/TODO values
-_PLACEHOLDER_PATTERNS = re.compile(
-    r"(?i)(todo|tbd|fixme|xxx|placeholder|unknown|n/a|default|tbs)"
-)
+_PLACEHOLDER_PATTERNS = re.compile(r"(?i)(todo|tbd|fixme|xxx|placeholder|unknown|n/a|default|tbs)")
 
 # Common lazy defaults for dimensions
 _DEFAULT_DIMENSIONS: dict[str, tuple[float, ...]] = {
@@ -67,8 +65,7 @@ class NoSimplificationValidator:
 
         component_ids = {c.component_id for c in model_ir.components}
         component_names_lower = {
-            c.component_id.lower() + " " + c.display_name.lower()
-            for c in model_ir.components
+            c.component_id.lower() + " " + c.display_name.lower() for c in model_ir.components
         }
 
         # ── Check 1: Complex model keyword detection ──
@@ -82,8 +79,7 @@ class NoSimplificationValidator:
             # Check which complex patterns are present
             for category, patterns in _COMPLEX_MODEL_PATTERNS:
                 found = any(
-                    any(p in name_lower for p in patterns)
-                    for name_lower in component_names_lower
+                    any(p in name_lower for p in patterns) for name_lower in component_names_lower
                 )
                 if not found:
                     # Check if user explicitly approved the omission
@@ -98,8 +94,7 @@ class NoSimplificationValidator:
         # If there's only 1 non-world volume and the target mentions "stack",
         # that's a simplification red flag
         non_world_components = [
-            c for c in model_ir.components
-            if c.component_type not in ("world",)
+            c for c in model_ir.components if c.component_type not in ("world",)
         ]
         if len(non_world_components) <= 2 and is_complex_request:
             errors.append(
@@ -110,34 +105,50 @@ class NoSimplificationValidator:
         # ── Check 3: Component evidence and dimensions ──
         for comp in model_ir.components:
             self._check_evidence(
-                comp.component_id, comp.source_evidence,
-                "component", errors, approved,
+                comp.component_id,
+                comp.source_evidence,
+                "component",
+                errors,
+                approved,
             )
             self._check_dimensions(
-                comp.component_id, comp.geometry_type,
-                comp.dimensions, errors, approved,
+                comp.component_id,
+                comp.geometry_type,
+                comp.dimensions,
+                errors,
+                approved,
             )
             self._check_placeholders(
-                comp.component_id, comp.display_name,
-                "component", errors,
+                comp.component_id,
+                comp.display_name,
+                "component",
+                errors,
             )
 
         # ── Check 4: Material evidence ──
         for mat in model_ir.materials:
             self._check_evidence(
-                mat.material_id, mat.source_evidence,
-                "material", errors, approved,
+                mat.material_id,
+                mat.source_evidence,
+                "material",
+                errors,
+                approved,
             )
             self._check_placeholders(
-                mat.material_id, mat.name,
-                "material", errors,
+                mat.material_id,
+                mat.name,
+                "material",
+                errors,
             )
 
         # ── Check 5: Source evidence ──
         for src in model_ir.sources:
             self._check_evidence(
-                src.source_id, src.source_evidence,
-                "source", errors, approved,
+                src.source_id,
+                src.source_evidence,
+                "source",
+                errors,
+                approved,
             )
 
         # ── Check 6: Physics evidence ──
@@ -145,14 +156,19 @@ class NoSimplificationValidator:
             self._check_evidence(
                 model_ir.physics.physics_list,
                 model_ir.physics.source_evidence,
-                "physics", errors, approved,
+                "physics",
+                errors,
+                approved,
             )
 
         # ── Check 7: Scoring evidence ──
         for sc in model_ir.scoring:
             self._check_evidence(
-                sc.scoring_id, sc.source_evidence,
-                "scoring", errors, approved,
+                sc.scoring_id,
+                sc.source_evidence,
+                "scoring",
+                errors,
+                approved,
             )
 
         return len(errors) == 0, errors
@@ -216,6 +232,4 @@ class NoSimplificationValidator:
     ) -> None:
         """Check for placeholder text in string fields."""
         if _PLACEHOLDER_PATTERNS.search(text):
-            errors.append(
-                f"{spec_type} '{target_id}' contains placeholder text: '{text}'"
-            )
+            errors.append(f"{spec_type} '{target_id}' contains placeholder text: '{text}'")

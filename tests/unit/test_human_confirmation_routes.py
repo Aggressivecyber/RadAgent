@@ -1,6 +1,5 @@
 """Tests for human_confirmation routing logic."""
 
-
 from agent_core.graph.main_routes import (
     route_after_g4_modeling,
     route_after_human_confirmation,

@@ -235,9 +235,7 @@ async def build_proposed_model_completion(
 
     # Calculate overall readiness
     proposed["requires_human_confirmation"] = len(ai_fields) > 0
-    proposed["readiness_score"] = _calculate_readiness_score(
-        user_fields, ai_fields, assumptions
-    )
+    proposed["readiness_score"] = _calculate_readiness_score(user_fields, ai_fields, assumptions)
 
     # Save to file
     conf_dir = _get_confirmation_dir(job_id)
@@ -320,9 +318,7 @@ def _calculate_readiness_score(
 
     # Penalty for low-confidence AI fields
     low_conf_penalty = sum(
-        1.0 - f["confidence"]
-        for f in ai_fields.values()
-        if f["confidence"] < 0.7
+        1.0 - f["confidence"] for f in ai_fields.values() if f["confidence"] < 0.7
     ) / max(total_fields, 1)
 
     score = user_score - assumption_penalty - low_conf_penalty
@@ -359,44 +355,50 @@ async def generate_confirmation_request(
     for comp in proposal.get("proposed_components", []):
         for param in comp.get("parameters", []):
             if param.get("requires_confirmation", False):
-                questions.append({
-                    "question_id": f"q_{len(questions) + 1}",
-                    "field_path": param["field_path"],
-                    "question": _build_question_text(param, comp),
-                    "proposed_value": param.get("proposed_value"),
-                    "unit": param.get("unit"),
-                    "options": [],
-                    "required": True,
-                    "reason": param.get("reason", ""),
-                })
+                questions.append(
+                    {
+                        "question_id": f"q_{len(questions) + 1}",
+                        "field_path": param["field_path"],
+                        "question": _build_question_text(param, comp),
+                        "proposed_value": param.get("proposed_value"),
+                        "unit": param.get("unit"),
+                        "options": [],
+                        "required": True,
+                        "reason": param.get("reason", ""),
+                    }
+                )
 
     # Questions from sources
     for src in proposal.get("proposed_sources", []):
         if src.get("requires_confirmation", False):
-            questions.append({
-                "question_id": f"q_{len(questions) + 1}",
-                "field_path": src["field_path"],
-                "question": _build_question_text(src, None),
-                "proposed_value": src.get("proposed_value"),
-                "unit": src.get("unit"),
-                "options": [],
-                "required": True,
-                "reason": src.get("reason", ""),
-            })
+            questions.append(
+                {
+                    "question_id": f"q_{len(questions) + 1}",
+                    "field_path": src["field_path"],
+                    "question": _build_question_text(src, None),
+                    "proposed_value": src.get("proposed_value"),
+                    "unit": src.get("unit"),
+                    "options": [],
+                    "required": True,
+                    "reason": src.get("reason", ""),
+                }
+            )
 
     # Questions from scoring
     for sc in proposal.get("proposed_scoring", []):
         if sc.get("requires_confirmation", False):
-            questions.append({
-                "question_id": f"q_{len(questions) + 1}",
-                "field_path": sc["field_path"],
-                "question": _build_question_text(sc, None),
-                "proposed_value": sc.get("proposed_value"),
-                "unit": sc.get("unit"),
-                "options": [],
-                "required": True,
-                "reason": sc.get("reason", ""),
-            })
+            questions.append(
+                {
+                    "question_id": f"q_{len(questions) + 1}",
+                    "field_path": sc["field_path"],
+                    "question": _build_question_text(sc, None),
+                    "proposed_value": sc.get("proposed_value"),
+                    "unit": sc.get("unit"),
+                    "options": [],
+                    "required": True,
+                    "reason": sc.get("reason", ""),
+                }
+            )
 
     # Sort by priority
     questions = _sort_questions_by_priority(questions)
@@ -468,6 +470,7 @@ def _sort_questions_by_priority(
     questions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Sort questions by priority using QUESTION_PRIORITY."""
+
     def get_priority_score(q: dict[str, Any]) -> int:
         field_path = q.get("field_path", "").lower()
 
@@ -679,25 +682,29 @@ async def merge_user_confirmation(
                     edited_fields.append(field_path)
                     confirmed_comp["confirmed_by_user"] = True
                     # Store parameter with user-provenance metadata
-                    confirmed_comp["parameters"].append({
-                        "field_path": field_path,
-                        "value": edit["new_value"],
-                        "source_type": "user",
-                        "confidence": 1.0,
-                        "requires_confirmation": False,
-                    })
+                    confirmed_comp["parameters"].append(
+                        {
+                            "field_path": field_path,
+                            "value": edit["new_value"],
+                            "source_type": "user",
+                            "confidence": 1.0,
+                            "requires_confirmation": False,
+                        }
+                    )
                 elif user_decision == "approve":
                     # Mark as confirmed
                     confirmed_fields.append(field_path)
                     confirmed_comp["confirmed_by_user"] = True
                     # Store parameter with original metadata
-                    confirmed_comp["parameters"].append({
-                        "field_path": field_path,
-                        "value": param.get("proposed_value"),
-                        "source_type": param.get("source_type", "rag"),
-                        "confidence": param.get("confidence", 0.8),
-                        "requires_confirmation": False,  # Now confirmed
-                    })
+                    confirmed_comp["parameters"].append(
+                        {
+                            "field_path": field_path,
+                            "value": param.get("proposed_value"),
+                            "source_type": param.get("source_type", "rag"),
+                            "confidence": param.get("confidence", 0.8),
+                            "requires_confirmation": False,  # Now confirmed
+                        }
+                    )
 
             confirmed_plan["components"].append(confirmed_comp)
 
@@ -714,8 +721,14 @@ async def merge_user_confirmation(
                 "confirmed_by_user": False,
             }
 
-            edit = next((e for e in (response.get("edits", []) if response else [])
-                        if e["field_path"] == field_path), None)
+            edit = next(
+                (
+                    e
+                    for e in (response.get("edits", []) if response else [])
+                    if e["field_path"] == field_path
+                ),
+                None,
+            )
 
             if edit:
                 confirmed_src["proposed_value"] = edit["new_value"]
@@ -747,8 +760,14 @@ async def merge_user_confirmation(
                 "confirmed_by_user": False,
             }
 
-            edit = next((e for e in (response.get("edits", []) if response else [])
-                        if e["field_path"] == field_path), None)
+            edit = next(
+                (
+                    e
+                    for e in (response.get("edits", []) if response else [])
+                    if e["field_path"] == field_path
+                ),
+                None,
+            )
 
             if edit:
                 confirmed_sc["proposed_value"] = edit["new_value"]
@@ -778,8 +797,7 @@ async def merge_user_confirmation(
     # Calculate remaining unconfirmed assumptions/fields
     # Count = total requiring - (confirmed + edited)
     unconfirmed_count = max(
-        0,
-        len(total_fields_requiring_confirmation) - len(confirmed_fields) - len(edited_fields)
+        0, len(total_fields_requiring_confirmation) - len(confirmed_fields) - len(edited_fields)
     )
 
     # Save confirmed model plan

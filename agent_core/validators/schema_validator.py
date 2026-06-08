@@ -81,8 +81,7 @@ class SchemaValidator:
         validator = dispatchers.get(schema_type)
         if validator is None:
             raise ValueError(
-                f"Unknown schema_type '{schema_type}'. "
-                f"Expected one of: {sorted(dispatchers)}"
+                f"Unknown schema_type '{schema_type}'. Expected one of: {sorted(dispatchers)}"
             )
         return validator(data)
 
@@ -90,8 +89,5 @@ class SchemaValidator:
     def _format_errors(exc: Exception) -> list[str]:
         """Turn a Pydantic ValidationError into human-readable strings."""
         if hasattr(exc, "errors"):
-            return [
-                f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
-                for e in exc.errors()
-            ]
+            return [f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()]
         return [str(exc)]

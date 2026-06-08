@@ -46,11 +46,9 @@ async def sensitive_detector_node(state: RadiationAgentState) -> dict[str, Any]:
     if not sensitive_components:
         # Auto-detect: make components with scoring roles sensitive
         sensitive_components = [
-            c for c in model_ir.components
-            if any(
-                role in c.roles
-                for role in ("dose_scoring_region", "edep_region", "sensitive")
-            )
+            c
+            for c in model_ir.components
+            if any(role in c.roles for role in ("dose_scoring_region", "edep_region", "sensitive"))
         ]
 
     # Create SD specs
@@ -58,19 +56,17 @@ async def sensitive_detector_node(state: RadiationAgentState) -> dict[str, Any]:
     for comp in sensitive_components:
         sd_name = f"{comp.component_id}_SD"
         # Replace non-alphanumeric chars for C++ class name
-        class_name = "".join(
-            word.capitalize() for word in sd_name.replace("-", "_").split("_")
-        ) + "SensitiveDetector"
+        class_name = (
+            "".join(word.capitalize() for word in sd_name.replace("-", "_").split("_"))
+            + "SensitiveDetector"
+        )
 
         # Link scoring IDs that target this component
         linked_scoring = [
-            s.scoring_id for s in model_ir.scoring
-            if (
-                s.voxel_grid and s.voxel_grid.target_component_id == comp.component_id
-            ) or any(
-                rs.region_component_id == comp.component_id
-                for rs in s.region_scores
-            )
+            s.scoring_id
+            for s in model_ir.scoring
+            if (s.voxel_grid and s.voxel_grid.target_component_id == comp.component_id)
+            or any(rs.region_component_id == comp.component_id for rs in s.region_scores)
         ]
 
         sd = SensitiveDetectorSpec(

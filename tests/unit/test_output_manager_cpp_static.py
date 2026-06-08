@@ -135,8 +135,7 @@ class TestCppIncludeOrder:
         source = code["OutputManager::OutputManager.cc"]
 
         include_lines = [
-            line.strip() for line in source.splitlines()
-            if line.strip().startswith("#include")
+            line.strip() for line in source.splitlines() if line.strip().startswith("#include")
         ]
         assert len(include_lines) > 0, "No includes found in source"
 
@@ -158,7 +157,7 @@ class TestCppIncludeOrder:
             stripped = line.strip()
             if not stripped.startswith("#include"):
                 continue
-            if stripped.startswith("#include <G4") or stripped.startswith("#include \"G4"):
+            if stripped.startswith("#include <G4") or stripped.startswith('#include "G4'):
                 if g4_include_idx is None:
                     g4_include_idx = i
             elif stripped.startswith("#include <") and not stripped.startswith("#include <G4"):
@@ -177,9 +176,7 @@ class TestCppIncludeOrder:
             for line_no, line in enumerate(content.splitlines(), 1):
                 stripped = line.strip()
                 if stripped.startswith("#include"):
-                    assert len(stripped) > len("#include"), (
-                        f"Empty include in {fname}:{line_no}"
-                    )
+                    assert len(stripped) > len("#include"), f"Empty include in {fname}:{line_no}"
                     has_angle = "<" in stripped and ">" in stripped
                     has_quote = '"' in stripped
                     assert has_angle or has_quote, (
@@ -207,7 +204,7 @@ class TestCppNoForbiddenPatterns:
                 if stripped.startswith("//"):
                     continue
                 # Match G4int as word boundary (not part of longer word)
-                if re.search(r'\bG4int\b', stripped):
+                if re.search(r"\bG4int\b", stripped):
                     raise AssertionError(
                         f"{fname}:{line_no}: bare G4int found, use int: {stripped}"
                     )
@@ -229,7 +226,7 @@ class TestCppNoForbiddenPatterns:
         for line_no, line in enumerate(source.splitlines(), 1):
             stripped = line.strip()
             # Match bare void Write*() without class qualifier
-            if re.match(r'^void\s+Write\w+\s*\(', stripped):
+            if re.match(r"^void\s+Write\w+\s*\(", stripped):
                 assert "OutputManager::" in stripped, (
                     f"Line {line_no}: Unqualified free function: {stripped}"
                 )
@@ -258,9 +255,7 @@ class TestCppPascalCaseMethods:
             "OutputManager::Writeevent_table",
         ]
         for pattern in forbidden:
-            assert pattern not in source, (
-                f"Old snake_case method found: {pattern}"
-            )
+            assert pattern not in source, f"Old snake_case method found: {pattern}"
 
     async def test_header_declarations_pascal_case(self) -> None:
         code = await _get_generated_code()
@@ -290,6 +285,4 @@ class TestCppOutputFilenames:
         for line in source.splitlines():
             stripped = line.strip()
             if "std::ofstream f(" in stripped:
-                assert "outputDir_" in stripped, (
-                    f"ofstream must use outputDir_ prefix: {stripped}"
-                )
+                assert "outputDir_" in stripped, f"ofstream must use outputDir_ prefix: {stripped}"

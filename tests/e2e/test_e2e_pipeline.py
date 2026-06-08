@@ -157,19 +157,23 @@ def _create_gate_results(job_dir: Path) -> Path:
 
     gates = []
     for gid in range(12):
-        gates.append({
-            "gate_id": gid,
-            "gate_name": f"Gate {gid}",
-            "severity": "pass",
-            "message": "OK",
-        })
+        gates.append(
+            {
+                "gate_id": gid,
+                "gate_name": f"Gate {gid}",
+                "severity": "pass",
+                "message": "OK",
+            }
+        )
     for gid in range(12, 20):
-        gates.append({
-            "gate_id": gid,
-            "gate_name": f"G4-{chr(65 + gid - 12)}",
-            "severity": "pass",
-            "message": "OK",
-        })
+        gates.append(
+            {
+                "gate_id": gid,
+                "gate_name": f"G4-{chr(65 + gid - 12)}",
+                "severity": "pass",
+                "message": "OK",
+            }
+        )
 
     gate_path.write_text(json.dumps(gates, indent=2))
     return gate_path
@@ -261,11 +265,15 @@ class TestE2EPipeline:
         state["simulation_scope"] = ["geant4"]
         task_spec_path = job_dir / "02_task_spec" / "task_spec.json"
         task_spec_path.parent.mkdir(parents=True, exist_ok=True)
-        task_spec_path.write_text(json.dumps({
-            "particle": "proton",
-            "energy_MeV": 100,
-            "scope": ["geant4"],
-        }))
+        task_spec_path.write_text(
+            json.dumps(
+                {
+                    "particle": "proton",
+                    "energy_MeV": 100,
+                    "scope": ["geant4"],
+                }
+            )
+        )
         state["task_spec_path"] = str(task_spec_path)
 
         # Step 4: G4 Modeling — create model IR
@@ -277,9 +285,7 @@ class TestE2EPipeline:
         state["construction_ledger_path"] = str(
             job_dir / "03_model_ir" / "construction_ledger.json"
         )
-        state["model_review_report_path"] = str(
-            job_dir / "03_model_ir" / "model_review_report.md"
-        )
+        state["model_review_report_path"] = str(job_dir / "03_model_ir" / "model_review_report.md")
 
         # Create supporting files
         comp_dir = job_dir / "03_model_ir" / "component_specs"
@@ -304,9 +310,7 @@ class TestE2EPipeline:
         state["g4_codegen_status"] = "passed"
         patch_path = _create_patch(job_dir)
         state["proposed_patch_path"] = str(patch_path)
-        state["code_module_plan_path"] = str(
-            job_dir / "04_codegen" / "code_module_plan.json"
-        )
+        state["code_module_plan_path"] = str(job_dir / "04_codegen" / "code_module_plan.json")
         (job_dir / "04_codegen" / "code_module_plan.json").write_text(
             json.dumps({"modules": ["DetectorConstruction"]})
         )
@@ -394,26 +398,20 @@ class TestE2EPipeline:
         assert no_simp["status"] == "NO_SIMPLIFICATION"
 
         # Verify component summary
-        comp_summary = json.loads(
-            (output_dir / "component_specs_summary.json").read_text()
-        )
+        comp_summary = json.loads((output_dir / "component_specs_summary.json").read_text())
         assert comp_summary["total_components"] == 2
         assert "world" in comp_summary["component_ids"]
         assert "silicon_detector" in comp_summary["component_ids"]
         assert comp_summary["materials_count"] == 2
 
         # Verify artifact manifest
-        manifest_data = json.loads(
-            (artifact_dir / "artifact_manifest.json").read_text()
-        )
+        manifest_data = json.loads((artifact_dir / "artifact_manifest.json").read_text())
         # Dev mode: validation_status is downgraded from VERIFIED to PARTIAL
         assert manifest_data["validation_status"] != "VERIFIED"
         assert manifest_data["total_files"] >= 6
 
         # Verify review_report.json
-        review_report = json.loads(
-            (artifact_dir / "review_report.json").read_text()
-        )
+        review_report = json.loads((artifact_dir / "review_report.json").read_text())
         assert review_report["has_model_ir"] is True
         assert review_report["has_gate_results"] is True
 

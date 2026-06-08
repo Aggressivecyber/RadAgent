@@ -73,7 +73,7 @@ _AUTO_PHASES: set[str] = {
 _INTERACTIVE_PHASES: set[str] = {"human_confirmation"}
 
 
-class _QuitREPL(Exception):
+class _QuitREPLError(Exception):
     """Signal to exit the REPL loop."""
 
 
@@ -158,7 +158,7 @@ class RadAgentREPL:
 
             try:
                 await self.handle_input(text)
-            except _QuitREPL:
+            except _QuitREPLError:
                 self.console.print("[dim]Goodbye.[/dim]")
                 break
             except Exception as exc:
@@ -243,9 +243,7 @@ class RadAgentREPL:
             if self.state.get("confirmation_request_path"):
                 await self.cmd_confirm()
             else:
-                self.console.print(
-                    "[yellow]当前没有待确认的方案。[/yellow]"
-                )
+                self.console.print("[yellow]当前没有待确认的方案。[/yellow]")
             return
 
         if intent_result.intent == "unknown":
@@ -330,8 +328,7 @@ class RadAgentREPL:
                 f" — {n_assumptions} assumptions need review"
             )
             self.console.print(
-                "  [dim]Use /confirm to review assumptions, "
-                "then /step to continue.[/dim]\n"
+                "  [dim]Use /confirm to review assumptions, then /step to continue.[/dim]\n"
             )
             self.current_phase_idx = _PIPELINE_PHASES.index("human_confirmation")
             return
@@ -350,16 +347,13 @@ class RadAgentREPL:
             await self._chat_reply(message.strip())
         else:
             self.console.print(
-                "[dim]用法: /chat <消息> — 与 AI 对话\n"
-                "      /chat reset — 清空对话历史[/dim]"
+                "[dim]用法: /chat <消息> — 与 AI 对话\n      /chat reset — 清空对话历史[/dim]"
             )
 
     async def cmd_step(self) -> None:
         """Execute the next single pipeline phase."""
         if not self.state:
-            self.console.print(
-                "[yellow]No active pipeline.[/yellow] Start with /run <query>"
-            )
+            self.console.print("[yellow]No active pipeline.[/yellow] Start with /run <query>")
             return
 
         if self.current_phase_idx >= len(_PIPELINE_PHASES):
@@ -369,17 +363,13 @@ class RadAgentREPL:
         phase = _PIPELINE_PHASES[self.current_phase_idx]
 
         if phase == "human_confirmation" and not self.state.get("raw_human_response"):
-            self.console.print(
-                "[yellow]Human confirmation pending.[/yellow] Run /confirm first."
-            )
+            self.console.print("[yellow]Human confirmation pending.[/yellow] Run /confirm first.")
             return
 
         success = await self._run_phase(phase)
         if success and self.current_phase_idx < len(_PIPELINE_PHASES):
             next_phase = _PIPELINE_PHASES[self.current_phase_idx]
-            self.console.print(
-                f"  [dim]Next: {next_phase}. Use /step to continue.[/dim]"
-            )
+            self.console.print(f"  [dim]Next: {next_phase}. Use /step to continue.[/dim]")
 
     async def cmd_status(self) -> None:
         """Display current pipeline state."""
@@ -423,9 +413,7 @@ class RadAgentREPL:
         """Display the current G4 Model IR."""
         ir_path = self.state.get("g4_model_ir_path")
         if not ir_path or not Path(ir_path).exists():
-            self.console.print(
-                "[yellow]No model IR available.[/yellow] Run /run first."
-            )
+            self.console.print("[yellow]No model IR available.[/yellow] Run /run first.")
             return
 
         model_ir = _load_json_safe(Path(ir_path))
@@ -440,9 +428,7 @@ class RadAgentREPL:
         if not request_path or not Path(request_path).exists():
             # Build confirmation request first
             self.console.print("  [dim]Building confirmation request...[/dim]")
-            phase_success = await self._run_phase(
-                "human_confirmation", stop_at_interrupt=True
-            )
+            phase_success = await self._run_phase("human_confirmation", stop_at_interrupt=True)
             if not phase_success:
                 self.console.print(
                     "[yellow]No confirmation needed or failed to build request.[/yellow]"
@@ -451,23 +437,17 @@ class RadAgentREPL:
             request_path = self.state.get("confirmation_request_path")
 
         if not request_path or not Path(request_path).exists():
-            self.console.print(
-                "[yellow]No confirmation request available.[/yellow]"
-            )
+            self.console.print("[yellow]No confirmation request available.[/yellow]")
             return
 
         request_data = _load_json_safe(Path(request_path))
         if request_data is None:
-            self.console.print(
-                f"[red]Corrupted confirmation request:[/red] {request_path}"
-            )
+            self.console.print(f"[red]Corrupted confirmation request:[/red] {request_path}")
             return
 
         questions = request_data.get("questions", [])
         if not questions:
-            self.console.print(
-                "[green]No assumptions to confirm — all set![/green]"
-            )
+            self.console.print("[green]No assumptions to confirm — all set![/green]")
             # Still require explicit user approval even with no questions
             self.console.print(
                 "[yellow]Please type 'approve' to confirm or 'reject' to cancel:[/yellow]"
@@ -523,22 +503,24 @@ class RadAgentREPL:
             )
 
             if answer == "e":
-                new_val = await asyncio.to_thread(
-                    self._prompt_text, f"  New value for {field}: "
+                new_val = await asyncio.to_thread(self._prompt_text, f"  New value for {field}: ")
+                edits.append(
+                    {
+                        "field_path": field,
+                        "new_value": new_val,
+                        "reason": "User edit in REPL",
+                    }
                 )
-                edits.append({
-                    "field_path": field,
-                    "new_value": new_val,
-                    "reason": "User edit in REPL",
-                })
                 all_approved = False
                 self.console.print(f"  [green]✓ Edited:[/green] {field} → {new_val}")
             elif answer == "r":
-                edits.append({
-                    "field_path": field,
-                    "new_value": None,
-                    "reason": "User rejected in REPL",
-                })
+                edits.append(
+                    {
+                        "field_path": field,
+                        "new_value": None,
+                        "reason": "User rejected in REPL",
+                    }
+                )
                 all_approved = False
                 self.console.print(f"  [red]✗ Rejected:[/red] {field}")
             else:
@@ -554,25 +536,18 @@ class RadAgentREPL:
             "edits": edits,
             "user_notes": f"Interactive REPL confirmation ({decision})",
         }
-        self.console.print(
-            f"\n  [bold green]✓ Confirmation recorded:[/bold green] {decision}"
-        )
+        self.console.print(f"\n  [bold green]✓ Confirmation recorded:[/bold green] {decision}")
         self.console.print("  [dim]Use /step to continue to codegen.[/dim]")
 
     async def cmd_code(self) -> None:
         """List and preview generated C++ files."""
         code_dir = self.state.get("generated_code_dir")
         if not code_dir or not Path(code_dir).exists():
-            self.console.print(
-                "[yellow]No generated code yet.[/yellow] Run /run first."
-            )
+            self.console.print("[yellow]No generated code yet.[/yellow] Run /run first.")
             return
 
         root = Path(code_dir)
-        files = sorted(
-            p for p in root.rglob("*")
-            if p.is_file() and not p.name.startswith(".")
-        )
+        files = sorted(p for p in root.rglob("*") if p.is_file() and not p.name.startswith("."))
 
         if not files:
             self.console.print("[yellow]No source files found.[/yellow]")
@@ -584,16 +559,12 @@ class RadAgentREPL:
             lines = f.read_text(errors="replace").count("\n") + 1
             self.console.print(f"  📄 {rel} ({lines} lines)")
 
-        name = await asyncio.to_thread(
-            self._prompt_text, "  View file (name or Enter to skip): "
-        )
+        name = await asyncio.to_thread(self._prompt_text, "  View file (name or Enter to skip): ")
         if name.strip():
             target = root / name.strip()
             if target.is_file():
                 content = target.read_text(errors="replace")
-                self.console.print(
-                    Panel(content, title=str(target), border_style="blue")
-                )
+                self.console.print(Panel(content, title=str(target), border_style="blue"))
             else:
                 self.console.print(f"  [yellow]File not found:[/yellow] {name}")
 
@@ -601,29 +572,21 @@ class RadAgentREPL:
         """Run cmake configure + make for the generated Geant4 project."""
         code_dir = self.state.get("generated_code_dir")
         if not code_dir or not Path(code_dir).exists():
-            self.console.print(
-                "[yellow]No generated code to build.[/yellow] Run /run first."
-            )
+            self.console.print("[yellow]No generated code to build.[/yellow] Run /run first.")
             return
 
         from agent_core.tools.geant4_runner import Geant4Runner
 
         runner = Geant4Runner()
         if not runner.geant4_available:
-            self.console.print(
-                "[red]Geant4 not available.[/red] Check /etc/profile.d/geant4.sh"
-            )
+            self.console.print("[red]Geant4 not available.[/red] Check /etc/profile.d/geant4.sh")
             return
 
         source_dir = str(Path(code_dir) / "05_geant4")
         if not (Path(code_dir) / "05_geant4" / "CMakeLists.txt").exists():
-            source_dir = (
-                code_dir if (Path(code_dir) / "CMakeLists.txt").exists() else ""
-            )
+            source_dir = code_dir if (Path(code_dir) / "CMakeLists.txt").exists() else ""
             if not source_dir:
-                self.console.print(
-                    f"[yellow]No CMakeLists.txt found in {code_dir}[/yellow]"
-                )
+                self.console.print(f"[yellow]No CMakeLists.txt found in {code_dir}[/yellow]")
                 return
 
         build_dir = str(Path(code_dir) / "build")
@@ -652,9 +615,7 @@ class RadAgentREPL:
         """Run the Geant4 simulation."""
         exe = self.state.get("_executable_path")
         if not exe or not Path(exe).exists():
-            self.console.print(
-                "[yellow]No built executable.[/yellow] Run /build first."
-            )
+            self.console.print("[yellow]No built executable.[/yellow] Run /build first.")
             return
 
         if arg.strip().isdigit():
@@ -663,8 +624,7 @@ class RadAgentREPL:
             events = 1000
             if arg.strip():
                 self.console.print(
-                    f"[yellow]Invalid event count '{arg}', "
-                    f"defaulting to 1000.[/yellow]"
+                    f"[yellow]Invalid event count '{arg}', defaulting to 1000.[/yellow]"
                 )
 
         job_id = self.state.get("job_id", "repl_run")
@@ -691,17 +651,13 @@ class RadAgentREPL:
             self.console.print(f"  Output: {output_dir}")
             self.state["_sim_output_dir"] = output_dir
         else:
-            self.console.print(
-                f"[red]Simulation failed:[/red]\n{result['errors']}"
-            )
+            self.console.print(f"[red]Simulation failed:[/red]\n{result['errors']}")
 
     async def cmd_results(self) -> None:
         """Show simulation output summary."""
         output_dir = self.state.get("_sim_output_dir")
         if not output_dir or not Path(output_dir).exists():
-            self.console.print(
-                "[yellow]No simulation results.[/yellow] Run /sim <events> first."
-            )
+            self.console.print("[yellow]No simulation results.[/yellow] Run /sim <events> first.")
             return
 
         root = Path(output_dir)
@@ -719,11 +675,13 @@ class RadAgentREPL:
             if summary_path.exists():
                 data = _load_json_safe(summary_path)
                 if data is not None:
-                    self.console.print(Panel(
-                        json.dumps(data, indent=2, ensure_ascii=False)[:2000],
-                        title=summary_name,
-                        border_style="cyan",
-                    ))
+                    self.console.print(
+                        Panel(
+                            json.dumps(data, indent=2, ensure_ascii=False)[:2000],
+                            title=summary_name,
+                            border_style="cyan",
+                        )
+                    )
                 break
 
     async def cmd_gates(self) -> None:
@@ -738,10 +696,7 @@ class RadAgentREPL:
             self.console.print(f"[red]Corrupted gate results:[/red] {gates_path}")
             return
 
-        results = (
-            gate_data if isinstance(gate_data, list)
-            else gate_data.get("results", [])
-        )
+        results = gate_data if isinstance(gate_data, list) else gate_data.get("results", [])
 
         if not results:
             self.console.print("[dim]No gate results found.[/dim]")
@@ -793,35 +748,39 @@ class RadAgentREPL:
             marker = "DONE" if report.exists() else "WIP"
             style = "green" if marker == "DONE" else "yellow"
             current = " ◀ current" if job.name == current_job else ""
-            self.console.print(f"  [{style}][{marker}][/{style}] {job.name}[bold cyan]{current}[/bold cyan]")
+            self.console.print(
+                f"  [{style}][{marker}][/{style}] {job.name}[bold cyan]{current}[/bold cyan]"
+            )
 
     async def cmd_help(self) -> None:
         """Show help text."""
-        self.console.print(Panel(
-            "[bold]/run <query>[/bold]   Execute pipeline with a new query\n"
-            "[bold]/step[/bold]          Execute next pipeline phase\n"
-            "[bold]/status[/bold]        Show current pipeline state\n"
-            "[bold]/model[/bold]         Display G4 Model IR\n"
-            "[bold]/confirm[/bold]       Interactively confirm AI assumptions\n"
-            "[bold]/code[/bold]          List and preview generated C++ files\n"
-            "[bold]/build[/bold]         Run cmake + make\n"
-            "[bold]/sim [events][/bold]  Run simulation (default 1000 events)\n"
-            "[bold]/results[/bold]       Show simulation output\n"
-            "[bold]/gates[/bold]         Show gate-check results\n"
-            "[bold]/jobs[/bold]          List existing jobs\n"
-            "[bold]/chat <msg>[/bold]    Chat with AI (with RAG + web + history)\n"
-            "[bold]/chat reset[/bold]    Clear conversation history\n"
-            "[bold]/help[/bold]          Show this help\n"
-            "[bold]/quit[/bold]          Exit REPL\n"
-            "\n[dim]Natural language input is classified by intent router.[/dim]\n"
-            "[dim]Simulation requests → pipeline.  Chat/questions → AI assistant.[/dim]",
-            title="RadAgent Commands",
-            border_style="cyan",
-        ))
+        self.console.print(
+            Panel(
+                "[bold]/run <query>[/bold]   Execute pipeline with a new query\n"
+                "[bold]/step[/bold]          Execute next pipeline phase\n"
+                "[bold]/status[/bold]        Show current pipeline state\n"
+                "[bold]/model[/bold]         Display G4 Model IR\n"
+                "[bold]/confirm[/bold]       Interactively confirm AI assumptions\n"
+                "[bold]/code[/bold]          List and preview generated C++ files\n"
+                "[bold]/build[/bold]         Run cmake + make\n"
+                "[bold]/sim [events][/bold]  Run simulation (default 1000 events)\n"
+                "[bold]/results[/bold]       Show simulation output\n"
+                "[bold]/gates[/bold]         Show gate-check results\n"
+                "[bold]/jobs[/bold]          List existing jobs\n"
+                "[bold]/chat <msg>[/bold]    Chat with AI (with RAG + web + history)\n"
+                "[bold]/chat reset[/bold]    Clear conversation history\n"
+                "[bold]/help[/bold]          Show this help\n"
+                "[bold]/quit[/bold]          Exit REPL\n"
+                "\n[dim]Natural language input is classified by intent router.[/dim]\n"
+                "[dim]Simulation requests → pipeline.  Chat/questions → AI assistant.[/dim]",
+                title="RadAgent Commands",
+                border_style="cyan",
+            )
+        )
 
     async def _cmd_quit(self) -> None:
         """Exit the REPL."""
-        raise _QuitREPL()
+        raise _QuitREPLError()
 
     # ── Phase execution ─────────────────────────────────────────────
 
@@ -865,8 +824,7 @@ class RadAgentREPL:
             job_id = self.state["job_id"]
             job_dir = self.state.get("job_workspace", "")
             self.console.print(
-                f"\n  [bold cyan]📋 Job ID:[/bold cyan] {job_id}"
-                f"\n  [dim]📁 {job_dir}[/dim]\n"
+                f"\n  [bold cyan]📋 Job ID:[/bold cyan] {job_id}\n  [dim]📁 {job_dir}[/dim]\n"
             )
 
         # Check for human-confirmation interrupt
@@ -926,16 +884,9 @@ class RadAgentREPL:
             phase = _PIPELINE_PHASES[self.current_phase_idx]
 
             # Unified human-confirmation gate
-            if (
-                phase == "human_confirmation"
-                and not self.state.get("raw_human_response")
-            ):
-                self.console.print(
-                    "\n  [bold yellow]⚠ Human confirmation required[/bold yellow]"
-                )
-                self.console.print(
-                    "  [dim]Use /confirm to review assumptions.[/dim]\n"
-                )
+            if phase == "human_confirmation" and not self.state.get("raw_human_response"):
+                self.console.print("\n  [bold yellow]⚠ Human confirmation required[/bold yellow]")
+                self.console.print("  [dim]Use /confirm to review assumptions.[/dim]\n")
                 return
 
             success = await self._run_phase(phase)
@@ -944,19 +895,13 @@ class RadAgentREPL:
                 return
 
             # Post-g4_modeling confirmation check
-            if (
-                phase == "g4_modeling"
-                and self.state.get("human_confirmation_required")
-            ):
+            if phase == "g4_modeling" and self.state.get("human_confirmation_required"):
                 n = self.state.get("unconfirmed_assumptions_count", "?")
                 self.console.print(
                     "\n  [bold yellow]⚠ Human confirmation required[/bold yellow]"
                     f" — {n} assumptions"
                 )
-                self.console.print(
-                    "  [dim]Use /confirm to review, "
-                    "then /step to continue.[/dim]\n"
-                )
+                self.console.print("  [dim]Use /confirm to review, then /step to continue.[/dim]\n")
                 return
 
         self.console.print("\n[bold green]✓ Pipeline complete![/bold green]")

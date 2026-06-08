@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 class ProposedParameter(BaseModel):
     """A single proposed parameter with source tracking."""
+
     field_path: str
     proposed_value: Any
     unit: str | None = None
@@ -25,6 +26,7 @@ class ProposedParameter(BaseModel):
 
 class ProposedComponent(BaseModel):
     """A proposed component with parameters needing confirmation."""
+
     component_id: str
     component_type: str
     material_id: str | None = None
@@ -39,6 +41,7 @@ class ProposedComponent(BaseModel):
 
 class ProposedModelCompletion(BaseModel):
     """AI-proposed model completion for user confirmation."""
+
     schema_version: str = "proposed_model_completion_v1"
     job_id: str
     source_query: str
@@ -55,6 +58,7 @@ class ProposedModelCompletion(BaseModel):
 
 class ConfirmationQuestion(BaseModel):
     """A single question for user confirmation."""
+
     question_id: str
     field_path: str
     question: str
@@ -67,6 +71,7 @@ class ConfirmationQuestion(BaseModel):
 
 class ConfirmationRequest(BaseModel):
     """A round of questions for user confirmation."""
+
     schema_version: str = "confirmation_request_v1"
     job_id: str
     round_id: int = 1
@@ -80,6 +85,7 @@ class ConfirmationRequest(BaseModel):
 
 class ConfirmationEdit(BaseModel):
     """A user edit to a proposed value."""
+
     field_path: str
     new_value: Any
     unit: str | None = None
@@ -88,6 +94,7 @@ class ConfirmationEdit(BaseModel):
 
 class ConfirmationResponse(BaseModel):
     """User's response to a confirmation request."""
+
     schema_version: str = "confirmation_response_v1"
     job_id: str
     round_id: int = 1
@@ -98,6 +105,7 @@ class ConfirmationResponse(BaseModel):
 
 class ConfirmationRecord(BaseModel):
     """Complete record of human confirmation process."""
+
     schema_version: str = "confirmation_record_v1"
     job_id: str
     total_rounds: int = 0

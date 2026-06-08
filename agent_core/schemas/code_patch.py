@@ -36,9 +36,7 @@ class ChangedFile(BaseModel):
     @model_validator(mode="after")
     def _validate_content(self) -> ChangedFile:
         if not self.new_content and not self.diff_content:
-            raise ValueError(
-                f"File '{self.path}' must have new_content or diff_content"
-            )
+            raise ValueError(f"File '{self.path}' must have new_content or diff_content")
         return self
 
 
@@ -68,8 +66,12 @@ class CodePatch(BaseModel):
         if not changed_files:
             return v
         max_zone = max(
-            (_ZONE_MIN_RISK.get(f.zone if isinstance(f, ChangedFile) else f.get("zone", "green"), 0)
-             for f in changed_files),
+            (
+                _ZONE_MIN_RISK.get(
+                    f.zone if isinstance(f, ChangedFile) else f.get("zone", "green"), 0
+                )
+                for f in changed_files
+            ),
             default=0,
         )
         if _RISK_ORDER[v] < max_zone:

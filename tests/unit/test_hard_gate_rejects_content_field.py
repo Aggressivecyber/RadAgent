@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from agent_core.g4_codegen.integration.cross_file_hard_gate import run_cross_file_hard_gate
@@ -37,11 +36,10 @@ class TestHardGateRejectsContentField:
         )
 
         assert result["status"] == "fail"
-        has_content_error = any(
-            "content" in e.lower()
-            for e in result.get("errors", [])
+        has_content_error = any("content" in e.lower() for e in result.get("errors", []))
+        assert has_content_error, (
+            f"Expected 'content' rejection, errors: {result.get('errors', [])}"
         )
-        assert has_content_error, f"Expected 'content' rejection, errors: {result.get('errors', [])}"
 
     def test_passes_with_only_new_content(self, workspace: Path) -> None:
         """Files with only 'new_content' should not trigger content field error."""
@@ -60,7 +58,8 @@ class TestHardGateRejectsContentField:
 
         # Should not have a content-field-specific error
         content_errors = [
-            e for e in result.get("errors", [])
+            e
+            for e in result.get("errors", [])
             if "content" in e.lower() and "new_content" not in e.lower()
         ]
         assert len(content_errors) == 0, f"Unexpected content errors: {content_errors}"

@@ -149,6 +149,7 @@ async def run_module_agent_node(
 
     # P0-14: Persist effective context (with summaries) to disk
     from agent_core.config.workspace import get_job_dir as _get_job_dir
+
     _ctx_dir = _get_job_dir(job_id) / "06_codegen" / "module_contexts"
     _ctx_dir.mkdir(parents=True, exist_ok=True)
     _eff_path = _ctx_dir / f"{module_name}.effective.json"
@@ -191,22 +192,23 @@ def _extract_file_summary(module_name: str, file_data: dict[str, Any]) -> dict[s
 def _extract_includes(content: str) -> list[str]:
     """Extract #include directives from C++ content."""
     import re
+
     return re.findall(r'#include\s+[<"]([^>"]+)[>"]', content)
 
 
 def _extract_classes(content: str) -> list[str]:
     """Extract class names from C++ content."""
     import re
-    return re.findall(r'\bclass\s+(\w+)', content)
+
+    return re.findall(r"\bclass\s+(\w+)", content)
 
 
 def _extract_public_methods(content: str) -> list[str]:
     """Extract public method names from C++ content."""
     import re
+
     # Match methods after 'public:' keyword
-    return re.findall(r'\bpublic:\s*(?:.*?)?\b(\w+)\s*\(', content, re.DOTALL)
-
-
+    return re.findall(r"\bpublic:\s*(?:.*?)?\b(\w+)\s*\(", content, re.DOTALL)
 
 
 def _get_agent_function(module_name: str):  # type: ignore[no-untyped-def]
@@ -261,6 +263,7 @@ async def run_module_hard_gate_node(
     module_status = result.get("status", "unknown")
 
     from agent_core.g4_codegen.schemas import GeneratedModuleFile
+
     files = [GeneratedModuleFile(**f) for f in generated_files_data]
 
     gate_fn = _get_hard_gate_function(module_name)
@@ -273,6 +276,7 @@ async def run_module_hard_gate_node(
 
     # Persist
     from agent_core.config.workspace import get_job_dir
+
     job_id = state.get("job_id", "unknown")
     gate_dir = get_job_dir(job_id) / "06_codegen" / "module_gates"
     gate_dir.mkdir(parents=True, exist_ok=True)
@@ -365,6 +369,7 @@ async def run_module_llm_gate_node(
 
     # Persist
     from agent_core.config.workspace import get_job_dir
+
     job_id = state.get("job_id", "unknown")
     gate_dir = get_job_dir(job_id) / "06_codegen" / "module_gates"
     gate_dir.mkdir(parents=True, exist_ok=True)
@@ -398,10 +403,7 @@ async def repair_module_node(
     llm_gate = module_gate.get("llm", {})
 
     # Check if repair is needed
-    needs_repair = (
-        hard_gate.get("status") == "fail"
-        or llm_gate.get("status") == "fail"
-    )
+    needs_repair = hard_gate.get("status") == "fail" or llm_gate.get("status") == "fail"
 
     if not needs_repair:
         return {"current_node": f"repair_{module_name}"}
@@ -447,8 +449,7 @@ async def repair_module_node(
         codegen_errors = list(state.get("codegen_errors", []))
         codegen_errors.append(
             f"Module '{module_name}' repair failed after "
-            f"{len(repaired.repair_attempts)} attempts: "
-            + "; ".join(repaired.errors[:3])
+            f"{len(repaired.repair_attempts)} attempts: " + "; ".join(repaired.errors[:3])
         )
         updates["codegen_errors"] = codegen_errors
         logger.warning(
@@ -548,6 +549,7 @@ async def persist_codegen_output_node(
     proposed_patch = state.get("proposed_patch", {})
 
     from agent_core.config.workspace import get_job_dir
+
     job_dir = get_job_dir(job_id)
     codegen_dir = job_dir / "06_codegen"
     codegen_dir.mkdir(parents=True, exist_ok=True)

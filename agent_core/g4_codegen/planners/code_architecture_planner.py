@@ -136,7 +136,13 @@ def plan_code_architecture(
     # Build dependencies
     deps: dict[str, list[str]] = {
         "DetectorConstruction": ["MaterialRegistry", "PlacementManager", "SensitiveDetector"],
-        "ActionInitialization": ["PrimaryGeneratorAction", "RunAction", "EventAction", "SteppingAction", "OutputManager"],
+        "ActionInitialization": [
+            "PrimaryGeneratorAction",
+            "RunAction",
+            "EventAction",
+            "SteppingAction",
+            "OutputManager",
+        ],
         "RunAction": ["OutputManager", "ScoringManager"],
         "EventAction": ["OutputManager"],
         "SteppingAction": ["ScoringManager"],
@@ -151,12 +157,11 @@ def plan_code_architecture(
 
     # Persist
     from agent_core.config.workspace import get_job_dir
+
     codegen_dir = get_job_dir(job_id) / "06_codegen"
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     plan_path = codegen_dir / "code_architecture_plan.json"
-    plan_path.write_text(
-        json.dumps(plan.model_dump(), indent=2, ensure_ascii=False)
-    )
+    plan_path.write_text(json.dumps(plan.model_dump(), indent=2, ensure_ascii=False))
 
     return plan.model_dump()

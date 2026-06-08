@@ -5,17 +5,15 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
 
+class TestOldIntegrationAssemblerDeleted:
+    """P0-10/P0-11: Old integration_assembler must be deleted."""
 
-class TestOldIntegrationAssemblerDeprecated:
-    """P0-10/P0-11: Old integration_assembler raises RuntimeError."""
-
-    def test_old_assembler_raises_on_import(self):
-        with pytest.raises(RuntimeError, match="deprecated"):
-            from agent_core.g4_codegen.nodes.integration_assembler import (
-                integration_assembler,
-            )
+    def test_old_assembler_deleted(self):
+        old_path = Path("agent_core/g4_codegen/nodes/integration_assembler.py")
+        assert not old_path.exists(), (
+            "Old integration_assembler.py must be deleted"
+        )
 
 
 class TestOldIntegrationAssemblerNotImportedByGraph:

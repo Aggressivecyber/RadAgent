@@ -75,9 +75,7 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
 
     # Write user query to request stage
     request_dir = job.stage_dir("00_input")
-    (request_dir / "user_query.md").write_text(
-        f"# User Query\n\n{state.get('user_query', '')}\n"
-    )
+    (request_dir / "user_query.md").write_text(f"# User Query\n\n{state.get('user_query', '')}\n")
 
     # Determine execution_mode from run_mode (backward compatibility)
     run_mode = state.get("run_mode", "dev")
@@ -114,11 +112,13 @@ def _make_context_subgraph_node() -> Any:
     subgraph = build_context_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "user_query": state.get("user_query", ""),
-            "required_sources": ["geant4"],
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "user_query": state.get("user_query", ""),
+                "required_sources": ["geant4"],
+            }
+        )
         return {
             "context_decision": result.get("context_decision", "block_no_context"),
             "context_report_path": result.get("context_report_path", ""),
@@ -138,12 +138,14 @@ def _make_task_planning_subgraph_node() -> Any:
     subgraph = build_task_planning_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "user_query": state.get("user_query", ""),
-            "context_report_path": state.get("context_report_path", ""),
-            "evidence_map_path": state.get("evidence_map_path", ""),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "user_query": state.get("user_query", ""),
+                "context_report_path": state.get("context_report_path", ""),
+                "evidence_map_path": state.get("evidence_map_path", ""),
+            }
+        )
         return {
             "task_spec_path": result.get("task_spec_path", ""),
             "simulation_scope": result.get("simulation_scope", ["geant4"]),
@@ -161,12 +163,14 @@ def _make_g4_modeling_subgraph_node() -> Any:
     subgraph = build_g4_modeling_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "user_query": state.get("user_query", ""),
-            "task_spec_path": state.get("task_spec_path", ""),
-            "evidence_map_path": state.get("evidence_map_path", ""),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "user_query": state.get("user_query", ""),
+                "task_spec_path": state.get("task_spec_path", ""),
+                "evidence_map_path": state.get("evidence_map_path", ""),
+            }
+        )
         return {
             "g4_model_ir_path": result.get("g4_model_ir_path", ""),
             "component_specs_dir": result.get("component_specs_dir", ""),
@@ -189,18 +193,20 @@ def _make_human_confirmation_subgraph_node() -> Any:
     subgraph = build_human_confirmation_subgraph()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "user_query": state.get("user_query", ""),
-            "g4_model_ir_path": state.get("g4_model_ir_path", ""),
-            "evidence_map_path": state.get("evidence_map_path", ""),
-            "human_confirmation_round": state.get("human_confirmation_round", 1),
-            "raw_human_response": state.get("raw_human_response", {}),
-            "confirmation_request_path": state.get("confirmation_request_path", ""),
-            "confirmation_response_path": state.get("confirmation_response_path", ""),
-            "confirmation_record_path": state.get("confirmation_record_path", ""),
-            "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "user_query": state.get("user_query", ""),
+                "g4_model_ir_path": state.get("g4_model_ir_path", ""),
+                "evidence_map_path": state.get("evidence_map_path", ""),
+                "human_confirmation_round": state.get("human_confirmation_round", 1),
+                "raw_human_response": state.get("raw_human_response", {}),
+                "confirmation_request_path": state.get("confirmation_request_path", ""),
+                "confirmation_response_path": state.get("confirmation_response_path", ""),
+                "confirmation_record_path": state.get("confirmation_record_path", ""),
+                "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
+            }
+        )
         return {
             "confirmation_status": result.get("confirmation_status", "failed"),
             "confirmation_request_path": result.get("confirmation_request_path", ""),
@@ -209,9 +215,8 @@ def _make_human_confirmation_subgraph_node() -> Any:
             "confirmed_model_plan_path": result.get("confirmed_model_plan_path", ""),
             "unconfirmed_assumptions_count": result.get("unconfirmed_count", 0),
             "human_confirmation_required": result.get("requires_human_confirmation", False),
-            "human_confirmation_round": state.get("human_confirmation_round", 1) + (
-                1 if result.get("confirmation_status") == "pending" else 0
-            ),
+            "human_confirmation_round": state.get("human_confirmation_round", 1)
+            + (1 if result.get("confirmation_status") == "pending" else 0),
             "confirmation_report_path": result.get("confirmation_report_path", ""),
             "human_confirmation_edited_fields": result.get("edited_fields", []),
             "current_node": "human_confirmation_subgraph",
@@ -227,17 +232,19 @@ def _make_g4_codegen_subgraph_node() -> Any:
     subgraph = build_g4_codegen_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "g4_model_ir_path": state.get("g4_model_ir_path", ""),
-            "component_specs_dir": state.get("component_specs_dir", ""),
-            "construction_ledger_path": state.get("construction_ledger_path", ""),
-            "run_mode": state.get("run_mode", "dev"),
-            "execution_mode": state.get("execution_mode", ""),
-            "confirmation_record_path": state.get("confirmation_record_path", ""),
-            "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
-            "human_confirmation_status": state.get("human_confirmation_status", ""),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "g4_model_ir_path": state.get("g4_model_ir_path", ""),
+                "component_specs_dir": state.get("component_specs_dir", ""),
+                "construction_ledger_path": state.get("construction_ledger_path", ""),
+                "run_mode": state.get("run_mode", "dev"),
+                "execution_mode": state.get("execution_mode", ""),
+                "confirmation_record_path": state.get("confirmation_record_path", ""),
+                "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
+                "human_confirmation_status": state.get("human_confirmation_status", ""),
+            }
+        )
         return {
             "code_module_plan_path": result.get("code_module_plan_path", ""),
             "proposed_patch_path": result.get("proposed_patch_path", ""),
@@ -256,11 +263,13 @@ def _make_patch_subgraph_node() -> Any:
     subgraph = build_patch_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "proposed_patch_path": state.get("proposed_patch_path", ""),
-            "generated_code_dir": state.get("generated_code_dir", ""),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "proposed_patch_path": state.get("proposed_patch_path", ""),
+                "generated_code_dir": state.get("generated_code_dir", ""),
+            }
+        )
         return {
             "patch_review_path": result.get("patch_review_path", ""),
             "applied_patch_path": result.get("applied_patch_path", ""),
@@ -281,17 +290,19 @@ def _make_gate_subgraph_node() -> Any:
     subgraph = build_gate_validation_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "execution_mode": state.get("execution_mode", "dev_no_geant4_env"),
-            "g4_model_ir_path": state.get("g4_model_ir_path", ""),
-            "generated_code_dir": state.get("generated_code_dir", ""),
-            "applied_patch_path": state.get("applied_patch_path", ""),
-            "patch_applied_at": state.get("patch_applied_at", ""),
-            "task_spec_path": state.get("task_spec_path", ""),
-            "context_decision": state.get("context_decision", ""),
-            "retry_count": state.get("retry_count", 0),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "execution_mode": state.get("execution_mode", "dev_no_geant4_env"),
+                "g4_model_ir_path": state.get("g4_model_ir_path", ""),
+                "generated_code_dir": state.get("generated_code_dir", ""),
+                "applied_patch_path": state.get("applied_patch_path", ""),
+                "patch_applied_at": state.get("patch_applied_at", ""),
+                "task_spec_path": state.get("task_spec_path", ""),
+                "context_decision": state.get("context_decision", ""),
+                "retry_count": state.get("retry_count", 0),
+            }
+        )
         new_retry = state.get("retry_count", 0) + (
             1 if result.get("validation_status") == "FAILED" else 0
         )
@@ -315,16 +326,18 @@ def _make_artifact_subgraph_node() -> Any:
     subgraph = build_artifact_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "gate_results_path": state.get("gate_results_path", ""),
-            "g4_model_ir_path": state.get("g4_model_ir_path", ""),
-            "model_review_report_path": state.get("model_review_report_path", ""),
-            "construction_ledger_path": state.get("construction_ledger_path", ""),
-            "code_module_plan_path": state.get("code_module_plan_path", ""),
-            "proposed_patch_path": state.get("proposed_patch_path", ""),
-            "validation_status": state.get("validation_status", ""),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "gate_results_path": state.get("gate_results_path", ""),
+                "g4_model_ir_path": state.get("g4_model_ir_path", ""),
+                "model_review_report_path": state.get("model_review_report_path", ""),
+                "construction_ledger_path": state.get("construction_ledger_path", ""),
+                "code_module_plan_path": state.get("code_module_plan_path", ""),
+                "proposed_patch_path": state.get("proposed_patch_path", ""),
+                "validation_status": state.get("validation_status", ""),
+            }
+        )
         return {
             "review_artifact_dir": result.get("review_artifact_dir", ""),
             "artifact_manifest_path": result.get("artifact_manifest_path", ""),
@@ -342,19 +355,21 @@ def _make_report_subgraph_node() -> Any:
     subgraph = build_report_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        result = await subgraph.ainvoke({
-            "job_id": state.get("job_id", ""),
-            "user_query": state.get("user_query", ""),
-            "execution_mode": state.get("execution_mode", "dev_no_geant4_env"),
-            "context_decision": state.get("context_decision", ""),
-            "validation_status": state.get("validation_status", ""),
-            "g4_model_ir_path": state.get("g4_model_ir_path", ""),
-            "gate_results_path": state.get("gate_results_path", ""),
-            "model_review_report_path": state.get("model_review_report_path", ""),
-            "simulation_scope": state.get("simulation_scope", []),
-            "failed_gates": state.get("failed_gates", []),
-            "errors": state.get("errors", []),
-        })
+        result = await subgraph.ainvoke(
+            {
+                "job_id": state.get("job_id", ""),
+                "user_query": state.get("user_query", ""),
+                "execution_mode": state.get("execution_mode", "dev_no_geant4_env"),
+                "context_decision": state.get("context_decision", ""),
+                "validation_status": state.get("validation_status", ""),
+                "g4_model_ir_path": state.get("g4_model_ir_path", ""),
+                "gate_results_path": state.get("gate_results_path", ""),
+                "model_review_report_path": state.get("model_review_report_path", ""),
+                "simulation_scope": state.get("simulation_scope", []),
+                "failed_gates": state.get("failed_gates", []),
+                "errors": state.get("errors", []),
+            }
+        )
         return {
             "final_report_path": result.get("final_report_path", ""),
             "verified": result.get("verified", False),

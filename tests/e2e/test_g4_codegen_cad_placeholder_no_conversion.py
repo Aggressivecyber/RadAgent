@@ -1,12 +1,11 @@
 """E2E test — CAD/GDML placeholder does not perform real conversion."""
-
+  # noqa: E501
 from __future__ import annotations
 
+# noqa: E501
 from pathlib import Path
-from typing import Any
 
 import pytest
-
 from agent_core.g4_codegen.interface_contracts import build_interface_contracts
 from agent_core.models.gateway import reset_model_gateway
 
@@ -52,9 +51,7 @@ class TestG4CodegenCadPlaceholderNoConversion:
             ],
         }
 
-        contracts = build_interface_contracts(
-            g4_model_ir, geometry_strategy, "cad_test"
-        )
+        contracts = build_interface_contracts(g4_model_ir, geometry_strategy, "cad_test")
 
         cad = contracts["cad_gdml"]
         assert len(cad) > 0
@@ -70,9 +67,7 @@ class TestG4CodegenCadPlaceholderNoConversion:
         g4_model_ir = {"model_ir_id": "no_cad_test"}
         geometry_strategy = {"requires_external_files": []}
 
-        contracts = build_interface_contracts(
-            g4_model_ir, geometry_strategy, "no_cad_test"
-        )
+        contracts = build_interface_contracts(g4_model_ir, geometry_strategy, "no_cad_test")
 
         cad = contracts["cad_gdml"]
         assert len(cad) > 0
@@ -86,7 +81,7 @@ class TestG4CodegenCadPlaceholderNoConversion:
             "changed_files": [
                 {
                     "path": "src/Geometry.cc",
-                    "new_content": '#include "G4Box.hh"\n// FreeCAD conversion of STEP file\nauto* solid = new G4Box("box", 1*m, 1*m, 1*m);\n',
+                    "new_content": '#include "G4Box.hh"\n// FreeCAD conversion of STEP file\nauto* solid = new G4Box("box", 1*m, 1*m, 1*m);\n',  # noqa: E501
                 },
             ],
         }
@@ -95,7 +90,10 @@ class TestG4CodegenCadPlaceholderNoConversion:
 
         # Should detect FreeCAD reference
         freecad_findings = [
-            f for f in scan["findings"]
+            f
+            for f in scan["findings"]
             if f["issue"] in ("freecad_reference", "step_conversion_claim")
         ]
-        assert len(freecad_findings) > 0, "Static scan should detect FreeCAD/STEP conversion references"
+        assert len(freecad_findings) > 0, (
+            "Static scan should detect FreeCAD/STEP conversion references"
+        )

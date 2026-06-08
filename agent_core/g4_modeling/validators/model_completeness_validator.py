@@ -54,15 +54,11 @@ class ModelCompletenessValidator:
         # Interfaces (required for realistic mode)
         if model_ir.modeling_mode == "realistic":
             if not model_ir.interfaces:
-                errors.append(
-                    "No geometry interfaces defined — required in realistic mode"
-                )
+                errors.append("No geometry interfaces defined — required in realistic mode")
 
         # Sensitive detectors
         sensitive_components = [c for c in model_ir.components if c.sensitive]
         if sensitive_components and not model_ir.sensitive_detectors:
-            errors.append(
-                "Components marked as sensitive but no SDs defined"
-            )
+            errors.append("Components marked as sensitive but no SDs defined")
 
         return len(errors) == 0, errors

@@ -60,46 +60,56 @@ async def code_module_planner(state: G4CodegenSubgraphState) -> dict[str, Any]:
             continue  # world is part of DetectorConstruction
         cid = comp.get("component_id", "unknown")
         safe_name = cid.replace("-", "_").replace(" ", "_")
-        modules.append({
-            "module_id": f"geometry_{safe_name}",
-            "target_file": f"src/Geometry_{safe_name}.cc",
-            "target_header": f"include/Geometry_{safe_name}.hh",
-            "description": f"Geometry for {comp.get('display_name', cid)}",
-            "depends_on": comp_deps,
-        })
+        modules.append(
+            {
+                "module_id": f"geometry_{safe_name}",
+                "target_file": f"src/Geometry_{safe_name}.cc",
+                "target_header": f"include/Geometry_{safe_name}.hh",
+                "description": f"Geometry for {comp.get('display_name', cid)}",
+                "depends_on": comp_deps,
+            }
+        )
 
     # Sensitive detector modules (one per scoring region)
     for sc in scoring:
         sc_id = sc.get("scoring_id", "unknown")
         safe_name = sc_id.replace("-", "_").replace(" ", "_")
-        modules.append({
-            "module_id": f"sd_{safe_name}",
-            "target_file": f"src/SensitiveDetector_{safe_name}.cc",
-            "target_header": f"include/SensitiveDetector_{safe_name}.hh",
-            "description": f"Sensitive detector for {sc.get('scoring_type', '?')} scoring",
-            "depends_on": ["detector_construction"],
-        })
+        modules.append(
+            {
+                "module_id": f"sd_{safe_name}",
+                "target_file": f"src/SensitiveDetector_{safe_name}.cc",
+                "target_header": f"include/SensitiveDetector_{safe_name}.hh",
+                "description": f"Sensitive detector for {sc.get('scoring_type', '?')} scoring",
+                "depends_on": ["detector_construction"],
+            }
+        )
 
     # Output manager
-    modules.append({
-        "module_id": "output_manager",
-        "target_file": "src/OutputManager.cc",
-        "target_header": "include/OutputManager.hh",
-        "description": "Output file management (CSV/ROOT)",
-        "depends_on": ["detector_construction"],
-    })
+    modules.append(
+        {
+            "module_id": "output_manager",
+            "target_file": "src/OutputManager.cc",
+            "target_header": "include/OutputManager.hh",
+            "description": "Output file management (CSV/ROOT)",
+            "depends_on": ["detector_construction"],
+        }
+    )
 
     # Main entry point
-    modules.append({
-        "module_id": "main",
-        "target_file": "src/main.cc",
-        "target_header": "",
-        "description": "Program entry point",
-        "depends_on": [
-            "detector_construction", "physics_list",
-            "primary_generator", "output_manager",
-        ],
-    })
+    modules.append(
+        {
+            "module_id": "main",
+            "target_file": "src/main.cc",
+            "target_header": "",
+            "description": "Program entry point",
+            "depends_on": [
+                "detector_construction",
+                "physics_list",
+                "primary_generator",
+                "output_manager",
+            ],
+        }
+    )
 
     return {
         "code_modules": modules,

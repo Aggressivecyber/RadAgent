@@ -1,20 +1,18 @@
 """E2E test — comprehensive mock provider full flow test."""
-
+  # noqa: E501  # noqa: E501
 from __future__ import annotations
 
-import json
+# noqa: E501  # noqa: E501
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
-from agent_core.g4_codegen.integration.cross_file_hard_gate import run_cross_file_hard_gate
-from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
-from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
-from agent_core.g4_codegen.schemas import GeneratedModuleFile
 from agent_core.g4_codegen.graph_nodes import persist_codegen_output_node
+from agent_core.g4_codegen.integration.cross_file_hard_gate import run_cross_file_hard_gate
+from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
+from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
+from agent_core.g4_codegen.schemas import GeneratedModuleFile
 from agent_core.models.gateway import reset_model_gateway
 
 
@@ -63,15 +61,15 @@ class TestG4CodegenAgentModulesWithMockProvider:
                         "src/MaterialRegistry.cc",
                         '#include "MaterialRegistry.hh"\n'
                         '#include "G4NistManager.hh"\n'
-                        'void MaterialRegistry::DefineMaterials() {\n'
+                        "void MaterialRegistry::DefineMaterials() {\n"
                         '  G4NistManager::Instance()->FindOrBuildMaterial("G4_Si");\n'
-                        '}\n',
+                        "}\n",
                         "material",
                     ),
                     _valid_file(
                         "include/MaterialRegistry.hh",
-                        '#pragma once\n#include <G4Material.hh>\n'
-                        'class MaterialRegistry { public: void DefineMaterials(); };\n',
+                        "#pragma once\n#include <G4Material.hh>\n"
+                        "class MaterialRegistry { public: void DefineMaterials(); };\n",
                         "material",
                     ),
                 ],
@@ -91,21 +89,21 @@ class TestG4CodegenAgentModulesWithMockProvider:
                         '#include "G4PVPlacement.hh"\n'
                         '#include "G4NistManager.hh"\n'
                         '#include "MaterialRegistry.hh"\n'
-                        'G4VPhysicalVolume* DetectorConstruction::Construct() {\n'
-                        '  MaterialRegistry::DefineMaterials();\n'
+                        "G4VPhysicalVolume* DetectorConstruction::Construct() {\n"
+                        "  MaterialRegistry::DefineMaterials();\n"
                         '  auto* worldSolid = new G4Box("World", 5*m, 5*m, 5*m);\n'
-                        '  auto* worldLV = new G4LogicalVolume(worldSolid, '
-                        '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
-                        '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
-                        '  return worldPV;\n'
-                        '}\n',
+                        "  auto* worldLV = new G4LogicalVolume(worldSolid, "
+                        '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'  # noqa: E501
+                        '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'  # noqa: E501
+                        "  return worldPV;\n"
+                        "}\n",
                         "geometry",
                     ),
-                    _valid_file(
+                    _valid_file(  # noqa: E501  # noqa: E501
                         "include/DetectorConstruction.hh",
-                        '#pragma once\n#include <G4VUserDetectorConstruction.hh>\n'
-                        'class DetectorConstruction : public G4VUserDetectorConstruction {\n'
-                        'public:\n  G4VPhysicalVolume* Construct() override;\n};\n',
+                        "#pragma once\n#include <G4VUserDetectorConstruction.hh>\n"
+                        "class DetectorConstruction : public G4VUserDetectorConstruction {\n"
+                        "public:\n  G4VPhysicalVolume* Construct() override;\n};\n",
                         "geometry",
                     ),
                 ],
@@ -120,16 +118,16 @@ class TestG4CodegenAgentModulesWithMockProvider:
                         "src/PhysicsList.cc",
                         '#include "PhysicsList.hh"\n'
                         '#include "G4ParticleDefinition.hh"\n'
-                        'PhysicsList::PhysicsList() {\n'
-                        '  RegisterPhysics(new G4DecayPhysics());\n'
-                        '}\n',
+                        "PhysicsList::PhysicsList() {\n"
+                        "  RegisterPhysics(new G4DecayPhysics());\n"
+                        "}\n",
                         "physics",
                     ),
                     _valid_file(
                         "include/PhysicsList.hh",
-                        '#pragma once\n#include <G4VModularPhysicsList.hh>\n'
-                        'class PhysicsList : public G4VModularPhysicsList {\n'
-                        'public:\n  PhysicsList();\n};\n',
+                        "#pragma once\n#include <G4VModularPhysicsList.hh>\n"
+                        "class PhysicsList : public G4VModularPhysicsList {\n"
+                        "public:\n  PhysicsList();\n};\n",
                         "physics",
                     ),
                 ],
@@ -179,10 +177,10 @@ class TestG4CodegenAgentModulesWithMockProvider:
             "cross_file_llm_gate": {"status": "pass"},
         }
 
-        result = asyncio.get_event_loop().run_until_complete(
-            persist_codegen_output_node(state)
-        )
+        result = asyncio.get_event_loop().run_until_complete(persist_codegen_output_node(state))
 
-        expected_status = "passed" if scan["status"] == "pass" and cross_gate["status"] == "pass" else "failed"
+        expected_status = (
+            "passed" if scan["status"] == "pass" and cross_gate["status"] == "pass" else "failed"
+        )
         assert result["g4_codegen_status"] == expected_status
         assert result["generated_code_dir"].endswith("08_geant4")

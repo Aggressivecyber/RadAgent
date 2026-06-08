@@ -185,29 +185,37 @@ def build_g4_codegen_subgraph() -> StateGraph:
 
 def _make_module_agent_node(module_name: str) -> Any:
     """Create a module agent node function."""
+
     async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
         return await run_module_agent_node(state, module_name)
+
     return _run
 
 
 def _make_hard_gate_node(module_name: str) -> Any:
     """Create a hard gate node function."""
+
     async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
         return await run_module_hard_gate_node(state, module_name)
+
     return _run
 
 
 def _make_llm_gate_node(module_name: str) -> Any:
     """Create an LLM gate node function."""
+
     async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
         return await run_module_llm_gate_node(state, module_name)
+
     return _run
 
 
 def _make_repair_node(module_name: str) -> Any:
     """Create a repair node function."""
+
     async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
         return await repair_module_node(state, module_name)
+
     return _run
 
 
@@ -223,17 +231,20 @@ def _next_module_or_integration(current_index: int) -> str:
 
 def _route_after_hard_gate(module_name: str) -> Any:
     """Route after hard gate: pass → LLM gate, fail → repair."""
+
     def _route(state: G4CodegenSubgraphState) -> str:
         gate_results = state.get("module_gate_results", {})
         hard_gate = gate_results.get(module_name, {}).get("hard", {})
         if hard_gate.get("status") == "pass":
             return f"{module_name}_llm_gate"
         return f"repair_{module_name}"
+
     return _route
 
 
 def _route_after_llm_gate(module_name: str) -> Any:
     """Route after LLM gate: pass → next, fail → repair."""
+
     def _route(state: G4CodegenSubgraphState) -> str:
         gate_results = state.get("module_gate_results", {})
         llm_gate = gate_results.get(module_name, {}).get("llm", {})
@@ -241,6 +252,7 @@ def _route_after_llm_gate(module_name: str) -> Any:
             idx = MODULE_ORDER.index(module_name)
             return _next_module_or_integration(idx)
         return f"repair_{module_name}"
+
     return _route
 
 
@@ -271,6 +283,7 @@ def _route_after_repair(module_name: str) -> Any:
     P0-14/P0-15: When repair fails after max attempts, terminate codegen
     by routing to persist_codegen_output. Do NOT loop back to hard gate.
     """
+
     def _route(state: G4CodegenSubgraphState) -> str:
         repair_results = state.get("module_repair_results", {})
         repair = repair_results.get(module_name, {})
@@ -278,4 +291,5 @@ def _route_after_repair(module_name: str) -> Any:
             # P0-15: Repair failed — terminate codegen, go to persist
             return "persist_codegen_output"
         return f"{module_name}_hard_gate"
+
     return _route

@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
-
 from agent_core.g4_codegen.graph_nodes import persist_codegen_output_node
-from agent_core.patching.nodes import apply_patch
 from agent_core.models.gateway import reset_model_gateway
+from agent_core.patching.nodes import apply_patch
 
 
 @pytest.fixture(autouse=True)

@@ -7,7 +7,6 @@ from typing import Any
 
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask
 
-
 # ── Material module ─────────────────────────────────────────────────
 
 _MATERIAL_HH = r"""#pragma once
@@ -1458,10 +1457,7 @@ def _build_codegen_result(module_name: str) -> dict[str, Any]:
     return {
         "status": "success",
         "module_name": module_name,
-        "generated_files": [
-            {"path": f["path"], "new_content": f["new_content"]}
-            for f in files
-        ],
+        "generated_files": [{"path": f["path"], "new_content": f["new_content"]} for f in files],
         "compilation_notes": f"Mock generated {len(files)} files for module '{module_name}'.",
         "warnings": [],
     }
@@ -1487,10 +1483,7 @@ def _build_diagnosis_result(module_name: str) -> dict[str, Any]:
         "status": "success",
         "module_name": module_name,
         "diagnosis": "Mock failure diagnosis: applied standard fix.",
-        "generated_files": [
-            {"path": f["path"], "new_content": f["new_content"]}
-            for f in files
-        ],
+        "generated_files": [{"path": f["path"], "new_content": f["new_content"]} for f in files],
         "fixes_applied": ["mock_fix_1"],
         "warnings": [],
     }

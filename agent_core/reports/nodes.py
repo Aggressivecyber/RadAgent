@@ -105,20 +105,24 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
         report_lines.append(reserved_note)
 
     # User query
-    report_lines.extend([
-        "",
-        "### User Query",
-        "",
-        f"> {user_query}",
-    ])
+    report_lines.extend(
+        [
+            "",
+            "### User Query",
+            "",
+            f"> {user_query}",
+        ]
+    )
 
     # Components
     if components:
-        report_lines.extend([
-            "",
-            f"### Components ({len(components)})",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "",
+                f"### Components ({len(components)})",
+                "",
+            ]
+        )
         for comp in components:
             cid = comp.get("component_id", "?")
             ctype = comp.get("component_type", "?")
@@ -132,11 +136,13 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
 
     # Materials
     if materials:
-        report_lines.extend([
-            "",
-            f"### Materials ({len(materials)})",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "",
+                f"### Materials ({len(materials)})",
+                "",
+            ]
+        )
         for mat in materials:
             mid = mat.get("material_id", mat.get("name", "?"))
             density = mat.get("density_g_cm3", "?")
@@ -145,11 +151,13 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
 
     # Sources
     if sources:
-        report_lines.extend([
-            "",
-            f"### Particle Sources ({len(sources)})",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "",
+                f"### Particle Sources ({len(sources)})",
+                "",
+            ]
+        )
         for src in sources:
             ptype = src.get("particle_type", "?")
             energy = src.get("energy", {})
@@ -157,36 +165,42 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
 
     # Scoring
     if scoring:
-        report_lines.extend([
-            "",
-            f"### Scoring ({len(scoring)})",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "",
+                f"### Scoring ({len(scoring)})",
+                "",
+            ]
+        )
         for sc in scoring:
             sid = sc.get("scoring_id", "?")
             stype = sc.get("scoring_type", "?")
             report_lines.append(f"- **{sid}**: type={stype}")
 
     # Simplification
-    report_lines.extend([
-        "",
-        "### Simplification Policy",
-        "",
-        f"- Allow simplification: `{simplification_policy.get('allow_simplification', False)}`",
-        f"- Requires user approval: `{simplification_policy.get('requires_user_approval', True)}`",
-        f"- Approved simplifications: "
-        f"{len(simplification_policy.get('approved_simplifications', []))}",
-    ])
+    report_lines.extend(
+        [
+            "",
+            "### Simplification Policy",
+            "",
+            f"- Allow simplification: `{simplification_policy.get('allow_simplification', False)}`",
+            f"- Requires user approval: `{simplification_policy.get('requires_user_approval', True)}`",  # noqa: E501
+            f"- Approved simplifications: "
+            f"{len(simplification_policy.get('approved_simplifications', []))}",
+        ]
+    )
 
     # Gate results
     if gate_results:
-        report_lines.extend([
-            "",
-            f"### Gate Results ({len(gate_results)} gates)",
-            "",
-            "| Gate | Name | Status | Passed | Failed | Message |",
-            "|------|------|--------|--------|--------|---------|",
-        ])
+        report_lines.extend(
+            [
+                "",
+                f"### Gate Results ({len(gate_results)} gates)",
+                "",
+                "| Gate | Name | Status | Passed | Failed | Message |",
+                "|------|------|--------|--------|--------|---------|",
+            ]
+        )
         for g in gate_results:
             gid = g.get("gate_id", "?")
             gname = g.get("name", "?")
@@ -195,8 +209,11 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
             gpassed = len(g.get("passed_items", []))
             gfailed = len(g.get("failed_items", []))
             emoji = {
-                "pass": "✅", "warning": "⚠️", "fail": "❌",
-                "block": "🚫", "skipped": "⏭️",
+                "pass": "✅",
+                "warning": "⚠️",
+                "fail": "❌",
+                "block": "🚫",
+                "skipped": "⏭️",
             }.get(gstatus, "?")
             report_lines.append(
                 f"| {gid} | {gname} | {emoji} {gstatus} | {gpassed} | {gfailed} | {gmsg} |"
@@ -204,48 +221,56 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
 
     # Open issues
     if open_issues:
-        report_lines.extend([
-            "",
-            f"### Open Issues ({len(open_issues)})",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "",
+                f"### Open Issues ({len(open_issues)})",
+                "",
+            ]
+        )
         for issue in open_issues:
             report_lines.append(f"- {issue}")
 
     # Evidence sources
     evidence = model_ir.get("evidence", {})
     if isinstance(evidence, dict):
-        report_lines.extend([
-            "",
-            "### Evidence Sources",
-            "",
-            f"- Decision: `{evidence.get('evidence_decision', 'unknown')}`",
-            f"- Geometry evidence: {len(evidence.get('geometry', []))}",
-            f"- Materials evidence: {len(evidence.get('materials', []))}",
-            f"- Source evidence: {len(evidence.get('source', []))}",
-            f"- Physics evidence: {len(evidence.get('physics', []))}",
-            f"- Scoring evidence: {len(evidence.get('scoring', []))}",
-        ])
+        report_lines.extend(
+            [
+                "",
+                "### Evidence Sources",
+                "",
+                f"- Decision: `{evidence.get('evidence_decision', 'unknown')}`",
+                f"- Geometry evidence: {len(evidence.get('geometry', []))}",
+                f"- Materials evidence: {len(evidence.get('materials', []))}",
+                f"- Source evidence: {len(evidence.get('source', []))}",
+                f"- Physics evidence: {len(evidence.get('physics', []))}",
+                f"- Scoring evidence: {len(evidence.get('scoring', []))}",
+            ]
+        )
 
     # Errors
     if errors:
-        report_lines.extend([
-            "",
-            f"### Errors ({len(errors)})",
-            "",
-        ])
+        report_lines.extend(
+            [
+                "",
+                f"### Errors ({len(errors)})",
+                "",
+            ]
+        )
         for err in errors:
             report_lines.append(f"- {err}")
 
     # Architecture note
-    report_lines.extend([
-        "",
-        "---",
-        "",
-        "*Generated by RadAgent v2 (subgraph architecture: "
-        "Context → Task Planning → G4 Modeling → G4 Codegen → "
-        "Patch → Gate → Artifact → Report)*",
-    ])
+    report_lines.extend(
+        [
+            "",
+            "---",
+            "",
+            "*Generated by RadAgent v2 (subgraph architecture: "
+            "Context → Task Planning → G4 Modeling → G4 Codegen → "
+            "Patch → Gate → Artifact → Report)*",
+        ]
+    )
 
     report_text = "\n".join(report_lines)
 

@@ -5,10 +5,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from agent_core.intent.fallback_rules import fallback_intent
 from agent_core.intent.router import classify_intent_with_lite_model
-from agent_core.intent.schemas import IntentResult
 from agent_core.models.gateway import get_model_gateway, reset_model_gateway
 from agent_core.models.schemas import (
     ModelCallResult,
@@ -87,7 +85,7 @@ class TestClassifyIntentWithLiteModel:
             provider=ModelProvider.MOCK,
             model_name="mock-lite",
             content='{"intent": "smalltalk", "confidence": 0.99, '
-                    '"routing_reason": "test", "normalized_user_query": "你好"}',
+            '"routing_reason": "test", "normalized_user_query": "你好"}',
             parsed_json={
                 "intent": "smalltalk",
                 "confidence": 0.99,
@@ -158,7 +156,7 @@ class TestClassifyIntentWithLiteModel:
                 provider=ModelProvider.MOCK,
                 model_name="mock-lite",
                 content='{"intent": "smalltalk", "confidence": 0.9, '
-                        '"routing_reason": "test", "normalized_user_query": "hi"}',
+                '"routing_reason": "test", "normalized_user_query": "hi"}',
                 parsed_json={
                     "intent": "smalltalk",
                     "confidence": 0.9,
@@ -167,9 +165,7 @@ class TestClassifyIntentWithLiteModel:
                 },
             )
 
-        with patch.object(
-            get_model_gateway(), "call", side_effect=mock_call
-        ):
+        with patch.object(get_model_gateway(), "call", side_effect=mock_call):
             await classify_intent_with_lite_model("hi")
 
         assert calls[0]["tier"] == ModelTier.LITE

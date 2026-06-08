@@ -24,9 +24,7 @@ def _sanitize_method_name(sd_id: str) -> str:
 
     Examples: sensor_sd → SensorSd, oxide_detector → OxideDetector
     """
-    return "".join(
-        word.capitalize() for word in sd_id.replace("-", "_").split("_")
-    )
+    return "".join(word.capitalize() for word in sd_id.replace("-", "_").split("_"))
 
 
 async def sensitive_detector_codegen(
@@ -56,21 +54,23 @@ async def sensitive_detector_codegen(
         comp_ids.extend(sd.linked_component_ids)
 
     return {
-        "code_modules": [{
-            "module_name": "SensitiveDetectorManager",
-            "module_type": "sensitive_detector",
-            "source_files": ["SensitiveDetectorManager.cc", "Hit.cc"],
-            "header_files": ["SensitiveDetectorManager.hh", "Hit.hh"],
-            "depends_on": [],
-            "linked_component_ids": sorted(set(comp_ids)),
-            "linked_material_ids": [],
-            "generated_content": {
-                "SensitiveDetectorManager::Hit.hh": hit_header,
-                "SensitiveDetectorManager::Hit.cc": hit_source,
-                "SensitiveDetectorManager::SensitiveDetectorManager.hh": sd_header,
-                "SensitiveDetectorManager::SensitiveDetectorManager.cc": sd_source,
-            },
-        }],
+        "code_modules": [
+            {
+                "module_name": "SensitiveDetectorManager",
+                "module_type": "sensitive_detector",
+                "source_files": ["SensitiveDetectorManager.cc", "Hit.cc"],
+                "header_files": ["SensitiveDetectorManager.hh", "Hit.hh"],
+                "depends_on": [],
+                "linked_component_ids": sorted(set(comp_ids)),
+                "linked_material_ids": [],
+                "generated_content": {
+                    "SensitiveDetectorManager::Hit.hh": hit_header,
+                    "SensitiveDetectorManager::Hit.cc": hit_source,
+                    "SensitiveDetectorManager::SensitiveDetectorManager.hh": sd_header,
+                    "SensitiveDetectorManager::SensitiveDetectorManager.cc": sd_source,
+                },
+            }
+        ],
     }
 
 
@@ -86,7 +86,11 @@ def _generate_hit_header(sds: list[Any]) -> str:
     for sd in sds:
         for hf in sd.hit_fields:
             if hf.name not in seen and hf.name not in (
-                "event_id", "track_id", "edep_MeV", "position", "time"
+                "event_id",
+                "track_id",
+                "edep_MeV",
+                "position",
+                "time",
             ):
                 seen.add(hf.name)
                 cpp_type = _field_type_to_cpp(hf.dtype)
@@ -99,10 +103,7 @@ def _generate_hit_header(sds: list[Any]) -> str:
         for fname, ctype in extra_fields
     )
 
-    extra_members = "\n".join(
-        f"    {ctype} f{_to_pascal(fname)};"
-        for fname, ctype in extra_fields
-    )
+    extra_members = "\n".join(f"    {ctype} f{_to_pascal(fname)};" for fname, ctype in extra_fields)
 
     # Initialize extra fields in constructor
     return f"""// Hit.hh
@@ -183,20 +184,20 @@ def _generate_hit_source(sds: list[Any]) -> str:
     for sd in sds:
         for hf in sd.hit_fields:
             if hf.name not in seen and hf.name not in (
-                "event_id", "track_id", "edep_MeV", "position", "time"
+                "event_id",
+                "track_id",
+                "edep_MeV",
+                "position",
+                "time",
             ):
                 seen.add(hf.name)
                 extra_fields.append((hf.name, _field_type_to_cpp(hf.dtype)))
 
-    extra_init_list = ", ".join(
-        f"f{_to_pascal(fname)}(0)"
-        for fname, _ in extra_fields
-    )
+    extra_init_list = ", ".join(f"f{_to_pascal(fname)}(0)" for fname, _ in extra_fields)
     init_prefix = ", " if extra_init_list else ""
 
     extra_copy = "\n".join(
-        f"    f{_to_pascal(fname)} = other.f{_to_pascal(fname)};"
-        for fname, _ in extra_fields
+        f"    f{_to_pascal(fname)} = other.f{_to_pascal(fname)};" for fname, _ in extra_fields
     )
 
     return f"""// Hit.cc
@@ -242,9 +243,7 @@ def _generate_sd_header(sds: list[Any]) -> str:
     """Generate SensitiveDetectorManager.hh."""
     # Build per-SD attach methods
     sd_decls = "\n".join(
-        f"    void Attach{_sanitize_method_name(sd.sd_id)}"
-        f"(G4LogicalVolume* lv);"
-        for sd in sds
+        f"    void Attach{_sanitize_method_name(sd.sd_id)}(G4LogicalVolume* lv);" for sd in sds
     )
 
     return f"""// SensitiveDetectorManager.hh
@@ -284,18 +283,13 @@ def _generate_sd_source(sds: list[Any], model_ir: Any) -> str:
     This ensures C++ classes are defined before they are used.
     """
     # 1. Concrete SD class definitions (must come before Attach methods)
-    sd_classes = "\n\n".join(
-        _concrete_sd_class(sd) for sd in sds
-    )
+    sd_classes = "\n\n".join(_concrete_sd_class(sd) for sd in sds)
 
     # 2. Attach method implementations (use the SD classes above)
-    attach_methods = "\n\n".join(
-        _attach_method(sd) for sd in sds
-    )
+    attach_methods = "\n\n".join(_attach_method(sd) for sd in sds)
 
     attach_calls = "\n".join(
-        f"    Attach{_sanitize_method_name(sd.sd_id)}(worldLogical);"
-        for sd in sds
+        f"    Attach{_sanitize_method_name(sd.sd_id)}(worldLogical);" for sd in sds
     )
 
     return f"""// SensitiveDetectorManager.cc
@@ -379,26 +373,23 @@ def _attach_method(sd: Any) -> str:
     # Build component search logic
     if len(components) == 1:
         search = (
-            f'    G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->'
+            f"    G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->"
             f'GetVolume("{components[0]}_logical", false);\n'
             f"    if (!target) return;\n"
             f"    target->SetSensitiveDetector(sd);"
         )
     else:
         searches = "\n".join(
-            f'    {{\n'
-            f'        G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->'
+            f"    {{\n"
+            f"        G4LogicalVolume* target = G4LogicalVolumeStore::GetInstance()->"
             f'GetVolume("{cid}_logical", false);\n'
-            f'        if (target) target->SetSensitiveDetector(sd);\n'
-            f'    }}'
+            f"        if (target) target->SetSensitiveDetector(sd);\n"
+            f"    }}"
             for cid in components
         )
         search = searches
 
-    sig = (
-        f"void SensitiveDetectorManager::Attach{method_suffix}"
-        f"(G4LogicalVolume* worldLogical) {{"
-    )
+    sig = f"void SensitiveDetectorManager::Attach{method_suffix}(G4LogicalVolume* worldLogical) {{"
     return f"""{sig}
     auto* sdManager = G4SDManager::GetSDMpointer();
     auto* sd = new {sd_class_name}("{sd.name}", "{collection}");
@@ -413,11 +404,11 @@ def _attach_method(sd: Any) -> str:
 def _build_hit_fill(sd: Any) -> str:
     """Generate the hit field filling code from SD spec."""
     lines = [
-        '        hit->SetEventID(G4RunManager::GetRunManager()->GetCurrentEvent()->GetEventID());',
-        '        hit->SetTrackID(step->GetTrack()->GetTrackID());',
-        '        hit->SetEdep(step->GetTotalEnergyDeposit());',
-        '        hit->SetPosition(step->GetPreStepPoint()->GetPosition());',
-        '        hit->SetTime(step->GetPreStepPoint()->GetGlobalTime());',
+        "        hit->SetEventID(G4RunManager::GetRunManager()->GetCurrentEvent()->GetEventID());",
+        "        hit->SetTrackID(step->GetTrack()->GetTrackID());",
+        "        hit->SetEdep(step->GetTotalEnergyDeposit());",
+        "        hit->SetPosition(step->GetPreStepPoint()->GetPosition());",
+        "        hit->SetTime(step->GetPreStepPoint()->GetGlobalTime());",
     ]
     return "\n".join(lines)
 

@@ -24,13 +24,9 @@ async def model_review_report_node(state: RadiationAgentState) -> dict[str, Any]
     """
     model_ir_dict = state.get("g4_model_ir", {})
     raw_errors = state.get("model_ir_errors", [])
-    model_ir_errors: list[Any] = (
-        raw_errors if isinstance(raw_errors, list) else []
-    )
+    model_ir_errors: list[Any] = raw_errors if isinstance(raw_errors, list) else []
     raw_modules = state.get("code_modules", [])
-    code_modules: list[dict[str, Any]] = (
-        raw_modules if isinstance(raw_modules, list) else []
-    )
+    code_modules: list[dict[str, Any]] = raw_modules if isinstance(raw_modules, list) else []
     job_id = state.get("job_id", "")
 
     model_ir = G4ModelIR.model_validate(model_ir_dict)
@@ -74,8 +70,7 @@ async def model_review_report_node(state: RadiationAgentState) -> dict[str, Any]
         sections.append("|----|------|------|-----------------|")
         for mat in model_ir.materials:
             sections.append(
-                f"| {mat.material_id} | {mat.name} | "
-                f"{mat.classification} | {mat.density_g_cm3} |"
+                f"| {mat.material_id} | {mat.name} | {mat.classification} | {mat.density_g_cm3} |"
             )
         sections.append("")
 
@@ -85,23 +80,17 @@ async def model_review_report_node(state: RadiationAgentState) -> dict[str, Any]
         for src in model_ir.sources:
             sections.append(f"- **Particle**: {src.particle_type}")
             sections.append(
-                f"- **Energy**: {src.energy.value} {src.energy.unit} "
-                f"({src.energy.distribution})"
+                f"- **Energy**: {src.energy.value} {src.energy.unit} ({src.energy.distribution})"
             )
             sections.append(f"- **Events**: {src.events}")
-            sections.append(
-                f"- **Position**: {src.beam.position} "
-                f"→ direction {src.beam.direction}"
-            )
+            sections.append(f"- **Position**: {src.beam.position} → direction {src.beam.direction}")
         sections.append("")
 
     # Physics
     if model_ir.physics:
         sections.append("## Physics")
         sections.append(f"- **List**: {model_ir.physics.physics_list}")
-        sections.append(
-            f"- **Reasoning**: {model_ir.physics.selection_reasoning}"
-        )
+        sections.append(f"- **Reasoning**: {model_ir.physics.selection_reasoning}")
         sections.append("")
 
     # Sensitive detectors
@@ -118,10 +107,7 @@ async def model_review_report_node(state: RadiationAgentState) -> dict[str, Any]
     if model_ir.scoring:
         sections.append("## Scoring")
         for s in model_ir.scoring:
-            sections.append(
-                f"- **{s.scoring_id}** ({s.scoring_type}): "
-                f"{', '.join(s.quantities)}"
-            )
+            sections.append(f"- **{s.scoring_id}** ({s.scoring_type}): {', '.join(s.quantities)}")
         sections.append("")
 
     # Code modules
@@ -143,13 +129,10 @@ async def model_review_report_node(state: RadiationAgentState) -> dict[str, Any]
         sections.append(f"Total steps: {len(model_ir.ledger.steps)}")
         for step in model_ir.ledger.steps[-10:]:
             sections.append(
-                f"- [{step.node_name}] {step.action} → {step.target_id}: "
-                f"{step.description}"
+                f"- [{step.node_name}] {step.action} → {step.target_id}: {step.description}"
             )
         if len(model_ir.ledger.steps) > 10:
-            sections.append(
-                f"- ... and {len(model_ir.ledger.steps) - 10} more entries"
-            )
+            sections.append(f"- ... and {len(model_ir.ledger.steps) - 10} more entries")
         sections.append("")
 
     # Open issues

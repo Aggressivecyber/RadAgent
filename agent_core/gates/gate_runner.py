@@ -67,19 +67,12 @@ def compute_validation_status(
 
     failed = [g for g in gate_results if g.get("status") == "fail"]
     # Handle both 'skip' and 'skipped' for backward compatibility
-    skipped = [
-        g for g in gate_results
-        if g.get("status") in ("skip", "skipped")
-    ]
+    skipped = [g for g in gate_results if g.get("status") in ("skip", "skipped")]
 
     if failed:
         return "FAILED"
 
-    skipped_ids = {
-        int(g["gate_id"])
-        for g in skipped
-        if str(g.get("gate_id", "")).isdigit()
-    }
+    skipped_ids = {int(g["gate_id"]) for g in skipped if str(g.get("gate_id", "")).isdigit()}
     critical_skipped = skipped_ids & CRITICAL_GATE_IDS
 
     # Critical gates skipped:
@@ -128,10 +121,7 @@ async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
 
     failed_gates = [g for g in gate_results if g.get("status") == "fail"]
     # Handle both 'skip' and 'skipped' for backward compatibility
-    skipped_gates = [
-        g for g in gate_results
-        if g.get("status") in ("skip", "skipped")
-    ]
+    skipped_gates = [g for g in gate_results if g.get("status") in ("skip", "skipped")]
 
     return {
         "gate_results_path": str(results_path),

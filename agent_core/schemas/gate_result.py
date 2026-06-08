@@ -22,34 +22,23 @@ class GateResult(BaseModel):
     )
     checked_items: list[dict] = Field(
         default_factory=list,
-        description="List of items checked, each with 'item' and 'result' keys"
+        description="List of items checked, each with 'item' and 'result' keys",
     )
     passed_items: list[str] = Field(
-        default_factory=list,
-        description="List of items that passed validation"
+        default_factory=list, description="List of items that passed validation"
     )
     failed_items: list[str] = Field(
-        default_factory=list,
-        description="List of items that failed validation"
+        default_factory=list, description="List of items that failed validation"
     )
-    warnings: list[str] = Field(
-        default_factory=list,
-        description="List of warning messages"
-    )
+    warnings: list[str] = Field(default_factory=list, description="List of warning messages")
     evidence: list[str] = Field(
-        default_factory=list,
-        description="Evidence URLs, file paths, or observations"
+        default_factory=list, description="Evidence URLs, file paths, or observations"
     )
     file_paths: list[str] = Field(
-        default_factory=list,
-        description="File paths involved in this gate check"
+        default_factory=list, description="File paths involved in this gate check"
     )
-    message: str = Field(
-        description="Human-readable result message - NOT just 'OK'"
-    )
-    timestamp: str = Field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    message: str = Field(description="Human-readable result message - NOT just 'OK'")
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class GateReport(BaseModel):
@@ -61,19 +50,14 @@ class GateReport(BaseModel):
 
     @property
     def overall_passed(self) -> bool:
-        return all(
-            r.status in ("pass", "skip", "skipped") for r in self.results
-        )
+        return all(r.status in ("pass", "skip", "skipped") for r in self.results)
 
     @property
     def summary(self) -> str:
         passed = sum(1 for r in self.results if r.status == "pass")
         failed = sum(1 for r in self.results if r.status == "fail")
         # Handle both 'skip' and 'skipped' for backward compatibility
-        skipped = sum(
-            1 for r in self.results
-            if r.status in ("skip", "skipped")
-        )
+        skipped = sum(1 for r in self.results if r.status in ("skip", "skipped"))
         errored = sum(1 for r in self.results if r.status == "error")
         status = "PASS" if self.overall_passed else "FAIL"
         return f"{status}: {passed} passed, {skipped} skipped, {errored} errors, {failed} failed"

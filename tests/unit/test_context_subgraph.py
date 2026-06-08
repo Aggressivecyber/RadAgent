@@ -33,9 +33,7 @@ class TestRouteSources:
 
 
 class TestRetrieveRagContext:
-    async def test_creates_context_files(
-        self, temp_workspace: Path
-    ) -> None:
+    async def test_creates_context_files(self, temp_workspace: Path) -> None:
         job_dir = temp_workspace / "jobs" / "test_job" / "01_context"
         job_dir.mkdir(parents=True)
 
@@ -82,9 +80,7 @@ class TestRetrieveWebContext:
             "user_query": "test query",
         }
 
-        with patch(
-            "agent_core.tools.web_search_tool.WebSearchTool", side_effect=ImportError
-        ):
+        with patch("agent_core.tools.web_search_tool.WebSearchTool", side_effect=ImportError):
             result = await retrieve_web_context(state)
 
         assert result["web_search_available"] is False
@@ -92,9 +88,7 @@ class TestRetrieveWebContext:
 
 
 class TestSaveEvidenceMap:
-    async def test_saves_evidence_map(
-        self, temp_workspace: Path
-    ) -> None:
+    async def test_saves_evidence_map(self, temp_workspace: Path) -> None:
         job_dir = temp_workspace / "jobs" / "test_job" / "01_context"
         job_dir.mkdir(parents=True)
 

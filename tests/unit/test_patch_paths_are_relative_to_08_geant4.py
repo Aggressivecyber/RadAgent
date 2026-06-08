@@ -77,9 +77,7 @@ class TestPatchPathsAreRelativeTo08Geant4:
         patch = assemble_proposed_patch(module_results, gate_results, "test")
 
         for f in patch["changed_files"]:
-            assert not f["path"].startswith("/"), (
-                f"Path {f['path']} should not start with /"
-            )
+            assert not f["path"].startswith("/"), f"Path {f['path']} should not start with /"
 
     def test_path_not_contains_dotdot(self, workspace: Path) -> None:
         """Paths should not contain '..' traversal."""
@@ -91,9 +89,7 @@ class TestPatchPathsAreRelativeTo08Geant4:
         patch = assemble_proposed_patch(module_results, gate_results, "test")
 
         for f in patch["changed_files"]:
-            assert ".." not in f["path"], (
-                f"Path {f['path']} contains '..' — possible traversal"
-            )
+            assert ".." not in f["path"], f"Path {f['path']} contains '..' — possible traversal"
 
     def test_clean_path_from_08_geant4_prefix(self, workspace: Path) -> None:
         """Paths with 08_geant4/ prefix should be cleaned."""

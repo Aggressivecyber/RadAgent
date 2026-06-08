@@ -46,15 +46,13 @@ class ComponentSpec(BaseModel):
     component_id: str = Field(
         ..., min_length=1, description="Unique identifier (e.g. 'oxide_layer')"
     )
-    display_name: str = Field(
-        ..., min_length=1, description="Human-readable name"
-    )
+    display_name: str = Field(..., min_length=1, description="Human-readable name")
     component_type: Literal[
         "world", "assembly", "layer", "volume", "shielding", "electrode", "substrate"
     ] = Field(..., description="Semantic type of this component")
-    geometry_type: Literal[
-        "box", "sphere", "cylinder", "tubs", "cons", "polycone", "trapezoid"
-    ] = Field(..., description="G4VSolid shape type")
+    geometry_type: Literal["box", "sphere", "cylinder", "tubs", "cons", "polycone", "trapezoid"] = (
+        Field(..., description="G4VSolid shape type")
+    )
     dimensions: dict[str, float] = Field(
         ...,
         description="Shape-specific dimensions in global units. "
@@ -105,9 +103,7 @@ class ComponentSpec(BaseModel):
     @classmethod
     def _world_has_no_mother(cls, v: str | None, info: ValidationInfo) -> str | None:
         if v is None and info.data.get("component_type") != "world":
-            raise ValueError(
-                "Only world volume may have mother_volume=None"
-            )
+            raise ValueError("Only world volume may have mother_volume=None")
         return v
 
 

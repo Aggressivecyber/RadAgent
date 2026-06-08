@@ -19,13 +19,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
-from langgraph.graph import StateGraph
-
-from agent_core.graph.main_state import RadAgentMainState
-
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
 
@@ -251,7 +246,11 @@ def _build_9_component_model_ir(job_id: str) -> dict[str, Any]:
             },
         ],
         "interfaces": [
-            {"parent_component": "world", "child_component": c["component_id"], "interface_type": "daughter"}
+            {
+                "parent_component": "world",
+                "child_component": c["component_id"],
+                "interface_type": "daughter",
+            }
             for c in [
                 {"component_id": "housing"},
                 {"component_id": "pcb"},
@@ -267,7 +266,13 @@ def _build_9_component_model_ir(job_id: str) -> dict[str, Any]:
         "evidence": {
             "evidence_decision": "allow_rag",
             "geometry": ["user_specification: beamline layout"],
-            "materials": ["NIST: G4_AIR", "NIST: G4_Al", "user_specification: FR4", "NIST: G4_Si", "user_specification: SiO2"],
+            "materials": [
+                "NIST: G4_AIR",
+                "NIST: G4_Al",
+                "user_specification: FR4",
+                "NIST: G4_Si",
+                "user_specification: SiO2",
+            ],
             "source": ["user_specification: 10 MeV proton"],
             "physics": ["standard_physics: FTFP_BERT"],
             "scoring": ["user_specification: edep + fluence + dose"],
@@ -287,13 +292,9 @@ def _write_model_ir_files(job_dir: Path, job_id: str) -> dict[str, str]:
     comp_dir = ir_dir / "component_specs"
     comp_dir.mkdir(exist_ok=True)
     for comp in model_ir["components"]:
-        (comp_dir / f"{comp['component_id']}.json").write_text(
-            json.dumps(comp, indent=2)
-        )
+        (comp_dir / f"{comp['component_id']}.json").write_text(json.dumps(comp, indent=2))
 
-    (ir_dir / "interfaces.json").write_text(
-        json.dumps(model_ir["interfaces"], indent=2)
-    )
+    (ir_dir / "interfaces.json").write_text(json.dumps(model_ir["interfaces"], indent=2))
     (ir_dir / "construction_ledger.json").write_text(
         json.dumps({"entries": [], "version": "1.0"}, indent=2)
     )
@@ -328,20 +329,25 @@ def _write_codegen_files(job_dir: Path) -> dict[str, str]:
     code_dir = job_dir / "06_codegen"
     code_dir.mkdir(parents=True, exist_ok=True)
     (code_dir / "code_module_plan.json").write_text(
-        json.dumps({"modules": ["DetectorConstruction", "PhysicsList", "PrimaryGenerator"]}, indent=2)
+        json.dumps(
+            {"modules": ["DetectorConstruction", "PhysicsList", "PrimaryGenerator"]}, indent=2
+        )
     )
     patch_dir = job_dir / "08_gate_validation"
     patch_dir.mkdir(parents=True, exist_ok=True)
     (patch_dir / "proposed_patch.json").write_text(
-        json.dumps({
-            "patch_id": "dev_patch",
-            "job_id": "dev_e2e",
-            "description": "Dev patch",
-            "change_type": "modify",
-            "risk_level": "low",
-            "changed_files": [],
-            "test_plan": "compile",
-        }, indent=2)
+        json.dumps(
+            {
+                "patch_id": "dev_patch",
+                "job_id": "dev_e2e",
+                "description": "Dev patch",
+                "change_type": "modify",
+                "risk_level": "low",
+                "changed_files": [],
+                "test_plan": "compile",
+            },
+            indent=2,
+        )
     )
     return {
         "code_module_plan_path": str(code_dir / "code_module_plan.json"),
@@ -350,7 +356,9 @@ def _write_codegen_files(job_dir: Path) -> dict[str, str]:
     }
 
 
-def _write_confirmation_files(job_dir: Path, job_id: str, status: str = "approved") -> dict[str, str]:
+def _write_confirmation_files(
+    job_dir: Path, job_id: str, status: str = "approved"
+) -> dict[str, str]:
     """Write human confirmation output files."""
     hc_dir = job_dir / "04_human_confirmation"
     hc_dir.mkdir(parents=True, exist_ok=True)
@@ -388,8 +396,10 @@ def _write_confirmation_files(job_dir: Path, job_id: str, status: str = "approve
 
 def _make_mock_subgraph_node(return_values: dict[str, Any]) -> Any:
     """Create an async mock node that returns given values."""
+
     async def _node(state: dict[str, Any]) -> dict[str, Any]:
         return return_values
+
     return _node
 
 
@@ -443,6 +453,7 @@ class TestPipelineComplexDetectorDev:
 
         # Verify canonical stage directories
         from agent_core.workspace.paths import ALL_STAGES
+
         for stage in ALL_STAGES:
             assert (job_dir / stage).is_dir(), f"Missing stage dir: {stage}"
 
@@ -457,11 +468,11 @@ class TestPipelineComplexDetectorDev:
 
         # ── Step 3: Test routing functions directly ──
         from agent_core.graph.main_routes import (
+            route_after_artifact,
             route_after_context,
             route_after_g4_modeling,
-            route_after_human_confirmation,
             route_after_gates,
-            route_after_artifact,
+            route_after_human_confirmation,
         )
 
         # Context allows RAG → task planning
@@ -469,21 +480,34 @@ class TestPipelineComplexDetectorDev:
         assert route_after_context({"context_decision": "block_no_context"}) == "report_subgraph"
 
         # Modeling passes → human confirmation required
-        assert route_after_g4_modeling({
-            "g4_modeling_status": "passed",
-            "human_confirmation_required": True,
-        }) == "human_confirmation_subgraph"
+        assert (
+            route_after_g4_modeling(
+                {
+                    "g4_modeling_status": "passed",
+                    "human_confirmation_required": True,
+                }
+            )
+            == "human_confirmation_subgraph"
+        )
 
         # Human confirmation approved → codegen (triple guard)
-        assert route_after_human_confirmation({
-            "confirmation_status": "approved",
-            "confirmation_record_path": hc_paths["confirmation_record_path"],
-            "confirmed_model_plan_path": hc_paths["confirmed_model_plan_path"],
-            "unconfirmed_assumptions_count": 0,
-        }) == "g4_codegen_subgraph"
+        assert (
+            route_after_human_confirmation(
+                {
+                    "confirmation_status": "approved",
+                    "confirmation_record_path": hc_paths["confirmation_record_path"],
+                    "confirmed_model_plan_path": hc_paths["confirmed_model_plan_path"],
+                    "unconfirmed_assumptions_count": 0,
+                }
+            )
+            == "g4_codegen_subgraph"
+        )
 
         # Gates VERIFIED → artifact
-        assert route_after_gates({"validation_status": "VERIFIED", "retry_count": 0}) == "artifact_subgraph"
+        assert (
+            route_after_gates({"validation_status": "VERIFIED", "retry_count": 0})
+            == "artifact_subgraph"
+        )
 
         # Artifact → report
         assert route_after_artifact({}) == "report_subgraph"
@@ -532,9 +556,7 @@ class TestPipelineComplexDetectorDev:
         assert comp_summary["materials_count"] == 5
 
         # Verify manifest has PARTIAL in dev mode (downgraded from VERIFIED)
-        manifest = json.loads(
-            (artifact_dir / "artifact_manifest.json").read_text()
-        )
+        manifest = json.loads((artifact_dir / "artifact_manifest.json").read_text())
         assert manifest["validation_status"] != "VERIFIED"
 
         # ── Step 5: Generate final report ──
@@ -543,18 +565,20 @@ class TestPipelineComplexDetectorDev:
         # Dev mode: gate validation may downgrade VERIFIED → PARTIAL.
         # Report verified=True only when validation_status == "VERIFIED".
         # With PARTIAL, verified=False but termination is still meaningful.
-        report_result = await generate_final_report({
-            "job_id": job_id,
-            "user_query": user_query,
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "VERIFIED",
-            "context_decision": "allow_rag",
-            "simulation_scope": ["geant4"],
-            "failed_gates": [],
-            "errors": [],
-            "g4_model_ir_path": ir_paths["g4_model_ir_path"],
-            "gate_results_path": gate_path,
-        })
+        report_result = await generate_final_report(
+            {
+                "job_id": job_id,
+                "user_query": user_query,
+                "execution_mode": "dev_no_geant4_env",
+                "validation_status": "VERIFIED",
+                "context_decision": "allow_rag",
+                "simulation_scope": ["geant4"],
+                "failed_gates": [],
+                "errors": [],
+                "g4_model_ir_path": ir_paths["g4_model_ir_path"],
+                "gate_results_path": gate_path,
+            }
+        )
 
         assert report_result["verified"] is True
         assert report_result["termination_reason"] == "completed_verified"
@@ -572,7 +596,7 @@ class TestPipelineComplexDetectorDev:
     ) -> None:
         """Verify WorkspaceManager creates correct directory structure for dev pipeline."""
         from agent_core.workspace.manager import WorkspaceManager
-        from agent_core.workspace.paths import STAGE_INPUT, STAGE_HUMAN_CONFIRMATION, STAGE_MODEL_IR
+        from agent_core.workspace.paths import STAGE_HUMAN_CONFIRMATION, STAGE_INPUT, STAGE_MODEL_IR
 
         workspace = tmp_path / "ws"
         workspace.mkdir()

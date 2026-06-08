@@ -62,22 +62,26 @@ async def model_ir_validation_node(state: RadiationAgentState) -> dict[str, Any]
     for name, validator_instance in validators:
         try:
             passed, errors = validator_instance.validate(model_ir)
-            validation_results.append({
-                "validator": name,
-                "passed": passed,
-                "errors": errors,
-            })
+            validation_results.append(
+                {
+                    "validator": name,
+                    "passed": passed,
+                    "errors": errors,
+                }
+            )
             if not passed:
                 all_errors.extend(errors)
         except Exception as exc:
             msg = f"{name} validator crashed: {exc}"
             logger.error(msg)
             all_errors.append(msg)
-            validation_results.append({
-                "validator": name,
-                "passed": False,
-                "errors": [msg],
-            })
+            validation_results.append(
+                {
+                    "validator": name,
+                    "passed": False,
+                    "errors": [msg],
+                }
+            )
 
     model_ir.ledger.add_entry(
         node_name="model_ir_validation_node",
@@ -94,20 +98,20 @@ async def model_ir_validation_node(state: RadiationAgentState) -> dict[str, Any]
         model_ir_dir = get_stage_dir(job_id, "03_model_ir")
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         report_file = model_ir_dir / "validation_report.json"
-        report_file.write_text(json.dumps(
-            {
-                "model_ir_id": model_ir.model_ir_id,
-                "total_validators": len(validators),
-                "passed": sum(1 for r in validation_results if r["passed"]),
-                "failed": sum(
-                    1 for r in validation_results if not r["passed"]
-                ),
-                "total_errors": len(all_errors),
-                "results": validation_results,
-            },
-            indent=2,
-            ensure_ascii=False,
-        ))
+        report_file.write_text(
+            json.dumps(
+                {
+                    "model_ir_id": model_ir.model_ir_id,
+                    "total_validators": len(validators),
+                    "passed": sum(1 for r in validation_results if r["passed"]),
+                    "failed": sum(1 for r in validation_results if not r["passed"]),
+                    "total_errors": len(all_errors),
+                    "results": validation_results,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
 
     return {
         "g4_model_ir": model_ir.model_dump(mode="json"),

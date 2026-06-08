@@ -23,7 +23,9 @@ class TestGeometryInterfaceReportFields:
     """Verify geometry_interface_report uses correct schema field names."""
 
     async def test_uses_component_a_not_parent(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
@@ -31,17 +33,21 @@ class TestGeometryInterfaceReportFields:
         ir_dir = tmp_path / "jobs" / "test" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "interfaces": [
+        ir_path.write_text(
+            json.dumps(
                 {
-                    "interface_id": "world_sensor",
-                    "component_a": "world",
-                    "component_b": "sensor",
-                    "relationship": "contains",
-                    "overlap_check_enabled": True,
-                },
-            ],
-        }))
+                    "interfaces": [
+                        {
+                            "interface_id": "world_sensor",
+                            "component_a": "world",
+                            "component_b": "sensor",
+                            "relationship": "contains",
+                            "overlap_check_enabled": True,
+                        },
+                    ],
+                }
+            )
+        )
 
         state = {
             "job_id": "test",
@@ -64,7 +70,9 @@ class TestGeometryInterfaceReportFields:
             assert iface["relationship"] == "contains"
 
     async def test_no_parent_component_field(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Must NOT contain old wrong field names."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -72,16 +80,20 @@ class TestGeometryInterfaceReportFields:
         ir_dir = tmp_path / "jobs" / "test2" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "interfaces": [
+        ir_path.write_text(
+            json.dumps(
                 {
-                    "interface_id": "a_b",
-                    "component_a": "a",
-                    "component_b": "b",
-                    "relationship": "contains",
-                },
-            ],
-        }))
+                    "interfaces": [
+                        {
+                            "interface_id": "a_b",
+                            "component_a": "a",
+                            "component_b": "b",
+                            "relationship": "contains",
+                        },
+                    ],
+                }
+            )
+        )
 
         state = {
             "job_id": "test2",
@@ -103,7 +115,9 @@ class TestRichManifest:
     """Verify artifact_manifest.json has rich metadata."""
 
     async def test_manifest_has_sha256_and_size(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
@@ -111,14 +125,18 @@ class TestRichManifest:
         ir_dir = tmp_path / "jobs" / "test3" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "components": [{"component_id": "world"}],
-            "materials": [],
-            "sources": [],
-            "scoring": [],
-            "interfaces": [],
-            "simplification_policy": {"allow_simplification": False},
-        }))
+        ir_path.write_text(
+            json.dumps(
+                {
+                    "components": [{"component_id": "world"}],
+                    "materials": [],
+                    "sources": [],
+                    "scoring": [],
+                    "interfaces": [],
+                    "simplification_policy": {"allow_simplification": False},
+                }
+            )
+        )
 
         state = {
             "job_id": "test3",
@@ -127,10 +145,12 @@ class TestRichManifest:
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
-        manifest_result = await generate_artifact_manifest({
-            **state,
-            **collect_result,
-        })
+        manifest_result = await generate_artifact_manifest(
+            {
+                **state,
+                **collect_result,
+            }
+        )
 
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         assert manifest_path.exists()
@@ -151,19 +171,25 @@ class TestRichManifest:
             assert len(entry["sha256"]) == 64, f"SHA256 must be 64 chars: {entry}"
 
     async def test_review_report_is_rich(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
         ir_dir = tmp_path / "jobs" / "test4" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "components": [{"component_id": "world"}],
-            "materials": [],
-            "sources": [],
-            "scoring": [],
-        }))
+        ir_path.write_text(
+            json.dumps(
+                {
+                    "components": [{"component_id": "world"}],
+                    "materials": [],
+                    "sources": [],
+                    "scoring": [],
+                }
+            )
+        )
 
         state = {
             "job_id": "test4",
@@ -186,7 +212,9 @@ class TestRichManifest:
         assert review["artifacts_collected"] > 0
 
     async def test_empty_state_produces_manifest(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Even with no input files, manifest should be valid and have schema_version."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -197,10 +225,12 @@ class TestRichManifest:
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
-        manifest_result = await generate_artifact_manifest({
-            **state,
-            **collect_result,
-        })
+        manifest_result = await generate_artifact_manifest(
+            {
+                **state,
+                **collect_result,
+            }
+        )
 
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         assert manifest_path.exists()
@@ -218,7 +248,9 @@ class TestDevModeValidationStatus:
     """Verify dev mode forces validation_status to PARTIAL (never VERIFIED)."""
 
     async def test_dev_mode_downgrades_verified_to_partial(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Dev mode with VERIFIED input must downgrade to PARTIAL."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -226,15 +258,27 @@ class TestDevModeValidationStatus:
         ir_dir = tmp_path / "jobs" / "dev_test" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "components": [
-                {"component_id": "world", "component_type": "world", "geometry_type": "box"},
-                {"component_id": "target", "component_type": "volume", "geometry_type": "cylinder"},
-            ],
-            "materials": ["G4_AIR"],
-            "sources": [],
-            "scoring": [],
-        }))
+        ir_path.write_text(
+            json.dumps(
+                {
+                    "components": [
+                        {
+                            "component_id": "world",
+                            "component_type": "world",
+                            "geometry_type": "box",
+                        },
+                        {
+                            "component_id": "target",
+                            "component_type": "volume",
+                            "geometry_type": "cylinder",
+                        },
+                    ],
+                    "materials": ["G4_AIR"],
+                    "sources": [],
+                    "scoring": [],
+                }
+            )
+        )
 
         state = {
             "job_id": "dev_test",
@@ -245,26 +289,32 @@ class TestDevModeValidationStatus:
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
-        manifest_result = await generate_artifact_manifest({
-            **state,
-            **collect_result,
-        })
+        manifest_result = await generate_artifact_manifest(
+            {
+                **state,
+                **collect_result,
+            }
+        )
 
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         manifest = json.loads(manifest_path.read_text())
 
         # Must be PARTIAL, not VERIFIED
-        assert manifest["validation_status"] == "PARTIAL", \
+        assert manifest["validation_status"] == "PARTIAL", (
             f"Dev mode must downgrade VERIFIED to PARTIAL, got {manifest['validation_status']}"
+        )
         assert manifest["run_type"] == "dev"
 
         # Known limitations should mention dev mode downgrade
         limitations = " ".join(manifest.get("known_limitations", []))
-        assert "dev mode" in limitations.lower(), \
+        assert "dev mode" in limitations.lower(), (
             f"Known limitations should mention dev mode downgrade: {limitations}"
+        )
 
     async def test_acceptance_mode_preserves_verified(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Acceptance mode should preserve VERIFIED status."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -272,12 +322,16 @@ class TestDevModeValidationStatus:
         ir_dir = tmp_path / "jobs" / "acc_test" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "components": [{"component_id": "world"}],
-            "materials": [],
-            "sources": [],
-            "scoring": [],
-        }))
+        ir_path.write_text(
+            json.dumps(
+                {
+                    "components": [{"component_id": "world"}],
+                    "materials": [],
+                    "sources": [],
+                    "scoring": [],
+                }
+            )
+        )
 
         state = {
             "job_id": "acc_test",
@@ -288,10 +342,12 @@ class TestDevModeValidationStatus:
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
-        manifest_result = await generate_artifact_manifest({
-            **state,
-            **collect_result,
-        })
+        manifest_result = await generate_artifact_manifest(
+            {
+                **state,
+                **collect_result,
+            }
+        )
 
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         manifest = json.loads(manifest_path.read_text())
@@ -301,7 +357,9 @@ class TestDevModeValidationStatus:
         assert manifest["run_type"] == "acceptance"
 
     async def test_dev_mode_with_partial_stays_partial(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Dev mode with PARTIAL input should stay PARTIAL."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -313,10 +371,12 @@ class TestDevModeValidationStatus:
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
-        manifest_result = await generate_artifact_manifest({
-            **state,
-            **collect_result,
-        })
+        manifest_result = await generate_artifact_manifest(
+            {
+                **state,
+                **collect_result,
+            }
+        )
 
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         manifest = json.loads(manifest_path.read_text())
@@ -329,7 +389,9 @@ class TestModelIRSummaryExtraction:
     """Verify model_ir_summary is extracted from g4_model_ir, not hardcoded."""
 
     async def test_model_ir_summary_components_from_g4_model_ir(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """model_ir_summary.components must match g4_model_ir components."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -350,12 +412,16 @@ class TestModelIRSummaryExtraction:
         ir_dir = tmp_path / "jobs" / "complex_test" / "03_model_ir"
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(json.dumps({
-            "components": expected_components,
-            "materials": ["G4_AIR", "G4_Si", "G4_Pb"],
-            "sources": ["gps_source"],
-            "scoring": ["dose_scoring", "energy_deposit"],
-        }))
+        ir_path.write_text(
+            json.dumps(
+                {
+                    "components": expected_components,
+                    "materials": ["G4_AIR", "G4_Si", "G4_Pb"],
+                    "sources": ["gps_source"],
+                    "scoring": ["dose_scoring", "energy_deposit"],
+                }
+            )
+        )
 
         state = {
             "job_id": "complex_test",
@@ -366,23 +432,27 @@ class TestModelIRSummaryExtraction:
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
-        manifest_result = await generate_artifact_manifest({
-            **state,
-            **collect_result,
-        })
+        manifest_result = await generate_artifact_manifest(
+            {
+                **state,
+                **collect_result,
+            }
+        )
 
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         manifest = json.loads(manifest_path.read_text())
 
         # Verify model_ir_summary matches g4_model_ir
         summary = manifest["model_ir_summary"]
-        assert len(summary["components"]) == 9, \
+        assert len(summary["components"]) == 9, (
             f"Expected 9 components, got {len(summary['components'])}"
+        )
         assert summary["materials_count"] == 3
         assert summary["scoring_count"] == 2
 
         # Verify component IDs match
         component_ids = [c["component_id"] for c in summary["components"]]
         expected_ids = [c["component_id"] for c in expected_components]
-        assert component_ids == expected_ids, \
+        assert component_ids == expected_ids, (
             f"Component IDs mismatch: expected {expected_ids}, got {component_ids}"
+        )

@@ -17,31 +17,23 @@ def _valid_file() -> GeneratedModuleFile:
 
 
 def test_failed_status_rejected():
-    result = run_hard_gate_checks(
-        "test", [_valid_file()], module_status="failed"
-    )
+    result = run_hard_gate_checks("test", [_valid_file()], module_status="failed")
     assert result.status == "fail"
     assert any("module_status" in c["check"] for c in result.checks)
 
 
 def test_generated_status_accepted():
-    result = run_hard_gate_checks(
-        "test", [_valid_file()], module_status="generated"
-    )
+    result = run_hard_gate_checks("test", [_valid_file()], module_status="generated")
     assert result.status == "pass"
 
 
 def test_repaired_status_accepted():
-    result = run_hard_gate_checks(
-        "test", [_valid_file()], module_status="repaired"
-    )
+    result = run_hard_gate_checks("test", [_valid_file()], module_status="repaired")
     assert result.status == "pass"
 
 
 def test_unknown_status_rejected():
-    result = run_hard_gate_checks(
-        "test", [_valid_file()], module_status="unknown"
-    )
+    result = run_hard_gate_checks("test", [_valid_file()], module_status="unknown")
     assert result.status == "fail"
 
 

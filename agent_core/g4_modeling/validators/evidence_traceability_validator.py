@@ -27,26 +27,17 @@ class EvidenceTraceabilityValidator:
         all_evidence: list[tuple[str, str, list[str]]] = []
 
         for comp in model_ir.components:
-            all_evidence.append(
-                ("component", comp.component_id, comp.source_evidence)
-            )
+            all_evidence.append(("component", comp.component_id, comp.source_evidence))
         for mat in model_ir.materials:
-            all_evidence.append(
-                ("material", mat.material_id, mat.source_evidence)
-            )
+            all_evidence.append(("material", mat.material_id, mat.source_evidence))
         for src in model_ir.sources:
-            all_evidence.append(
-                ("source", src.source_id, src.source_evidence)
-            )
+            all_evidence.append(("source", src.source_id, src.source_evidence))
         if model_ir.physics is not None:
             all_evidence.append(
-                ("physics", model_ir.physics.physics_list,
-                 model_ir.physics.source_evidence)
+                ("physics", model_ir.physics.physics_list, model_ir.physics.source_evidence)
             )
         for sc in model_ir.scoring:
-            all_evidence.append(
-                ("scoring", sc.scoring_id, sc.source_evidence)
-            )
+            all_evidence.append(("scoring", sc.scoring_id, sc.source_evidence))
 
         # Validate each evidence list
         for spec_type, target_id, evidence in all_evidence:
@@ -60,13 +51,10 @@ class EvidenceTraceabilityValidator:
             for ref in evidence:
                 ref_stripped = ref.strip()
                 if not ref_stripped:
-                    errors.append(
-                        f"{spec_type} '{target_id}' has empty evidence reference"
-                    )
+                    errors.append(f"{spec_type} '{target_id}' has empty evidence reference")
                 elif self._is_placeholder(ref_stripped):
                     errors.append(
-                        f"{spec_type} '{target_id}' has placeholder evidence: "
-                        f"'{ref_stripped}'"
+                        f"{spec_type} '{target_id}' has placeholder evidence: '{ref_stripped}'"
                     )
 
         # Check physics has selection reasoning

@@ -61,12 +61,14 @@ async def integration_assembler_node(state: RadiationAgentState) -> dict[str, An
                 file_key = f"{module_name}::{f}"
                 content = mod.get("generated_content", {}).get(file_key, "")
                 if content:
-                    changed_files.append({
-                        "path": f"{prefix}/{f}",
-                        "operation": "create_or_replace",
-                        "new_content": content,
-                        "zone": "green",
-                    })
+                    changed_files.append(
+                        {
+                            "path": f"{prefix}/{f}",
+                            "operation": "create_or_replace",
+                            "new_content": content,
+                            "zone": "green",
+                        }
+                    )
 
     # Build the code patch compatible with CodePatch schema
     code_patch: dict[str, Any] = {
@@ -101,9 +103,13 @@ async def integration_assembler_node(state: RadiationAgentState) -> dict[str, An
         model_ir_dir = get_stage_dir(job_id, "03_model_ir")
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         patch_file = model_ir_dir / "assembled_code_patch.json"
-        patch_file.write_text(json.dumps(
-            code_patch, indent=2, ensure_ascii=False,
-        ))
+        patch_file.write_text(
+            json.dumps(
+                code_patch,
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
 
     return {
         "g4_model_ir": model_ir.model_dump(mode="json"),

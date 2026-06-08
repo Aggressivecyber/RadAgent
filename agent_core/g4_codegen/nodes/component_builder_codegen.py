@@ -52,9 +52,7 @@ async def component_builder_codegen(state: G4CodegenSubgraphState) -> dict[str, 
     }
 
 
-def _box_component(
-    name: str, display: str, dx: float, dy: float, dz: float, material: str
-) -> str:
+def _box_component(name: str, display: str, dx: float, dy: float, dz: float, material: str) -> str:
     return f"""// Component: {display} (box)
 auto {name}_solid = new G4Box("{name}", {dx}, {dy}, {dz});
 auto {name}_logic = new G4LogicalVolume(

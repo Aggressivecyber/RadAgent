@@ -151,9 +151,7 @@ class TestSDContract:
             if "new G4VSensitiveDetector" in stripped and "class" not in stripped:
                 # Only allowed inside a concrete class definition
                 if "public G4VSensitiveDetector" not in stripped:
-                    raise AssertionError(
-                        f"Direct abstract instantiation: {stripped}"
-                    )
+                    raise AssertionError(f"Direct abstract instantiation: {stripped}")
 
         # Must have a concrete class inheriting from G4VSensitiveDetector
         assert "public G4VSensitiveDetector" in source
@@ -208,9 +206,7 @@ class TestSDCppStatic:
             for line_no, line in enumerate(content.splitlines(), 1):
                 stripped = line.strip()
                 if stripped.startswith("#include"):
-                    assert len(stripped) > len("#include"), (
-                        f"Empty include in {fname}:{line_no}"
-                    )
+                    assert len(stripped) > len("#include"), f"Empty include in {fname}:{line_no}"
 
     async def test_no_using_namespace_std(self) -> None:
         code = await _get_generated_code()
@@ -223,8 +219,7 @@ class TestSDCppStatic:
             if not fname.endswith(".cc"):
                 continue
             includes = [
-                line.strip() for line in content.splitlines()
-                if line.strip().startswith("#include")
+                line.strip() for line in content.splitlines() if line.strip().startswith("#include")
             ]
             if includes:
                 # First include should be the module's own header
@@ -262,6 +257,4 @@ class TestSDCppStatic:
             stripped = line.strip()
             if stripped.startswith("//"):
                 continue
-            assert not re.search(r'\bG4int\b', stripped), (
-                f"Hit.hh: bare G4int: {stripped}"
-            )
+            assert not re.search(r"\bG4int\b", stripped), f"Hit.hh: bare G4int: {stripped}"

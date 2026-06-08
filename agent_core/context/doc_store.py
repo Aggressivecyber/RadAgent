@@ -26,7 +26,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "G4Box(const G4String& pName, G4double pDx, G4double pDy, G4double pDz) "
             "creates a box solid with half-lengths dx, dy, dz. The full dimensions are "
             "2*dx × 2*dy × 2*dz. G4Box is the simplest solid and is commonly used for "
-            "world volumes and layer geometries. Include: #include \"G4Box.hh\". "
+            'world volumes and layer geometries. Include: #include "G4Box.hh". '
             "Units: use G4SystemOfUnits.hh (mm, cm, m)."
         ),
         "source": "geant4_reference",
@@ -40,7 +40,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "pRMin/pRMax: inner/outer radius. pDz: half-length in z. "
             "pSPhi/pDPhi: starting angle and delta angle. For a full cylinder set "
             "pRMin=0, pDPhi=360*deg. Commonly used for detector layers, beam pipes. "
-            "Include: #include \"G4Tubs.hh\"."
+            'Include: #include "G4Tubs.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -52,7 +52,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "G4double pSPhi, G4double pDPhi, G4double pSTheta, G4double pDTheta) "
             "creates a spherical shell. pRMin/pRMax: inner/outer radius. "
             "For a solid sphere set pRMin=0. Used for spherical detectors, shielding. "
-            "Include: #include \"G4Sphere.hh\"."
+            'Include: #include "G4Sphere.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -65,7 +65,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "G4double pDy2, G4double pDx3, G4double pDx4, G4double pAlp2) "
             "creates a general trapezoid. Used for non-rectangular detector shapes. "
             "A simpler constructor exists for symmetric traps: G4Box-like with taper. "
-            "Include: #include \"G4Trap.hh\"."
+            'Include: #include "G4Trap.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -77,7 +77,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "G4int numZPlanes, const G4double* pZ, const G4double* pRMin, "
             "const G4double* pRMax) creates a solid of revolution defined by z-planes "
             "with inner/outer radii. Used for complex cylindrical detector geometries. "
-            "Include: #include \"G4Polycone.hh\"."
+            'Include: #include "G4Polycone.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -90,7 +90,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "Logical volumes define the properties but NOT the position. "
             "A logical volume can be placed multiple times. "
             "Sensitive detectors are attached to logical volumes via "
-            "SetSensitiveDetector(). Include: #include \"G4LogicalVolume.hh\"."
+            'SetSensitiveDetector(). Include: #include "G4LogicalVolume.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -104,7 +104,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "G4bool pOverlaps=false) places a logical volume inside a mother volume. "
             "Position and rotation are in the mother's coordinate system. "
             "The world volume has no mother (nullptr). Set pOverlaps=true to enable "
-            "overlap checking. Include: #include \"G4PVPlacement.hh\"."
+            'overlap checking. Include: #include "G4PVPlacement.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -112,11 +112,11 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
         "doc_id": "g4_nist_materials",
         "title": "G4NistManager — NIST Material Database",
         "content": (
-            "G4NistManager::Instance()->FindOrBuildMaterial(\"G4_Si\") returns a "
+            'G4NistManager::Instance()->FindOrBuildMaterial("G4_Si") returns a '
             "pre-defined NIST material. Common materials: G4_AIR, G4_Si, G4_Ge, "
             "G4_WATER, G4_COPPER, G4_ALUMINUM, G4_LEAD, G4_PLASTIC_SC_VINYLTOLUENE. "
             "Use FindOrBuildElement() for individual elements. "
-            "Include: #include \"G4NistManager.hh\"."
+            'Include: #include "G4NistManager.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -128,8 +128,8 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "G4State state=kStateSolid) creates a custom material. Add elements via "
             "AddElement(G4Element*, G4int) or AddElement(G4Element*, G4double fraction). "
             "Density in g/cm3. For mixtures use fractional mass composition. "
-            "Include: #include \"G4Material.hh\", #include \"G4Element.hh\", "
-            "#include \"G4SystemOfUnits.hh\"."
+            'Include: #include "G4Material.hh", #include "G4Element.hh", '
+            '#include "G4SystemOfUnits.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -143,7 +143,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "Override Initialize(G4HCofThisEvent*) to reset per-event data. "
             "Attach to logical volume: logicalVol->SetSensitiveDetector(sd). "
             "Hit collections are registered via G4THitsCollection. "
-            "Include: #include \"G4VSensitiveDetector.hh\", #include \"G4Step.hh\"."
+            'Include: #include "G4VSensitiveDetector.hh", #include "G4Step.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -157,7 +157,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "Set position: SetParticlePosition(const G4ThreeVector&). "
             "Set direction: SetParticleMomentumDirection(const G4ThreeVector&). "
             "Must be called in GeneratePrimaries(G4Event*). "
-            "Include: #include \"G4ParticleGun.hh\"."
+            'Include: #include "G4ParticleGun.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -169,8 +169,8 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "pre-built physics lists. EM physics: G4EmStandardPhysics (recommended). "
             "Hadronic: FTFP_BERT for protons/neutrons > 5 GeV. "
             "Register physics: RegisterPhysics(new G4EmStandardPhysics()). "
-            "Include: #include \"G4VModularPhysicsList.hh\", "
-            "#include \"FTFP_BERT.hh\" or #include \"G4EmStandardPhysics.hh\"."
+            'Include: #include "G4VModularPhysicsList.hh", '
+            '#include "FTFP_BERT.hh" or #include "G4EmStandardPhysics.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -184,7 +184,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "SetUserAction(eventAction), SetUserAction(steppingAction). "
             "BeamOn(G4int numberOfEvents) starts the simulation. "
             "For multithreading use G4MTRunManager. "
-            "Include: #include \"G4RunManager.hh\"."
+            'Include: #include "G4RunManager.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -198,7 +198,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "Volume: step->GetPreStepPoint()->GetTouchable()->GetVolume(). "
             "Copy number: step->GetPreStepPoint()->GetTouchable()->GetCopyNumber(). "
             "Units: energy in MeV, position in mm (default Geant4 units). "
-            "Include: #include \"G4Step.hh\"."
+            'Include: #include "G4Step.hh".'
         ),
         "source": "geant4_reference",
     },
@@ -211,7 +211,7 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "mm, cm, m, km (length); eV, keV, MeV, GeV (energy); "
             "g/cm3, mg/cm3 (density); deg, rad (angle). "
             "Example: density = 2.33*g/cm3; energy = 100*MeV; length = 5*cm. "
-            "Include: #include \"G4SystemOfUnits.hh\"."
+            'Include: #include "G4SystemOfUnits.hh".'
         ),
         "source": "geant4_reference",
     },

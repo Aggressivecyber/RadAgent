@@ -14,35 +14,37 @@ from pathlib import Path
 # ─── Color palette ───────────────────────────────────────────────────
 
 _FILL = {
-    "workspace": "#E8F5E9",    # green tint — bootstrap
-    "io":       "#FFF3E0",    # orange tint — I/O adapters
-    "core":     "#E3F2FD",    # blue tint — core modeling
-    "guard":    "#FCE4EC",    # pink tint — gate/guard
-    "codegen":  "#F3E5F5",    # purple tint — code generation
-    "gate":     "#FFF9C4",    # yellow tint — validation gates
-    "artifact": "#E0F7FA",    # cyan tint — artifact/report
-    "subgraph": "#F5F5F5",    # grey — subgraph wrapper
-    "end":      "#FFCDD2",    # red tint — terminal
+    "workspace": "#E8F5E9",  # green tint — bootstrap
+    "io": "#FFF3E0",  # orange tint — I/O adapters
+    "core": "#E3F2FD",  # blue tint — core modeling
+    "guard": "#FCE4EC",  # pink tint — gate/guard
+    "codegen": "#F3E5F5",  # purple tint — code generation
+    "gate": "#FFF9C4",  # yellow tint — validation gates
+    "artifact": "#E0F7FA",  # cyan tint — artifact/report
+    "subgraph": "#F5F5F5",  # grey — subgraph wrapper
+    "end": "#FFCDD2",  # red tint — terminal
 }
 
 _BORDER = {
     "workspace": "#388E3C",
-    "io":       "#F57C00",
-    "core":     "#1976D2",
-    "guard":    "#C62828",
-    "codegen":  "#7B1FA2",
-    "gate":     "#F9A825",
+    "io": "#F57C00",
+    "core": "#1976D2",
+    "guard": "#C62828",
+    "codegen": "#7B1FA2",
+    "gate": "#F9A825",
     "artifact": "#00838F",
     "subgraph": "#757575",
-    "end":      "#D32F2F",
+    "end": "#D32F2F",
 }
 
 
 # ─── Data model ──────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class EdgeSpec:
     """A directed edge between two nodes."""
+
     source: str
     target: str
     label: str = ""
@@ -52,6 +54,7 @@ class EdgeSpec:
 @dataclass(frozen=True)
 class NodeSpec:
     """A node in a graph."""
+
     node_id: str
     label: str
     kind: str = "core"  # workspace | io | core | guard | codegen | gate | artifact | subgraph | end
@@ -61,6 +64,7 @@ class NodeSpec:
 @dataclass(frozen=True)
 class SubgraphSpec:
     """Complete specification of a (sub)graph."""
+
     name: str
     display_name: str
     description: str
@@ -72,6 +76,7 @@ class SubgraphSpec:
 # ─── Graph topology declarations ─────────────────────────────────────
 # All topology is declared as static data.  When graph code changes,
 # update these declarations to keep diagrams in sync.
+
 
 def get_main_graph_spec() -> SubgraphSpec:
     """Main orchestration graph — 9 nodes, conditional routing."""
@@ -205,8 +210,10 @@ def get_g4_modeling_subgraph_spec() -> SubgraphSpec:
             EdgeSpec("model_scope_guard_node", "persist_model_ir", "block → 失败", "block"),
             EdgeSpec("model_ir_validation_node", "model_review_report_node", "通过"),
             EdgeSpec(
-                "model_ir_validation_node", "geometry_decomposition_node",
-                "错误 < 3 → 重试", "retry",
+                "model_ir_validation_node",
+                "geometry_decomposition_node",
+                "错误 < 3 → 重试",
+                "retry",
             ),
             EdgeSpec("model_ir_validation_node", "persist_model_ir", "错误 ≥ 3 → 失败", "block"),
         ),
@@ -226,9 +233,16 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
     """
     # Module names in execution order
     modules = [
-        "material", "geometry", "placement", "source", "physics",
-        "sensitive_detector", "scoring", "output_manager",
-        "action_initialization", "main_cmake",
+        "material",
+        "geometry",
+        "placement",
+        "source",
+        "physics",
+        "sensitive_detector",
+        "scoring",
+        "output_manager",
+        "action_initialization",
+        "main_cmake",
     ]
 
     nodes = [
@@ -266,7 +280,7 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
         if i == 0:
             edges.append(EdgeSpec("build_module_contexts", agent))
         else:
-            prev_llm = f"{modules[i-1]}_llm_gate"
+            prev_llm = f"{modules[i - 1]}_llm_gate"
             edges.append(EdgeSpec(prev_llm, agent))
 
         # Agent → hard gate (always)
@@ -278,9 +292,7 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
 
         # LLM gate → next module (pass) or repair (fail)
         next_target = (
-            f"run_{modules[i+1]}_agent"
-            if i + 1 < len(modules)
-            else "build_interface_contracts"
+            f"run_{modules[i + 1]}_agent" if i + 1 < len(modules) else "build_interface_contracts"
         )
         conditional_edges.append(EdgeSpec(llm, next_target, "pass"))
         conditional_edges.append(EdgeSpec(llm, repair, "fail"))
@@ -292,40 +304,34 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
         )
 
     # Integration pipeline
-    nodes.extend([
-        NodeSpec("build_interface_contracts", "接口契约", "codegen"),
-        NodeSpec("integration_assembler", "集成组装", "codegen"),
-        NodeSpec("static_semantic_scanner", "静态语义扫描", "guard"),
-        NodeSpec("cross_file_hard_gate", "跨文件硬门禁", "guard"),
-        NodeSpec("cross_file_llm_gate", "跨文件 LLM 门禁", "guard"),
-        NodeSpec("persist_codegen_output", "持久化输出", "io"),
-    ])
+    nodes.extend(
+        [
+            NodeSpec("build_interface_contracts", "接口契约", "codegen"),
+            NodeSpec("integration_assembler", "集成组装", "codegen"),
+            NodeSpec("static_semantic_scanner", "静态语义扫描", "guard"),
+            NodeSpec("cross_file_hard_gate", "跨文件硬门禁", "guard"),
+            NodeSpec("cross_file_llm_gate", "跨文件 LLM 门禁", "guard"),
+            NodeSpec("persist_codegen_output", "持久化输出", "io"),
+        ]
+    )
 
-    edges.extend([
-        EdgeSpec("build_interface_contracts", "integration_assembler"),
-        EdgeSpec("integration_assembler", "static_semantic_scanner"),
-    ])
+    edges.extend(
+        [
+            EdgeSpec("build_interface_contracts", "integration_assembler"),
+            EdgeSpec("integration_assembler", "static_semantic_scanner"),
+        ]
+    )
 
     # Static scan → cross hard gate (pass) or persist (fail)
+    conditional_edges.append(EdgeSpec("static_semantic_scanner", "cross_file_hard_gate", "pass"))
     conditional_edges.append(
-        EdgeSpec("static_semantic_scanner", "cross_file_hard_gate", "pass")
-    )
-    conditional_edges.append(
-        EdgeSpec(
-            "static_semantic_scanner", "persist_codegen_output",
-            "fail → 阻断", "block"
-        )
+        EdgeSpec("static_semantic_scanner", "persist_codegen_output", "fail → 阻断", "block")
     )
 
     # Cross hard gate → cross LLM gate (pass) or persist (fail)
+    conditional_edges.append(EdgeSpec("cross_file_hard_gate", "cross_file_llm_gate", "pass"))
     conditional_edges.append(
-        EdgeSpec("cross_file_hard_gate", "cross_file_llm_gate", "pass")
-    )
-    conditional_edges.append(
-        EdgeSpec(
-            "cross_file_hard_gate", "persist_codegen_output",
-            "fail → 阻断", "block"
-        )
+        EdgeSpec("cross_file_hard_gate", "persist_codegen_output", "fail → 阻断", "block")
     )
 
     # Cross LLM gate → persist
@@ -403,30 +409,27 @@ def get_report_subgraph_spec() -> SubgraphSpec:
         name="report_subgraph",
         display_name="Report 子图",
         description="最终报告生成 (1 node)",
-        nodes=(
-            NodeSpec("generate_final_report", "生成最终报告", "artifact", is_entry=True),
-        ),
-        edges=(
-            EdgeSpec("generate_final_report", "END"),
-        ),
+        nodes=(NodeSpec("generate_final_report", "生成最终报告", "artifact", is_entry=True),),
+        edges=(EdgeSpec("generate_final_report", "END"),),
     )
 
 
 def get_all_subgraph_specs() -> dict[str, SubgraphSpec]:
     """Return all subgraph specifications keyed by name."""
     return {
-        "context":        get_context_subgraph_spec(),
-        "task_planning":  get_task_planning_subgraph_spec(),
-        "g4_modeling":    get_g4_modeling_subgraph_spec(),
-        "g4_codegen":     get_g4_codegen_subgraph_spec(),
+        "context": get_context_subgraph_spec(),
+        "task_planning": get_task_planning_subgraph_spec(),
+        "g4_modeling": get_g4_modeling_subgraph_spec(),
+        "g4_codegen": get_g4_codegen_subgraph_spec(),
         "gate_validation": get_gate_validation_subgraph_spec(),
-        "patch":          get_patch_subgraph_spec(),
-        "artifact":       get_artifact_subgraph_spec(),
-        "report":         get_report_subgraph_spec(),
+        "patch": get_patch_subgraph_spec(),
+        "artifact": get_artifact_subgraph_spec(),
+        "report": get_report_subgraph_spec(),
     }
 
 
 # ─── Mermaid renderer ────────────────────────────────────────────────
+
 
 class MermaidRenderer:
     """Pure-function Mermaid diagram generator.
@@ -496,9 +499,7 @@ class MermaidRenderer:
             for node in sub_spec.nodes:
                 safe_label = node.label.replace('"', "'")
                 shape_open, shape_close = self._node_shape(node.kind)
-                lines.append(
-                    f'        {node.node_id}{shape_open}"{safe_label}"{shape_close}'
-                )
+                lines.append(f'        {node.node_id}{shape_open}"{safe_label}"{shape_close}')
             for edge in sub_spec.edges:
                 if edge.target == "END":
                     lines.append(f"        {edge.source} --> {sub_spec.name}_end((END))")
@@ -671,6 +672,7 @@ def export_mermaid(
 
 # ─── CLI entry point ─────────────────────────────────────────────────
 
+
 def main() -> None:
     """CLI entry point for graph visualization."""
     import argparse
@@ -684,7 +686,8 @@ def main() -> None:
         help="'draw' 打印到终端, 'export' 写入 .mmd 文件",
     )
     parser.add_argument(
-        "--main", action="store_true",
+        "--main",
+        action="store_true",
         help="仅输出主图",
     )
     parser.add_argument(
@@ -695,11 +698,13 @@ def main() -> None:
         "(context/task_planning/g4_modeling/g4_codegen/gate_validation/patch/artifact/report)",
     )
     parser.add_argument(
-        "--combined", action="store_true",
+        "--combined",
+        action="store_true",
         help="输出合并视图 (主图 + 所有子图)",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=str,
         default="docs/graphs",
         help="export 输出目录 (默认: docs/graphs)",
@@ -717,9 +722,9 @@ def main() -> None:
         else:
             # Default: print all
             for name, content in draw_all().items():
-                print(f"\n{'='*60}")
+                print(f"\n{'=' * 60}")
                 print(f"  {name}")
-                print(f"{'='*60}\n")
+                print(f"{'=' * 60}\n")
                 print(content)
 
     elif args.command == "export":

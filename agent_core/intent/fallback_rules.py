@@ -29,8 +29,16 @@ def fallback_intent(
         )
 
     sim_keywords = [
-        "geant4", "g4", "辐照", "仿真", "粒子", "剂量",
-        "探测器", "能量沉积", "tcad", "spice",
+        "geant4",
+        "g4",
+        "辐照",
+        "仿真",
+        "粒子",
+        "剂量",
+        "探测器",
+        "能量沉积",
+        "tcad",
+        "spice",
     ]
     if any(k in q_lower for k in sim_keywords):
         return IntentResult(

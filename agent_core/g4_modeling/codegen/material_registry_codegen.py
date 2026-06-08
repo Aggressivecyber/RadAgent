@@ -58,21 +58,23 @@ async def material_registry_codegen(state: RadiationAgentState) -> dict[str, Any
     config = _generate_config(materials)
 
     return {
-        "code_modules": [{
-            "module_name": "MaterialRegistry",
-            "module_type": "material_registry",
-            "source_files": ["MaterialRegistry.cc"],
-            "header_files": ["MaterialRegistry.hh"],
-            "config_files": ["material_config.json"],
-            "depends_on": [],
-            "linked_component_ids": [],
-            "linked_material_ids": [m.material_id for m in materials],
-            "generated_content": {
-                "MaterialRegistry::MaterialRegistry.hh": header,
-                "MaterialRegistry::MaterialRegistry.cc": source,
-                "MaterialRegistry::material_config.json": config,
-            },
-        }],
+        "code_modules": [
+            {
+                "module_name": "MaterialRegistry",
+                "module_type": "material_registry",
+                "source_files": ["MaterialRegistry.cc"],
+                "header_files": ["MaterialRegistry.hh"],
+                "config_files": ["material_config.json"],
+                "depends_on": [],
+                "linked_component_ids": [],
+                "linked_material_ids": [m.material_id for m in materials],
+                "generated_content": {
+                    "MaterialRegistry::MaterialRegistry.hh": header,
+                    "MaterialRegistry::MaterialRegistry.cc": source,
+                    "MaterialRegistry::material_config.json": config,
+                },
+            }
+        ],
     }
 
 
@@ -134,28 +136,24 @@ def _generate_source(
 ) -> str:
     """Generate MaterialRegistry.cc."""
     nist_inits = "\n\n".join(
-        f"""G4Material* MaterialRegistry::Get{_sanitize_cpp_identifier(
-            m.nist_name or m.material_id
-        )}() const {{
+        f"""G4Material* MaterialRegistry::Get{
+            _sanitize_cpp_identifier(m.nist_name or m.material_id)
+        }() const {{
     auto it = registry_.find("{m.material_id}");
     return (it != registry_.end()) ? it->second : nullptr;
 }}"""
         for m in nist_materials
     )
 
-    custom_defs = "\n\n".join(
-        _custom_material_def(m) for m in custom_materials
-    )
+    custom_defs = "\n\n".join(_custom_material_def(m) for m in custom_materials)
 
     nist_registrations = "\n".join(
-        f'    registry_["{m.material_id}"] = '
-        f"nist->FindOrBuildMaterial(\"{m.nist_name}\");"
+        f'    registry_["{m.material_id}"] = nist->FindOrBuildMaterial("{m.nist_name}");'
         for m in nist_materials
     )
 
     custom_registrations = "\n".join(
-        f'    registry_["{m.material_id}"] = '
-        f"Define{_sanitize_cpp_identifier(m.material_id)}(nist);"
+        f'    registry_["{m.material_id}"] = Define{_sanitize_cpp_identifier(m.material_id)}(nist);'
         for m in custom_materials
     )
 
@@ -227,8 +225,7 @@ def _custom_material_def(mat: Any) -> str:
     )
 
     elem_adds = "\n".join(
-        f"    mat_{cpp_id}->AddElement(el_{e.element}, {e.fraction});"
-        for e in elements_list
+        f"    mat_{cpp_id}->AddElement(el_{e.element}, {e.fraction});" for e in elements_list
     )
 
     source_str = ", ".join(mat.source_evidence) if mat.source_evidence else "N/A"

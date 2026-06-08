@@ -30,7 +30,7 @@ class TestHardGateRejectsEmptyGeneratedFiles:
             GeneratedModuleFile(
                 path="include/Test.hh",
                 operation="create_or_replace",
-                new_content='#pragma once\nint x;\n',
+                new_content="#pragma once\nint x;\n",
                 generated_by="test_module_agent",
                 module_name="test_module",
                 rationale="test",

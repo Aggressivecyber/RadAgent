@@ -25,9 +25,7 @@ class FilePermissionValidator:
         # Files matching no pattern fall back to default
         return "red" if self._default_action == "reject" else "green"
 
-    def validate_patch_permissions(
-        self, changed_files: list[dict]
-    ) -> tuple[bool, list[str]]:
+    def validate_patch_permissions(self, changed_files: list[dict]) -> tuple[bool, list[str]]:
         """Validate a list of changed files against the access policy.
 
         Each dict must have a 'path' key. Returns (all_allowed, messages).

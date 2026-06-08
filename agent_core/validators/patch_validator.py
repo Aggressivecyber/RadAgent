@@ -11,8 +11,14 @@ import re
 RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 PATCH_REQUIRED_FIELDS = {
-    "patch_id", "job_id", "description", "change_type",
-    "risk_level", "changed_files", "test_plan", "expected_outputs",
+    "patch_id",
+    "job_id",
+    "description",
+    "change_type",
+    "risk_level",
+    "changed_files",
+    "test_plan",
+    "expected_outputs",
 }
 
 FILE_REQUIRED_FIELDS = {"path", "new_content", "zone"}

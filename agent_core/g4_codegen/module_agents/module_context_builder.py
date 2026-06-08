@@ -46,13 +46,12 @@ def build_module_context(
 
     # Persist
     from agent_core.config.workspace import get_job_dir
+
     ctx_dir = get_job_dir(job_id) / "06_codegen" / "module_contexts"
     ctx_dir.mkdir(parents=True, exist_ok=True)
 
     ctx_path = ctx_dir / f"{module_name}.json"
-    ctx_path.write_text(
-        json.dumps(context.model_dump(), indent=2, ensure_ascii=False)
-    )
+    ctx_path.write_text(json.dumps(context.model_dump(), indent=2, ensure_ascii=False))
 
     return context.model_dump()
 

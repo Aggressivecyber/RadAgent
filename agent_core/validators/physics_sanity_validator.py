@@ -13,6 +13,8 @@ _VALID_PARTICLES = frozenset(
 
 def _is_finite(v: Any) -> bool:
     return isinstance(v, (int, float)) and math.isfinite(v)
+
+
 def _normalize(data: list[dict] | dict) -> list[dict]:
     return data if isinstance(data, list) else [data]
 
@@ -121,8 +123,7 @@ class PhysicsSanityValidator:
                 errors.append(f"Field '{field}' has no declared unit (expected '{expected}')")
             elif actual != expected:
                 errors.append(
-                    f"Field '{field}' unit mismatch: "
-                    f"got '{actual}', expected '{expected}'"
+                    f"Field '{field}' unit mismatch: got '{actual}', expected '{expected}'"
                 )
         return (not errors, errors)
 

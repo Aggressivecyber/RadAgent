@@ -1,6 +1,5 @@
 """Tests that unconfirmed assumptions block codegen."""
 
-
 from agent_core.graph.main_routes import route_after_human_confirmation
 from agent_core.human_confirmation.validators import validate_human_confirmation
 

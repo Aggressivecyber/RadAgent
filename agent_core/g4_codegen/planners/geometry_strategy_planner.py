@@ -34,17 +34,20 @@ def plan_geometry_strategy(
             file_path = geo.get("file_path", "")
             file_exists = False
             if file_path:
-                from pathlib import Path as P
-                file_exists = P(file_path).exists()
+                from pathlib import Path as FilePath
 
-            external_files.append({
-                "component_id": cid,
-                "path": file_path,
-                "source_type": geo_type,
-                "exists": file_exists,
-                "status": "exists" if file_exists else "missing",
-                "action": "ok" if file_exists else "clarification_required",
-            })
+                file_exists = FilePath(file_path).exists()
+
+            external_files.append(
+                {
+                    "component_id": cid,
+                    "path": file_path,
+                    "source_type": geo_type,
+                    "exists": file_exists,
+                    "status": "exists" if file_exists else "missing",
+                    "action": "ok" if file_exists else "clarification_required",
+                }
+            )
         elif geo_type == "parameterized":
             strategies[cid] = "parameterized"
         elif geo_type == "replica":
@@ -66,12 +69,11 @@ def plan_geometry_strategy(
 
     # Persist
     from agent_core.config.workspace import get_job_dir
+
     codegen_dir = get_job_dir(job_id) / "06_codegen"
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     plan_path = codegen_dir / "geometry_strategy_plan.json"
-    plan_path.write_text(
-        json.dumps(plan.model_dump(), indent=2, ensure_ascii=False)
-    )
+    plan_path.write_text(json.dumps(plan.model_dump(), indent=2, ensure_ascii=False))
 
     return plan.model_dump()

@@ -11,7 +11,13 @@ def test_content_field_rejected():
     """File with 'content' field must fail."""
     patch = {
         "changed_files": [
-            {"path": "include/X.hh", "content": "#pragma once", "zone": "green", "module_name": "material", "generated_by": "m"},
+            {
+                "path": "include/X.hh",
+                "content": "#pragma once",
+                "zone": "green",
+                "module_name": "material",
+                "generated_by": "m",
+            },
         ],
     }
     result = run_cross_file_hard_gate(patch, {}, "test_job")
@@ -23,7 +29,14 @@ def test_content_with_new_content_also_rejected():
     """File with both 'content' and 'new_content' must fail."""
     patch = {
         "changed_files": [
-            {"path": "include/X.hh", "content": "old", "new_content": "#pragma once", "zone": "green", "module_name": "material", "generated_by": "m"},
+            {
+                "path": "include/X.hh",
+                "content": "old",
+                "new_content": "#pragma once",
+                "zone": "green",
+                "module_name": "material",
+                "generated_by": "m",
+            },
         ],
     }
     result = run_cross_file_hard_gate(patch, {}, "test_job")
@@ -35,7 +48,13 @@ def test_only_new_content_passes_content_check():
     """File with only 'new_content' should not fail on content check."""
     patch = {
         "changed_files": [
-            {"path": "include/X.hh", "new_content": "#pragma once", "zone": "green", "module_name": "material", "generated_by": "m"},
+            {
+                "path": "include/X.hh",
+                "new_content": "#pragma once",
+                "zone": "green",
+                "module_name": "material",
+                "generated_by": "m",
+            },
         ],
     }
     result = run_cross_file_hard_gate(patch, {}, "test_job")

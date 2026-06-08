@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
-from agent_core.g4_codegen.integration.cross_file_llm_gate import (
-    _persist_result,
-)
-
 
 def test_persist_result_saves_status():
     """Verify persist saves the gate result."""
@@ -30,10 +24,12 @@ def test_persist_result_saves_status():
             from agent_core.g4_codegen.integration.cross_file_llm_gate import (
                 _persist_result,
             )
+
             _persist_result(result, "test_job")
             persisted = job_dir / "06_codegen" / "cross_file_llm_gate.json"
             assert persisted.exists()
             import json
+
             data = json.loads(persisted.read_text())
             assert data["status"] == "fail"
 

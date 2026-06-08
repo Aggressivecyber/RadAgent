@@ -227,8 +227,7 @@ class TestMaterialRegistryCppStatic:
         source = code["MaterialRegistry::MaterialRegistry.cc"]
 
         include_lines = [
-            line.strip() for line in source.splitlines()
-            if line.strip().startswith("#include")
+            line.strip() for line in source.splitlines() if line.strip().startswith("#include")
         ]
         assert len(include_lines) > 0
         first = include_lines[0]
@@ -246,7 +245,7 @@ class TestMaterialRegistryCppStatic:
             stripped = line.strip()
             if not stripped.startswith("#include"):
                 continue
-            if stripped.startswith("#include <G4") or stripped.startswith("#include \"G4"):
+            if stripped.startswith("#include <G4") or stripped.startswith('#include "G4'):
                 if g4_idx is None:
                     g4_idx = i
             elif stripped.startswith("#include <") and not stripped.startswith("#include <G4"):
@@ -265,9 +264,7 @@ class TestMaterialRegistryCppStatic:
             for line_no, line in enumerate(content.splitlines(), 1):
                 stripped = line.strip()
                 if stripped.startswith("#include"):
-                    assert len(stripped) > len("#include"), (
-                        f"Empty include in {fname}:{line_no}"
-                    )
+                    assert len(stripped) > len("#include"), f"Empty include in {fname}:{line_no}"
                     has_angle = "<" in stripped and ">" in stripped
                     has_quote = '"' in stripped
                     assert has_angle or has_quote, (
@@ -279,9 +276,7 @@ class TestMaterialRegistryCppStatic:
         for fname, content in code.items():
             if fname.endswith(".json"):
                 continue
-            assert "using namespace std" not in content, (
-                f"{fname}: forbidden 'using namespace std'"
-            )
+            assert "using namespace std" not in content, f"{fname}: forbidden 'using namespace std'"
 
     async def test_no_bare_g4int(self) -> None:
         code = await _get_generated_code()
@@ -292,7 +287,7 @@ class TestMaterialRegistryCppStatic:
                 stripped = line.strip()
                 if stripped.startswith("//"):
                     continue
-                assert not re.search(r'\bG4int\b', stripped), (
+                assert not re.search(r"\bG4int\b", stripped), (
                     f"{fname}:{line_no}: bare G4int, use int: {stripped}"
                 )
 
@@ -306,7 +301,7 @@ class TestMaterialRegistryCppStatic:
             # Match bare function definitions (not in comments)
             if stripped.startswith("//"):
                 continue
-            if re.match(r'^(void|G4Material\*)\s+\w+\s*\(', stripped):
+            if re.match(r"^(void|G4Material\*)\s+\w+\s*\(", stripped):
                 assert "MaterialRegistry::" in stripped, (
                     f"Line {line_no}: Unqualified free function: {stripped}"
                 )
@@ -323,17 +318,15 @@ class TestMaterialRegistryCppStatic:
         for line in source.splitlines():
             stripped = line.strip()
             if "new G4Material(" in stripped:
-                assert "mat_" in stripped, (
-                    f"Must use mat_ prefix for material variable: {stripped}"
-                )
+                assert "mat_" in stripped, f"Must use mat_ prefix for material variable: {stripped}"
 
     async def test_getmaterial_method_exists(self) -> None:
         code = await _get_generated_code()
         header = code["MaterialRegistry::MaterialRegistry.hh"]
         source = code["MaterialRegistry::MaterialRegistry.cc"]
 
-        assert 'GetMaterial(const std::string& id)' in header
-        assert 'MaterialRegistry::GetMaterial(const std::string& id)' in source
+        assert "GetMaterial(const std::string& id)" in header
+        assert "MaterialRegistry::GetMaterial(const std::string& id)" in source
 
     async def test_define_all_materials_method(self) -> None:
         code = await _get_generated_code()

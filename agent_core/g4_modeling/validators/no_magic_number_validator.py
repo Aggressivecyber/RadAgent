@@ -67,7 +67,7 @@ class NoMagicNumberValidator:
                 if not self._is_declared(value, declared_values):
                     # Check if the number appears in a comment or string
                     # (rough heuristic)
-                    context = code_part[max(0, match.start() - 20):match.end() + 20]
+                    context = code_part[max(0, match.start() - 20) : match.end() + 20]
                     if '"' not in context and "'" not in context:
                         errors.append(
                             f"{file_path}:{line_num}: Magic number {num_str} "

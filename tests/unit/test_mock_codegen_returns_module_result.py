@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from agent_core.g4_codegen.module_agents.base import run_module_agent
 from agent_core.g4_codegen.schemas import ModuleAgentResult
 from agent_core.models.gateway import reset_model_gateway
@@ -31,7 +30,7 @@ class TestMockCodegenReturnsModuleResult:
                 {
                     "path": "src/DetectorConstruction.cc",
                     "operation": "create_or_replace",
-                    "new_content": '#include "DetectorConstruction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }\n',
+                    "new_content": '#include "DetectorConstruction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }\n',  # noqa: E501
                     "generated_by": "geometry_module_agent",
                     "module_name": "geometry",
                     "rationale": "Geant4 detector construction",
@@ -43,7 +42,7 @@ class TestMockCodegenReturnsModuleResult:
                 {
                     "path": "include/DetectorConstruction.hh",
                     "operation": "create_or_replace",
-                    "new_content": "#pragma once\n#include <G4VUserDetectorConstruction.hh>\nclass DetectorConstruction : public G4VUserDetectorConstruction { public: G4VPhysicalVolume* Construct() override; };\n",
+                    "new_content": "#pragma once\n#include <G4VUserDetectorConstruction.hh>\nclass DetectorConstruction : public G4VUserDetectorConstruction { public: G4VPhysicalVolume* Construct() override; };\n",  # noqa: E501
                     "generated_by": "geometry_module_agent",
                     "module_name": "geometry",
                     "rationale": "Detector header",

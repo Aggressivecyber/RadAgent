@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
-
 from agent_core.g4_codegen.interface_contracts import build_interface_contracts
 from agent_core.models.gateway import reset_model_gateway
 
@@ -109,6 +107,7 @@ class TestInterfaceContractsFormat:
         )
 
         from agent_core.config.workspace import get_job_dir
+
         contracts_path = get_job_dir("ic_persist_test") / "06_codegen" / "interface_contracts.json"
         assert contracts_path.exists()
 

@@ -20,6 +20,7 @@ from agent_core.visualization.graph_visualizer import (
 
 # ─── Topology completeness tests ─────────────────────────────────────
 
+
 class TestMainGraphTopology:
     """Verify main graph topology matches the actual graph code."""
 
@@ -57,8 +58,7 @@ class TestMainGraphTopology:
         spec = get_main_graph_spec()
         # Gate subgraph has retry routes back to multiple subgraphs
         gate_retries = [
-            e for e in spec.conditional_edges
-            if e.source == "gate_subgraph" and e.style == "retry"
+            e for e in spec.conditional_edges if e.source == "gate_subgraph" and e.style == "retry"
         ]
         assert len(gate_retries) >= 5  # context, planning, modeling, codegen, patch
 
@@ -93,8 +93,16 @@ class TestSubgraphTopology:
 
     @pytest.mark.parametrize(
         "name",
-        ["context", "task_planning", "g4_modeling", "g4_codegen",
-         "gate_validation", "patch", "artifact", "report"],
+        [
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "g4_codegen",
+            "gate_validation",
+            "patch",
+            "artifact",
+            "report",
+        ],
     )
     def test_has_entry_point(self, name: str) -> None:
         specs = get_all_subgraph_specs()
@@ -103,8 +111,16 @@ class TestSubgraphTopology:
 
     @pytest.mark.parametrize(
         "name",
-        ["context", "task_planning", "g4_modeling", "g4_codegen",
-         "gate_validation", "patch", "artifact", "report"],
+        [
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "g4_codegen",
+            "gate_validation",
+            "patch",
+            "artifact",
+            "report",
+        ],
     )
     def test_all_edges_reference_valid_nodes(self, name: str) -> None:
         specs = get_all_subgraph_specs()
@@ -146,6 +162,7 @@ class TestSubgraphTopology:
 
 
 # ─── Mermaid renderer tests ──────────────────────────────────────────
+
 
 class TestMermaidRenderer:
     """Test the Mermaid diagram renderer."""
@@ -240,6 +257,7 @@ class TestExportMermaid:
 
 
 # ─── Data model tests ────────────────────────────────────────────────
+
 
 class TestDataModel:
     """Test frozen dataclasses."""

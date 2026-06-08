@@ -50,6 +50,7 @@ async def run_cross_file_llm_gate(
     """
     # Check cross-file hard gate
     from agent_core.config.workspace import get_job_dir as _get_job_dir
+
     hard_gate_path = _get_job_dir(job_id) / "06_codegen" / "cross_file_hard_gate.json"
     if hard_gate_path.exists():
         hard_gate = json.loads(hard_gate_path.read_text())
@@ -100,15 +101,17 @@ async def run_cross_file_llm_gate(
     }
 
     for f in proposed_patch.get("changed_files", []):
-        code_review_bundle["file_details"].append({
-            "path": f.get("path", ""),
-            "module_name": f.get("module_name", ""),
-            "generated_by": f.get("generated_by", ""),
-            "includes": _extract_includes(f.get("new_content", "")),
-            "classes": _extract_classes(f.get("new_content", "")),
-            "public_methods": _extract_public_methods(f.get("new_content", "")),
-            "content_excerpt": f.get("new_content", "")[:2000],
-        })
+        code_review_bundle["file_details"].append(
+            {
+                "path": f.get("path", ""),
+                "module_name": f.get("module_name", ""),
+                "generated_by": f.get("generated_by", ""),
+                "includes": _extract_includes(f.get("new_content", "")),
+                "classes": _extract_classes(f.get("new_content", "")),
+                "public_methods": _extract_public_methods(f.get("new_content", "")),
+                "content_excerpt": f.get("new_content", "")[:2000],
+            }
+        )
 
     # ── Build LLM prompt ─────────────────────────────────────────────
     user_prompt = f"""代码审查包：
@@ -160,6 +163,7 @@ async def run_cross_file_llm_gate(
 def _persist_result(result: dict[str, Any], job_id: str) -> None:
     """Persist cross-file LLM gate result."""
     from agent_core.config.workspace import get_job_dir
+
     codegen_dir = get_job_dir(job_id) / "06_codegen"
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
@@ -173,16 +177,19 @@ def _persist_result(result: dict[str, Any], job_id: str) -> None:
 def _extract_includes(content: str) -> list[str]:
     """Extract #include directives from C++ content."""
     import re
+
     return re.findall(r'#include\s+[<"]([^>"]+)[>"]', content)
 
 
 def _extract_classes(content: str) -> list[str]:
     """Extract class names from C++ content."""
     import re
-    return re.findall(r'\bclass\s+(\w+)', content)
+
+    return re.findall(r"\bclass\s+(\w+)", content)
 
 
 def _extract_public_methods(content: str) -> list[str]:
     """Extract public method names from C++ content."""
     import re
-    return re.findall(r'\bpublic:\s*(?:.*?)?\b(\w+)\s*\(', content, re.DOTALL)
+
+    return re.findall(r"\bpublic:\s*(?:.*?)?\b(\w+)\s*\(", content, re.DOTALL)

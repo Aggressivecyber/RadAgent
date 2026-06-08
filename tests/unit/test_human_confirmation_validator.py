@@ -1,6 +1,5 @@
 """Tests for human_confirmation validators."""
 
-
 from agent_core.human_confirmation.validators import (
     ConfirmationValidationResult,
     validate_human_confirmation,

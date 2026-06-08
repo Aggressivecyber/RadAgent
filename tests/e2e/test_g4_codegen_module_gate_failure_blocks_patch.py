@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
-
 from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
 from agent_core.models.gateway import reset_model_gateway
 

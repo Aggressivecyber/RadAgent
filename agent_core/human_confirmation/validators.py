@@ -12,6 +12,7 @@ from typing import Any
 @dataclass(frozen=True)
 class ConfirmationValidationResult:
     """Result of human confirmation validation."""
+
     passed: bool
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -42,9 +43,7 @@ def validate_human_confirmation(model_ir: dict[str, Any]) -> ConfirmationValidat
     all_unconfirmed = unconfirmed_components + unconfirmed_fields
 
     if all_unconfirmed:
-        errors.append(
-            f"Unconfirmed modeling assumptions remain: {all_unconfirmed}"
-        )
+        errors.append(f"Unconfirmed modeling assumptions remain: {all_unconfirmed}")
 
     # Warn if assumptions_confirmed is False but no specific unconfirmed items
     if not model_ir.get("assumptions_confirmed", False) and not all_unconfirmed:

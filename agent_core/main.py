@@ -105,7 +105,9 @@ def main() -> None:
     parser.add_argument("--status", action="store_true", help="Check job status")
     parser.add_argument("--list-jobs", action="store_true", help="List all jobs")
     parser.add_argument(
-        "-i", "--interactive", action="store_true",
+        "-i",
+        "--interactive",
+        action="store_true",
         help="Launch interactive REPL mode",
     )
     parser.add_argument(

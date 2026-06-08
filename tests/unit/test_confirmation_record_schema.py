@@ -1,7 +1,5 @@
 """Tests for ConfirmationRecord and related schemas."""
 
-
-
 from agent_core.human_confirmation.schemas import (
     ConfirmationEdit,
     ConfirmationQuestion,

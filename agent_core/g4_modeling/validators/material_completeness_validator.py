@@ -28,9 +28,7 @@ class MaterialCompletenessValidator:
         seen_ids: set[str] = set()
         for mat in model_ir.materials:
             if mat.material_id in seen_ids:
-                errors.append(
-                    f"Duplicate material_id: '{mat.material_id}'"
-                )
+                errors.append(f"Duplicate material_id: '{mat.material_id}'")
             seen_ids.add(mat.material_id)
 
         # Validate each material
@@ -59,8 +57,7 @@ class MaterialCompletenessValidator:
 
             if mat.density_g_cm3 <= 0:
                 errors.append(
-                    f"Material '{mat.material_id}' density "
-                    f"{mat.density_g_cm3} must be positive"
+                    f"Material '{mat.material_id}' density {mat.density_g_cm3} must be positive"
                 )
 
         # Cross-reference with components

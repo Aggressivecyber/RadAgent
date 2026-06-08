@@ -72,57 +72,66 @@ async def repair_module(
             task=ModelTask.FAILURE_DIAGNOSIS,
             tier=ModelTier.MAX,
             system_prompt=REPAIR_SYSTEM_PROMPT,
-            user_prompt=f"修复上下文：\n{json.dumps(repair_context, indent=2, ensure_ascii=False)[:4000]}",
+            user_prompt=f"修复上下文：\n{json.dumps(repair_context, indent=2, ensure_ascii=False)[:4000]}",  # noqa: E501
             response_format="json",
             max_tokens=65536,
             metadata={"module_name": module_name, "repair_attempt": attempt + 1},
         )
 
         if result.error:
-            attempts.append({
-                "attempt": attempt + 1,
-                "status": "failed",
-                "error": f"Repair call failed: {result.error}",
-            })
+            attempts.append(
+                {
+                    "attempt": attempt + 1,
+                    "status": "failed",
+                    "error": f"Repair call failed: {result.error}",
+                }
+            )
             continue
 
         # Parse repair result
         try:
             data = result.parsed_json or json.loads(result.content.strip())
         except (json.JSONDecodeError, TypeError) as exc:
-            attempts.append({
-                "attempt": attempt + 1,
-                "status": "failed",
-                "error": f"Invalid JSON: {exc}",
-            })
+            attempts.append(
+                {
+                    "attempt": attempt + 1,
+                    "status": "failed",
+                    "error": f"Invalid JSON: {exc}",
+                }
+            )
             continue
 
         # Build repaired result
         from agent_core.g4_codegen.schemas import GeneratedModuleFile
+
         repaired_files: list[GeneratedModuleFile] = []
         for f in data.get("generated_files", []):
             try:
-                repaired_files.append(GeneratedModuleFile(
-                    path=f["path"],
-                    operation=f.get("operation", "create_or_replace"),
-                    new_content=f["new_content"],
-                    generated_by=f.get("generated_by", f"{module_name}_module_agent"),
-                    module_name=f.get("module_name", module_name),
-                    rationale=f.get("rationale", "repaired"),
-                    dependencies=f.get("dependencies", []),
-                    satisfies=f.get("satisfies", []),
-                    risk_notes=f.get("risk_notes", []),
-                    used_references=f.get("used_references", []),
-                ))
+                repaired_files.append(
+                    GeneratedModuleFile(
+                        path=f["path"],
+                        operation=f.get("operation", "create_or_replace"),
+                        new_content=f["new_content"],
+                        generated_by=f.get("generated_by", f"{module_name}_module_agent"),
+                        module_name=f.get("module_name", module_name),
+                        rationale=f.get("rationale", "repaired"),
+                        dependencies=f.get("dependencies", []),
+                        satisfies=f.get("satisfies", []),
+                        risk_notes=f.get("risk_notes", []),
+                        used_references=f.get("used_references", []),
+                    )
+                )
             except (KeyError, TypeError):
                 pass
 
         if not repaired_files:
-            attempts.append({
-                "attempt": attempt + 1,
-                "status": "failed",
-                "error": "No valid files in repair response",
-            })
+            attempts.append(
+                {
+                    "attempt": attempt + 1,
+                    "status": "failed",
+                    "error": "No valid files in repair response",
+                }
+            )
             continue
 
         repaired_result = ModuleAgentResult(
@@ -135,11 +144,13 @@ async def repair_module(
 
         # Re-run hard gate
         gate = run_hard_gate_checks(module_name, repaired_files)
-        attempts.append({
-            "attempt": attempt + 1,
-            "status": "repaired",
-            "gate_status": gate.status,
-        })
+        attempts.append(
+            {
+                "attempt": attempt + 1,
+                "status": "repaired",
+                "gate_status": gate.status,
+            }
+        )
 
         if gate.status == "pass":
             logger.info("Module %s repaired successfully on attempt %d", module_name, attempt + 1)
@@ -166,6 +177,7 @@ def save_repair_summary(
 ) -> None:
     """Save repair summary to disk."""
     from agent_core.config.workspace import get_job_dir
+
     repair_dir = get_job_dir(job_id) / "06_codegen" / "repair"
     repair_dir.mkdir(parents=True, exist_ok=True)
 

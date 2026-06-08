@@ -12,7 +12,9 @@ from agent_core.models.schemas import ModelTask, ModelTier
 MODULE_LLM_GATE_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块审查 Agent。
 你只审查当前模块，不审查整个工程。
 
-请根据 ModuleContract、ModuleContext、G4ModelIR 子集、生成文件内容、硬门禁结果，判断当前模块是否可以进入集成阶段。
+请根据 ModuleContract、ModuleContext、G4ModelIR 子集、
+生成文件内容、硬门禁结果，
+判断当前模块是否可以进入集成阶段。
 
 你必须检查：
 1. 是否忠于 G4ModelIR；

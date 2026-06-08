@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+from agent_core.models.gateway import get_model_gateway, reset_model_gateway
 from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
 
 
@@ -35,7 +33,6 @@ class TestModelGatewayMockProvider:
         gw = get_model_gateway()
 
         # Patch the config to use MOCK provider
-        from agent_core.models.config import load_model_profiles
         from agent_core.models.schemas import ModelProfile
 
         mock_profiles = {

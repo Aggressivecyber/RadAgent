@@ -74,47 +74,54 @@ def scan_generated_code(
 
         # Check for 'content' field (must use 'new_content')
         if "content" in f:
-            findings.append({
-                "file": path,
-                "issue": "content_field_present",
-                "severity": "error",
-                "message": (
-                    "File contains deprecated 'content' field; "
-                    "only 'new_content' is allowed"
-                ),
-            })
+            findings.append(
+                {
+                    "file": path,
+                    "issue": "content_field_present",
+                    "severity": "error",
+                    "message": (
+                        "File contains deprecated 'content' field; only 'new_content' is allowed"
+                    ),
+                }
+            )
             all_passed = False
 
         if not content:
-            findings.append({
-                "file": path,
-                "issue": "empty_content",
-                "severity": "error",
-                "message": "new_content is empty",
-            })
+            findings.append(
+                {
+                    "file": path,
+                    "issue": "empty_content",
+                    "severity": "error",
+                    "message": "new_content is empty",
+                }
+            )
             all_passed = False
             continue
 
         # Scan error patterns (always fail)
         for issue_name, pattern in ERROR_PATTERNS:
             if re.search(pattern, content, _REGEX_FLAGS):
-                findings.append({
-                    "file": path,
-                    "issue": issue_name,
-                    "severity": "error",
-                    "message": f"Found forbidden pattern: {issue_name}",
-                })
+                findings.append(
+                    {
+                        "file": path,
+                        "issue": issue_name,
+                        "severity": "error",
+                        "message": f"Found forbidden pattern: {issue_name}",
+                    }
+                )
                 all_passed = False
 
         # Scan warning patterns (log but don't fail)
         for issue_name, pattern in WARNING_PATTERNS:
             if re.search(pattern, content, _REGEX_FLAGS):
-                findings.append({
-                    "file": path,
-                    "issue": issue_name,
-                    "severity": "warning",
-                    "message": f"Found warning pattern: {issue_name}",
-                })
+                findings.append(
+                    {
+                        "file": path,
+                        "issue": issue_name,
+                        "severity": "warning",
+                        "message": f"Found warning pattern: {issue_name}",
+                    }
+                )
 
     result = {
         "status": "pass" if all_passed else "fail",
@@ -126,6 +133,7 @@ def scan_generated_code(
 
     # Persist
     from agent_core.config.workspace import get_job_dir
+
     codegen_dir = get_job_dir(job_id) / "06_codegen"
     codegen_dir.mkdir(parents=True, exist_ok=True)
 

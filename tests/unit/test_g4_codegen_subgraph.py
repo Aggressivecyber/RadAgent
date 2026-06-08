@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 
 class TestG4CodegenSubgraphCompilation:
@@ -46,13 +45,15 @@ class TestNewIntegrationAssembler:
         module_results = {
             "material": {
                 "status": "generated",
-                "generated_files": [{
-                    "path": "include/MaterialRegistry.hh",
-                    "new_content": "#pragma once\n",
-                    "generated_by": "material_module_agent",
-                    "module_name": "material",
-                    "rationale": "test",
-                }],
+                "generated_files": [
+                    {
+                        "path": "include/MaterialRegistry.hh",
+                        "new_content": "#pragma once\n",
+                        "generated_by": "material_module_agent",
+                        "module_name": "material",
+                        "rationale": "test",
+                    }
+                ],
             },
         }
         module_gates = {
@@ -62,18 +63,25 @@ class TestNewIntegrationAssembler:
 
         # Must have all PatchValidator required fields
         required = {
-            "patch_id", "job_id", "description", "change_type",
-            "risk_level", "changed_files", "test_plan", "expected_outputs",
+            "patch_id",
+            "job_id",
+            "description",
+            "change_type",
+            "risk_level",
+            "changed_files",
+            "test_plan",
+            "expected_outputs",
         }
         assert required <= set(patch.keys()), f"Missing: {required - set(patch.keys())}"
 
-    def test_old_integration_assembler_raises(self) -> None:
-        """P0-10: Old integration_assembler must raise RuntimeError."""
-        import pytest
-        with pytest.raises(RuntimeError, match="deprecated"):
-            from agent_core.g4_codegen.nodes.integration_assembler import (
-                integration_assembler,
-            )
+    def test_old_integration_assembler_deleted(self) -> None:
+        """P0-10: Old integration_assembler must not exist."""
+        from pathlib import Path
+
+        old_path = Path("agent_core/g4_codegen/nodes/integration_assembler.py")
+        assert not old_path.exists(), (
+            "Old integration_assembler.py must be deleted"
+        )
 
 
 class TestCodegenValidators:

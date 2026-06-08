@@ -62,9 +62,7 @@ class ShellTool:
                 cwd=str(resolved_cwd),
                 env=merged_env,
             )
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             return {
                 "success": proc.returncode == 0,
                 "stdout": stdout_bytes.decode("utf-8", errors="replace"),

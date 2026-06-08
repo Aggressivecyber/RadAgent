@@ -26,26 +26,20 @@ class CoordinateConsistencyValidator:
             pos = comp.placement.position
             if len(pos) != 3:
                 errors.append(
-                    f"Component '{comp.component_id}' placement has "
-                    f"{len(pos)} elements, expected 3"
+                    f"Component '{comp.component_id}' placement has {len(pos)} elements, expected 3"
                 )
             for i, val in enumerate(pos):
                 if val != val:  # NaN check
-                    errors.append(
-                        f"Component '{comp.component_id}' placement "
-                        f"position[{i}] is NaN"
-                    )
+                    errors.append(f"Component '{comp.component_id}' placement position[{i}] is NaN")
                 if abs(val) == float("inf"):
                     errors.append(
-                        f"Component '{comp.component_id}' placement "
-                        f"position[{i}] is infinite"
+                        f"Component '{comp.component_id}' placement position[{i}] is infinite"
                     )
 
             rot = comp.placement.rotation
             if len(rot) != 3:
                 errors.append(
-                    f"Component '{comp.component_id}' rotation has "
-                    f"{len(rot)} elements, expected 3"
+                    f"Component '{comp.component_id}' rotation has {len(rot)} elements, expected 3"
                 )
 
         # Check voxel scoring uses consistent units
@@ -54,14 +48,12 @@ class CoordinateConsistencyValidator:
                 vs = sc.voxel_grid.voxel_size
                 if len(vs) != 3:
                     errors.append(
-                        f"Scoring '{sc.scoring_id}' voxel_size has "
-                        f"{len(vs)} elements, expected 3"
+                        f"Scoring '{sc.scoring_id}' voxel_size has {len(vs)} elements, expected 3"
                     )
                 for val in vs:
                     if val <= 0:
                         errors.append(
-                            f"Scoring '{sc.scoring_id}' voxel_size "
-                            f"must be positive, got {val}"
+                            f"Scoring '{sc.scoring_id}' voxel_size must be positive, got {val}"
                         )
 
         return len(errors) == 0, errors

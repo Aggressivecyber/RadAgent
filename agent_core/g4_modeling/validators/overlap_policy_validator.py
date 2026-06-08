@@ -40,9 +40,7 @@ class OverlapPolicyValidator:
         approved = set(model_ir.simplification_policy.approved_simplifications)
         for iface in model_ir.interfaces:
             if iface.overlap_allowed:
-                desc = (
-                    f"overlap allowed: {iface.component_a}/{iface.component_b}"
-                )
+                desc = f"overlap allowed: {iface.component_a}/{iface.component_b}"
                 if desc not in approved and not model_ir.simplification_policy.allow_simplification:
                     errors.append(
                         f"Interface '{iface.interface_id}' allows overlap "
@@ -115,10 +113,14 @@ class OverlapPolicyValidator:
         b_hz = b_dims.get("dz", b_dims.get("half_z", 0))
 
         # AABB overlap test
-        for i, (ap, ah, bp, bh) in enumerate(zip(
-            a_xyz, [a_hx, a_hy, a_hz],
-            b_xyz, [b_hx, b_hy, b_hz],
-        )):
+        for i, (ap, ah, bp, bh) in enumerate(
+            zip(
+                a_xyz,
+                [a_hx, a_hy, a_hz],
+                b_xyz,
+                [b_hx, b_hy, b_hz],
+            )
+        ):
             if abs(ap - bp) < (ah + bh):
                 # At least one axis overlaps — this is necessary but not sufficient
                 # For a full check we'd need all three axes overlapping

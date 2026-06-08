@@ -61,6 +61,7 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
     # Copy human confirmation files if available
     job_id = state.get("job_id", "unknown")
     from agent_core.config.workspace import get_job_dir
+
     job_dir = get_job_dir(job_id)
     confirmation_dir = job_dir / "04_human_confirmation"
 
@@ -97,8 +98,7 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
         patch_summary = {
             "total_files": len(patch.get("changed_files", [])),
             "file_paths": [
-                f.get("path", "?") for f in patch.get("changed_files", [])
-                if isinstance(f, dict)
+                f.get("path", "?") for f in patch.get("changed_files", []) if isinstance(f, dict)
             ],
         }
         (output_dir / "proposed_patch_summary.json").write_text(
@@ -115,9 +115,7 @@ async def collect_artifacts(state: ArtifactSubgraphState) -> dict[str, Any]:
             "approved_simplifications": policy.get("approved_simplifications", []),
             "status": "HAS_APPROVED" if allow_simp else "NO_SIMPLIFICATION",
         }
-        (output_dir / "no_simplification_report.json").write_text(
-            json.dumps(no_simp, indent=2)
-        )
+        (output_dir / "no_simplification_report.json").write_text(json.dumps(no_simp, indent=2))
 
     # Generate geometry interface report
     if ir_path and Path(ir_path).exists():
@@ -176,11 +174,13 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
             if f.is_file():
                 content = f.read_bytes()
                 sha = hashlib.sha256(content).hexdigest()
-                file_entries.append({
-                    "name": f.name,
-                    "size_bytes": len(content),
-                    "sha256": sha,
-                })
+                file_entries.append(
+                    {
+                        "name": f.name,
+                        "size_bytes": len(content),
+                        "sha256": sha,
+                    }
+                )
                 rel = f"output/{f.name}"
                 sha256_map[rel] = sha
                 size_map[rel] = len(content)
@@ -189,9 +189,12 @@ async def generate_artifact_manifest(state: ArtifactSubgraphState) -> dict[str, 
     source_commit = ""
     try:
         import subprocess
+
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             source_commit = result.stdout.strip()

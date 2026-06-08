@@ -17,7 +17,9 @@ MODULE_CODEGEN_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 C++ 模块级编码
 
 你不是模板填空器。
 你只负责当前模块。
-你必须根据 ModuleContract、ModuleContext、G4ModelIR 子集、规则、RAG 参考片段和 Geant4 API 约束，生成当前模块需要的完整文件内容。
+你必须根据 ModuleContract、ModuleContext、G4ModelIR 子集、
+规则、RAG 参考片段和 Geant4 API 约束，
+生成当前模块需要的完整文件内容。
 
 严格要求：
 1. 只生成当前模块负责的文件。
@@ -110,18 +112,20 @@ async def run_module_agent(
     generated_files: list[GeneratedModuleFile] = []
     for f in data.get("generated_files", []):
         try:
-            generated_files.append(GeneratedModuleFile(
-                path=f["path"],
-                operation=f.get("operation", "create_or_replace"),
-                new_content=f["new_content"],
-                generated_by=f.get("generated_by", f"{module_name}_module_agent"),
-                module_name=f.get("module_name", module_name),
-                rationale=f.get("rationale", ""),
-                dependencies=f.get("dependencies", []),
-                satisfies=f.get("satisfies", []),
-                risk_notes=f.get("risk_notes", []),
-                used_references=f.get("used_references", []),
-            ))
+            generated_files.append(
+                GeneratedModuleFile(
+                    path=f["path"],
+                    operation=f.get("operation", "create_or_replace"),
+                    new_content=f["new_content"],
+                    generated_by=f.get("generated_by", f"{module_name}_module_agent"),
+                    module_name=f.get("module_name", module_name),
+                    rationale=f.get("rationale", ""),
+                    dependencies=f.get("dependencies", []),
+                    satisfies=f.get("satisfies", []),
+                    risk_notes=f.get("risk_notes", []),
+                    used_references=f.get("used_references", []),
+                )
+            )
         except (KeyError, TypeError) as exc:
             logger.warning("Skipping invalid file entry: %s", exc)
 
@@ -140,11 +144,10 @@ def save_module_result(
 ) -> Path:
     """Persist module agent result to disk."""
     from agent_core.config.workspace import get_job_dir
+
     output_dir = get_job_dir(job_id) / "06_codegen" / "module_outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = output_dir / f"{result.module_name}.json"
-    output_path.write_text(
-        json.dumps(result.model_dump(), indent=2, ensure_ascii=False)
-    )
+    output_path.write_text(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
     return output_path

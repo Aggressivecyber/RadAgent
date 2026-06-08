@@ -19,18 +19,22 @@ class ConstructionLedgerEntry(BaseModel):
         description="ISO 8601 timestamp of the entry",
     )
     node_name: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Name of the pipeline node that created this entry",
     )
     action: Literal["create", "modify", "validate", "delete"] = Field(
-        ..., description="Type of action performed",
+        ...,
+        description="Type of action performed",
     )
     target_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="ID of the affected entity (component_id, material_id, etc.)",
     )
     description: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Human-readable description of what was done",
     )
     evidence_refs: list[str] = Field(

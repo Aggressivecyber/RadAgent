@@ -111,19 +111,22 @@ class TestRequiredG4CodeStructure:
         module_results = {
             "main_cmake": {
                 "status": "generated",
-                "generated_files": [{
-                    "path": "CMakeLists.txt",
-                    "new_content": "cmake_minimum_required(VERSION 3.16)\n",
-                    "generated_by": "main_cmake_module_agent",
-                    "module_name": "main_cmake",
-                    "rationale": "test",
-                }, {
-                    "path": "main.cc",
-                    "new_content": "int main(){return 0;}\n",
-                    "generated_by": "main_cmake_module_agent",
-                    "module_name": "main_cmake",
-                    "rationale": "test",
-                }],
+                "generated_files": [
+                    {
+                        "path": "CMakeLists.txt",
+                        "new_content": "cmake_minimum_required(VERSION 3.16)\n",
+                        "generated_by": "main_cmake_module_agent",
+                        "module_name": "main_cmake",
+                        "rationale": "test",
+                    },
+                    {
+                        "path": "main.cc",
+                        "new_content": "int main(){return 0;}\n",
+                        "generated_by": "main_cmake_module_agent",
+                        "module_name": "main_cmake",
+                        "rationale": "test",
+                    },
+                ],
             },
         }
         gates = {

@@ -1,4 +1,5 @@
 """RAG endpoint registry with auto-discovery."""
+
 from __future__ import annotations
 
 import logging

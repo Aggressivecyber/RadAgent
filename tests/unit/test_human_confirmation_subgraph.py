@@ -79,12 +79,11 @@ def sample_evidence_map(temp_job_dir):
 @pytest.fixture
 def patch_get_job_dir(temp_job_dir, monkeypatch):
     """Monkeypatch get_job_dir to return temp_job_dir for test-job-123."""
+
     def _mock(job_id: str) -> Path:
         return temp_job_dir
 
-    monkeypatch.setattr(
-        "agent_core.human_confirmation.nodes.get_job_dir", _mock
-    )
+    monkeypatch.setattr("agent_core.human_confirmation.nodes.get_job_dir", _mock)
     return _mock
 
 
@@ -122,13 +121,12 @@ class TestGetConfirmationDir:
 
     def test_get_confirmation_dir_creates_directory(self, tmp_path, monkeypatch):
         """Test that _get_confirmation_dir creates the directory."""
+
         # Mock get_job_dir to return our temp path
         def mock_get_job_dir(job_id):
             return tmp_path / "jobs" / job_id
 
-        monkeypatch.setattr(
-            "agent_core.human_confirmation.nodes.get_job_dir", mock_get_job_dir
-        )
+        monkeypatch.setattr("agent_core.human_confirmation.nodes.get_job_dir", mock_get_job_dir)
 
         conf_dir = _get_confirmation_dir("test-job-123")
         assert conf_dir.exists()
@@ -139,9 +137,7 @@ class TestBuildProposedModelCompletion:
     """Test build_proposed_model_completion node."""
 
     @pytest.mark.asyncio
-    async def test_build_proposed_model_completion(
-        self, base_state, temp_job_dir
-    ):
+    async def test_build_proposed_model_completion(self, base_state, temp_job_dir):
         """Test building proposed model completion."""
         result = await build_proposed_model_completion(base_state)
 
@@ -163,9 +159,7 @@ class TestGenerateConfirmationRequest:
     """Test generate_confirmation_request node."""
 
     @pytest.mark.asyncio
-    async def test_generate_confirmation_request(
-        self, base_state, temp_job_dir
-    ):
+    async def test_generate_confirmation_request(self, base_state, temp_job_dir):
         """Test generating confirmation request."""
         # First build the proposal
         await build_proposed_model_completion(base_state)
@@ -351,9 +345,7 @@ class TestValidateConfirmationCompleteness:
     """Test validate_confirmation_completeness node."""
 
     @pytest.mark.asyncio
-    async def test_validate_confirmation_completeness_pass(
-        self, base_state, temp_job_dir
-    ):
+    async def test_validate_confirmation_completeness_pass(self, base_state, temp_job_dir):
         """Test validation passes with all confirmed."""
         # Setup complete approved flow
         await build_proposed_model_completion(base_state)
@@ -371,9 +363,7 @@ class TestValidateConfirmationCompleteness:
         assert result["confirmation_status"] == "approved"
 
     @pytest.mark.asyncio
-    async def test_validate_confirmation_completeness_pending(
-        self, base_state, temp_job_dir
-    ):
+    async def test_validate_confirmation_completeness_pending(self, base_state, temp_job_dir):
         """Test validation returns pending for unconfirmed items."""
         # Build plan with unconfirmed items
         await build_proposed_model_completion(base_state)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 
@@ -69,6 +67,7 @@ class TestMainGraphPassesRunModeToCodegen:
 
         with pytest.MonkeyPatch.context() as mp:
             import tempfile
+
             with tempfile.TemporaryDirectory() as td:
                 mp.setenv("RADAGENT_WORKSPACE_ROOT", td)
                 result = await prepare_workspace(state)

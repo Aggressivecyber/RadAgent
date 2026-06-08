@@ -30,18 +30,12 @@ async def geometry_validation_node(state: RadiationAgentState) -> dict[str, Any]
 
     # Check that code_patch exists with files
     raw_code_patch = state.get("code_patch", {})
-    code_patch: dict[str, Any] = (
-        raw_code_patch if isinstance(raw_code_patch, dict) else {}
-    )
+    code_patch: dict[str, Any] = raw_code_patch if isinstance(raw_code_patch, dict) else {}
     raw_files = code_patch.get("files", [])
-    files: list[dict[str, Any]] = (
-        raw_files if isinstance(raw_files, list) else []
-    )
+    files: list[dict[str, Any]] = raw_files if isinstance(raw_files, list) else []
 
     if not files:
-        errors.append(
-            "Geometry validation skipped: no assembled code files available"
-        )
+        errors.append("Geometry validation skipped: no assembled code files available")
     else:
         # Check for checkOverlaps in placement files
         has_check_overlaps = False
@@ -84,9 +78,7 @@ async def geometry_validation_node(state: RadiationAgentState) -> dict[str, Any]
 
     # Merge with existing model_ir_errors
     raw_existing = state.get("model_ir_errors", [])
-    existing_errors: list[str] = (
-        raw_existing if isinstance(raw_existing, list) else []
-    )
+    existing_errors: list[str] = raw_existing if isinstance(raw_existing, list) else []
 
     return {
         "g4_model_ir": model_ir.model_dump(mode="json"),

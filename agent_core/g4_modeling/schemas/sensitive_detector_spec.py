@@ -26,15 +26,15 @@ class SensitiveDetectorSpec(BaseModel):
     and records specified hit fields during simulation.
     """
 
-    sd_id: str = Field(
-        ..., min_length=1, description="Unique SD identifier"
-    )
+    sd_id: str = Field(..., min_length=1, description="Unique SD identifier")
     name: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Geant4 SD class name (e.g. 'SiliconSensitiveDetector')",
     )
     linked_component_ids: list[str] = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Component IDs this SD attaches to",
     )
     scoring_ids: list[str] = Field(

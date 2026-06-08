@@ -25,7 +25,9 @@ class TestFinalizeStatusStrategy:
     """Verify finalize_gate_results status determination."""
 
     async def test_verified_when_all_passed_no_skipped(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """VERIFIED only when 0 failed AND 0 skipped."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -44,7 +46,9 @@ class TestFinalizeStatusStrategy:
         assert result["validation_status"] == "VERIFIED"
 
     async def test_partial_when_skipped_but_no_failures(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """PARTIAL when 0 failed but some skipped (dev mode)."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -64,7 +68,9 @@ class TestFinalizeStatusStrategy:
         assert result["validation_status"] == "PARTIAL"
 
     async def test_failed_when_any_gate_fails(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """FAILED when any gate fails, regardless of count."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -83,7 +89,9 @@ class TestFinalizeStatusStrategy:
         assert result["validation_status"] == "FAILED"
 
     async def test_failed_when_many_failures(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """FAILED when multiple gates fail."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -104,7 +112,9 @@ class TestFinalizeStatusStrategy:
         assert result["validation_status"] == "FAILED"
 
     async def test_dev_mode_gates_produce_partial_not_verified(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Dev mode with skipped gates should finalize as PARTIAL, never VERIFIED."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -143,7 +153,9 @@ class TestGate4NoAutoPass:
     """Verify Gate 4 (File Permission) does NOT bare auto-pass."""
 
     async def test_gate4_skipped_when_no_patch_data(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Gate 4 must not auto-pass when no patch data is available."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -173,7 +185,9 @@ class TestGate4NoAutoPass:
         )
 
     async def test_gate4_validates_green_zone(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Gate 4 must validate zones when patch data has changed_files."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -212,7 +226,9 @@ class TestGate4NoAutoPass:
         assert gate4.get("evidence"), "Gate 4 must have evidence of zone check"
 
     async def test_gate4_fails_on_red_zone(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Gate 4 must fail when patch contains red zone files."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -245,9 +261,7 @@ class TestGate4NoAutoPass:
         result = await run_base_gates(state)
         gate4 = [g for g in result["gate_results"] if g["gate_id"] == 4][0]
 
-        assert gate4["status"] == "fail", (
-            f"Gate 4 should fail for red zone files: {gate4}"
-        )
+        assert gate4["status"] == "fail", f"Gate 4 should fail for red zone files: {gate4}"
 
 
 class TestComputeValidationStatus:

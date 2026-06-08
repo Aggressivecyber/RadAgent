@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """Graph viewer — renders Mermaid diagrams as HTML and opens in browser.
 
@@ -93,10 +94,10 @@ def _build_html_page(title: str, mermaid_content: str) -> str:
 <h1>{html.escape(title)}</h1>
 
 <div class="legend">
-  <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>  # noqa: E501
+  <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>  # noqa: E501
+  <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>  # noqa: E501
+  <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>  # noqa: E501
   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
@@ -137,13 +138,13 @@ def _build_multi_page(title: str, diagrams: dict[str, str]) -> str:
         display = name.replace("_", " ").title()
         tabs_html.append(
             f'<button class="tab-btn {active}" onclick="switchTab(event, \'tab-{name}\')">'
-            f'{html.escape(display)}</button>'
+            f"{html.escape(display)}</button>"
         )
         escaped = html.escape(content)
         panels_html.append(
             f'<div id="tab-{name}" class="tab-panel {active}">'
             f'<pre class="mermaid">{escaped}</pre>'
-            f'</div>'
+            f"</div>"
         )
 
     tabs = "\n".join(tabs_html)
@@ -284,7 +285,10 @@ def view_graph(
         out_path.write_text(html_content, encoding="utf-8")
     else:
         tmp = tempfile.NamedTemporaryFile(
-            suffix=".html", prefix="radagent_graph_", delete=False, mode="w",
+            suffix=".html",
+            prefix="radagent_graph_",
+            delete=False,
+            mode="w",
             encoding="utf-8",
         )
         tmp.write(html_content)
@@ -301,9 +305,7 @@ def view_graph(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="RadAgent Graph Viewer — 在浏览器中查看图结构"
-    )
+    parser = argparse.ArgumentParser(description="RadAgent Graph Viewer — 在浏览器中查看图结构")
     parser.add_argument("--main", action="store_true", help="仅查看主图")
     parser.add_argument("--sub", type=str, default=None, help="查看指定子图")
     parser.add_argument("--all", action="store_true", dest="all_graphs", help="查看所有图")

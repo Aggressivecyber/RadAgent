@@ -33,6 +33,7 @@ async def persist_codegen_output(state: G4CodegenSubgraphState) -> dict[str, Any
     The graph uses graph_nodes.persist_codegen_output_node instead.
     """
     import warnings
+
     warnings.warn(
         "Use graph_nodes.persist_codegen_output_node instead.",
         DeprecationWarning,

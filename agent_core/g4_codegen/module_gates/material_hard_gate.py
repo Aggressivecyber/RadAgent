@@ -14,6 +14,8 @@ def run_material_hard_gate(
         module_name="material",
         generated_files=generated_files,
         forbidden_patterns=[
-            "G4PVPlacement", "G4ParticleGun", "G4VSensitiveDetector",
+            "G4PVPlacement",
+            "G4ParticleGun",
+            "G4VSensitiveDetector",
         ],
     )

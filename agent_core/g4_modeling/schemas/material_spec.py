@@ -24,9 +24,7 @@ class MaterialSpec(BaseModel):
     material_id: str = Field(
         ..., min_length=1, description="Unique identifier (e.g. 'silicon_dioxide')"
     )
-    name: str = Field(
-        ..., min_length=1, description="Display name (e.g. 'Silicon Dioxide')"
-    )
+    name: str = Field(..., min_length=1, description="Display name (e.g. 'Silicon Dioxide')")
     classification: Literal["nist", "custom"] = Field(
         ..., description="Whether this is a NIST standard or custom material"
     )
@@ -38,14 +36,13 @@ class MaterialSpec(BaseModel):
         default=None,
         description="Element composition. Required if classification='custom'.",
     )
-    density_g_cm3: float = Field(
-        ..., gt=0, description="Material density in g/cm³"
-    )
+    density_g_cm3: float = Field(..., gt=0, description="Material density in g/cm³")
     state: Literal["solid", "liquid", "gas"] | None = Field(
         default="solid", description="Material state"
     )
     temperature_kelvin: float | None = Field(
-        default=None, description="Temperature in Kelvin (optional override)",
+        default=None,
+        description="Temperature in Kelvin (optional override)",
         alias="temperature_K",
     )
     source_evidence: list[str] = Field(
@@ -73,9 +70,7 @@ class MaterialSpec(BaseModel):
     ) -> list[ElementFraction] | None:
         classification = info.data.get("classification")
         if classification == "custom" and (v is None or len(v) == 0):
-            raise ValueError(
-                "composition is required when classification='custom'"
-            )
+            raise ValueError("composition is required when classification='custom'")
         return v
 
 

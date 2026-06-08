@@ -14,11 +14,13 @@ class CodeModulePlan(BaseModel):
     """
 
     module_name: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Module name (e.g. 'MaterialRegistry', 'WorldBuilder')",
     )
     module_type: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Codegen node type that produces this module "
         "(e.g. 'material_registry', 'component_geometry', 'placement')",
     )
@@ -56,15 +58,18 @@ class CodeGenerationPlan(BaseModel):
     """
 
     plan_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Unique plan identifier",
     )
     job_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Job ID this plan belongs to",
     )
     modules: list[CodeModulePlan] = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Ordered list of modules to generate",
     )
     assembly_order: list[str] = Field(
@@ -72,11 +77,13 @@ class CodeGenerationPlan(BaseModel):
         description="Module generation order (respecting dependencies)",
     )
     total_source_files: int = Field(
-        default=0, ge=0,
+        default=0,
+        ge=0,
         description="Total number of source files across all modules",
     )
     total_header_files: int = Field(
-        default=0, ge=0,
+        default=0,
+        ge=0,
         description="Total number of header files across all modules",
     )
 

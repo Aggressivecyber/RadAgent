@@ -17,9 +17,9 @@ class TestNoMagicNumberValidator:
 
     def test_code_with_declared_values_passes(self):
         code = (
-            'double dx = 500.0; // from IR: world dx\n'
-            'double dy = 500.0; // from IR: world dy\n'
-            'double dz = 500.0; // from IR: world dz\n'
+            "double dx = 500.0; // from IR: world dx\n"
+            "double dy = 500.0; // from IR: world dy\n"
+            "double dz = 500.0; // from IR: world dz\n"
         )
         declared: set[float] = {500.0}
         validator = NoMagicNumberValidator()
@@ -27,10 +27,7 @@ class TestNoMagicNumberValidator:
         assert passed, f"Errors: {errors}"
 
     def test_code_with_undeclared_magic_number_fails(self):
-        code = (
-            'double density = 2.33; // g/cm3\n'
-            'double thickness = 0.5; // mm — undeclared!\n'
-        )
+        code = "double density = 2.33; // g/cm3\ndouble thickness = 0.5; // mm — undeclared!\n"
         declared: set[float] = {2.33}
         validator = NoMagicNumberValidator()
         passed, errors = validator.validate_code(code, "test.cc", declared)
@@ -47,10 +44,7 @@ class TestNoMagicNumberValidator:
 
     def test_zero_and_one_not_flagged(self):
         """0.0 and 1.0 are common and should not be flagged."""
-        code = (
-            'double x = 0.0;\n'
-            'double scale = 1.0;\n'
-        )
+        code = "double x = 0.0;\ndouble scale = 1.0;\n"
         declared: set[float] = set()
         validator = NoMagicNumberValidator()
         passed, errors = validator.validate_code(code, "test.cc", declared)
@@ -63,8 +57,8 @@ class TestNoMagicNumberValidator:
 
     def test_all_declared_passes(self):
         code = (
-            "new G4Box(\"world\", 5000.0, 5000.0, 5000.0);\n"
-            "new G4Box(\"sensor\", 100.0, 100.0, 10.0);\n"
+            'new G4Box("world", 5000.0, 5000.0, 5000.0);\n'
+            'new G4Box("sensor", 100.0, 100.0, 10.0);\n'
         )
         declared: set[float] = {5000.0, 100.0, 10.0}
         validator = NoMagicNumberValidator()

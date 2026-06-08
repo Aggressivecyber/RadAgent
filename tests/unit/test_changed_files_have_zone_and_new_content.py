@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from agent_core.g4_codegen.integration.integration_assembler import (
     assemble_proposed_patch,
 )

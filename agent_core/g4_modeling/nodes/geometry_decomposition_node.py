@@ -89,9 +89,7 @@ async def geometry_decomposition_node(
                     components.append(comp)
                 except Exception as exc:
                     logger.warning("Invalid component spec: %s", exc)
-                    model_ir.open_issues.append(
-                        f"Invalid component from LLM: {exc}"
-                    )
+                    model_ir.open_issues.append(f"Invalid component from LLM: {exc}")
 
     except Exception as exc:
         logger.warning("LLM geometry decomposition failed: %s", exc)

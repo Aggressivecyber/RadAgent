@@ -14,12 +14,14 @@ class PhysicsSpec(BaseModel):
     """
 
     physics_list: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Geant4 physics list name (e.g. 'FTFP_BERT', 'QGSP_BIC_HP', "
         "'Shielding', 'Livermore')",
     )
     selection_reasoning: str = Field(
-        ..., min_length=10,
+        ...,
+        min_length=10,
         description="Mandatory explanation of why this physics list was chosen. "
         "Must reference particle type, energy range, and target output.",
     )

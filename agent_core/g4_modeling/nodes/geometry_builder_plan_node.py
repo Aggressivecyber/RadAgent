@@ -39,102 +39,118 @@ async def geometry_builder_plan_node(state: RadiationAgentState) -> dict[str, An
     modules: list[CodeModulePlan] = []
 
     # 1. Material registry (no dependencies)
-    modules.append(CodeModulePlan(
-        module_name="MaterialRegistry",
-        module_type="material_registry",
-        source_files=["MaterialRegistry.cc"],
-        header_files=["MaterialRegistry.hh"],
-        config_files=["material_config.json"],
-        depends_on=[],
-        linked_component_ids=[],
-        linked_material_ids=all_material_ids,
-    ))
+    modules.append(
+        CodeModulePlan(
+            module_name="MaterialRegistry",
+            module_type="material_registry",
+            source_files=["MaterialRegistry.cc"],
+            header_files=["MaterialRegistry.hh"],
+            config_files=["material_config.json"],
+            depends_on=[],
+            linked_component_ids=[],
+            linked_material_ids=all_material_ids,
+        )
+    )
 
     # 2. Per-component geometry builders
     for comp in model_ir.components:
         module_name = _to_class_name(comp.component_id) + "Builder"
-        modules.append(CodeModulePlan(
-            module_name=module_name,
-            module_type="component_geometry",
-            source_files=[f"{module_name}.cc"],
-            header_files=[f"{module_name}.hh"],
-            depends_on=["MaterialRegistry"],
-            linked_component_ids=[comp.component_id],
-            linked_material_ids=[comp.material_id],
-        ))
+        modules.append(
+            CodeModulePlan(
+                module_name=module_name,
+                module_type="component_geometry",
+                source_files=[f"{module_name}.cc"],
+                header_files=[f"{module_name}.hh"],
+                depends_on=["MaterialRegistry"],
+                linked_component_ids=[comp.component_id],
+                linked_material_ids=[comp.material_id],
+            )
+        )
 
     # 3. Placement (depends on all geometry builders)
     geometry_module_names = [
         m.module_name for m in modules if m.module_type == "component_geometry"
     ]
-    modules.append(CodeModulePlan(
-        module_name="PlacementManager",
-        module_type="placement",
-        source_files=["PlacementManager.cc"],
-        header_files=["PlacementManager.hh"],
-        depends_on=geometry_module_names,
-        linked_component_ids=[c.component_id for c in model_ir.components],
-        linked_material_ids=[],
-    ))
+    modules.append(
+        CodeModulePlan(
+            module_name="PlacementManager",
+            module_type="placement",
+            source_files=["PlacementManager.cc"],
+            header_files=["PlacementManager.hh"],
+            depends_on=geometry_module_names,
+            linked_component_ids=[c.component_id for c in model_ir.components],
+            linked_material_ids=[],
+        )
+    )
 
     # 4. Source
-    modules.append(CodeModulePlan(
-        module_name="PrimaryGeneratorAction",
-        module_type="source",
-        source_files=["PrimaryGeneratorAction.cc"],
-        header_files=["PrimaryGeneratorAction.hh"],
-        config_files=["source.mac"],
-        depends_on=[],
-        linked_component_ids=[],
-        linked_material_ids=[],
-    ))
+    modules.append(
+        CodeModulePlan(
+            module_name="PrimaryGeneratorAction",
+            module_type="source",
+            source_files=["PrimaryGeneratorAction.cc"],
+            header_files=["PrimaryGeneratorAction.hh"],
+            config_files=["source.mac"],
+            depends_on=[],
+            linked_component_ids=[],
+            linked_material_ids=[],
+        )
+    )
 
     # 5. Physics macro
-    modules.append(CodeModulePlan(
-        module_name="PhysicsConfig",
-        module_type="physics_macro",
-        config_files=["physics_list.mac", "physics_config.json"],
-        depends_on=[],
-        linked_component_ids=[],
-        linked_material_ids=[],
-    ))
+    modules.append(
+        CodeModulePlan(
+            module_name="PhysicsConfig",
+            module_type="physics_macro",
+            config_files=["physics_list.mac", "physics_config.json"],
+            depends_on=[],
+            linked_component_ids=[],
+            linked_material_ids=[],
+        )
+    )
 
     # 6. Sensitive detectors (depends on geometry builders)
     sd_comp_ids: list[str] = []
     for sd in model_ir.sensitive_detectors:
         sd_comp_ids.extend(sd.linked_component_ids)
 
-    modules.append(CodeModulePlan(
-        module_name="SensitiveDetectorManager",
-        module_type="sensitive_detector",
-        source_files=["SensitiveDetectorManager.cc", "Hit.cc"],
-        header_files=["SensitiveDetectorManager.hh", "Hit.hh"],
-        depends_on=geometry_module_names,
-        linked_component_ids=sorted(set(sd_comp_ids)),
-        linked_material_ids=[],
-    ))
+    modules.append(
+        CodeModulePlan(
+            module_name="SensitiveDetectorManager",
+            module_type="sensitive_detector",
+            source_files=["SensitiveDetectorManager.cc", "Hit.cc"],
+            header_files=["SensitiveDetectorManager.hh", "Hit.hh"],
+            depends_on=geometry_module_names,
+            linked_component_ids=sorted(set(sd_comp_ids)),
+            linked_material_ids=[],
+        )
+    )
 
     # 7. Scoring manager (depends on SDs)
-    modules.append(CodeModulePlan(
-        module_name="ScoringManager",
-        module_type="scoring",
-        source_files=["ScoringManager.cc"],
-        header_files=["ScoringManager.hh"],
-        depends_on=["SensitiveDetectorManager"],
-        linked_component_ids=[],
-        linked_material_ids=[],
-    ))
+    modules.append(
+        CodeModulePlan(
+            module_name="ScoringManager",
+            module_type="scoring",
+            source_files=["ScoringManager.cc"],
+            header_files=["ScoringManager.hh"],
+            depends_on=["SensitiveDetectorManager"],
+            linked_component_ids=[],
+            linked_material_ids=[],
+        )
+    )
 
     # 8. Output manager
-    modules.append(CodeModulePlan(
-        module_name="OutputManager",
-        module_type="output_manager",
-        source_files=["OutputManager.cc"],
-        header_files=["OutputManager.hh"],
-        depends_on=["ScoringManager"],
-        linked_component_ids=[],
-        linked_material_ids=[],
-    ))
+    modules.append(
+        CodeModulePlan(
+            module_name="OutputManager",
+            module_type="output_manager",
+            source_files=["OutputManager.cc"],
+            header_files=["OutputManager.hh"],
+            depends_on=["ScoringManager"],
+            linked_component_ids=[],
+            linked_material_ids=[],
+        )
+    )
 
     # Compute assembly order (topological sort by dependencies)
     assembly_order = _topological_sort(modules)
@@ -162,9 +178,13 @@ async def geometry_builder_plan_node(state: RadiationAgentState) -> dict[str, An
         model_ir_dir = get_stage_dir(job_id, "03_model_ir")
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         plan_file = model_ir_dir / "code_generation_plan.json"
-        plan_file.write_text(json.dumps(
-            plan.model_dump(mode="json"), indent=2, ensure_ascii=False,
-        ))
+        plan_file.write_text(
+            json.dumps(
+                plan.model_dump(mode="json"),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
 
     return {
         "g4_model_ir": model_ir.model_dump(mode="json"),
@@ -175,9 +195,7 @@ async def geometry_builder_plan_node(state: RadiationAgentState) -> dict[str, An
 
 def _to_class_name(component_id: str) -> str:
     """Convert component_id to PascalCase class name prefix."""
-    return "".join(
-        word.capitalize() for word in component_id.replace("-", "_").split("_")
-    )
+    return "".join(word.capitalize() for word in component_id.replace("-", "_").split("_"))
 
 
 def _topological_sort(modules: list[CodeModulePlan]) -> list[str]:

@@ -107,13 +107,10 @@ async def apply_patch(state: PatchSubgraphState) -> dict[str, Any]:
         # Even if both content and new_content are present, reject it.
         if "content" in file_entry:
             logger.error(
-                "Rejected patch entry with deprecated 'content' field "
-                "(use 'new_content' only): %s",
+                "Rejected patch entry with deprecated 'content' field (use 'new_content' only): %s",
                 path,
             )
-            errors.append(
-                f"Patch file entry uses deprecated 'content' field: {path}"
-            )
+            errors.append(f"Patch file entry uses deprecated 'content' field: {path}")
             continue
 
         if not path:

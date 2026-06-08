@@ -37,25 +37,50 @@ logger = logging.getLogger(__name__)
 
 REQUIRED_RAG_CATEGORIES: dict[str, list[str]] = {
     "geometry": [
-        "G4Box", "G4Tubs", "G4LogicalVolume", "G4PVPlacement",
-        "solid", "logical volume", "physical volume", "geometry",
+        "G4Box",
+        "G4Tubs",
+        "G4LogicalVolume",
+        "G4PVPlacement",
+        "solid",
+        "logical volume",
+        "physical volume",
+        "geometry",
     ],
     "materials": [
-        "G4Material", "G4NistManager", "density", "element", "material",
+        "G4Material",
+        "G4NistManager",
+        "density",
+        "element",
+        "material",
     ],
     "source": [
-        "G4ParticleGun", "G4GeneralParticleSource", "GPS",
-        "primary generator", "particle source",
+        "G4ParticleGun",
+        "G4GeneralParticleSource",
+        "GPS",
+        "primary generator",
+        "particle source",
     ],
     "physics": [
-        "physics list", "FTFP_BERT", "QGSP", "electromagnetic", "hadronic",
+        "physics list",
+        "FTFP_BERT",
+        "QGSP",
+        "electromagnetic",
+        "hadronic",
     ],
     "scoring": [
-        "sensitive detector", "G4VSensitiveDetector", "scorer",
-        "dose", "edep", "energy deposition",
+        "sensitive detector",
+        "G4VSensitiveDetector",
+        "scorer",
+        "dose",
+        "edep",
+        "energy deposition",
     ],
     "output": [
-        "RunAction", "analysis manager", "CSV", "output", "file",
+        "RunAction",
+        "analysis manager",
+        "CSV",
+        "output",
+        "file",
     ],
 }
 
@@ -192,18 +217,22 @@ async def retrieve_rag_context(state: ContextSubgraphState) -> dict[str, Any]:
     for query in queries:
         try:
             results = await client.search(
-                query, top_k=DEFAULT_TOP_K, min_score=MIN_RELEVANCE_SCORE,
+                query,
+                top_k=DEFAULT_TOP_K,
+                min_score=MIN_RELEVANCE_SCORE,
             )
             for r in results:
                 if r.doc_id not in seen_ids:
                     seen_ids.add(r.doc_id)
-                    rag_context.append({
-                        "doc_id": r.doc_id,
-                        "title": r.title,
-                        "content": r.content,
-                        "source": r.source,
-                        "score": round(r.score, 4),
-                    })
+                    rag_context.append(
+                        {
+                            "doc_id": r.doc_id,
+                            "title": r.title,
+                            "content": r.content,
+                            "source": r.source,
+                            "score": round(r.score, 4),
+                        }
+                    )
         except Exception as exc:
             logger.warning("RAG search failed for query '%s': %s", query, exc)
 
@@ -259,14 +288,9 @@ def compute_rag_coverage(
 
     coverage: dict[str, bool] = {}
     for category, keywords in REQUIRED_RAG_CATEGORIES.items():
-        coverage[category] = any(
-            keyword.lower() in combined_text
-            for keyword in keywords
-        )
+        coverage[category] = any(keyword.lower() in combined_text for keyword in keywords)
 
-    missing_categories = sorted(
-        cat for cat, covered in coverage.items() if not covered
-    )
+    missing_categories = sorted(cat for cat, covered in coverage.items() if not covered)
     missing_hard_required = sorted(
         cat for cat in HARD_REQUIRED_CATEGORIES if not coverage.get(cat, False)
     )
@@ -359,9 +383,15 @@ TRUSTED_WEB_DOMAINS = [
 ]
 
 WEB_KEYWORDS = [
-    "Geant4", "G4Material", "G4PVPlacement", "G4ParticleGun",
-    "G4GeneralParticleSource", "G4VSensitiveDetector", "dose",
-    "energy deposition", "physics list",
+    "Geant4",
+    "G4Material",
+    "G4PVPlacement",
+    "G4ParticleGun",
+    "G4GeneralParticleSource",
+    "G4VSensitiveDetector",
+    "dose",
+    "energy deposition",
+    "physics list",
 ]
 
 
@@ -400,11 +430,7 @@ def score_web_quality(
         if any(keyword.lower() in text for keyword in WEB_KEYWORDS):
             keyword_items.append(item)
 
-    sufficient = (
-        len(valid_items) >= 2
-        and len(trusted_items) >= 1
-        and len(keyword_items) >= 2
-    )
+    sufficient = len(valid_items) >= 2 and len(trusted_items) >= 1 and len(keyword_items) >= 2
 
     return {
         "sufficient": sufficient,

@@ -69,10 +69,12 @@ class TestCoordinateConsistencyValidator:
     """Test CoordinateConsistencyValidator."""
 
     def test_consistent_placements_pass(self):
-        ir = _make_ir_with_placements({
-            "sensor": [0.0, 0.0, 0.0],
-            "shield": [0.0, 0.0, 200.0],
-        })
+        ir = _make_ir_with_placements(
+            {
+                "sensor": [0.0, 0.0, 0.0],
+                "shield": [0.0, 0.0, 200.0],
+            }
+        )
         validator = CoordinateConsistencyValidator()
         passed, errors = validator.validate(ir)
         assert passed, f"Unexpected errors: {errors}"
@@ -85,9 +87,11 @@ class TestCoordinateConsistencyValidator:
 
     def test_origin_centered_placements(self):
         """Placements at origin should be valid."""
-        ir = _make_ir_with_placements({
-            "layer1": [0.0, 0.0, 0.0],
-        })
+        ir = _make_ir_with_placements(
+            {
+                "layer1": [0.0, 0.0, 0.0],
+            }
+        )
         validator = CoordinateConsistencyValidator()
         passed, errors = validator.validate(ir)
         assert passed, f"Errors: {errors}"

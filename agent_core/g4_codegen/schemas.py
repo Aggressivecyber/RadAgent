@@ -91,9 +91,7 @@ class ModuleContext(BaseModel):
     code_architecture_plan: dict[str, Any]
     rag_snippets: list[dict[str, Any]] = Field(default_factory=list)
     geant4_api_rules: list[str] = Field(default_factory=list)
-    existing_generated_file_summaries: list[dict[str, Any]] = Field(
-        default_factory=list
-    )
+    existing_generated_file_summaries: list[dict[str, Any]] = Field(default_factory=list)
     previous_failures: list[dict[str, Any]] = Field(default_factory=list)
     run_mode: str = "dev"
 

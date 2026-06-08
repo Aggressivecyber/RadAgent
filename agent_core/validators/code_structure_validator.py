@@ -39,9 +39,7 @@ class CodeStructureValidator:
         if not list(root.glob("include/*.hh")):
             errors.append("No .hh files in include/")
 
-        all_source = " ".join(
-            p.read_text(errors="replace") for p in root.glob("src/*.cc")
-        )
+        all_source = " ".join(p.read_text(errors="replace") for p in root.glob("src/*.cc"))
         for cls in self._G4_REQUIRED_CLASSES:
             if cls not in all_source:
                 errors.append(f"Missing required class: {cls}")

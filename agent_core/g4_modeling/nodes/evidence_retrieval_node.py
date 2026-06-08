@@ -34,9 +34,7 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
     # Normalize context_decision to valid literal
     valid = ("allow_rag", "allow_with_web_supplement", "block_no_context")
     fallback: Literal["block_no_context"] = "block_no_context"
-    context_decision = (
-        raw_decision if raw_decision in valid else fallback
-    )
+    context_decision = raw_decision if raw_decision in valid else fallback
 
     # Reconstruct model IR
     model_ir = G4ModelIR.model_validate(model_ir_dict)
@@ -121,10 +119,13 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
         model_ir_dir = get_stage_dir(job_id, "03_model_ir")
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         ev_file = model_ir_dir / "evidence_context.json"
-        ev_file.write_text(json.dumps(
-            evidence_pack.model_dump(mode="json"),
-            indent=2, ensure_ascii=False,
-        ))
+        ev_file.write_text(
+            json.dumps(
+                evidence_pack.model_dump(mode="json"),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
 
     return {
         "g4_model_ir": model_ir.model_dump(mode="json"),

@@ -71,11 +71,11 @@ class CoordinateSystem(BaseModel):
 class EvidencePack(BaseModel):
     """Evidence map organized by modeling dimension."""
 
-    evidence_decision: Literal[
-        "allow_rag", "allow_with_web_supplement", "block_no_context"
-    ] = Field(
-        ...,
-        description="Overall evidence sufficiency decision",
+    evidence_decision: Literal["allow_rag", "allow_with_web_supplement", "block_no_context"] = (
+        Field(
+            ...,
+            description="Overall evidence sufficiency decision",
+        )
     )
     geometry: list[dict[str, Any]] = Field(
         default_factory=list,
@@ -112,11 +112,13 @@ class G4ModelIR(BaseModel):
         description="IR schema version for forward compatibility",
     )
     model_ir_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Unique model IR identifier",
     )
     job_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Job ID this model belongs to",
     )
     modeling_mode: Literal["simple", "realistic"] = Field(
@@ -244,9 +246,7 @@ class G4ModelIR(BaseModel):
 
     def children_of(self, component_id: str) -> list[ComponentSpec]:
         """Return all components whose mother_volume is the given ID."""
-        return [
-            c for c in self.components if c.mother_volume == component_id
-        ]
+        return [c for c in self.components if c.mother_volume == component_id]
 
 
 def validate_g4_model_ir(

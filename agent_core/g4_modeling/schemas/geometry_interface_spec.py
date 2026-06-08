@@ -13,15 +13,18 @@ class GeometryInterfaceSpec(BaseModel):
     """
 
     interface_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Unique interface identifier",
     )
     component_a: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="First component_id in the relationship",
     )
     component_b: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Second component_id in the relationship",
     )
     relationship: str = Field(

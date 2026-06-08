@@ -30,18 +30,20 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
         model_ir = G4ModelIR.model_validate(model_ir_dict)
     except Exception as exc:
         for gid in range(12, 19):
-            gate_results.append({
-                "gate_id": gid,
-                "name": gate_name(gid),
-                "status": "fail",
-                "checked_items": [{"item": "Model IR validation", "result": "fail"}],
-                "passed_items": [],
-                "failed_items": [f"Model IR validation error: {exc}"],
-                "warnings": [],
-                "evidence": [],
-                "file_paths": [],
-                "message": f"Invalid model IR: {exc}",
-            })
+            gate_results.append(
+                {
+                    "gate_id": gid,
+                    "name": gate_name(gid),
+                    "status": "fail",
+                    "checked_items": [{"item": "Model IR validation", "result": "fail"}],
+                    "passed_items": [],
+                    "failed_items": [f"Model IR validation error: {exc}"],
+                    "warnings": [],
+                    "evidence": [],
+                    "file_paths": [],
+                    "message": f"Invalid model IR: {exc}",
+                }
+            )
             failed.append(gate_name(gid))
         return {"gate_results": gate_results, "failed_gates": failed}
 
@@ -60,7 +62,10 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # G4-A: Model Completeness
     _run_detailed_gate(
-        gate_results, failed, 12, "Model Completeness",
+        gate_results,
+        failed,
+        12,
+        "Model Completeness",
         lambda: ModelCompletenessValidator().validate(model_ir),
         checked_items=[
             {"item": f"components count ({len(component_ids)})", "result": "check"},
@@ -74,7 +79,10 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # G4-B: No Unapproved Simplification
     _run_detailed_gate(
-        gate_results, failed, 13, "No Unapproved Simplification",
+        gate_results,
+        failed,
+        13,
+        "No Unapproved Simplification",
         lambda: NoSimplificationValidator().validate(model_ir),
         checked_items=[
             {"item": "no missing complex components", "result": "check"},
@@ -92,7 +100,10 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
     # G4-C: Geometry Interface
     iface_count = len(model_ir.interfaces)
     _run_detailed_gate(
-        gate_results, failed, 14, "Geometry Interface Consistency",
+        gate_results,
+        failed,
+        14,
+        "Geometry Interface Consistency",
         lambda: GeometryInterfaceValidator().validate(model_ir),
         checked_items=[
             {"item": "exactly one world volume", "result": "check"},
@@ -110,7 +121,10 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # G4-D: Overlap Policy
     _run_detailed_gate(
-        gate_results, failed, 15, "Overlap Policy",
+        gate_results,
+        failed,
+        15,
+        "Overlap Policy",
         lambda: OverlapPolicyValidator().validate(model_ir),
         checked_items=[
             {"item": "no overlapping daughter volumes", "result": "check"},
@@ -120,7 +134,10 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # G4-E: Evidence Traceability
     _run_detailed_gate(
-        gate_results, failed, 16, "Evidence Traceability",
+        gate_results,
+        failed,
+        16,
+        "Evidence Traceability",
         lambda: EvidenceTraceabilityValidator().validate(model_ir),
         checked_items=[
             {"item": "all components have source_evidence", "result": "check"},
@@ -141,10 +158,7 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
             )
             from agent_core.g4_modeling.validators import CodeModuleBoundaryValidator
 
-            plans = [
-                CodeModulePlan.model_validate(m)
-                for m in code_modules if isinstance(m, dict)
-            ]
+            plans = [CodeModulePlan.model_validate(m) for m in code_modules if isinstance(m, dict)]
             gen_plan = CodeGenerationPlan(
                 plan_id="gate_check",
                 job_id=state.get("job_id", "unknown"),
@@ -152,8 +166,12 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
             )
             passed, errors = CodeModuleBoundaryValidator().validate(gen_plan, model_ir)
             _append_gate_detailed(
-                gate_results, failed, 17, "Code Module Boundary",
-                passed, errors,
+                gate_results,
+                failed,
+                17,
+                "Code Module Boundary",
+                passed,
+                errors,
                 checked_items=[
                     {"item": "each module has own header", "result": "pass" if passed else "fail"},
                     {"item": "no global mutable state", "result": "pass" if passed else "fail"},
@@ -163,63 +181,73 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
             )
         except Exception as exc:
             _append_gate_detailed(
-                gate_results, failed, 17, "Code Module Boundary",
-                False, [f"Error: {exc}"],
+                gate_results,
+                failed,
+                17,
+                "Code Module Boundary",
+                False,
+                [f"Error: {exc}"],
                 checked_items=[{"item": "module boundary validation", "result": "fail"}],
                 evidence=[],
             )
     else:
-        gate_results.append({
-            "gate_id": 17,
-            "name": "Code Module Boundary",
-            "status": "skipped",
-            "checked_items": [],
-            "passed_items": [],
-            "failed_items": [],
-            "warnings": ["No code modules generated yet"],
-            "evidence": [],
-            "file_paths": [],
-            "message": "Skipped: no code modules to validate",
-        })
+        gate_results.append(
+            {
+                "gate_id": 17,
+                "name": "Code Module Boundary",
+                "status": "skipped",
+                "checked_items": [],
+                "passed_items": [],
+                "failed_items": [],
+                "warnings": ["No code modules generated yet"],
+                "evidence": [],
+                "file_paths": [],
+                "message": "Skipped: no code modules to validate",
+            }
+        )
 
     # G4-G: No Magic Number
-    gate_results.append({
-        "gate_id": 18,
-        "name": "No Magic Number",
-        "status": "skipped",
-        "checked_items": [
-            {"item": "C++ code magic number check", "result": "deferred"},
-        ],
-        "passed_items": [],
-        "failed_items": [],
-        "warnings": ["Magic number check deferred to code review phase"],
-        "evidence": [],
-        "file_paths": [],
-        "message": "Deferred: magic number check runs after codegen",
-    })
+    gate_results.append(
+        {
+            "gate_id": 18,
+            "name": "No Magic Number",
+            "status": "skipped",
+            "checked_items": [
+                {"item": "C++ code magic number check", "result": "deferred"},
+            ],
+            "passed_items": [],
+            "failed_items": [],
+            "warnings": ["Magic number check deferred to code review phase"],
+            "evidence": [],
+            "file_paths": [],
+            "message": "Deferred: magic number check runs after codegen",
+        }
+    )
 
     # G4-H: Human Confirmation Completeness
     from agent_core.human_confirmation.validators import validate_human_confirmation_state
 
     hc_result = validate_human_confirmation_state(state)
-    gate_results.append({
-        "gate_id": 19,
-        "name": gate_name(19),
-        "status": "pass" if hc_result["passed"] else "fail",
-        "checked_items": [
-            {"item": item, "result": "pass" if hc_result["passed"] else "fail"}
-            for item in hc_result["checked_items"]
-        ],
-        "passed_items": hc_result["checked_items"] if hc_result["passed"] else [],
-        "failed_items": hc_result["failed_items"],
-        "warnings": [],
-        "evidence": [state.get("confirmation_record_path", "")],
-        "file_paths": [
-            state.get("confirmation_record_path", ""),
-            state.get("confirmed_model_plan_path", ""),
-        ],
-        "message": hc_result["message"],
-    })
+    gate_results.append(
+        {
+            "gate_id": 19,
+            "name": gate_name(19),
+            "status": "pass" if hc_result["passed"] else "fail",
+            "checked_items": [
+                {"item": item, "result": "pass" if hc_result["passed"] else "fail"}
+                for item in hc_result["checked_items"]
+            ],
+            "passed_items": hc_result["checked_items"] if hc_result["passed"] else [],
+            "failed_items": hc_result["failed_items"],
+            "warnings": [],
+            "evidence": [state.get("confirmation_record_path", "")],
+            "file_paths": [
+                state.get("confirmation_record_path", ""),
+                state.get("confirmed_model_plan_path", ""),
+            ],
+            "message": hc_result["message"],
+        }
+    )
 
     if not hc_result["passed"]:
         failed.append(gate_name(19))
@@ -241,13 +269,24 @@ def _run_detailed_gate(
     try:
         passed, errors = validator_fn()
         _append_gate_detailed(
-            gate_results, failed, gate_id, gate_display_name,
-            passed, errors, checked_items, evidence, extra_fields,
+            gate_results,
+            failed,
+            gate_id,
+            gate_display_name,
+            passed,
+            errors,
+            checked_items,
+            evidence,
+            extra_fields,
         )
     except Exception as exc:
         _append_gate_detailed(
-            gate_results, failed, gate_id, gate_display_name,
-            False, [f"Validator error: {exc}"],
+            gate_results,
+            failed,
+            gate_id,
+            gate_display_name,
+            False,
+            [f"Validator error: {exc}"],
             checked_items=[{"item": "validator execution", "result": "fail"}],
             evidence=[],
         )

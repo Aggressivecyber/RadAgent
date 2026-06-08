@@ -1,22 +1,17 @@
 """Tests for agent_core.workspace module — WorkspaceManager, JobWorkspace, paths."""
 
-import json
 from pathlib import Path
 
 import pytest
-
 from agent_core.workspace.manager import JobWorkspace, WorkspaceManager
 from agent_core.workspace.paths import (
     ALL_STAGES,
     GEANT4_SUBDIRS,
+    HC_CONFIRMATION_RECORD,
     STAGE_CODEGEN,
     STAGE_HUMAN_CONFIRMATION,
     STAGE_INPUT,
-    STAGE_MODEL_IR,
-    STAGE_PATCH,
-    HC_CONFIRMATION_RECORD,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -164,7 +159,9 @@ class TestPathsConstants:
 
 
 class TestBackwardCompat:
-    def test_config_workspace_reexports(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_config_workspace_reexports(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         from agent_core.config.workspace import (
             ensure_job_dirs,

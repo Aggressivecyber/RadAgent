@@ -26,6 +26,7 @@ def test_codegen_state_has_execution_mode():
 
 def test_codegen_plan_schema_has_requires_human_confirmation():
     from agent_core.g4_codegen.schemas import CodegenPlan
+
     plan = CodegenPlan(
         scenario_type="semiconductor",
         required_modules=["material", "geometry"],

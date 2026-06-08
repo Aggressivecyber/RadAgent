@@ -2,19 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from agent_core.graph.main_graph import compile_main_graph
 from agent_core.models.gateway import reset_model_gateway
-from agent_core.models.schemas import (
-    ModelCallResult,
-    ModelProvider,
-    ModelTask,
-    ModelTier,
-)
 
 
 @pytest.fixture(autouse=True)
@@ -39,10 +31,12 @@ async def test_run_pipeline_hello_terminates() -> None:
             {},
         ),
     ):
-        result = await graph.ainvoke({
-            "user_query": "你好",
-            "run_mode": "dev",
-        })
+        result = await graph.ainvoke(
+            {
+                "user_query": "你好",
+                "run_mode": "dev",
+            }
+        )
 
     # Should be classified as smalltalk
     assert result["intent"] == "smalltalk"
@@ -88,10 +82,12 @@ async def test_run_pipeline_simulation_enters_pipeline() -> None:
         "agent_core.models.gateway.call_openai_compatible_model",
         side_effect=mock_llm_call,
     ):
-        result = await graph.ainvoke({
-            "user_query": "建立一个9组件硅探测器，10MeV proton入射",
-            "run_mode": "dev",
-        })
+        result = await graph.ainvoke(
+            {
+                "user_query": "建立一个9组件硅探测器，10MeV proton入射",
+                "run_mode": "dev",
+            }
+        )
 
     # Should be classified as simulation_request
     assert result["intent"] == "simulation_request"

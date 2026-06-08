@@ -107,8 +107,7 @@ async def material_definition_node(state: RadiationAgentState) -> dict[str, Any]
         node_name="material_definition_node",
         action="create",
         target_id=model_ir.model_ir_id,
-        description=f"Defined {len(materials)} materials: "
-        f"{[m.material_id for m in materials]}",
+        description=f"Defined {len(materials)} materials: {[m.material_id for m in materials]}",
         modified_fields=["materials"],
     )
 
@@ -117,10 +116,13 @@ async def material_definition_node(state: RadiationAgentState) -> dict[str, Any]
         model_ir_dir = get_stage_dir(job_id, "03_model_ir")
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         mat_file = model_ir_dir / "material_specs.json"
-        mat_file.write_text(json.dumps(
-            [m.model_dump(mode="json") for m in materials],
-            indent=2, ensure_ascii=False,
-        ))
+        mat_file.write_text(
+            json.dumps(
+                [m.model_dump(mode="json") for m in materials],
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
 
     return {
         "g4_model_ir": model_ir.model_dump(mode="json"),
@@ -167,7 +169,6 @@ def _define_material(mat_id: str) -> MaterialSpec:
         density_g_cm3=2.33,  # Silicon default
         source_evidence=[],
         open_issues=[
-            f"Material '{mat_id}' not in known database — "
-            f"composition and density need verification"
+            f"Material '{mat_id}' not in known database — composition and density need verification"
         ],
     )

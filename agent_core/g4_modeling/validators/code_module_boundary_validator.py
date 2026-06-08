@@ -26,9 +26,7 @@ _MODULE_PERMISSIONS: dict[str, set[str]] = {
 class CodeModuleBoundaryValidator:
     """Validates codegen module boundaries against IR."""
 
-    def validate(
-        self, plan: CodeGenerationPlan, model_ir: G4ModelIR
-    ) -> tuple[bool, list[str]]:
+    def validate(self, plan: CodeGenerationPlan, model_ir: G4ModelIR) -> tuple[bool, list[str]]:
         """Check that each module stays within its boundary.
 
         Validates:
@@ -47,8 +45,7 @@ class CodeModuleBoundaryValidator:
             # Check module type is known
             if mod.module_type not in _MODULE_PERMISSIONS:
                 errors.append(
-                    f"Module '{mod.module_name}' has unknown module_type "
-                    f"'{mod.module_type}'"
+                    f"Module '{mod.module_name}' has unknown module_type '{mod.module_type}'"
                 )
                 continue
 
@@ -56,25 +53,20 @@ class CodeModuleBoundaryValidator:
             for cid in mod.linked_component_ids:
                 if cid not in comp_ids:
                     errors.append(
-                        f"Module '{mod.module_name}' references "
-                        f"undefined component '{cid}'"
+                        f"Module '{mod.module_name}' references undefined component '{cid}'"
                     )
 
             # Check linked_material_ids exist
             for mid in mod.linked_material_ids:
                 if mid not in mat_ids:
                     errors.append(
-                        f"Module '{mod.module_name}' references "
-                        f"undefined material '{mid}'"
+                        f"Module '{mod.module_name}' references undefined material '{mid}'"
                     )
 
             # Check dependencies exist
             for dep in mod.depends_on:
                 if dep not in module_names:
-                    errors.append(
-                        f"Module '{mod.module_name}' depends on "
-                        f"undefined module '{dep}'"
-                    )
+                    errors.append(f"Module '{mod.module_name}' depends on undefined module '{dep}'")
 
         # Check for duplicate module names
         name_counts: dict[str, int] = {}

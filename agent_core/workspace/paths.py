@@ -42,9 +42,7 @@ GEANT4_SUBDIRS: tuple[str, ...] = (
 )
 
 # ── Model IR subdirectories ──────────────────────────────────────────────
-MODEL_IR_SUBDIRS: tuple[str, ...] = (
-    "component_specs",
-)
+MODEL_IR_SUBDIRS: tuple[str, ...] = ("component_specs",)
 
 # ── Human confirmation sub-files ──────────────────────────────────────────
 HC_CONFIRMATION_RECORD = "confirmation_record.json"

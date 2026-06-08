@@ -11,14 +11,42 @@ from agent_core.g4_codegen.integration.cross_file_hard_gate import (
 def _full_valid_patch() -> dict:
     """Build a patch with all 10 core modules."""
     files = [
-        {"path": "CMakeLists.txt", "new_content": "cmake_minimum_required(VERSION 3.16)\nproject(t)\nfind_package(Geant4 REQUIRED)\nfile(GLOB s src/*.cc)\nadd_executable(app main.cc ${s})\n", "zone": "green", "module_name": "main_cmake", "generated_by": "m"},
-        {"path": "main.cc", "new_content": "int main(){return 0;}", "zone": "green", "module_name": "main_cmake", "generated_by": "m"},
+        {
+            "path": "CMakeLists.txt",
+            "new_content": "cmake_minimum_required(VERSION 3.16)\nproject(t)\nfind_package(Geant4 REQUIRED)\nfile(GLOB s src/*.cc)\nadd_executable(app main.cc ${s})\n",  # noqa: E501
+            "zone": "green",
+            "module_name": "main_cmake",
+            "generated_by": "m",
+        },
+        {
+            "path": "main.cc",
+            "new_content": "int main(){return 0;}",
+            "zone": "green",
+            "module_name": "main_cmake",
+            "generated_by": "m",
+        },
     ]
     for mod in REQUIRED_MODULES:
         if mod == "main_cmake":
             continue
-        files.append({"path": f"include/{mod}.hh", "new_content": "#pragma once", "zone": "green", "module_name": mod, "generated_by": "m"})
-        files.append({"path": f"src/{mod}.cc", "new_content": f'#include "{mod}.hh"', "zone": "green", "module_name": mod, "generated_by": "m"})
+        files.append(
+            {
+                "path": f"include/{mod}.hh",
+                "new_content": "#pragma once",
+                "zone": "green",
+                "module_name": mod,
+                "generated_by": "m",
+            }
+        )
+        files.append(
+            {
+                "path": f"src/{mod}.cc",
+                "new_content": f'#include "{mod}.hh"',
+                "zone": "green",
+                "module_name": mod,
+                "generated_by": "m",
+            }
+        )
     return {"changed_files": files}
 
 
@@ -41,9 +69,7 @@ def test_missing_material_fails():
 
 def test_missing_source_fails():
     patch = _full_valid_patch()
-    patch["changed_files"] = [
-        f for f in patch["changed_files"] if f.get("module_name") != "source"
-    ]
+    patch["changed_files"] = [f for f in patch["changed_files"] if f.get("module_name") != "source"]
     result = run_cross_file_hard_gate(patch, {}, "test_job")
     assert result["status"] == "fail"
     assert any("source" in e for e in result["errors"])

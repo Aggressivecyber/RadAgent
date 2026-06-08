@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from agent_core.intent.schemas import IntentResult
 from agent_core.repl import RadAgentREPL
 
@@ -86,9 +85,7 @@ async def test_repl_unknown_does_not_crash(repl: RadAgentREPL) -> None:
 
 
 @pytest.mark.asyncio
-async def test_repl_simulation_request_calls_cmd_run(
-    repl: RadAgentREPL
-) -> None:
+async def test_repl_simulation_request_calls_cmd_run(repl: RadAgentREPL) -> None:
     """REPL should call cmd_run for simulation requests."""
     mock_intent = IntentResult(
         intent="simulation_request",

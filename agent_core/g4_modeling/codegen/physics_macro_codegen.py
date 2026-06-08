@@ -36,28 +36,28 @@ async def physics_macro_codegen(state: RadiationAgentState) -> dict[str, Any]:
     config = _generate_config(physics)
 
     return {
-        "code_modules": [{
-            "module_name": "PhysicsConfig",
-            "module_type": "physics_macro",
-            "source_files": [],
-            "header_files": [],
-            "config_files": ["physics_list.mac", "physics_config.json"],
-            "depends_on": [],
-            "linked_component_ids": [],
-            "linked_material_ids": [],
-            "generated_content": {
-                "PhysicsConfig::physics_list.mac": macro,
-                "PhysicsConfig::physics_config.json": config,
-            },
-        }],
+        "code_modules": [
+            {
+                "module_name": "PhysicsConfig",
+                "module_type": "physics_macro",
+                "source_files": [],
+                "header_files": [],
+                "config_files": ["physics_list.mac", "physics_config.json"],
+                "depends_on": [],
+                "linked_component_ids": [],
+                "linked_material_ids": [],
+                "generated_content": {
+                    "PhysicsConfig::physics_list.mac": macro,
+                    "PhysicsConfig::physics_config.json": config,
+                },
+            }
+        ],
     }
 
 
 def _generate_macro(physics: Any) -> str:
     """Generate physics_list.mac."""
-    evidence = "\n".join(
-        f"# Evidence: {e}" for e in physics.source_evidence
-    )
+    evidence = "\n".join(f"# Evidence: {e}" for e in physics.source_evidence)
 
     lines = [
         "# physics_list.mac",

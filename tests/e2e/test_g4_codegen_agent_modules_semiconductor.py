@@ -1,17 +1,16 @@
 """E2E test — semiconductor detector config codegen pipeline with mock provider."""
-
+  # noqa: E501  # noqa: E501
 from __future__ import annotations
 
+# noqa: E501  # noqa: E501
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
-from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
 from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
 from agent_core.g4_codegen.schemas import GeneratedModuleFile
 from agent_core.models.gateway import reset_model_gateway
 
@@ -100,21 +99,21 @@ class TestG4CodegenAgentModulesSemiconductor:
         module_results = {
             "material": {
                 "module_name": "material",
-                "status": "generated",
+                "status": "generated",  # noqa: E501  # noqa: E501
                 "generated_files": [
                     _valid_file(
                         "src/MaterialRegistry.cc",
                         '#include "MaterialRegistry.hh"\n#include "G4NistManager.hh"\n'
-                        'void MaterialRegistry::DefineMaterials() {\n'
+                        "void MaterialRegistry::DefineMaterials() {\n"
                         '  G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR");\n'
                         '  G4NistManager::Instance()->FindOrBuildMaterial("G4_Si");\n'
-                        '}\n',
+                        "}\n",
                         "material",
                     ),
                     _valid_file(
                         "include/MaterialRegistry.hh",
-                        '#pragma once\n#include <G4Material.hh>\n'
-                        'class MaterialRegistry { public: void DefineMaterials(); };\n',
+                        "#pragma once\n#include <G4Material.hh>\n"
+                        "class MaterialRegistry { public: void DefineMaterials(); };\n",
                         "material",
                     ),
                 ],
@@ -133,19 +132,19 @@ class TestG4CodegenAgentModulesSemiconductor:
                         '#include "G4LogicalVolume.hh"\n'
                         '#include "G4PVPlacement.hh"\n'
                         '#include "G4NistManager.hh"\n'
-                        'G4VPhysicalVolume* DetectorConstruction::Construct() {\n'
+                        "G4VPhysicalVolume* DetectorConstruction::Construct() {\n"
                         '  auto* worldSolid = new G4Box("World", 5000*cm, 5000*cm, 5000*cm);\n'
-                        '  auto* worldLV = new G4LogicalVolume(worldSolid, G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
-                        '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
-                        '  return worldPV;\n'
-                        '}\n',
+                        '  auto* worldLV = new G4LogicalVolume(worldSolid, G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'  # noqa: E501
+                        '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'  # noqa: E501
+                        "  return worldPV;\n"
+                        "}\n",
                         "geometry",
                     ),
                     _valid_file(
                         "include/DetectorConstruction.hh",
-                        '#pragma once\n#include <G4VUserDetectorConstruction.hh>\n'
-                        'class DetectorConstruction : public G4VUserDetectorConstruction {\n'
-                        'public:\n  G4VPhysicalVolume* Construct() override;\n};\n',
+                        "#pragma once\n#include <G4VUserDetectorConstruction.hh>\n"
+                        "class DetectorConstruction : public G4VUserDetectorConstruction {\n"
+                        "public:\n  G4VPhysicalVolume* Construct() override;\n};\n",
                         "geometry",
                     ),
                 ],
@@ -200,6 +199,7 @@ class TestG4CodegenAgentModulesSemiconductor:
 
         # Verify patch was persisted
         from agent_core.config.workspace import get_job_dir
+
         codegen_dir = get_job_dir("semi_write") / "06_codegen"
         patch_path = codegen_dir / "proposed_patch.json"
         assert patch_path.exists()

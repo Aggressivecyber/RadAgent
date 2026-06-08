@@ -6,7 +6,6 @@ import os
 from unittest.mock import patch
 
 import pytest
-
 from agent_core.models.config import load_model_profiles
 from agent_core.models.schemas import ModelProvider, ModelTier
 

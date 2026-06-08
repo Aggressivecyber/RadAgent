@@ -25,18 +25,37 @@ _RESERVED_SCOPES = {"tcad", "spice", "geant4_to_tcad", "tcad_to_spice", "full_ch
 
 # Keyword sets for scope detection
 _GEANT4_KEYWORDS = [
-    "geant4", "g4", "蒙特卡罗", "粒子输运", "辐照仿真",
-    "能量沉积", "剂量分布", "monte carlo",
+    "geant4",
+    "g4",
+    "蒙特卡罗",
+    "粒子输运",
+    "辐照仿真",
+    "能量沉积",
+    "剂量分布",
+    "monte carlo",
 ]
 _TCAD_KEYWORDS = [
-    "tcad", "sentaurus", "silvaco", "技术计算机辅助设计", "半导体器件仿真",
+    "tcad",
+    "sentaurus",
+    "silvaco",
+    "技术计算机辅助设计",
+    "半导体器件仿真",
     "器件仿真",
 ]
 _SPICE_KEYWORDS = [
-    "spice", "ngspice", "hspice", "ltspice", "电路仿真", "网表",
+    "spice",
+    "ngspice",
+    "hspice",
+    "ltspice",
+    "电路仿真",
+    "网表",
 ]
 _FULL_CHAIN_KEYWORDS = [
-    "联合仿真", "全链路", "geant4到tcad", "tcad到spice", "g4到tcad",
+    "联合仿真",
+    "全链路",
+    "geant4到tcad",
+    "tcad到spice",
+    "g4到tcad",
     "全流程",
 ]
 
@@ -80,10 +99,7 @@ def validate_supported_scope(scope: list[str]) -> dict[str, Any]:
         return {
             "task_planning_status": "reserved",
             "reserved_scopes": reserved,
-            "termination_reason": (
-                "TCAD/SPICE/full-chain simulation is reserved "
-                "for later MVPs."
-            ),
+            "termination_reason": ("TCAD/SPICE/full-chain simulation is reserved for later MVPs."),
         }
 
     if scope == ["geant4"]:

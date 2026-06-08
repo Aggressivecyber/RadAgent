@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
-
+from agent_core.graph.main_routes import route_after_human_confirmation
 from agent_core.human_confirmation.nodes import (
     HumanConfirmationState,
     build_proposed_model_completion,
@@ -25,8 +24,6 @@ from agent_core.human_confirmation.nodes import (
     parse_confirmation_response,
     validate_confirmation_completeness,
 )
-from agent_core.graph.main_routes import route_after_human_confirmation
-
 
 # ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -176,12 +173,14 @@ class TestPipelineHumanEdit:
         assert step6["confirmation_status"] == "edited"
 
         # Step 7: Route after confirmation → codegen
-        route = route_after_human_confirmation({
-            "confirmation_status": "edited",
-            "confirmation_record_path": str(record_path),
-            "confirmed_model_plan_path": str(plan_path),
-            "unconfirmed_assumptions_count": 0,
-        })
+        route = route_after_human_confirmation(
+            {
+                "confirmation_status": "edited",
+                "confirmation_record_path": str(record_path),
+                "confirmed_model_plan_path": str(plan_path),
+                "unconfirmed_assumptions_count": 0,
+            }
+        )
         assert route == "g4_codegen_subgraph"
 
     @pytest.mark.asyncio
@@ -306,19 +305,23 @@ class TestPipelineHumanEdit:
 
     def test_edited_routes_to_codegen_with_guards(self) -> None:
         """Route: edited + all guards → g4_codegen_subgraph."""
-        route = route_after_human_confirmation({
-            "confirmation_status": "edited",
-            "confirmation_record_path": "/tmp/record.json",
-            "confirmed_model_plan_path": "/tmp/plan.json",
-            "unconfirmed_assumptions_count": 0,
-        })
+        route = route_after_human_confirmation(
+            {
+                "confirmation_status": "edited",
+                "confirmation_record_path": "/tmp/record.json",
+                "confirmed_model_plan_path": "/tmp/plan.json",
+                "unconfirmed_assumptions_count": 0,
+            }
+        )
         assert route == "g4_codegen_subgraph"
 
     def test_edited_blocks_without_record(self) -> None:
         """Route: edited + missing record → report_subgraph."""
-        route = route_after_human_confirmation({
-            "confirmation_status": "edited",
-            "confirmed_model_plan_path": "/tmp/plan.json",
-            "unconfirmed_assumptions_count": 0,
-        })
+        route = route_after_human_confirmation(
+            {
+                "confirmation_status": "edited",
+                "confirmed_model_plan_path": "/tmp/plan.json",
+                "unconfirmed_assumptions_count": 0,
+            }
+        )
         assert route == "report_subgraph"

@@ -47,19 +47,21 @@ async def output_manager_codegen(state: RadiationAgentState) -> dict[str, Any]:
     source = _generate_source(model_ir)
 
     return {
-        "code_modules": [{
-            "module_name": "OutputManager",
-            "module_type": "output_manager",
-            "source_files": ["OutputManager.cc"],
-            "header_files": ["OutputManager.hh"],
-            "depends_on": ["ScoringManager"],
-            "linked_component_ids": [],
-            "linked_material_ids": [],
-            "generated_content": {
-                "OutputManager::OutputManager.hh": header,
-                "OutputManager::OutputManager.cc": source,
-            },
-        }],
+        "code_modules": [
+            {
+                "module_name": "OutputManager",
+                "module_type": "output_manager",
+                "source_files": ["OutputManager.cc"],
+                "header_files": ["OutputManager.hh"],
+                "depends_on": ["ScoringManager"],
+                "linked_component_ids": [],
+                "linked_material_ids": [],
+                "generated_content": {
+                    "OutputManager::OutputManager.hh": header,
+                    "OutputManager::OutputManager.cc": source,
+                },
+            }
+        ],
     }
 
 
@@ -172,12 +174,8 @@ def _generate_source(model_ir: Any) -> str:
     beam_lines: list[str] = []
     if model_ir.sources and len(model_ir.sources) > 0:
         src = model_ir.sources[0]
-        beam_lines.append(
-            f'    f << "  \\"beam_particle\\": \\"{src.particle_type}\\",\\n";'
-        )
-        beam_lines.append(
-            f'    f << "  \\"beam_energy_MeV\\": {src.energy.value},\\n";'
-        )
+        beam_lines.append(f'    f << "  \\"beam_particle\\": \\"{src.particle_type}\\",\\n";')
+        beam_lines.append(f'    f << "  \\"beam_energy_MeV\\": {src.energy.value},\\n";')
 
     beam_block = "\n".join(beam_lines)
 

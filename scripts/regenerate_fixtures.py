@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """Regenerate review_artifact fixtures for testing.
 
@@ -38,8 +39,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from agent_core.gates.base_gates import GATE_NAMES, run_base_gates
-from agent_core.gates.gate_runner import compute_validation_status
+from agent_core.gates.base_gates import GATE_NAMES, run_base_gates  # noqa: E402
+from agent_core.gates.gate_runner import compute_validation_status  # noqa: E402
 
 ARTIFACT_DIR = ROOT / "review_artifacts" / "g4_complex_model" / "latest"
 OUTPUT_DIR = ARTIFACT_DIR / "output"
@@ -201,7 +202,8 @@ def current_git_commit() -> str:
     """Read current HEAD commit hash."""
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True,
+            ["git", "rev-parse", "HEAD"],
+            text=True,
         ).strip()
     except Exception:
         return "unknown"
@@ -220,6 +222,7 @@ def _write_text(text: str, path: Path) -> None:
 
 # ── Phase 1: Write model IR ──────────────────────────────────────────────
 
+
 def write_model_ir() -> dict:
     """Write canonical 9-component model IR to output dir."""
     ir_path = OUTPUT_DIR / "g4_model_ir.json"
@@ -228,6 +231,7 @@ def write_model_ir() -> dict:
 
 
 # ── Phase 2: Run gates ───────────────────────────────────────────────────
+
 
 async def run_gates(model_ir: dict) -> list[dict]:
     """Run gate checks and return new-format gate results."""
@@ -262,55 +266,60 @@ async def run_gates(model_ir: dict) -> list[dict]:
 
     # Gates 12-18: dev mode skip
     for gid in range(12, 19):
-        gate_results.append({
-            "gate_id": gid,
-            "name": GATE_NAMES.get(gid, f"Gate {gid}"),
-            "status": "skip",
-            "checked_items": [
-                {"item": f"{GATE_NAMES.get(gid, 'Gate')} check", "result": "skipped"},
-            ],
-            "passed_items": [],
-            "failed_items": [],
-            "warnings": ["Dev mode — gate skipped"],
-            "evidence": [],
-            "file_paths": [],
-            "message": f"{GATE_NAMES.get(gid, 'Gate')} skipped in dev mode",
-        })
+        gate_results.append(
+            {
+                "gate_id": gid,
+                "name": GATE_NAMES.get(gid, f"Gate {gid}"),
+                "status": "skip",
+                "checked_items": [
+                    {"item": f"{GATE_NAMES.get(gid, 'Gate')} check", "result": "skipped"},
+                ],
+                "passed_items": [],
+                "failed_items": [],
+                "warnings": ["Dev mode — gate skipped"],
+                "evidence": [],
+                "file_paths": [],
+                "message": f"{GATE_NAMES.get(gid, 'Gate')} skipped in dev mode",
+            }
+        )
 
     # Gate 19: G4-H Human Confirmation — REAL checks
-    gate_results.append({
-        "gate_id": 19,
-        "name": "G4-H Human Confirmation",
-        "status": "pass",
-        "checked_items": [
-            {"item": "confirmation_record exists", "result": "pass"},
-            {"item": "confirmed_model_plan exists", "result": "pass"},
-            {"item": "remaining_unconfirmed_fields empty", "result": "pass"},
-            {"item": "confirmation_status approved", "result": "pass"},
-        ],
-        "passed_items": [
-            "confirmation_record exists",
-            "confirmed_model_plan exists",
-            "remaining_unconfirmed_fields empty",
-            "confirmation_status approved",
-        ],
-        "failed_items": [],
-        "warnings": [],
-        "evidence": [
-            "output/confirmation_record.json",
-            "output/confirmed_model_plan.json",
-        ],
-        "file_paths": [
-            "output/confirmation_record.json",
-            "output/confirmed_model_plan.json",
-        ],
-        "message": "All required human confirmations are complete.",
-    })
+    gate_results.append(
+        {
+            "gate_id": 19,
+            "name": "G4-H Human Confirmation",
+            "status": "pass",
+            "checked_items": [
+                {"item": "confirmation_record exists", "result": "pass"},
+                {"item": "confirmed_model_plan exists", "result": "pass"},
+                {"item": "remaining_unconfirmed_fields empty", "result": "pass"},
+                {"item": "confirmation_status approved", "result": "pass"},
+            ],
+            "passed_items": [
+                "confirmation_record exists",
+                "confirmed_model_plan exists",
+                "remaining_unconfirmed_fields empty",
+                "confirmation_status approved",
+            ],
+            "failed_items": [],
+            "warnings": [],
+            "evidence": [
+                "output/confirmation_record.json",
+                "output/confirmed_model_plan.json",
+            ],
+            "file_paths": [
+                "output/confirmation_record.json",
+                "output/confirmed_model_plan.json",
+            ],
+            "message": "All required human confirmations are complete.",
+        }
+    )
 
     return gate_results
 
 
 # ── Phase 3: Write confirmation artifacts ─────────────────────────────────
+
 
 def write_confirmation_artifacts() -> None:
     """Write COMPLETE human confirmation artifacts — not stubs."""
@@ -410,7 +419,7 @@ def write_confirmation_artifacts() -> None:
 - **Total Components**: {len(COMPLEX_MODEL_IR["components"])}
 - **Materials**: {len(COMPLEX_MODEL_IR["materials"])} (G4_AIR, G4_Al, FR4, G4_Si, SiO2)
 - **Source**: 10 MeV proton pencil beam
-- **Scoring**: {len(COMPLEX_MODEL_IR["scoring"])} scorers (sensitive_edep, oxide_dose, bulk_dose_3d, event_table)
+- **Scoring**: {len(COMPLEX_MODEL_IR["scoring"])} scorers (sensitive_edep, oxide_dose, bulk_dose_3d, event_table)  # noqa: E501
 - **Confirmed Fields**: {len(CONFIRMED_FIELD_IDS)}
 - **Edited Fields**: 0
 - **Remaining Unconfirmed**: 0
@@ -468,8 +477,10 @@ def _fmt_components() -> str:
         parent = c.get("parent", "—")
         geom = c.get("geometry_type", "?")
         mat = c.get("material_id", "?")
-        lines.append(f"- `{c['component_id']}`: {c['component_type']}, "
-                     f"geom={geom}, mat={mat}, parent={parent}")
+        lines.append(
+            f"- `{c['component_id']}`: {c['component_type']}, "
+            f"geom={geom}, mat={mat}, parent={parent}"
+        )
     return "\n".join(lines)
 
 
@@ -496,11 +507,13 @@ def _fmt_fields() -> str:
 
 # ── Phase 4: Write gate_results.json ─────────────────────────────────────
 
+
 def write_gate_results(gate_results: list[dict]) -> None:
     _write_json(gate_results, OUTPUT_DIR / "gate_results.json")
 
 
 # ── Phase 5: Write component_specs_summary.json ──────────────────────────
+
 
 def write_component_summary(model_ir: dict) -> None:
     components = model_ir.get("components", [])
@@ -515,6 +528,7 @@ def write_component_summary(model_ir: dict) -> None:
 
 
 # ── Phase 6: Write manifest and review_report ────────────────────────────
+
 
 def write_manifest_and_review(
     model_ir: dict,
@@ -535,11 +549,13 @@ def write_manifest_and_review(
         if f.is_file():
             content = f.read_bytes()
             sha = hashlib.sha256(content).hexdigest()
-            file_entries.append({
-                "name": f.name,
-                "size_bytes": len(content),
-                "sha256": sha,
-            })
+            file_entries.append(
+                {
+                    "name": f.name,
+                    "size_bytes": len(content),
+                    "sha256": sha,
+                }
+            )
             rel = f"output/{f.name}"
             sha256_map[rel] = sha
             size_map[rel] = len(content)
@@ -632,6 +648,7 @@ def write_manifest_and_review(
 
 # ── Main ──────────────────────────────────────────────────────────────────
 
+
 async def main() -> None:
     print("=== Regenerating review_artifacts ===\n")
 
@@ -679,7 +696,7 @@ async def main() -> None:
     assert len(ir["materials"]) == 5, f"Expected 5 materials, got {len(ir['materials'])}"
     assert len(ir["scoring"]) == 4, f"Expected 4 scoring, got {len(ir['scoring'])}"
     assert "10 MeV" in ir["sources"][0]["energy"], ir["sources"][0]
-    print(f"  model_ir: 9 components, 5 materials, 1 source (10 MeV), 4 scoring ✓")
+    print("  model_ir: 9 components, 5 materials, 1 source (10 MeV), 4 scoring ✓")
 
     # Verify confirmation_record
     record = json.loads((OUTPUT_DIR / "confirmation_record.json").read_text())
@@ -694,14 +711,20 @@ async def main() -> None:
     assert len(plan["materials"]) == 5
     assert len(plan["scoring"]) == 4
     assert plan["remaining_unconfirmed_fields"] == []
-    print(f"  confirmed_model_plan: 9 components, 5 materials, 4 scoring ✓")
+    print("  confirmed_model_plan: 9 components, 5 materials, 4 scoring ✓")
 
     # Verify report
     report_text = (OUTPUT_DIR / "human_confirmation_report.md").read_text()
     assert len(report_text) > 300
-    for section in ["Summary", "Round 1 Questions", "User Response",
-                     "Confirmed Fields", "Edited Fields",
-                     "Remaining Unconfirmed Fields", "Final Status"]:
+    for section in [
+        "Summary",
+        "Round 1 Questions",
+        "User Response",
+        "Confirmed Fields",
+        "Edited Fields",
+        "Remaining Unconfirmed Fields",
+        "Final Status",
+    ]:
         assert section in report_text, f"missing section: {section}"
     print(f"  human_confirmation_report: {len(report_text)} chars, 7 sections ✓")
 
@@ -718,7 +741,7 @@ async def main() -> None:
     assert review["has_human_confirmation"] is True
     assert review["human_confirmation"]["required"] is True
     assert review["human_confirmation"]["status"] == "approved"
-    print(f"  review_report: has_hc=true, required=true, status=approved ✓")
+    print("  review_report: has_hc=true, required=true, status=approved ✓")
 
     # Verify manifest
     manifest = json.loads((ARTIFACT_DIR / "artifact_manifest.json").read_text())

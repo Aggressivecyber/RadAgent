@@ -229,9 +229,9 @@ class TestOutputManagerContract:
                         f"Empty include found: '{stripped}' in {_fname}"
                     )
                     # Must have either <header> or "header"
-                    assert ("<" in stripped and ">" in stripped) or (
-                        '"' in stripped
-                    ), f"Malformed include: '{stripped}' in {_fname}"
+                    assert ("<" in stripped and ">" in stripped) or ('"' in stripped), (
+                        f"Malformed include: '{stripped}' in {_fname}"
+                    )
 
     async def test_scoring_methods_are_class_members(self) -> None:
         """WriteScoringCSV must be a member of OutputManager, not a free function."""
@@ -256,9 +256,7 @@ class TestOutputManagerContract:
             stripped = line.strip()
             if stripped.startswith("void Write"):
                 # Must be qualified as OutputManager::WriteXxx
-                assert "OutputManager::" in stripped, (
-                    f"Unqualified free function: {stripped}"
-                )
+                assert "OutputManager::" in stripped, f"Unqualified free function: {stripped}"
 
     async def test_header_declares_per_scoring_methods(self) -> None:
         """Header must declare a method for each scoring spec."""

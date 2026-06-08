@@ -49,10 +49,15 @@ class TestGraphVisualizerUsesModuleAgentFlow:
         spec = get_g4_codegen_subgraph_spec()
         node_ids = {n.node_id for n in spec.nodes}
         legacy = {
-            "material_registry_codegen", "component_geometry_codegen",
-            "placement_codegen", "source_codegen", "physics_macro_codegen",
-            "sensitive_detector_codegen", "scoring_codegen",
-            "output_manager_codegen", "code_module_planner",
+            "material_registry_codegen",
+            "component_geometry_codegen",
+            "placement_codegen",
+            "source_codegen",
+            "physics_macro_codegen",
+            "sensitive_detector_codegen",
+            "scoring_codegen",
+            "output_manager_codegen",
+            "code_module_planner",
             "geometry_builder_plan_node",
         }
         found_legacy = legacy & node_ids

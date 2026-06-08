@@ -45,23 +45,25 @@ def assemble_proposed_patch(
             # Strip any leading directory prefix so path is relative to 08_geant4
             clean_path = raw_path.lstrip("/")
             if clean_path.startswith("08_geant4/"):
-                clean_path = clean_path[len("08_geant4/"):]
+                clean_path = clean_path[len("08_geant4/") :]
             elif clean_path.startswith("08_geant4"):
-                clean_path = clean_path[len("08_geant4"):].lstrip("/")
+                clean_path = clean_path[len("08_geant4") :].lstrip("/")
 
-            changed_files.append({
-                "path": clean_path,
-                "operation": f.get("operation", "create"),
-                "new_content": f["new_content"],
-                "zone": "green",
-                "generated_by": f.get("generated_by", f"{module_name}_module_agent"),
-                "module_name": f.get("module_name", module_name),
-                "rationale": f.get("rationale", ""),
-                "dependencies": f.get("dependencies", []),
-                "satisfies": f.get("satisfies", []),
-                "risk_notes": f.get("risk_notes", []),
-                "used_references": f.get("used_references", []),
-            })
+            changed_files.append(
+                {
+                    "path": clean_path,
+                    "operation": f.get("operation", "create"),
+                    "new_content": f["new_content"],
+                    "zone": "green",
+                    "generated_by": f.get("generated_by", f"{module_name}_module_agent"),
+                    "module_name": f.get("module_name", module_name),
+                    "rationale": f.get("rationale", ""),
+                    "dependencies": f.get("dependencies", []),
+                    "satisfies": f.get("satisfies", []),
+                    "risk_notes": f.get("risk_notes", []),
+                    "used_references": f.get("used_references", []),
+                }
+            )
             agent_file_count += 1
 
     patch = {
@@ -92,6 +94,7 @@ def assemble_proposed_patch(
 
     # Persist
     from agent_core.config.workspace import get_job_dir
+
     codegen_dir = get_job_dir(job_id) / "06_codegen"
     codegen_dir.mkdir(parents=True, exist_ok=True)
 

@@ -77,8 +77,7 @@ async def source_definition_node(state: RadiationAgentState) -> dict[str, Any]:
         generator_type=generator_type,
         events=events,
         source_evidence=[
-            f"task_spec: particle={particle_type}, "
-            f"energy={energy_mev} MeV, direction={direction}"
+            f"task_spec: particle={particle_type}, energy={energy_mev} MeV, direction={direction}"
         ],
     )
 

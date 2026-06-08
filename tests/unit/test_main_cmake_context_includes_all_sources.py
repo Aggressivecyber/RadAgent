@@ -7,9 +7,6 @@ from typing import Any
 
 import pytest
 
-from agent_core.g4_codegen.graph_nodes import run_module_agent_node
-from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
-
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -24,7 +21,8 @@ class TestMainCmakeContextIncludesAllSources:
 
     @pytest.mark.asyncio
     async def test_module_context_receives_upstream_summaries(
-        self, workspace: Path,
+        self,
+        workspace: Path,
     ) -> None:
         """run_module_agent_node should inject existing_generated_file_summaries."""
         # Simulate state with one completed module
@@ -51,13 +49,13 @@ class TestMainCmakeContextIncludesAllSources:
                     "generated_files": [
                         {
                             "path": "src/MaterialRegistry.cc",
-                            "new_content": '#include "MaterialRegistry.hh"\nvoid MaterialRegistry::DefineMaterials() {}\n',
+                            "new_content": '#include "MaterialRegistry.hh"\nvoid MaterialRegistry::DefineMaterials() {}\n',  # noqa: E501
                             "generated_by": "material_module_agent",
                             "module_name": "material",
                         },
                         {
                             "path": "include/MaterialRegistry.hh",
-                            "new_content": "#pragma once\nclass MaterialRegistry { public: void DefineMaterials(); };\n",
+                            "new_content": "#pragma once\nclass MaterialRegistry { public: void DefineMaterials(); };\n",  # noqa: E501
                             "generated_by": "material_module_agent",
                             "module_name": "material",
                         },
@@ -71,7 +69,7 @@ class TestMainCmakeContextIncludesAllSources:
                     "generated_files": [
                         {
                             "path": "src/DetectorConstruction.cc",
-                            "new_content": '#include "DetectorConstruction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }\n',
+                            "new_content": '#include "DetectorConstruction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }\n',  # noqa: E501
                             "generated_by": "geometry_module_agent",
                             "module_name": "geometry",
                         },
@@ -100,7 +98,7 @@ class TestMainCmakeContextIncludesAllSources:
 
         # Each summary should have key fields
         for s in summaries:
-            assert "module_name" in s
+            assert "module_name" in s  # noqa: E501  # noqa: E501  # noqa: E501
             assert "path" in s
             assert "generated_by" in s
             assert "classes" in s

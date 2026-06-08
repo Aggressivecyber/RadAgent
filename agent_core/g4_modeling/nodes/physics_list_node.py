@@ -54,9 +54,7 @@ async def physics_list_node(state: RadiationAgentState) -> dict[str, Any]:
 
         evidence_text = ""
         if model_ir.evidence and model_ir.evidence.physics:
-            evidence_text = json.dumps(
-                model_ir.evidence.physics[:3], indent=2, ensure_ascii=False
-            )
+            evidence_text = json.dumps(model_ir.evidence.physics[:3], indent=2, ensure_ascii=False)
 
         prompt = PHYSICS_SELECTION_PROMPT.format(
             particle_type=particle_type,
@@ -108,9 +106,7 @@ async def physics_list_node(state: RadiationAgentState) -> dict[str, Any]:
     }
 
 
-def _default_physics(
-    particle_type: str, energy: float, energy_unit: str
-) -> PhysicsSpec:
+def _default_physics(particle_type: str, energy: float, energy_unit: str) -> PhysicsSpec:
     """Provide a reasonable default physics selection."""
     if particle_type.lower() in ("gamma", "e-", "e+", "electron", "positron"):
         if energy < 1.0 and energy_unit == "GeV":

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 # -- Stage configurations ---------------------------------------------------
 
+
 class G4Config(BaseModel):
     """Geant4 simulation parameters.
 
@@ -58,6 +59,7 @@ class SPICEConfig(BaseModel):
 
 # -- Inter-stage mapping ----------------------------------------------------
 
+
 class MappingChain(BaseModel):
     """Mapping metadata connecting adjacent simulation stages.
 
@@ -71,6 +73,7 @@ class MappingChain(BaseModel):
 
 
 # -- Top-level IR -----------------------------------------------------------
+
 
 class SimulationIR(BaseModel):
     """Simulation Intermediate Representation.
@@ -87,11 +90,13 @@ class SimulationIR(BaseModel):
     spice_config: SPICEConfig | None = None
     mapping_chain: MappingChain | None = None
     unit_registry: dict[str, str] = Field(
-        default_factory=dict, description="Quantity name -> unit string.",
+        default_factory=dict,
+        description="Quantity name -> unit string.",
     )
 
 
 # -- Validation helper -------------------------------------------------------
+
 
 def validate_simulation_ir(
     data: dict,

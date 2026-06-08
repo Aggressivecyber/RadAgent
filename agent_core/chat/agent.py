@@ -241,10 +241,7 @@ class ChatAgent:
             if not self._web.search_available:
                 return []
             results = await self._web.search(query, max_results=3)
-            return [
-                {"title": r.title, "snippet": r.snippet[:200], "url": r.url}
-                for r in results
-            ]
+            return [{"title": r.title, "snippet": r.snippet[:200], "url": r.url} for r in results]
         except Exception as exc:
             logger.warning("Chat web search failed: %s", exc)
             return []
@@ -283,11 +280,13 @@ class ChatAgent:
                     query = lines[-1].strip() if lines else raw[:80]
 
                 done = report_file.exists()
-                jobs.append({
-                    "id": job_dir.name,
-                    "query": query[:100],
-                    "done": done,
-                })
+                jobs.append(
+                    {
+                        "id": job_dir.name,
+                        "query": query[:100],
+                        "done": done,
+                    }
+                )
             return jobs
         except Exception as exc:
             logger.warning("Job listing failed: %s", exc)

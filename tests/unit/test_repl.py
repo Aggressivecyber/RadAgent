@@ -7,15 +7,13 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from agent_core.repl import (
     _AUTO_PHASES,
     _INTERACTIVE_PHASES,
     _PIPELINE_PHASES,
-    _QuitREPL,
     RadAgentREPL,
+    _QuitREPLError,
 )
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────
 
@@ -59,9 +57,7 @@ class TestPipelineConstants:
     def test_all_phases_covered(self) -> None:
         all_phases = _AUTO_PHASES | _INTERACTIVE_PHASES
         for phase in _PIPELINE_PHASES:
-            assert phase in all_phases, (
-                f"Phase {phase} not in auto or interactive sets"
-            )
+            assert phase in all_phases, f"Phase {phase} not in auto or interactive sets"
 
 
 # ─── REPL construction ───────────────────────────────────────────────
@@ -124,8 +120,11 @@ class TestHandleInput:
             requires_simulation_pipeline=True,
         )
         with (
-            patch("agent_core.intent.router.classify_intent_with_lite_model",
-                  new_callable=AsyncMock, return_value=mock_intent),
+            patch(
+                "agent_core.intent.router.classify_intent_with_lite_model",
+                new_callable=AsyncMock,
+                return_value=mock_intent,
+            ),
             patch.object(repl, "cmd_run", new_callable=AsyncMock) as mock,
         ):
             await repl.handle_input("simulate proton beam")
@@ -173,8 +172,8 @@ class TestSlashCommands:
 
     @pytest.mark.asyncio
     async def test_quit_raises_quit_exception(self, repl: RadAgentREPL) -> None:
-        """/quit should raise _QuitREPL, not SystemExit."""
-        with pytest.raises(_QuitREPL):
+        """/quit should raise _QuitREPLError, not SystemExit."""
+        with pytest.raises(_QuitREPLError):
             await repl._cmd_quit()
 
     @pytest.mark.asyncio
@@ -268,9 +267,7 @@ class TestCmdModel:
     """Test /model command."""
 
     @pytest.mark.asyncio
-    async def test_model_with_ir(
-        self, repl_with_state: RadAgentREPL, tmp_path: Path
-    ) -> None:
+    async def test_model_with_ir(self, repl_with_state: RadAgentREPL, tmp_path: Path) -> None:
         """Model should display IR components."""
         ir_path = tmp_path / "g4_model_ir.json"
         ir_data = {
@@ -284,12 +281,8 @@ class TestCmdModel:
                     "roles": ["target"],
                 }
             ],
-            "sources": [
-                {"source_id": "beam", "particle_type": "proton", "energy": "100 MeV"}
-            ],
-            "scoring": [
-                {"scoring_id": "dose", "scoring_type": "dose", "volume": "water"}
-            ],
+            "sources": [{"source_id": "beam", "particle_type": "proton", "energy": "100 MeV"}],
+            "scoring": [{"scoring_id": "dose", "scoring_type": "dose", "volume": "water"}],
         }
         ir_path.write_text(json.dumps(ir_data), encoding="utf-8")
         repl_with_state.state["g4_model_ir_path"] = str(ir_path)
@@ -317,9 +310,7 @@ class TestCmdGates:
     """Test /gates command."""
 
     @pytest.mark.asyncio
-    async def test_gates_with_results(
-        self, repl_with_state: RadAgentREPL, tmp_path: Path
-    ) -> None:
+    async def test_gates_with_results(self, repl_with_state: RadAgentREPL, tmp_path: Path) -> None:
         """Gates should display results table."""
         gates_path = tmp_path / "gate_results.json"
         gates_data = {
@@ -364,9 +355,7 @@ class TestCmdRunSim:
     """Test /sim simulation command."""
 
     @pytest.mark.asyncio
-    async def test_run_sim_with_exe(
-        self, repl_with_state: RadAgentREPL, tmp_path: Path
-    ) -> None:
+    async def test_run_sim_with_exe(self, repl_with_state: RadAgentREPL, tmp_path: Path) -> None:
         """Run sim should call Geant4Runner.simulate."""
         exe_path = tmp_path / "my_sim"
         exe_path.touch()
@@ -447,18 +436,12 @@ class TestCmdCode:
     """Test /code command."""
 
     @pytest.mark.asyncio
-    async def test_code_lists_files(
-        self, repl_with_state: RadAgentREPL, tmp_path: Path
-    ) -> None:
+    async def test_code_lists_files(self, repl_with_state: RadAgentREPL, tmp_path: Path) -> None:
         """Code should list generated C++ files."""
         code_dir = tmp_path / "generated"
         code_dir.mkdir()
-        (code_dir / "DetectorConstruction.cc").write_text(
-            "// detector\nline2\nline3\n"
-        )
-        (code_dir / "CMakeLists.txt").write_text(
-            "cmake_minimum_required(VERSION 3.16)\n"
-        )
+        (code_dir / "DetectorConstruction.cc").write_text("// detector\nline2\nline3\n")
+        (code_dir / "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.16)\n")
 
         repl_with_state.state["generated_code_dir"] = str(code_dir)
 
@@ -518,9 +501,7 @@ class TestCmdConfirm:
         assert response["user_decision"] == "approve"
 
     @pytest.mark.asyncio
-    async def test_confirm_with_edit(
-        self, repl_with_state: RadAgentREPL, tmp_path: Path
-    ) -> None:
+    async def test_confirm_with_edit(self, repl_with_state: RadAgentREPL, tmp_path: Path) -> None:
         """Confirm with edits should record edits."""
         request_path = tmp_path / "confirmation_request.json"
         request_data = {
@@ -549,9 +530,7 @@ class TestCmdConfirm:
         assert response["edits"][0]["new_value"] == "200 MeV"
 
     @pytest.mark.asyncio
-    async def test_confirm_with_reject(
-        self, repl_with_state: RadAgentREPL, tmp_path: Path
-    ) -> None:
+    async def test_confirm_with_reject(self, repl_with_state: RadAgentREPL, tmp_path: Path) -> None:
         """Confirm with rejection should record reject decision."""
         request_path = tmp_path / "confirmation_request.json"
         request_data = {
@@ -589,9 +568,15 @@ class TestBuildSubgraphNodes:
 
         nodes = build_subgraph_nodes()
         expected = {
-            "context", "task_planning", "g4_modeling",
-            "human_confirmation", "g4_codegen", "patch",
-            "gate", "artifact", "report",
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "human_confirmation",
+            "g4_codegen",
+            "patch",
+            "gate",
+            "artifact",
+            "report",
         }
         assert set(nodes.keys()) == expected
 

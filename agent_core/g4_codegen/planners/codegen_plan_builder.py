@@ -83,12 +83,11 @@ def build_codegen_plan(
     codegen_dir = Path(job_id) / "06_codegen" if "/" in job_id else Path(job_id)
     if not codegen_dir.is_absolute():
         from agent_core.config.workspace import get_job_dir
+
         codegen_dir = get_job_dir(job_id) / "06_codegen"
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     plan_path = codegen_dir / "codegen_plan.json"
-    plan_path.write_text(
-        json.dumps(plan.model_dump(), indent=2, ensure_ascii=False)
-    )
+    plan_path.write_text(json.dumps(plan.model_dump(), indent=2, ensure_ascii=False))
 
     return plan.model_dump()

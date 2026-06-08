@@ -84,9 +84,7 @@ def check_magic_numbers(code: str, module_id: str = "?") -> tuple[bool, list[str
     return is_clean, violations
 
 
-def validate_no_magic_numbers(
-    modules: list[dict[str, Any]]
-) -> tuple[bool, list[str]]:
+def validate_no_magic_numbers(modules: list[dict[str, Any]]) -> tuple[bool, list[str]]:
     """Validate all modules are free of magic numbers."""
     all_violations: list[str] = []
     all_clean = True

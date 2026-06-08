@@ -6,7 +6,17 @@ from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generate
 
 
 def _patch(content: str) -> dict:
-    return {"changed_files": [{"path": "src/Test.cc", "new_content": content, "zone": "green", "module_name": "material", "generated_by": "m"}]}
+    return {
+        "changed_files": [
+            {
+                "path": "src/Test.cc",
+                "new_content": content,
+                "zone": "green",
+                "module_name": "material",
+                "generated_by": "m",
+            }
+        ]
+    }
 
 
 def test_rejects_step_conversion():

@@ -11,11 +11,14 @@ class VoxelGrid(BaseModel):
     """3D voxel grid for scoring."""
 
     target_component_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Component to voxelise for scoring",
     )
     voxel_size: list[float] = Field(
-        ..., min_length=3, max_length=3,
+        ...,
+        min_length=3,
+        max_length=3,
         description="Voxel dimensions [dx, dy, dz] in global units (default um)",
     )
 
@@ -24,11 +27,13 @@ class RegionScore(BaseModel):
     """Per-region scoring configuration."""
 
     region_component_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Component to score in",
     )
     quantity: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Quantity to score: 'edep_MeV', 'dose_Gy', 'fluence', etc.",
     )
 
@@ -40,14 +45,13 @@ class ScoringSpec(BaseModel):
     Ensures compatibility with g4_output_package contract.
     """
 
-    scoring_id: str = Field(
-        ..., min_length=1, description="Unique scoring identifier"
-    )
+    scoring_id: str = Field(..., min_length=1, description="Unique scoring identifier")
     scoring_type: Literal["voxel", "region", "mesh"] = Field(
         ..., description="Type of scoring: voxel grid, per-region, or mesh"
     )
     quantities: list[str] = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Quantities to score: 'edep_MeV', 'dose_Gy', 'fluence_cm2', etc.",
     )
     voxel_grid: VoxelGrid | None = Field(

@@ -104,7 +104,8 @@ class OllamaEmbedder:
                 embeddings = data.get("embeddings", [])
                 if embeddings and len(embeddings) > 0:
                     arr: NDArray[np.floating[Any]] = np.array(
-                        embeddings[0], dtype=np.float64,
+                        embeddings[0],
+                        dtype=np.float64,
                     )
                     return arr
                 return None

@@ -26,7 +26,9 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "required_symbols": ["MaterialRegistry"],
         "dependencies": [],
         "forbidden_patterns": [
-            "G4PVPlacement", "G4ParticleGun", "G4VSensitiveDetector",
+            "G4PVPlacement",
+            "G4ParticleGun",
+            "G4VSensitiveDetector",
         ],
     },
     "geometry": {
@@ -44,7 +46,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "required_symbols": ["DetectorConstruction"],
         "dependencies": ["material", "placement"],
         "forbidden_patterns": [
-            "G4ParticleGun", "G4VSensitiveDetector",
+            "G4ParticleGun",
+            "G4VSensitiveDetector",
         ],
     },
     "placement": {
@@ -62,7 +65,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "required_symbols": ["PlacementManager"],
         "dependencies": ["material"],
         "forbidden_patterns": [
-            "G4ParticleGun", "G4VSensitiveDetector",
+            "G4ParticleGun",
+            "G4VSensitiveDetector",
         ],
     },
     "source": {
@@ -79,7 +83,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "required_symbols": ["PrimaryGeneratorAction"],
         "dependencies": [],
         "forbidden_patterns": [
-            "G4PVPlacement", "G4VSensitiveDetector",
+            "G4PVPlacement",
+            "G4VSensitiveDetector",
         ],
     },
     "physics": {
@@ -97,7 +102,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "required_symbols": ["PhysicsListFactoryWrapper"],
         "dependencies": [],
         "forbidden_patterns": [
-            "G4PVPlacement", "G4ParticleGun",
+            "G4PVPlacement",
+            "G4ParticleGun",
         ],
     },
     "sensitive_detector": {
@@ -151,7 +157,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "required_symbols": ["OutputManager"],
         "dependencies": [],
         "forbidden_patterns": [
-            "G4PVPlacement", "G4ParticleGun",
+            "G4PVPlacement",
+            "G4ParticleGun",
         ],
     },
     "action_initialization": {
@@ -173,8 +180,10 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "src/SteppingAction.cc",
         ],
         "required_symbols": [
-            "ActionInitialization", "RunAction",
-            "EventAction", "SteppingAction",
+            "ActionInitialization",
+            "RunAction",
+            "EventAction",
+            "SteppingAction",
         ],
         "dependencies": ["output_manager", "source"],
         "forbidden_patterns": [],
@@ -195,8 +204,14 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         ],
         "required_symbols": ["main"],
         "dependencies": [
-            "material", "geometry", "placement", "source", "physics",
-            "sensitive_detector", "scoring", "output_manager",
+            "material",
+            "geometry",
+            "placement",
+            "source",
+            "physics",
+            "sensitive_detector",
+            "scoring",
+            "output_manager",
             "action_initialization",
         ],
         "forbidden_patterns": [],
@@ -217,6 +232,7 @@ def build_module_contracts(
     contracts: dict[str, dict[str, Any]] = {}
 
     from agent_core.config.workspace import get_job_dir
+
     contracts_dir = get_job_dir(job_id) / "06_codegen" / "module_contracts"
     contracts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -242,8 +258,6 @@ def build_module_contracts(
 
         # Persist
         contract_path = contracts_dir / f"{module_name}.json"
-        contract_path.write_text(
-            json.dumps(contract.model_dump(), indent=2, ensure_ascii=False)
-        )
+        contract_path.write_text(json.dumps(contract.model_dump(), indent=2, ensure_ascii=False))
 
     return contracts

@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
-
 from agent_core.g4_codegen.graph_nodes import (
     persist_codegen_output_node,
-    static_semantic_scanner_node,
 )
 from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
-from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_static_scan
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
+from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_static_scan
 from agent_core.models.gateway import reset_model_gateway
 
 

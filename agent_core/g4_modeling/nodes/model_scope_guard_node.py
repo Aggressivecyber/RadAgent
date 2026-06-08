@@ -74,9 +74,7 @@ async def model_scope_guard_node(state: RadiationAgentState) -> dict[str, Any]:
         "missing_dimensions": missing_dimensions,
         "warnings": warnings,
         "message": (
-            f"Scope guard: {action}. "
-            f"Missing dimensions: {missing_dimensions}. "
-            f"Warnings: {warnings}"
+            f"Scope guard: {action}. Missing dimensions: {missing_dimensions}. Warnings: {warnings}"
         ),
     }
 

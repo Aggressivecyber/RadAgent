@@ -9,7 +9,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from agent_core.graph.main_graph import compile_main_graph
 from agent_core.models.gateway import reset_model_gateway
 from agent_core.models.schemas import (
@@ -36,8 +35,8 @@ def _make_smalltalk_result() -> ModelCallResult:
         provider=ModelProvider.MOCK,
         model_name="mock-lite",
         content='{"intent": "smalltalk", "confidence": 0.99, '
-                '"routing_reason": "User said hello", '
-                '"normalized_user_query": "你好"}',
+        '"routing_reason": "User said hello", '
+        '"normalized_user_query": "你好"}',
         parsed_json={
             "intent": "smalltalk",
             "confidence": 0.99,

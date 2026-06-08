@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from agent_core.graph.main_graph import compile_main_graph
+from agent_core.graph.main_graph import compile_main_graph  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,9 +45,7 @@ async def main() -> None:
     # Load optional human response
     raw_human_response = {}
     if args.human_response_file:
-        raw_human_response = json.loads(
-            Path(args.human_response_file).read_text(encoding="utf-8")
-        )
+        raw_human_response = json.loads(Path(args.human_response_file).read_text(encoding="utf-8"))
 
     # Build initial state
     state = {

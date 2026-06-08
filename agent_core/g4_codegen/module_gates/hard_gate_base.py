@@ -55,14 +55,15 @@ def run_hard_gate_checks(
             module_name=module_name,
             gate_type="hard",
             status="fail",
-            checks=[{
-                "check": "module_status",
-                "status": "fail",
-                "message": (
-                    f"module_status is '{module_status}', "
-                    "expected 'generated' or 'repaired'"
-                ),
-            }],
+            checks=[
+                {
+                    "check": "module_status",
+                    "status": "fail",
+                    "message": (
+                        f"module_status is '{module_status}', expected 'generated' or 'repaired'"
+                    ),
+                }
+            ],
             errors=[
                 f"Module status '{module_status}' is not acceptable — "
                 "must be 'generated' or 'repaired'"
@@ -75,11 +76,13 @@ def run_hard_gate_checks(
             module_name=module_name,
             gate_type="hard",
             status="fail",
-            checks=[{
-                "check": "non_empty_generated_files",
-                "status": "fail",
-                "message": "generated_files is empty",
-            }],
+            checks=[
+                {
+                    "check": "non_empty_generated_files",
+                    "status": "fail",
+                    "message": "generated_files is empty",
+                }
+            ],
             errors=["generated_files is empty — hard gate cannot pass"],
         )
 
@@ -88,9 +91,7 @@ def run_hard_gate_checks(
     all_passed = True
 
     for f in generated_files:
-        file_checks = _check_single_file(
-            f, module_name, forbidden_patterns or []
-        )
+        file_checks = _check_single_file(f, module_name, forbidden_patterns or [])
         checks.extend(file_checks)
         for c in file_checks:
             if c["status"] == "fail":
@@ -118,25 +119,31 @@ def _check_single_file(
     # Check raw dict for legacy "content" key
     raw = f.model_dump() if hasattr(f, "model_dump") else (f if isinstance(f, dict) else {})
     if "content" in raw and "new_content" not in raw:
-        checks.append({
-            "check": "legacy_content_key",
-            "status": "fail",
-            "message": "File uses 'content' instead of 'new_content'",
-        })
+        checks.append(
+            {
+                "check": "legacy_content_key",
+                "status": "fail",
+                "message": "File uses 'content' instead of 'new_content'",
+            }
+        )
 
     # Check non-empty content
-    checks.append({
-        "check": "non_empty_content",
-        "status": "pass" if content.strip() else "fail",
-        "message": "new_content must not be empty",
-    })
+    checks.append(
+        {
+            "check": "non_empty_content",
+            "status": "pass" if content.strip() else "fail",
+            "message": "new_content must not be empty",
+        }
+    )
 
     # Check path validity
-    checks.append({
-        "check": "valid_path",
-        "status": "pass" if f.path and "/" in f.path else "fail",
-        "message": "path must be valid",
-    })
+    checks.append(
+        {
+            "check": "valid_path",
+            "status": "pass" if f.path and "/" in f.path else "fail",
+            "message": "path must be valid",
+        }
+    )
 
     # Check for forbidden patterns
     all_patterns = UNIVERSAL_FORBIDDEN_PATTERNS + [
@@ -145,55 +152,58 @@ def _check_single_file(
 
     for pattern, desc in all_patterns:
         if re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
-            checks.append({
-                "check": f"forbidden_pattern_{desc}",
-                "status": "fail",
-                "message": f"Found forbidden pattern: {desc}",
-            })
+            checks.append(
+                {
+                    "check": f"forbidden_pattern_{desc}",
+                    "status": "fail",
+                    "message": f"Found forbidden pattern: {desc}",
+                }
+            )
 
     # Check header guard
     if f.path.endswith(".hh") or f.path.endswith(".h"):
-        has_guard = (
-            "#pragma once" in content
-            or re.search(r"#ifndef\s+\w+_H", content)
+        has_guard = "#pragma once" in content or re.search(r"#ifndef\s+\w+_H", content)
+        checks.append(
+            {
+                "check": "header_guard",
+                "status": "pass" if has_guard else "fail",
+                "message": "Header must have #pragma once or include guard",
+            }
         )
-        checks.append({
-            "check": "header_guard",
-            "status": "pass" if has_guard else "fail",
-            "message": "Header must have #pragma once or include guard",
-        })
 
     # Check source includes own header
     if f.path.endswith(".cc") or f.path.endswith(".cpp"):
         header_name = (
-            f.path
-            .replace("/src/", "/include/")
-            .replace(".cc", ".hh")
-            .replace(".cpp", ".h")
+            f.path.replace("/src/", "/include/").replace(".cc", ".hh").replace(".cpp", ".h")
         )
         short_header = header_name.split("/")[-1]
         has_own_include = (
-            f'#include "{short_header}"' in content
-            or f'#include <{short_header}>' in content
+            f'#include "{short_header}"' in content or f"#include <{short_header}>" in content
         )
-        checks.append({
-            "check": "source_includes_own_header",
-            "status": "pass" if has_own_include else "warn",
-            "message": "Source should include its own header",
-        })
+        checks.append(
+            {
+                "check": "source_includes_own_header",
+                "status": "pass" if has_own_include else "warn",
+                "message": "Source should include its own header",
+            }
+        )
 
     # Check generated_by
-    checks.append({
-        "check": "generated_by",
-        "status": "pass" if f.generated_by == f"{expected_module}_module_agent" else "warn",
-        "message": f"generated_by should be {expected_module}_module_agent",
-    })
+    checks.append(
+        {
+            "check": "generated_by",
+            "status": "pass" if f.generated_by == f"{expected_module}_module_agent" else "warn",
+            "message": f"generated_by should be {expected_module}_module_agent",
+        }
+    )
 
     # Check module_name
-    checks.append({
-        "check": "module_name",
-        "status": "pass" if f.module_name == expected_module else "warn",
-        "message": f"module_name should be {expected_module}",
-    })
+    checks.append(
+        {
+            "check": "module_name",
+            "status": "pass" if f.module_name == expected_module else "warn",
+            "message": f"module_name should be {expected_module}",
+        }
+    )
 
     return checks

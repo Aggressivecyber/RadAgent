@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -27,18 +26,20 @@ def _make_module_result(
     """Build a module result dict matching ModuleAgentResult.model_dump()."""
     generated_files = []
     for f in files:
-        generated_files.append({
-            "path": f["path"],
-            "operation": f.get("operation", "create_or_replace"),
-            "new_content": f["new_content"],
-            "generated_by": f.get("generated_by", f"{module_name}_module_agent"),
-            "module_name": f.get("module_name", module_name),
-            "rationale": f.get("rationale", "test"),
-            "dependencies": f.get("dependencies", []),
-            "satisfies": f.get("satisfies", []),
-            "risk_notes": f.get("risk_notes", []),
-            "used_references": f.get("used_references", []),
-        })
+        generated_files.append(
+            {
+                "path": f["path"],
+                "operation": f.get("operation", "create_or_replace"),
+                "new_content": f["new_content"],
+                "generated_by": f.get("generated_by", f"{module_name}_module_agent"),
+                "module_name": f.get("module_name", module_name),
+                "rationale": f.get("rationale", "test"),
+                "dependencies": f.get("dependencies", []),
+                "satisfies": f.get("satisfies", []),
+                "risk_notes": f.get("risk_notes", []),
+                "used_references": f.get("used_references", []),
+            }
+        )
     return {
         "module_name": module_name,
         "status": status,
@@ -65,18 +66,24 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_patch_satisfies_validator(self, workspace: Path) -> None:
         """assemble_proposed_patch output must satisfy PatchValidator."""
         module_results = {
-            "material": _make_module_result("material", [
-                {
-                    "path": "src/MaterialRegistry.cc",
-                    "new_content": '#include "MaterialRegistry.hh"\nvoid MaterialRegistry::DefineMaterials() {}',
-                },
-            ]),
-            "geometry": _make_module_result("geometry", [
-                {
-                    "path": "src/DetectorConstruction.cc",
-                    "new_content": '#include "DetectorConstruction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }',
-                },
-            ]),
+            "material": _make_module_result(
+                "material",
+                [
+                    {
+                        "path": "src/MaterialRegistry.cc",
+                        "new_content": '#include "MaterialRegistry.hh"\nvoid MaterialRegistry::DefineMaterials() {}',  # noqa: E501
+                    },
+                ],
+            ),
+            "geometry": _make_module_result(
+                "geometry",
+                [
+                    {
+                        "path": "src/DetectorConstruction.cc",
+                        "new_content": '#include "DetectorConstruction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }',  # noqa: E501
+                    },
+                ],
+            ),
         }
 
         gate_results = _make_gate_results_pass(["material", "geometry"])
@@ -91,20 +98,29 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_patch_has_required_top_level_fields(self, workspace: Path) -> None:
         """Patch must contain all required top-level fields."""
         module_results = {
-            "material": _make_module_result("material", [
-                {
-                    "path": "src/MaterialRegistry.cc",
-                    "new_content": "int x = 1;",
-                },
-            ]),
+            "material": _make_module_result(  # noqa: E501  # noqa: E501
+                "material",
+                [
+                    {
+                        "path": "src/MaterialRegistry.cc",
+                        "new_content": "int x = 1;",
+                    },
+                ],
+            ),
         }
         gate_results = _make_gate_results_pass(["material"])
 
         patch = assemble_proposed_patch(module_results, gate_results, "test_job")
 
         required_fields = [
-            "patch_id", "job_id", "description", "change_type",
-            "risk_level", "changed_files", "test_plan", "expected_outputs",
+            "patch_id",
+            "job_id",
+            "description",
+            "change_type",
+            "risk_level",
+            "changed_files",
+            "test_plan",
+            "expected_outputs",
         ]
         for field in required_fields:
             assert field in patch, f"Missing required field: {field}"
@@ -112,9 +128,12 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_patch_id_includes_job_id(self, workspace: Path) -> None:
         """patch_id should contain the job_id."""
         module_results = {
-            "material": _make_module_result("material", [
-                {"path": "src/test.cc", "new_content": "// test"},
-            ]),
+            "material": _make_module_result(
+                "material",
+                [
+                    {"path": "src/test.cc", "new_content": "// test"},
+                ],
+            ),
         }
         gate_results = _make_gate_results_pass(["material"])
 
@@ -126,9 +145,12 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_change_type_is_valid(self, workspace: Path) -> None:
         """change_type should be a recognized value."""
         module_results = {
-            "material": _make_module_result("material", [
-                {"path": "src/test.cc", "new_content": "// test"},
-            ]),
+            "material": _make_module_result(
+                "material",
+                [
+                    {"path": "src/test.cc", "new_content": "// test"},
+                ],
+            ),
         }
         gate_results = _make_gate_results_pass(["material"])
 
@@ -140,9 +162,12 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_risk_level_is_valid(self, workspace: Path) -> None:
         """risk_level should be a recognized value."""
         module_results = {
-            "material": _make_module_result("material", [
-                {"path": "src/test.cc", "new_content": "// test"},
-            ]),
+            "material": _make_module_result(
+                "material",
+                [
+                    {"path": "src/test.cc", "new_content": "// test"},
+                ],
+            ),
         }
         gate_results = _make_gate_results_pass(["material"])
 
@@ -154,9 +179,12 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_changed_files_not_empty_when_modules_pass(self, workspace: Path) -> None:
         """changed_files should not be empty when at least one module passes."""
         module_results = {
-            "material": _make_module_result("material", [
-                {"path": "src/test.cc", "new_content": "// test"},
-            ]),
+            "material": _make_module_result(
+                "material",
+                [
+                    {"path": "src/test.cc", "new_content": "// test"},
+                ],
+            ),
         }
         gate_results = _make_gate_results_pass(["material"])
 
@@ -167,12 +195,18 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_two_modules_both_pass(self, workspace: Path) -> None:
         """Both modules pass both gates — all files should be in patch."""
         module_results = {
-            "material": _make_module_result("material", [
-                {"path": "src/Material.cc", "new_content": "// material"},
-            ]),
-            "physics": _make_module_result("physics", [
-                {"path": "src/Physics.cc", "new_content": "// physics"},
-            ]),
+            "material": _make_module_result(
+                "material",
+                [
+                    {"path": "src/Material.cc", "new_content": "// material"},
+                ],
+            ),
+            "physics": _make_module_result(
+                "physics",
+                [
+                    {"path": "src/Physics.cc", "new_content": "// physics"},
+                ],
+            ),
         }
         gate_results = _make_gate_results_pass(["material", "physics"])
 

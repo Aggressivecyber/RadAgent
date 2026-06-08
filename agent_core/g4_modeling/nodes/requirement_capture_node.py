@@ -115,9 +115,7 @@ async def requirement_capture_node(state: RadiationAgentState) -> dict[str, Any]
     }
 
 
-def _heuristic_requirements(
-    user_query: str, task_spec: dict
-) -> dict[str, Any]:
+def _heuristic_requirements(user_query: str, task_spec: dict) -> dict[str, Any]:
     """Fallback requirement extraction without LLM."""
     components: list[dict[str, str]] = []
     materials: list[dict[str, str]] = []
@@ -128,30 +126,36 @@ def _heuristic_requirements(
     target = task_spec.get("target", {})
 
     if particle:
-        sources.append({
-            "particle_type": particle.get("type", "proton"),
-            "energy": f"{particle.get('energy_MeV', 10)} MeV",
-            "distribution": "mono",
-            "geometry": "pencil",
-        })
+        sources.append(
+            {
+                "particle_type": particle.get("type", "proton"),
+                "energy": f"{particle.get('energy_MeV', 10)} MeV",
+                "distribution": "mono",
+                "geometry": "pencil",
+            }
+        )
 
     if target:
         mat_name = target.get("material", "Si")
-        materials.append({
-            "name": mat_name,
-            "classification": "nist" if mat_name in ("Si", "Al", "Cu", "Ge") else "custom",
-            "reason": "Target material from task specification",
-        })
+        materials.append(
+            {
+                "name": mat_name,
+                "classification": "nist" if mat_name in ("Si", "Al", "Cu", "Ge") else "custom",
+                "reason": "Target material from task specification",
+            }
+        )
         target.get("size_um", [1000, 1000, 300])
-        components.append({
-            "component_id": "target_volume",
-            "display_name": f"{mat_name} target",
-            "component_type": "volume",
-            "geometry_type": "box",
-            "material": mat_name,
-            "role": "Primary scoring region",
-            "source": "user_specified",
-        })
+        components.append(
+            {
+                "component_id": "target_volume",
+                "display_name": f"{mat_name} target",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "material": mat_name,
+                "role": "Primary scoring region",
+                "source": "user_specified",
+            }
+        )
 
     return {
         "target_system": user_query,

@@ -189,10 +189,12 @@ class TestRAGClient:
 
     async def test_index_documents(self) -> None:
         embedder = AsyncMock(spec=OllamaEmbedder)
-        embedder.embed_batch = AsyncMock(return_value=[
-            np.array([1.0, 0.0]),
-            np.array([0.0, 1.0]),
-        ])
+        embedder.embed_batch = AsyncMock(
+            return_value=[
+                np.array([1.0, 0.0]),
+                np.array([0.0, 1.0]),
+            ]
+        )
 
         idx = DocumentIndex()
         client = RAGClient(embedder=embedder, index=idx)
@@ -259,8 +261,15 @@ class TestGeant4DocStore:
         docs = store.get_documents()
         titles = " ".join(d.title + " " + d.content for d in docs).lower()
         # Must cover key Geant4 concepts
-        for keyword in ("g4box", "g4tubs", "g4material", "g4vsensitivedetector",
-                        "g4particlegun", "g4runmanager", "processhits"):
+        for keyword in (
+            "g4box",
+            "g4tubs",
+            "g4material",
+            "g4vsensitivedetector",
+            "g4particlegun",
+            "g4runmanager",
+            "processhits",
+        ):
             assert keyword in titles, f"Doc store must cover '{keyword}'"
 
 
@@ -288,32 +297,36 @@ class TestComputeRAGScore:
 
     def test_all_categories_covered_allows_high_score(self) -> None:
         """All categories covered + high similarity → score >= 0.7."""
-        ctx = [{
-            "title": "Geant4 detector",
-            "content": (
-                "G4Box G4PVPlacement G4LogicalVolume "
-                "G4Material G4NistManager density "
-                "G4ParticleGun primary generator "
-                "physics list FTFP_BERT "
-                "G4VSensitiveDetector sensitive detector dose edep "
-                "RunAction CSV output"
-            ),
-            "score": 0.85,
-        }]
+        ctx = [
+            {
+                "title": "Geant4 detector",
+                "content": (
+                    "G4Box G4PVPlacement G4LogicalVolume "
+                    "G4Material G4NistManager density "
+                    "G4ParticleGun primary generator "
+                    "physics list FTFP_BERT "
+                    "G4VSensitiveDetector sensitive detector dose edep "
+                    "RunAction CSV output"
+                ),
+                "score": 0.85,
+            }
+        ]
         score, report = _compute_rag_score(ctx)
         assert score >= 0.7
         assert report["missing_hard_required"] == []
 
     def test_score_capped_at_one(self) -> None:
-        ctx = [{
-            "title": "All topics",
-            "content": (
-                "G4Box G4PVPlacement G4LogicalVolume G4Material G4NistManager density "
-                "G4ParticleGun primary generator physics list FTFP_BERT "
-                "G4VSensitiveDetector sensitive detector dose edep RunAction CSV output"
-            ),
-            "score": 1.0,
-        }] * 10
+        ctx = [
+            {
+                "title": "All topics",
+                "content": (
+                    "G4Box G4PVPlacement G4LogicalVolume G4Material G4NistManager density "
+                    "G4ParticleGun primary generator physics list FTFP_BERT "
+                    "G4VSensitiveDetector sensitive detector dose edep RunAction CSV output"
+                ),
+                "score": 1.0,
+            }
+        ] * 10
         score, _report = _compute_rag_score(ctx)
         assert score <= 1.0
 
@@ -348,17 +361,19 @@ class TestComputeRAGCoverage:
         assert report["covered_count"] >= 1
 
     def test_all_categories_covered(self) -> None:
-        ctx = [{
-            "title": "Complete Geant4",
-            "content": (
-                "G4Box G4PVPlacement G4LogicalVolume "
-                "G4Material G4NistManager density "
-                "G4ParticleGun primary generator "
-                "physics list FTFP_BERT "
-                "G4VSensitiveDetector sensitive detector dose edep "
-                "RunAction CSV output"
-            ),
-        }]
+        ctx = [
+            {
+                "title": "Complete Geant4",
+                "content": (
+                    "G4Box G4PVPlacement G4LogicalVolume "
+                    "G4Material G4NistManager density "
+                    "G4ParticleGun primary generator "
+                    "physics list FTFP_BERT "
+                    "G4VSensitiveDetector sensitive detector dose edep "
+                    "RunAction CSV output"
+                ),
+            }
+        ]
         report = compute_rag_coverage(ctx)
         assert report["missing_hard_required"] == []
         assert report["covered_count"] == 6
@@ -393,7 +408,9 @@ class TestGenerateSearchQueries:
 
 class TestRetrieveRAGContext:
     async def test_graceful_fallback_when_ollama_unavailable(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """When Ollama is unreachable, must return score 0.0 and needs_web=True."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -417,7 +434,9 @@ class TestRetrieveRAGContext:
             assert len(result["rag_context"]) == 0
 
     async def test_returns_results_when_ollama_available(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """When Ollama is available and indexed, must return real results."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -440,10 +459,12 @@ class TestRetrieveRAGContext:
         mock_embedder = AsyncMock(spec=OllamaEmbedder)
         mock_embedder.is_available = AsyncMock(return_value=True)
         mock_embedder.embed = AsyncMock(return_value=np.array([0.95, 0.05, 0.0, 0.0, 0.0]))
-        mock_embedder.embed_batch = AsyncMock(return_value=[
-            np.array([1.0, 0.0, 0.0, 0.0, 0.0]),
-            np.array([0.0, 1.0, 0.0, 0.0, 0.0]),
-        ])
+        mock_embedder.embed_batch = AsyncMock(
+            return_value=[
+                np.array([1.0, 0.0, 0.0, 0.0, 0.0]),
+                np.array([0.0, 1.0, 0.0, 0.0, 0.0]),
+            ]
+        )
 
         client = RAGClient(embedder=mock_embedder, index=idx)
 
@@ -465,7 +486,9 @@ class TestRetrieveRAGContext:
             assert top["score"] > 0.5
 
     async def test_saves_rag_files_to_disk(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """RAG context and report must be persisted to disk."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -498,49 +521,57 @@ class TestRetrieveRAGContext:
 
 class TestScoreWebQuality:
     def test_web_quality_rejects_no_urls(self) -> None:
-        result = score_web_quality([
-            {"title": "Geant4", "url": "", "snippet": "G4Material"},
-        ])
+        result = score_web_quality(
+            [
+                {"title": "Geant4", "url": "", "snippet": "G4Material"},
+            ]
+        )
         assert result["sufficient"] is False
 
     def test_web_quality_requires_trusted_source(self) -> None:
-        result = score_web_quality([
-            {
-                "title": "Geant4 material",
-                "url": "https://random.com/a",
-                "snippet": "G4Material",
-            },
-            {
-                "title": "Geant4 geometry",
-                "url": "https://example.com/b",
-                "snippet": "G4PVPlacement",
-            },
-        ])
+        result = score_web_quality(
+            [
+                {
+                    "title": "Geant4 material",
+                    "url": "https://random.com/a",
+                    "snippet": "G4Material",
+                },
+                {
+                    "title": "Geant4 geometry",
+                    "url": "https://example.com/b",
+                    "snippet": "G4PVPlacement",
+                },
+            ]
+        )
         assert result["sufficient"] is False
 
     def test_web_quality_accepts_trusted_geant4_sources(self) -> None:
-        result = score_web_quality([
-            {
-                "title": "Geant4 geometry",
-                "url": "https://geant4.web.cern.ch/documentation",
-                "snippet": "G4PVPlacement G4Material",
-            },
-            {
-                "title": "Geant4 scoring",
-                "url": "https://github.com/Geant4/geant4",
-                "snippet": "G4VSensitiveDetector dose scoring",
-            },
-        ])
+        result = score_web_quality(
+            [
+                {
+                    "title": "Geant4 geometry",
+                    "url": "https://geant4.web.cern.ch/documentation",
+                    "snippet": "G4PVPlacement G4Material",
+                },
+                {
+                    "title": "Geant4 scoring",
+                    "url": "https://github.com/Geant4/geant4",
+                    "snippet": "G4VSensitiveDetector dose scoring",
+                },
+            ]
+        )
         assert result["sufficient"] is True
 
     def test_web_quality_insufficient_keyword_hits(self) -> None:
-        result = score_web_quality([
-            {
-                "title": "Geant4 overview",
-                "url": "https://geant4.web.cern.ch/",
-                "snippet": "simulation toolkit",
-            },
-        ])
+        result = score_web_quality(
+            [
+                {
+                    "title": "Geant4 overview",
+                    "url": "https://geant4.web.cern.ch/",
+                    "snippet": "simulation toolkit",
+                },
+            ]
+        )
         # Has trusted source but only 1 valid item + 0 keyword hits
         assert result["sufficient"] is False
 

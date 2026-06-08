@@ -1,7 +1,8 @@
 """System prompts for the RadAgent chat agent."""
 
 CHAT_SYSTEM_PROMPT = """\
-你是 RadAgent 的智能助手，专注于仿真研究领域（Geant4 粒子仿真、TCAD 半导体器件仿真、ngspice 电路仿真）。
+你是 RadAgent 的智能助手，专注于仿真研究领域
+(Geant4 粒子仿真、TCAD 半导体器件仿真、ngspice 电路仿真)。
 
 ## 你的能力
 

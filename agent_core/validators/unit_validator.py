@@ -34,9 +34,7 @@ class UnitValidator:
                 return category
         return None
 
-    def validate_unit(
-        self, value: float, unit: str, expected_units: list[str]
-    ) -> tuple[bool, str]:
+    def validate_unit(self, value: float, unit: str, expected_units: list[str]) -> tuple[bool, str]:
         if unit in expected_units:
             return True, f"Unit '{unit}' is valid for value {value}."
         category = self._find_category(unit)
@@ -48,9 +46,7 @@ class UnitValidator:
             f"Convertible within category '{category}'.",
         )
 
-    def convert(
-        self, value: float, from_unit: str, to_unit: str
-    ) -> tuple[float, bool]:
+    def convert(self, value: float, from_unit: str, to_unit: str) -> tuple[float, bool]:
         cat = self._find_category(from_unit)
         if cat is None or self._find_category(to_unit) != cat:
             return 0.0, False

@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import pytest
-
 from agent_core.g4_codegen.integration.integration_assembler import (
     assemble_proposed_patch,
 )
 
 PATCH_REQUIRED_FIELDS = {
-    "patch_id", "job_id", "description", "change_type",
-    "risk_level", "changed_files", "test_plan", "expected_outputs",
+    "patch_id",
+    "job_id",
+    "description",
+    "change_type",
+    "risk_level",
+    "changed_files",
+    "test_plan",
+    "expected_outputs",
 }
 
 
@@ -42,20 +47,14 @@ def sample_gate_results():
     }
 
 
-def test_patch_has_all_required_fields(
-    sample_module_results, sample_gate_results
-):
-    patch = assemble_proposed_patch(
-        sample_module_results, sample_gate_results, "job_001"
-    )
+def test_patch_has_all_required_fields(sample_module_results, sample_gate_results):
+    patch = assemble_proposed_patch(sample_module_results, sample_gate_results, "job_001")
     missing = PATCH_REQUIRED_FIELDS - set(patch.keys())
     assert not missing, f"Missing fields: {sorted(missing)}"
 
 
 def test_patch_has_metadata(sample_module_results, sample_gate_results):
-    patch = assemble_proposed_patch(
-        sample_module_results, sample_gate_results, "job_001"
-    )
+    patch = assemble_proposed_patch(sample_module_results, sample_gate_results, "job_001")
     assert "metadata" in patch
     meta = patch["metadata"]
     assert "source" in meta
@@ -66,15 +65,15 @@ def test_patch_has_metadata(sample_module_results, sample_gate_results):
     assert "module_gate_summary" in meta
 
 
-def test_changed_files_have_required_fields(
-    sample_module_results, sample_gate_results
-):
-    patch = assemble_proposed_patch(
-        sample_module_results, sample_gate_results, "job_001"
-    )
+def test_changed_files_have_required_fields(sample_module_results, sample_gate_results):
+    patch = assemble_proposed_patch(sample_module_results, sample_gate_results, "job_001")
     file_required = {
-        "path", "operation", "new_content", "zone",
-        "generated_by", "module_name",
+        "path",
+        "operation",
+        "new_content",
+        "zone",
+        "generated_by",
+        "module_name",
     }
     for idx, f in enumerate(patch["changed_files"]):
         missing = file_required - set(f.keys())

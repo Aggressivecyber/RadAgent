@@ -5,11 +5,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from agent_core.models.gateway import ModelGateway, get_model_gateway, reset_model_gateway
+from agent_core.models.gateway import get_model_gateway, reset_model_gateway
 from agent_core.models.schemas import (
     ModelCallResult,
-    ModelProvider,
     ModelTask,
     ModelTier,
 )

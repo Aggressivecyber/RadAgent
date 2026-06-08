@@ -1,16 +1,15 @@
 """E2E test — shielding config codegen pipeline with mock provider."""
-
+  # noqa: E501  # noqa: E501
 from __future__ import annotations
 
-import json
+# noqa: E501  # noqa: E501
 from pathlib import Path
 from typing import Any
 
 import pytest
-
 from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
-from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
 from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
 from agent_core.g4_codegen.schemas import GeneratedModuleFile
 from agent_core.models.gateway import reset_model_gateway
 
@@ -59,16 +58,16 @@ class TestG4CodegenAgentModulesShielding:
                         "src/MaterialRegistry.cc",
                         '#include "MaterialRegistry.hh"\n'
                         '#include "G4NistManager.hh"\n'
-                        'void MaterialRegistry::DefineMaterials() {\n'
+                        "void MaterialRegistry::DefineMaterials() {\n"
                         '  G4NistManager::Instance()->FindOrBuildMaterial("G4_Pb");\n'
                         '  G4NistManager::Instance()->FindOrBuildMaterial("G4_CONCRETE");\n'
-                        '}\n',
+                        "}\n",
                         "material",
                     ),
                     _valid_file(
                         "include/MaterialRegistry.hh",
-                        '#pragma once\n#include <G4Material.hh>\n'
-                        'class MaterialRegistry { public: void DefineMaterials(); };\n',
+                        "#pragma once\n#include <G4Material.hh>\n"
+                        "class MaterialRegistry { public: void DefineMaterials(); };\n",
                         "material",
                     ),
                 ],
@@ -87,20 +86,20 @@ class TestG4CodegenAgentModulesShielding:
                         '#include "G4LogicalVolume.hh"\n'
                         '#include "G4PVPlacement.hh"\n'
                         '#include "G4NistManager.hh"\n'
-                        'G4VPhysicalVolume* ShieldingConstruction::Construct() {\n'
+                        "G4VPhysicalVolume* ShieldingConstruction::Construct() {\n"
                         '  auto* worldSolid = new G4Box("World", 5000*cm, 5000*cm, 5000*cm);\n'
-                        '  auto* worldLV = new G4LogicalVolume(worldSolid, '
-                        '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'
-                        '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'
-                        '  return worldPV;\n'
-                        '}\n',
+                        "  auto* worldLV = new G4LogicalVolume(worldSolid, "
+                        '    G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "WorldLV");\n'  # noqa: E501
+                        '  auto* worldPV = new G4PVPlacement(nullptr, {}, worldLV, "WorldPV", nullptr, false, 0);\n'  # noqa: E501
+                        "  return worldPV;\n"
+                        "}\n",
                         "geometry",
                     ),
                     _valid_file(
                         "include/ShieldingConstruction.hh",
-                        '#pragma once\n#include <G4VUserDetectorConstruction.hh>\n'
-                        'class ShieldingConstruction : public G4VUserDetectorConstruction {\n'
-                        'public:\n  G4VPhysicalVolume* Construct() override;\n};\n',
+                        "#pragma once\n#include <G4VUserDetectorConstruction.hh>\n"
+                        "class ShieldingConstruction : public G4VUserDetectorConstruction {\n"
+                        "public:\n  G4VPhysicalVolume* Construct() override;\n};\n",  # noqa: E501  # noqa: E501
                         "geometry",
                     ),
                 ],
@@ -122,9 +121,7 @@ class TestG4CodegenAgentModulesShielding:
         assert len(patch["changed_files"]) > 0
 
         # Verify Pb and concrete materials are referenced
-        all_content = " ".join(
-            f["new_content"] for f in patch["changed_files"]
-        )
+        all_content = " ".join(f["new_content"] for f in patch["changed_files"])
         assert "G4_Pb" in all_content or "G4_CONCRETE" in all_content
 
         # Hard gate

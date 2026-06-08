@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
-
 from agent_core.g4_codegen.integration.cross_file_llm_gate import run_cross_file_llm_gate
 from agent_core.models.gateway import reset_model_gateway
+from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +37,7 @@ class TestCrossFileLlmGateUsesCodeReviewBundle:
             "changed_files": [
                 {
                     "path": "src/Detector.cc",
-                    "new_content": '#include "Detector.hh"\nG4VPhysicalVolume* Detector::Construct() { return nullptr; }\n',
+                    "new_content": '#include "Detector.hh"\nG4VPhysicalVolume* Detector::Construct() { return nullptr; }\n',  # noqa: E501
                     "generated_by": "geometry_module_agent",
                     "module_name": "geometry",
                 },
@@ -66,11 +63,10 @@ class TestCrossFileLlmGateUsesCodeReviewBundle:
         # Need to create the cross_file_hard_gate.json to pass the pre-check
         job_id = "test_bundle"
         from agent_core.config.workspace import get_job_dir
+
         codegen_dir = get_job_dir(job_id) / "06_codegen"
         codegen_dir.mkdir(parents=True, exist_ok=True)
-        (codegen_dir / "cross_file_hard_gate.json").write_text(
-            json.dumps({"status": "pass"})
-        )
+        (codegen_dir / "cross_file_hard_gate.json").write_text(json.dumps({"status": "pass"}))
 
         captured_prompts: dict[str, str] = {}
 
@@ -87,7 +83,7 @@ class TestCrossFileLlmGateUsesCodeReviewBundle:
                     tier=ModelTier.MAX,
                     provider=ModelProvider.MOCK,
                     model_name="mock",
-                    content='{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": "OK"}',
+                    content='{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": "OK"}',  # noqa: E501
                     parsed_json={
                         "status": "pass",
                         "checks": [],
@@ -102,9 +98,7 @@ class TestCrossFileLlmGateUsesCodeReviewBundle:
 
             mock_gw.call = capture_call
 
-            result = await run_cross_file_llm_gate(
-                proposed_patch, module_gate_results, job_id
-            )
+            result = await run_cross_file_llm_gate(proposed_patch, module_gate_results, job_id)  # noqa: E501  # noqa: E501  # noqa: E501
 
         assert result["status"] == "pass"
 
@@ -136,11 +130,10 @@ class TestCrossFileLlmGateDoesNotOnlyUseContentLength:
 
         job_id = "test_not_length"
         from agent_core.config.workspace import get_job_dir
+
         codegen_dir = get_job_dir(job_id) / "06_codegen"
         codegen_dir.mkdir(parents=True, exist_ok=True)
-        (codegen_dir / "cross_file_hard_gate.json").write_text(
-            json.dumps({"status": "pass"})
-        )
+        (codegen_dir / "cross_file_hard_gate.json").write_text(json.dumps({"status": "pass"}))
 
         captured_prompts: dict[str, str] = {}
 
@@ -157,7 +150,7 @@ class TestCrossFileLlmGateDoesNotOnlyUseContentLength:
                     tier=ModelTier.MAX,
                     provider=ModelProvider.MOCK,
                     model_name="mock",
-                    content='{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": ""}',
+                    content='{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": ""}',  # noqa: E501
                     parsed_json={
                         "status": "pass",
                         "checks": [],
@@ -172,9 +165,7 @@ class TestCrossFileLlmGateDoesNotOnlyUseContentLength:
 
             mock_gw.call = capture_call
 
-            await run_cross_file_llm_gate(
-                proposed_patch, module_gate_results, job_id
-            )
+            await run_cross_file_llm_gate(proposed_patch, module_gate_results, job_id)
 
         prompt = captured_prompts["user_prompt"]
 
