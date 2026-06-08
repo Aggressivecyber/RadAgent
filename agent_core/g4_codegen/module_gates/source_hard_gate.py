@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
 from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleGateResult
 
@@ -31,6 +33,47 @@ def run_source_hard_gate(
                 }
             )
             errors.append(f"{file_entry.path}: source position must use mm, not cm")
+
+        if file_entry.path == "src/PrimaryGeneratorAction.cc":
+            generate_primaries = re.search(
+                r"void\s+PrimaryGeneratorAction::GeneratePrimaries\s*"
+                r"\(\s*G4Event\s*\*\s*(?P<param>[^)]*)\)\s*"
+                r"\{(?P<body>.*?)\n\}",
+                content,
+                re.DOTALL,
+            )
+            if generate_primaries:
+                param = generate_primaries.group("param").strip()
+                body = generate_primaries.group("body")
+                uses_event = bool(re.search(r"\bevent\b", body))
+                names_event = bool(re.search(r"\bevent\b", param))
+                comments_out_event = "/*event*/" in param or "/* event */" in param
+                if uses_event and (not names_event or comments_out_event):
+                    checks.append(
+                        {
+                            "check": "source_generate_primaries_names_event_parameter",
+                            "status": "fail",
+                            "message": (
+                                "GeneratePrimaries must define G4Event* event when the "
+                                "function body passes event to GeneratePrimaryVertex"
+                            ),
+                        }
+                    )
+                    errors.append(
+                        f"{file_entry.path}: GeneratePrimaries must use "
+                        "G4Event* event, not an unnamed or commented-out parameter"
+                    )
+            elif "GeneratePrimaries" in content:
+                checks.append(
+                    {
+                        "check": "source_generate_primaries_signature_parseable",
+                        "status": "fail",
+                        "message": "GeneratePrimaries definition must be parseable",
+                    }
+                )
+                errors.append(
+                    f"{file_entry.path}: GeneratePrimaries definition must be parseable"
+                )
 
     return ModuleGateResult(
         module_name="source",

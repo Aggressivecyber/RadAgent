@@ -23,7 +23,11 @@ SOURCE_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 源项模块编码 Agent。
 4. IR 中 beam.position 的数值已经使用全局长度单位，不得擅自换算成 cm
 5. 对位置使用 G4ThreeVector(x*mm, y*mm, z*mm)，不要使用 cm
 6. 对能量使用 IR energy.unit，例如 10.0*MeV
-7. 输出 JSON 格式
+7. PrimaryGeneratorAction.cc 中 GeneratePrimaries 的定义必须命名 G4Event 形参：
+   void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
+   函数体调用 fParticleGun->GeneratePrimaryVertex(event)；不要写
+   G4Event* /*event*/ 或未命名的 G4Event* 后再使用 event
+8. 输出 JSON 格式
 """
 
 
