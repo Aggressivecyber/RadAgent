@@ -518,6 +518,10 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "a function-local static MaterialRegistry so other modules can share the registry."
             ),
             (
+                "Use valid Geant4 G4Exception severity values such as FatalException "
+                "or FatalErrorInArgument; do not write FatalErrorInArguments."
+            ),
+            (
                 "Do not use placeholder, dummy, stub, TODO, NotImplemented, 'for now', "
                 "or 'should handle' in code or comments."
             ),
@@ -571,9 +575,11 @@ def _module_repair_requirements(module_name: str) -> list[str]:
             ),
             (
                 "Use the real DetectorConstruction constructor from the generated "
-                "header; if it takes MaterialRegistry*, create and initialize a "
-                "MaterialRegistry and pass it to DetectorConstruction."
+                "header; if it takes MaterialRegistry*, obtain the registry with "
+                "MaterialRegistry::GetInstance(), initialize it, and pass it to "
+                "DetectorConstruction."
             ),
+            "Do not call new MaterialRegistry(); its constructor may be private.",
             (
                 "If DetectorConstruction only has a default constructor, call "
                 "new DetectorConstruction() and do not pass MaterialRegistry."

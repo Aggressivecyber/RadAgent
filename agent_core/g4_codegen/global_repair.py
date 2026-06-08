@@ -38,6 +38,7 @@ def run_global_code_repair(
     by_path = {f.get("path", ""): f for f in changed_files if isinstance(f, dict)}
 
     _repair_cmake_sources(by_path, report)
+    _repair_geant4_exception_severities(by_path, report)
     _repair_material_registry(by_path, report)
     _repair_material_registry_call_sites(by_path, report)
     _repair_placement_manager(by_path, report)
@@ -205,6 +206,23 @@ def _repair_material_registry_call_sites(
             changed_paths.append(path)
     if changed_paths:
         _fixed(report, "MaterialRegistry call sites", "normalized GetInstance pointer calls")
+
+
+def _repair_geant4_exception_severities(
+    by_path: dict[str, dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    changed_paths: list[str] = []
+    for path, entry in by_path.items():
+        if not path.endswith((".cc", ".hh")):
+            continue
+        content = entry.get("new_content", "")
+        updated = content.replace("FatalErrorInArguments", "FatalException")
+        if updated != content:
+            entry["new_content"] = updated
+            changed_paths.append(path)
+    if changed_paths:
+        _fixed(report, "G4Exception severity", "normalized invalid FatalErrorInArguments")
 
 
 def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
@@ -456,12 +474,17 @@ def _repair_main_detector_constructor(
 
     if "MaterialRegistry.hh" not in content:
         content = _ensure_include_text(content, "MaterialRegistry.hh")
+    content = re.sub(
+        r"(?:auto|MaterialRegistry)\s*\*\s+materialRegistry\s*=\s*new\s+MaterialRegistry\s*\(\s*\)\s*;",
+        "auto* materialRegistry = MaterialRegistry::GetInstance();",
+        content,
+    )
     if "materialRegistry" not in content:
         with_registry = re.sub(
             r"(\bauto\*\s+runManager\s*=\s*G4RunManagerFactory::CreateRunManager\(\)\s*;\s*)",
             (
                 "\\1\n"
-                "    auto* materialRegistry = new MaterialRegistry();\n"
+                "    auto* materialRegistry = MaterialRegistry::GetInstance();\n"
                 "    materialRegistry->Initialize();\n"
             ),
             content,
@@ -471,7 +494,7 @@ def _repair_main_detector_constructor(
             with_registry = re.sub(
                 r"(\brunManager->SetUserInitialization\s*\(\s*new\s+DetectorConstruction)",
                 (
-                    "auto* materialRegistry = new MaterialRegistry();\n"
+                    "auto* materialRegistry = MaterialRegistry::GetInstance();\n"
                     "    materialRegistry->Initialize();\n\n"
                     "    \\1"
                 ),

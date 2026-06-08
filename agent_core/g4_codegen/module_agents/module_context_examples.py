@@ -28,13 +28,21 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             '#include "G4String.hh"\n'
             "class MaterialRegistry {\n"
             "public:\n"
+            "  static MaterialRegistry* GetInstance();\n"
             "  void Initialize();\n"
             "  G4Material* GetMaterial(const G4String& name);\n"
             "  void AddCustomMaterial(const G4String& name, G4Material* material);\n"
+            "private:\n"
+            "  MaterialRegistry() = default;\n"
             "};\n"
         ),
         "notes": [
             "Use one GetMaterial string overload to avoid literal ambiguity.",
+            (
+                "Share the registry via GetInstance(); downstream modules must not "
+                "call new MaterialRegistry()."
+            ),
+            "Use valid G4Exception severity enums such as FatalException or FatalErrorInArgument.",
             "Initialize must register real NIST/custom materials, not placeholders.",
         ],
     },
@@ -218,7 +226,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             ),
             (
                 "main.cc should match DetectorConstruction's generated constructor; "
-                "pass an initialized MaterialRegistry when required."
+                "pass MaterialRegistry::GetInstance() when required."
             ),
         ],
     },
