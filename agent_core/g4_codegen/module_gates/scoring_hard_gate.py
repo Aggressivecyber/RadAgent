@@ -83,7 +83,7 @@ def run_scoring_hard_gate(
             errors.append(f"{f.path}: ScoringManager must not write files")
 
         if "G4THitsMap" in content and re.search(
-            r"\b[A-Za-z_]\w*\s*(?:->|\.)\s*find\s*\(",
+            r"\b(?!scoreMap\b|score_map\b)[A-Za-z_]\w*\s*(?:->|\.)\s*find\s*\(",
             content,
         ):
             checks.append(

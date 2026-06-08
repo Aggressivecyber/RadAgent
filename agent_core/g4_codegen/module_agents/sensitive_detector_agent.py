@@ -33,7 +33,11 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
 9. SensitiveDetector 不直接依赖 OutputManager；不得 include OutputManager.hh
 10. SensitiveDetector 不调用 OutputManager::Instance 或 OutputManager 方法
 11. 输出模块通过后续 action/integration 层读取 hit/scoring 数据
-12. 输出 JSON 格式
+12. Hit.cc 或 Hit.hh 只要使用 CLHEP::MeV、CLHEP::ns、MeV、ns、mm、cm、keV、GeV、Gy 等单位，
+    对应文件必须 include "G4SystemOfUnits.hh"
+13. SensitiveDetector 构造函数中注册 hits collection 时必须使用 collectionName.push_back(GetName())
+    或 collectionName.push_back("<collection_name>")；不要调用 collectionName.insert(...)
+14. 输出 JSON 格式
 """
 
 

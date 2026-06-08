@@ -23,9 +23,8 @@ REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块修复 Agent。
 当前模块的代码生成失败了。请根据以下信息修复代码：
 1. 原始模块上下文
 2. 失败的代码
-3. 硬门禁失败原因
-4. LLM 门禁失败原因
-5. 静态扫描失败原因
+3. 必须满足的生成约束
+4. 当前代码和门禁检查摘要
 
 要求：
 1. 只修复当前模块的文件
@@ -104,9 +103,8 @@ async def repair_module(
             "current_generated_files": [
                 file_entry.model_dump() for file_entry in current_result.generated_files
             ],
-            "previous_errors": current_result.errors,
-            "gate_errors": gate_result.errors,
-            "gate_warnings": gate_result.warnings,
+            "implementation_requirements": _module_repair_requirements(module_name),
+            "gate_requirements": _format_gate_requirements(gate_result),
             "attempt": attempt + 1,
             "max_attempts": max_attempts,
         }
@@ -343,3 +341,66 @@ def _prune_files_outside_module_contract(
     for path in list(merged_files_by_path):
         if path not in allowed_paths:
             merged_files_by_path.pop(path, None)
+
+
+def _format_gate_requirements(gate_result: ModuleGateResult) -> list[str]:
+    """Convert gate feedback into prescriptive requirements for the repair agent."""
+    requirements: list[str] = []
+    for message in [*gate_result.errors, *gate_result.warnings]:
+        if not isinstance(message, str) or not message.strip():
+            continue
+        text = message.strip()
+        if ": " in text:
+            text = text.split(": ", 1)[1]
+        requirements.append(f"Make the repaired code satisfy this requirement: {text}")
+    return requirements
+
+
+def _module_repair_requirements(module_name: str) -> list[str]:
+    """Return module-specific repair guidance phrased as implementation requirements."""
+    if module_name == "scoring":
+        return [
+            "Use G4VScoringMesh::GetScoreMap() to read command-based scoring mesh results.",
+            (
+                "GetScoreMap() values are already G4THitsMap<G4StatDouble>*; assign "
+                "scoreIt->second directly to G4THitsMap<G4StatDouble>*."
+            ),
+            (
+                "Use scoreMap.find(\"edepScorer\") and scoreMap.find(\"doseScorer\") "
+                "only on the score map."
+            ),
+            "Do not use dynamic_cast for scoring mesh result maps.",
+            "Do not call find() directly on a G4THitsMap object.",
+            (
+                "To read a cell value, use hitsMap->GetObject(copyNo) and then "
+                "G4StatDouble::sum_wx(), or use hitsMap->GetMap()->find(copyNo)."
+            ),
+        ]
+    if module_name == "sensitive_detector":
+        return [
+            (
+                "Register hits collections with collectionName.push_back(...), "
+                "not collectionName.insert(...)."
+            ),
+            (
+                "Include G4SystemOfUnits.hh in every Hit/SensitiveDetector file "
+                "that uses Geant4 or CLHEP units."
+            ),
+            (
+                "ProcessHits must store the track id with "
+                "hit->SetTrackID(step->GetTrack()->GetTrackID())."
+            ),
+        ]
+    if module_name == "placement":
+        return [
+            (
+                "Use G4RotationMatrix* for G4PVPlacement rotation arguments, "
+                "not const G4RotationMatrix*."
+            ),
+            (
+                "When accepting const G4Transform3D&, create a non-const local copy before "
+                "passing it to G4PVPlacement."
+            ),
+            "Keep placement code limited to PlacementManager.hh and PlacementManager.cc.",
+        ]
+    return []

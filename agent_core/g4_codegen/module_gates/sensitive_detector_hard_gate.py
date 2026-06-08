@@ -105,6 +105,18 @@ def run_sensitive_detector_hard_gate(
                 "Replace hallucinated SensitiveDetectorName with SensitiveDetectorName-safe code"
             )
 
+        if re.search(r"\bcollectionName\s*\.\s*insert\s*\(", source.new_content):
+            checks.append(
+                {
+                    "check": "sensitive_detector_collection_name_push_back",
+                    "status": "fail",
+                    "message": (
+                        "collectionName is a std::vector<G4String>; use push_back(), not insert()"
+                    ),
+                }
+            )
+            errors.append("SensitiveDetector.cc must use collectionName.push_back(...), not insert")
+
         if re.search(r"\bSetSensitiveDetector\s*\(\s*this\s*\)", source.new_content) and header:
             static_attach = bool(
                 re.search(r"\bstatic\b[^;\n]*\bAttachTo\s*\(", header.new_content, re.MULTILINE)
@@ -165,6 +177,28 @@ def run_sensitive_detector_hard_gate(
         )
         if uses_iomanip and not has_iomanip:
             errors.append("Hit.cc must include <iomanip> when using std::setw/std::setprecision")
+
+    for f in generated_files:
+        if not f.path.endswith((".cc", ".hh")):
+            continue
+        uses_units = bool(
+            re.search(
+                r"\b(CLHEP::)?(MeV|keV|GeV|eV|ns|ms|s|mm|cm|m|um|nm|Gy)\b",
+                f.new_content,
+            )
+        )
+        has_units_include = bool(
+            re.search(r"#include\s+[<\"]G4SystemOfUnits\.hh[>\"]", f.new_content)
+        )
+        checks.append(
+            {
+                "check": "sensitive_detector_units_include",
+                "status": "pass" if not uses_units or has_units_include else "fail",
+                "message": "Files that use Geant4/CLHEP units must include G4SystemOfUnits.hh",
+            }
+        )
+        if uses_units and not has_units_include:
+            errors.append(f"{f.path}: must include G4SystemOfUnits.hh when using units")
 
     return ModuleGateResult(
         module_name="sensitive_detector",
