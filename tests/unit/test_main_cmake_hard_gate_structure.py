@@ -76,3 +76,31 @@ def test_main_cmake_hard_gate_rejects_src_main_cc() -> None:
 
     assert result.status == "fail"
     assert "CMakeLists.txt must list root main.cc, not src/main.cc" in result.errors
+
+
+def test_main_cmake_hard_gate_rejects_wrapper_as_physics_list() -> None:
+    result = run_main_cmake_hard_gate(
+        [
+            _file(
+                "CMakeLists.txt",
+                "cmake_minimum_required(VERSION 3.16)\n"
+                "project(RadAgentG4)\n"
+                "add_executable(RadAgentG4 main.cc src/DetectorConstruction.cc)\n",
+            ),
+            _file(
+                "main.cc",
+                '#include "PhysicsListFactoryWrapper.hh"\n'
+                "int main() {\n"
+                "  auto* runManager = GetRunManager();\n"
+                "  auto* physicsWrapper = new PhysicsListFactoryWrapper();\n"
+                "  runManager->SetUserInitialization(physicsWrapper);\n"
+                "}\n",
+            ),
+            _file("macros/init.mac", "/run/initialize\n"),
+            _file("macros/run.mac", "/run/beamOn 1\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("CreatePhysicsList" in error for error in result.errors)

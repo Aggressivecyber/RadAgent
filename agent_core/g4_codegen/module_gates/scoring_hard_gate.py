@@ -147,6 +147,10 @@ def run_scoring_hard_gate(
                 r"\bGetHitsMap\s*\(",
                 "Do not read scoring mesh results through GetHitsMap(); use GetScoreMap()",
             ),
+            (
+                r"\bGetMeshName\s*\(",
+                "G4ScoringManager has no GetMeshName(i); store the configured mesh name",
+            ),
         ]
         for pattern, message in invalid_mesh_access_patterns:
             if re.search(pattern, content, re.DOTALL):

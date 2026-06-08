@@ -61,10 +61,10 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         "example": (
             "class PlacementManager {\n"
             "public:\n"
-            "  G4VPhysicalVolume* PlaceVolume(G4LogicalVolume* logical,\n"
+            "  G4VPhysicalVolume* PlaceVolume(G4RotationMatrix* rotation,\n"
+            "      const G4ThreeVector& position, G4LogicalVolume* logical,\n"
             "      const G4String& name, G4LogicalVolume* mother,\n"
-            "      const G4ThreeVector& position, G4RotationMatrix* rotation,\n"
-            "      G4int copyNo, G4bool checkOverlaps);\n"
+            "      G4bool many, G4int copyNo, G4bool checkOverlaps);\n"
             "};\n"
         ),
         "notes": [

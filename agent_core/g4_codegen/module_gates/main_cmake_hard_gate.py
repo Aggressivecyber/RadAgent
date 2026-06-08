@@ -89,6 +89,35 @@ def _append_main_cmake_checks(
                 ),
             }
         )
+    wrapper_vars = re.findall(
+        r"\bPhysicsListFactoryWrapper\s*\*?\s+([A-Za-z_]\w*)\s*(?:=|;)",
+        main,
+    )
+    wrapper_vars.extend(
+        re.findall(
+            r"\bauto\s*\*?\s+([A-Za-z_]\w*)\s*=\s*new\s+PhysicsListFactoryWrapper\s*\(",
+            main,
+        )
+    )
+    passes_wrapper_directly = bool(
+        re.search(
+            r"SetUserInitialization\s*\(\s*new\s+PhysicsListFactoryWrapper\s*\(",
+            main,
+        )
+    ) or any(
+        re.search(rf"SetUserInitialization\s*\(\s*{re.escape(var)}\s*\)", main)
+        for var in wrapper_vars
+    )
+    checks.append(
+        {
+            "check": "main_sets_physics_list_not_wrapper",
+            "status": "fail" if passes_wrapper_directly else "pass",
+            "message": (
+                "main.cc must pass PhysicsListFactoryWrapper::CreatePhysicsList() "
+                "result to SetUserInitialization, not the wrapper object"
+            ),
+        }
+    )
 
     result.checks.extend(checks)
     for check in checks:

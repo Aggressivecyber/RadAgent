@@ -43,7 +43,9 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
     时必须 include 对应 Geant4 头文件，不能依赖隐式 include
 16. 如果实现 AttachTo(G4LogicalVolume*)，函数体只能通过 logVol->SetSensitiveDetector(this)
     附加探测器；不得调用不存在的 SetLogicalVolume 或 G4VSensitiveDetector::SetLogicalVolume
-17. 输出 JSON 格式
+17. 在 SensitiveDetector::ProcessHits 中创建 hit 时使用 ::Hit* hit = new ::Hit();
+    避免 Hit 类型名被 G4VSensitiveDetector 成员函数名遮蔽
+18. 输出 JSON 格式
 """
 
 

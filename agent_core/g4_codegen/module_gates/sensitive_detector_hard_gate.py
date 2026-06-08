@@ -163,6 +163,18 @@ def run_sensitive_detector_hard_gate(
         )
         if not has_track_id:
             errors.append("ProcessHits must call hit->SetTrackID(step->GetTrack()->GetTrackID())")
+        unqualified_hit_allocation = bool(
+            re.search(r"\bHit\s*\*\s+\w+\s*=\s*new\s+Hit\s*\(", body)
+        )
+        checks.append(
+            {
+                "check": "sensitive_detector_qualified_hit_allocation",
+                "status": "fail" if unqualified_hit_allocation else "pass",
+                "message": "Use ::Hit when allocating hits inside ProcessHits",
+            }
+        )
+        if unqualified_hit_allocation:
+            errors.append("ProcessHits must allocate hits as ::Hit to avoid name hiding")
 
         uses_hits_collection = bool(re.search(r"\bG4THitsCollection\s*<", source.new_content))
         has_hits_collection_include = bool(

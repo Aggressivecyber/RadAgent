@@ -25,6 +25,11 @@ PLACEMENT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 放置模块编码 Agent
 5. 不得直接创建材料或调用 G4NistManager；材料由 geometry/material 模块提供
 6. 调用 G4PVPlacement(rotation, position, logical, name, mother, ...) 时，
    rotation 参数必须是 G4RotationMatrix*，不要使用 const G4RotationMatrix*
+   推荐公开接口：
+   PlaceVolume(G4RotationMatrix* rotation, const G4ThreeVector& position,
+               G4LogicalVolume* logical, const G4String& name,
+               G4LogicalVolume* mother, G4bool many, G4int copyNo,
+               G4bool checkOverlaps)
 7. 如果提供 G4Transform3D overload，传给 G4PVPlacement 前必须使用非 const 局部副本，
    例如 G4Transform3D placementTransform = transform;
    new G4PVPlacement(placementTransform, logical, name, mother, ...)

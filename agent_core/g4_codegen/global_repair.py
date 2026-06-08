@@ -43,6 +43,8 @@ def run_global_code_repair(
     _repair_physics_factory(by_path, report)
     _repair_main_physics_constructor(by_path, report)
     _repair_output_manager(by_path, report)
+    _repair_scoring_manager(by_path, report)
+    _repair_sensitive_detector(by_path, report)
 
     repaired_patch.setdefault("metadata", {})
     repaired_patch["metadata"]["global_code_repair"] = {
@@ -163,6 +165,19 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
         header_changed = _insert_before_private_or_class_end(header, place_decl)
 
     source_content = source.get("new_content", "")
+    original_source = source_content
+    source_content = re.sub(
+        r"return\s+Instance\(\)->PlaceVolume\s*\(\s*"
+        r"logical\s*,\s*logical->GetName\(\)\s*,\s*mother\s*,\s*position\s*,\s*"
+        r"rotation\s*,\s*0\s*,\s*checkOverlaps\s*\)\s*;",
+        (
+            "static PlacementManager manager;\n"
+            "    return manager.PlaceVolume(\n"
+            "        rotation, position, logical, logical->GetName(), mother, false, 0,\n"
+            "        checkOverlaps);"
+        ),
+        source_content,
+    )
     source_changed = False
     if "PlacementManager::Place(" not in source_content:
         source["new_content"] = (
@@ -173,11 +188,15 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
             + "    G4RotationMatrix* rotation,\n"
             + "    G4LogicalVolume* mother,\n"
             + "    G4bool checkOverlaps) {\n"
-            + "    return Instance()->PlaceVolume(\n"
-            + "        logical, logical->GetName(), mother, position, rotation, 0,\n"
+            + "    static PlacementManager manager;\n"
+            + "    return manager.PlaceVolume(\n"
+            + "        rotation, position, logical, logical->GetName(), mother, false, 0,\n"
             + "        checkOverlaps);\n"
             + "}\n"
         )
+        source_changed = True
+    elif source_content != original_source:
+        source["new_content"] = source_content
         source_changed = True
 
     if header_changed or source_changed:
@@ -192,33 +211,28 @@ def _repair_physics_factory(by_path: dict[str, dict[str, Any]], report: dict[str
 
     header_content = header.get("new_content", "")
     original_header = header_content
-    if '#include "G4VModularPhysicsList.hh"' not in header_content:
-        header_content = header_content.replace(
-            "class G4VModularPhysicsList;",
-            '#include "G4VModularPhysicsList.hh"',
-        )
-    if "static G4VModularPhysicsList* list();" not in header_content:
-        header_content = _insert_declaration_text(
-            header_content,
-            "static G4VModularPhysicsList* list();",
-            "CreatePhysicsList",
-        )
+    header_content = re.sub(
+        r"\s*static\s+G4VModularPhysicsList\s*\*\s*list\s*\(\s*\)\s*;\n?",
+        "\n",
+        header_content,
+    )
     if header_content != original_header:
         header["new_content"] = header_content
 
     source_content = source.get("new_content", "")
-    source_changed = False
-    if "PhysicsListFactoryWrapper::list(" not in source_content:
-        source["new_content"] = (
-            source_content.rstrip()
-            + "\n\nG4VModularPhysicsList* PhysicsListFactoryWrapper::list() {\n"
-            + "    return CreatePhysicsList();\n"
-            + "}\n"
-        )
-        source_changed = True
+    original_source = source_content
+    source_content = re.sub(
+        r"\n\s*G4VModularPhysicsList\s*\*\s*PhysicsListFactoryWrapper::list\s*"
+        r"\(\s*\)\s*\{.*?\n\}\s*",
+        "\n",
+        source_content,
+        flags=re.DOTALL,
+    )
+    if source_content != original_source:
+        source["new_content"] = source_content
 
-    if header_content != original_header or source_changed:
-        _fixed(report, "PhysicsListFactoryWrapper", "added list compatibility adapter")
+    if header_content != original_header or source_content != original_source:
+        _fixed(report, "PhysicsListFactoryWrapper", "removed invalid list adapter")
 
 
 def _repair_main_physics_constructor(
@@ -235,9 +249,30 @@ def _repair_main_physics_constructor(
         "new PhysicsListFactoryWrapper()",
         content,
     )
+    updated = re.sub(
+        r"runManager->SetUserInitialization\s*\(\s*new\s+PhysicsListFactoryWrapper\s*"
+        r"\(\s*\)\s*\)\s*;",
+        (
+            "auto* physicsWrapper = new PhysicsListFactoryWrapper();\n"
+            "    runManager->SetUserInitialization(physicsWrapper->CreatePhysicsList());"
+        ),
+        updated,
+    )
+    wrapper_decl = re.search(
+        r"(?:auto|PhysicsListFactoryWrapper)\s*\*?\s+([A-Za-z_]\w*)\s*=\s*"
+        r"new\s+PhysicsListFactoryWrapper\s*\(\s*\)\s*;",
+        updated,
+    )
+    if wrapper_decl:
+        wrapper_name = wrapper_decl.group(1)
+        updated = re.sub(
+            rf"runManager->SetUserInitialization\s*\(\s*{re.escape(wrapper_name)}\s*\)\s*;",
+            f"runManager->SetUserInitialization({wrapper_name}->CreatePhysicsList());",
+            updated,
+        )
     if updated != content:
         main["new_content"] = updated
-        _fixed(report, "main.cc", "matched PhysicsListFactoryWrapper default constructor")
+        _fixed(report, "main.cc", "matched PhysicsListFactoryWrapper physics list creation")
 
 
 def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
@@ -307,6 +342,32 @@ def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str,
 
     if header_content != original_header or source_changed:
         _fixed(report, "OutputManager", "added action interface compatibility adapters")
+
+
+def _repair_scoring_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
+    source = by_path.get("src/ScoringManager.cc")
+    if not source:
+        return
+    content = source.get("new_content", "")
+    updated = re.sub(r"scMgr->GetMeshName\s*\(\s*iMesh\s*\)", '"scoringMesh"', content)
+    if updated != content:
+        source["new_content"] = updated
+        _fixed(report, "ScoringManager", "removed nonexistent G4ScoringManager::GetMeshName")
+
+
+def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
+    source = by_path.get("src/SensitiveDetector.cc")
+    if not source:
+        return
+    content = source.get("new_content", "")
+    updated = re.sub(
+        r"\bHit\s*\*\s+hit\s*=\s*new\s+Hit\s*\(\s*\)\s*;",
+        "::Hit* hit = new ::Hit();",
+        content,
+    )
+    if updated != content:
+        source["new_content"] = updated
+        _fixed(report, "SensitiveDetector", "qualified Hit allocation")
 
 
 def _ensure_public_declaration(

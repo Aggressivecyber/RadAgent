@@ -183,8 +183,8 @@ def _get_geant4_api_rules(module_name: str) -> list[str]:
             "材料查找必须通过 MaterialRegistry，不要在 geometry 模块直接调用 G4NistManager",
             "world 物理体可直接构造为 null mother；非 world 物理体放置必须通过 PlacementManager",
             (
-                "PlacementManager 预期接口：PlaceVolume(logical, name, mother, position, "
-                "rotation, copy_no, check_overlaps)"
+                "PlacementManager 预期接口：PlaceVolume(rotation, position, logical, name, "
+                "mother, many, copy_no, check_overlaps)"
             ),
         ],
         "placement": [

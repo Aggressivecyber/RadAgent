@@ -81,3 +81,26 @@ def test_sensitive_detector_hard_gate_requires_all_module_files() -> None:
     assert result.status == "fail"
     assert any("include/SensitiveDetector.hh" in e for e in result.errors)
     assert any("include/Hit.hh" in e for e in result.errors)
+
+
+def test_sensitive_detector_hard_gate_rejects_unqualified_hit_allocation() -> None:
+    result = run_sensitive_detector_hard_gate(
+        [
+            _file("include/Hit.hh", "#pragma once\nclass Hit { public: void SetTrackID(int); };\n"),
+            _file("src/Hit.cc", '#include "Hit.hh"\n'),
+            _file("include/SensitiveDetector.hh", "#pragma once\nclass SensitiveDetector {};\n"),
+            _file(
+                "src/SensitiveDetector.cc",
+                '#include "SensitiveDetector.hh"\n'
+                "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                "  Hit* hit = new Hit();\n"
+                "  hit->SetTrackID(step->GetTrack()->GetTrackID());\n"
+                "  return true;\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("::Hit" in error for error in result.errors)
