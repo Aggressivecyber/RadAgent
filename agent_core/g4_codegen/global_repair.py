@@ -39,6 +39,7 @@ def run_global_code_repair(
 
     _repair_cmake_sources(by_path, report)
     _repair_material_registry(by_path, report)
+    _repair_material_registry_call_sites(by_path, report)
     _repair_placement_manager(by_path, report)
     _repair_physics_factory(by_path, report)
     _repair_main_physics_constructor(by_path, report)
@@ -127,11 +128,16 @@ def _repair_material_registry(by_path: dict[str, dict[str, Any]], report: dict[s
         "",
         header_content,
     )
+    header_content = re.sub(
+        r"\bstatic\s+MaterialRegistry\s*&\s+GetInstance\s*\(\s*\)\s*;",
+        "static MaterialRegistry* GetInstance();",
+        header_content,
+    )
     header_changed = header_content != original_header
     if "GetInstance(" not in header_content:
         header_content = _insert_declaration_text(
             header_content,
-            "static MaterialRegistry& GetInstance();",
+            "static MaterialRegistry* GetInstance();",
             "Initialize",
         )
         header_changed = True
@@ -147,13 +153,26 @@ def _repair_material_registry(by_path: dict[str, dict[str, Any]], report: dict[s
         source_content,
         flags=re.DOTALL,
     )
+    source_content = re.sub(
+        r"\bMaterialRegistry\s*&\s+MaterialRegistry::GetInstance\s*\(\s*\)\s*\{\s*"
+        r"static\s+MaterialRegistry\s+([A-Za-z_]\w*)\s*;\s*"
+        r"return\s+\1\s*;\s*\}",
+        (
+            "MaterialRegistry* MaterialRegistry::GetInstance() {\n"
+            "    static MaterialRegistry registry;\n"
+            "    return &registry;\n"
+            "}"
+        ),
+        source_content,
+        flags=re.DOTALL,
+    )
     source_changed = source_content != original_source
     if "MaterialRegistry::GetInstance(" not in source_content:
         source_content = (
             source_content.rstrip()
-            + "\n\nMaterialRegistry& MaterialRegistry::GetInstance() {\n"
+            + "\n\nMaterialRegistry* MaterialRegistry::GetInstance() {\n"
             + "    static MaterialRegistry registry;\n"
-            + "    return registry;\n"
+            + "    return &registry;\n"
             + "}\n"
         )
         source_changed = True
@@ -166,6 +185,26 @@ def _repair_material_registry(by_path: dict[str, dict[str, Any]], report: dict[s
             "MaterialRegistry",
             "normalized material registry overloads and singleton adapter",
         )
+
+
+def _repair_material_registry_call_sites(
+    by_path: dict[str, dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    changed_paths: list[str] = []
+    for path, entry in by_path.items():
+        if not path.endswith((".cc", ".hh")):
+            continue
+        content = entry.get("new_content", "")
+        updated = content.replace(
+            "MaterialRegistry::GetInstance().",
+            "MaterialRegistry::GetInstance()->",
+        )
+        if updated != content:
+            entry["new_content"] = updated
+            changed_paths.append(path)
+    if changed_paths:
+        _fixed(report, "MaterialRegistry call sites", "normalized GetInstance pointer calls")
 
 
 def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
@@ -392,11 +431,29 @@ def _repair_main_detector_constructor(
         return
 
     detector_content = detector_header.get("new_content", "")
-    if not re.search(r"\bDetectorConstruction\s*\(\s*MaterialRegistry\s*\*", detector_content):
-        return
-
     content = main.get("new_content", "")
     original = content
+    needs_registry_constructor = bool(
+        re.search(r"\bDetectorConstruction\s*\(\s*MaterialRegistry\s*\*", detector_content)
+    )
+    if not needs_registry_constructor:
+        content = re.sub(
+            r"\n\s*(?:auto|MaterialRegistry)\s*\*?\s+[A-Za-z_]\w*\s*=\s*"
+            r"MaterialRegistry::GetInstance\(\)\s*;\s*"
+            r"\n\s*[A-Za-z_]\w*\s*->\s*Initialize\(\)\s*;\s*",
+            "\n",
+            content,
+        )
+        content = re.sub(
+            r"new\s+DetectorConstruction\s*\(\s*[A-Za-z_]\w*\s*\)",
+            "new DetectorConstruction()",
+            content,
+        )
+        if content != original:
+            main["new_content"] = content
+            _fixed(report, "main.cc", "matched DetectorConstruction default constructor")
+        return
+
     if "MaterialRegistry.hh" not in content:
         content = _ensure_include_text(content, "MaterialRegistry.hh")
     if "materialRegistry" not in content:

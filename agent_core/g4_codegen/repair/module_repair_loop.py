@@ -514,8 +514,8 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "material API."
             ),
             (
-                "Provide static MaterialRegistry& GetInstance() returning a function-local "
-                "static MaterialRegistry so other modules can share the registry."
+                "Provide static MaterialRegistry* GetInstance() returning the address of "
+                "a function-local static MaterialRegistry so other modules can share the registry."
             ),
             (
                 "Do not use placeholder, dummy, stub, TODO, NotImplemented, 'for now', "
@@ -573,6 +573,10 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "Use the real DetectorConstruction constructor from the generated "
                 "header; if it takes MaterialRegistry*, create and initialize a "
                 "MaterialRegistry and pass it to DetectorConstruction."
+            ),
+            (
+                "If DetectorConstruction only has a default constructor, call "
+                "new DetectorConstruction() and do not pass MaterialRegistry."
             ),
         ]
     return []

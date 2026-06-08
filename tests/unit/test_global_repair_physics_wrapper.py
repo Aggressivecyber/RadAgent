@@ -202,11 +202,85 @@ def test_global_repair_adds_material_registry_singleton(monkeypatch, tmp_path) -
     repaired, report = run_global_code_repair(patch, "job")
     by_path = {file["path"]: file["new_content"] for file in repaired["changed_files"]}
 
-    assert "static MaterialRegistry& GetInstance();" in by_path["include/MaterialRegistry.hh"]
-    assert "MaterialRegistry& MaterialRegistry::GetInstance()" in by_path[
+    assert "static MaterialRegistry* GetInstance();" in by_path["include/MaterialRegistry.hh"]
+    assert "MaterialRegistry* MaterialRegistry::GetInstance()" in by_path[
         "src/MaterialRegistry.cc"
     ]
     assert "static MaterialRegistry registry;" in by_path["src/MaterialRegistry.cc"]
+    assert "return &registry;" in by_path["src/MaterialRegistry.cc"]
+    assert report["issues_fixed"]
+
+
+def test_global_repair_normalizes_material_registry_pointer_calls(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    patch = {
+        "changed_files": [
+            {
+                "path": "src/DetectorConstruction.cc",
+                "new_content": (
+                    '#include "MaterialRegistry.hh"\n'
+                    "void build() { MaterialRegistry::GetInstance().GetMaterial(\"G4_AIR\"); }\n"
+                ),
+                "module_name": "geometry",
+                "generated_by": "geometry_module_agent",
+            },
+        ]
+    }
+
+    repaired, report = run_global_code_repair(patch, "job")
+    source = {file["path"]: file["new_content"] for file in repaired["changed_files"]}[
+        "src/DetectorConstruction.cc"
+    ]
+
+    assert "MaterialRegistry::GetInstance()->GetMaterial" in source
+    assert report["issues_fixed"]
+
+
+def test_global_repair_main_uses_default_detector_constructor_when_required(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    patch = {
+        "changed_files": [
+            {
+                "path": "main.cc",
+                "new_content": (
+                    '#include "MaterialRegistry.hh"\n'
+                    '#include "DetectorConstruction.hh"\n'
+                    "int main() {\n"
+                    "  MaterialRegistry* matReg = MaterialRegistry::GetInstance();\n"
+                    "  matReg->Initialize();\n"
+                    "  auto* detector = new DetectorConstruction(matReg);\n"
+                    "}\n"
+                ),
+                "module_name": "main_cmake",
+                "generated_by": "main_cmake_module_agent",
+            },
+            {
+                "path": "include/DetectorConstruction.hh",
+                "new_content": (
+                    "#pragma once\n"
+                    "class DetectorConstruction {\n"
+                    "public:\n"
+                    "  DetectorConstruction();\n"
+                    "};\n"
+                ),
+                "module_name": "geometry",
+                "generated_by": "geometry_module_agent",
+            },
+        ]
+    }
+
+    repaired, report = run_global_code_repair(patch, "job")
+    main = {file["path"]: file["new_content"] for file in repaired["changed_files"]}[
+        "main.cc"
+    ]
+
+    assert "matReg->Initialize()" not in main
+    assert "new DetectorConstruction()" in main
+    assert "new DetectorConstruction(matReg)" not in main
     assert report["issues_fixed"]
 
 
