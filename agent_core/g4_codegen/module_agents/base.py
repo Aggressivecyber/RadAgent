@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,11 @@ MODULE_CODEGEN_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 C++ 模块级编码
 12. 不得伪造 TCAD/SPICE 结果。
 13. 必须说明 rationale、dependencies、satisfies、risk_notes、used_references。
 14. 输出 JSON，不要输出额外文字。
+15. generated_files 中每个文件对象必须使用字段 path 和 new_content。
+16. 每个文件对象的路径字段固定为 path。
+17. 每个文件对象的完整文件内容字段固定为 new_content。
+18. JSON 顶层必须包含 generated_files 数组。
+19. generated_files 数组必须包含完整可写入文件，不是文件摘要、计划或说明。
 
 返回格式：
 {
@@ -72,6 +78,12 @@ async def run_module_agent(
     Uses ModelGateway with CODEGEN task and PRO tier.
     """
     gateway = get_model_gateway()
+    job_id = (
+        module_context.get("job_id")
+        or module_context.get("g4_model_ir_subset", {}).get("job_id")
+        or module_context.get("codegen_plan", {}).get("job_id")
+        or ""
+    )
 
     user_prompt = f"""模块上下文：
 {json.dumps(module_context, indent=2, ensure_ascii=False)}
@@ -86,7 +98,7 @@ async def run_module_agent(
         user_prompt=user_prompt,
         response_format="json",
         max_tokens=65536,
-        metadata={"module_name": module_name},
+        metadata={"module_name": module_name, "job_id": job_id},
     )
 
     if result.error:
@@ -110,13 +122,27 @@ async def run_module_agent(
 
     # Build result
     generated_files: list[GeneratedModuleFile] = []
-    for f in data.get("generated_files", []):
+    parse_errors: list[str] = []
+    file_entries = _extract_generated_file_entries(data)
+    for f in file_entries:
         try:
+            if not isinstance(f, dict):
+                raise TypeError(f"file entry must be object, got {type(f).__name__}")
+            new_content = f.get("new_content", f.get("content"))
+            if new_content is None:
+                raise KeyError("new_content")
+            path = f.get(
+                "path",
+                f.get("file_path", f.get("filepath", f.get("filename", f.get("name")))),
+            )
+            if path is None:
+                raise KeyError("path")
+            path = _normalize_generated_path(module_name, path)
             generated_files.append(
                 GeneratedModuleFile(
-                    path=f["path"],
+                    path=path,
                     operation=f.get("operation", "create_or_replace"),
-                    new_content=f["new_content"],
+                    new_content=new_content,
                     generated_by=f.get("generated_by", f"{module_name}_module_agent"),
                     module_name=f.get("module_name", module_name),
                     rationale=f.get("rationale", ""),
@@ -127,20 +153,109 @@ async def run_module_agent(
                 )
             )
         except (KeyError, TypeError) as exc:
-            logger.warning("Skipping invalid file entry: %s", exc)
+            keys = sorted(f.keys()) if isinstance(f, dict) else type(f).__name__
+            message = f"Skipping invalid file entry with keys={keys}: {exc}"
+            parse_errors.append(message)
+            logger.warning(message)
+
+    status = _normalize_module_status(data.get("status", "generated"))
+    errors = list(data.get("errors", [])) + parse_errors
+    if status in {"generated", "repaired"} and not generated_files:
+        status = "failed"
+        top_level_keys = sorted(data.keys()) if isinstance(data, dict) else type(data).__name__
+        errors.append(
+            "Model response did not contain any valid generated_files entries; "
+            f"top_level_keys={top_level_keys}"
+        )
 
     return ModuleAgentResult(
         module_name=module_name,
-        status=data.get("status", "generated"),
+        status=status,
         generated_files=generated_files,
-        errors=data.get("errors", []),
+        errors=errors,
         warnings=data.get("warnings", []),
     )
+
+
+def _normalize_module_status(value: Any) -> str:
+    status = str(value or "generated").strip().lower()
+    if status in {"generated", "success", "succeeded", "ok", "pass", "passed"}:
+        return "generated"
+    if status in {"repaired", "repair_success"}:
+        return "repaired"
+    return "failed"
+
+
+def _extract_generated_file_entries(data: Any) -> list[Any]:
+    """Return generated file entries from common real-provider JSON shapes."""
+    if not isinstance(data, dict):
+        return []
+    for key in ("generated_files", "files", "repaired_files", "changed_files"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            entries = _extract_generated_file_entries(value)
+            if entries:
+                return entries
+    for key in ("result", "output", "data"):
+        nested = data.get(key)
+        if isinstance(nested, dict):
+            entries = _extract_generated_file_entries(nested)
+            if entries:
+                return entries
+    path_keyed_entries: list[dict[str, Any]] = []
+    for key, value in data.items():
+        if not _looks_like_generated_file_path(key):
+            continue
+        if isinstance(value, dict):
+            entry = dict(value)
+            entry.setdefault("path", key)
+        elif isinstance(value, str):
+            entry = {"path": key, "new_content": value}
+        else:
+            continue
+        path_keyed_entries.append(entry)
+    if path_keyed_entries:
+        return path_keyed_entries
+    return []
+
+
+def _looks_like_generated_file_path(value: str) -> bool:
+    return (
+        "/" in value
+        or value in {"CMakeLists.txt", "main.cc"}
+        or value.endswith((".cc", ".hh", ".hpp", ".h", ".mac", ".json", ".txt"))
+        or re.search(r"_(cc|hh|hpp|h)$", value) is not None
+    )
+
+
+def _normalize_generated_path(module_name: str, path: Any) -> str:
+    normalized = str(path)
+    if normalized.startswith("08_geant4/"):
+        normalized = normalized[len("08_geant4/") :]
+    if module_name == "main_cmake" and normalized == "src/main.cc":
+        return "main.cc"
+    if module_name == "main_cmake" and normalized in {"run.mac", "init.mac"}:
+        return f"macros/{normalized}"
+    if "/" not in normalized and normalized not in {"CMakeLists.txt", "main.cc"}:
+        if normalized.endswith(".cc"):
+            return f"src/{normalized}"
+        if normalized.endswith((".hh", ".hpp", ".h")):
+            return f"include/{normalized}"
+    snake_match = re.fullmatch(r"([a-z0-9_]+)_(cc|hh|hpp|h)", normalized)
+    if snake_match:
+        stem = "".join(part.capitalize() for part in snake_match.group(1).split("_"))
+        ext = snake_match.group(2)
+        directory = "src" if ext == "cc" else "include"
+        return f"{directory}/{stem}.{ext}"
+    return normalized
 
 
 def save_module_result(
     result: ModuleAgentResult,
     job_id: str,
+    raw_response: str | None = None,
 ) -> Path:
     """Persist module agent result to disk."""
     from agent_core.config.workspace import get_job_dir
@@ -150,4 +265,7 @@ def save_module_result(
 
     output_path = output_dir / f"{result.module_name}.json"
     output_path.write_text(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
+    if raw_response is not None:
+        raw_path = output_dir / f"{result.module_name}.raw.txt"
+        raw_path.write_text(raw_response)
     return output_path

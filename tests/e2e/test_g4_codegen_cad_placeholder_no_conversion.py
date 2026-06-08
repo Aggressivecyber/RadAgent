@@ -1,5 +1,6 @@
 """E2E test — CAD/GDML placeholder does not perform real conversion."""
-  # noqa: E501
+
+# noqa: E501
 from __future__ import annotations
 
 # noqa: E501

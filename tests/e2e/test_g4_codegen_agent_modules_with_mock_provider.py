@@ -1,5 +1,6 @@
 """E2E test — comprehensive mock provider full flow test."""
-  # noqa: E501  # noqa: E501
+
+# noqa: E501  # noqa: E501
 from __future__ import annotations
 
 # noqa: E501  # noqa: E501
@@ -170,14 +171,14 @@ class TestG4CodegenAgentModulesWithMockProvider:
 
         state = {
             "job_id": "mock_full_test",
-            "run_mode": "dev",
+            "run_mode": "strict",
             "proposed_patch": patch,
             "static_semantic_scan": scan,
             "cross_file_hard_gate": cross_gate,
             "cross_file_llm_gate": {"status": "pass"},
         }
 
-        result = asyncio.get_event_loop().run_until_complete(persist_codegen_output_node(state))
+        result = asyncio.run(persist_codegen_output_node(state))
 
         expected_status = (
             "passed" if scan["status"] == "pass" and cross_gate["status"] == "pass" else "failed"

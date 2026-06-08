@@ -19,6 +19,23 @@ class TestG4CodegenSubgraphCompilation:
         compiled = graph.compile()
         assert compiled is not None
 
+    def test_subgraph_has_parallel_layers_and_global_repair(self) -> None:
+        """Subgraph should expose layered module gates and global repair."""
+        from agent_core.graph.subgraphs.g4_codegen_graph import (
+            MODULE_LAYERS,
+            build_g4_codegen_subgraph,
+        )
+
+        graph = build_g4_codegen_subgraph()
+        node_names = set(graph.nodes)
+        assert "global_code_repair_agent" in node_names
+        for layer_name, module_names in MODULE_LAYERS:
+            assert f"run_{layer_name}" in node_names
+            assert f"{layer_name}_gate" in node_names
+            for module_name in module_names:
+                assert f"run_{module_name}_agent" in node_names
+                assert f"{module_name}_complete" in node_names
+
     def test_subgraph_state_schema(self) -> None:
         """Subgraph state must have required fields."""
         from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
@@ -27,6 +44,32 @@ class TestG4CodegenSubgraphCompilation:
         required = ["job_id", "g4_model_ir_path", "proposed_patch", "g4_codegen_status"]
         for field in required:
             assert field in annotations, f"Missing field: {field}"
+
+    def test_failed_layer_gate_routes_to_persist(self) -> None:
+        """A failed layer gate must not release the next module layer."""
+        from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_layer_gate
+
+        route = _route_after_layer_gate("detector_modules_gate", "run_application_modules")
+        assert (
+            route(
+                {
+                    "layer_gate_results": {
+                        "detector_modules_gate": {"status": "fail"},
+                    }
+                }
+            )
+            == "persist_codegen_output"
+        )
+        assert (
+            route(
+                {
+                    "layer_gate_results": {
+                        "detector_modules_gate": {"status": "pass"},
+                    }
+                }
+            )
+            == "run_application_modules"
+        )
 
 
 class TestNewIntegrationAssembler:
@@ -79,9 +122,7 @@ class TestNewIntegrationAssembler:
         from pathlib import Path
 
         old_path = Path("agent_core/g4_codegen/nodes/integration_assembler.py")
-        assert not old_path.exists(), (
-            "Old integration_assembler.py must be deleted"
-        )
+        assert not old_path.exists(), "Old integration_assembler.py must be deleted"
 
 
 class TestCodegenValidators:

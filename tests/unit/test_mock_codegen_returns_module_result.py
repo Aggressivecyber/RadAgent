@@ -81,3 +81,165 @@ class TestMockCodegenReturnsModuleResult:
         assert cc_file.new_content  # non-empty
         assert cc_file.generated_by == "geometry_module_agent"
         assert cc_file.module_name == "geometry"
+
+    @pytest.mark.asyncio
+    async def test_normalizes_top_level_files_to_generated_files(self) -> None:
+        """Real providers may return top-level files; normalize into ModuleAgentResult."""
+        mock_response = {
+            "module_name": "material",
+            "status": "generated",
+            "files": [
+                {
+                    "path": "include/MaterialRegistry.hh",
+                    "content": "#pragma once\nclass MaterialRegistry {};\n",
+                    "generated_by": "material_module_agent",
+                    "module_name": "material",
+                    "rationale": "Material registry header",
+                }
+            ],
+        }
+
+        with patch(
+            "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+
+            mock_result = AsyncMock()
+            mock_result.error = None
+            mock_result.content = '{"module_name": "material", "status": "generated"}'
+            mock_result.parsed_json = mock_response
+            mock_gw.call.return_value = mock_result
+
+            result = await run_module_agent("material", {"module_name": "material"})
+
+        assert result.status == "generated"
+        assert len(result.generated_files) == 1
+        assert result.generated_files[0].new_content.startswith("#pragma once")
+        assert "content" not in result.generated_files[0].model_dump()
+
+    @pytest.mark.asyncio
+    async def test_normalizes_path_keyed_file_map(self) -> None:
+        """Real providers may return a dict keyed by file path."""
+        mock_response = {
+            "include/PlacementManager.hh": {
+                "content": "#pragma once\nclass PlacementManager {};\n",
+                "rationale": "Placement manager header",
+            },
+            "src/PlacementManager.cc": '#include "PlacementManager.hh"\n',
+        }
+
+        with patch(
+            "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+
+            mock_result = AsyncMock()
+            mock_result.error = None
+            mock_result.content = "{}"
+            mock_result.parsed_json = mock_response
+            mock_gw.call.return_value = mock_result
+
+            result = await run_module_agent("placement", {"module_name": "placement"})
+
+        assert result.status == "generated"
+        assert {f.path for f in result.generated_files} == {
+            "include/PlacementManager.hh",
+            "src/PlacementManager.cc",
+        }
+        for file_entry in result.generated_files:
+            assert file_entry.generated_by == "placement_module_agent"
+            assert file_entry.module_name == "placement"
+            assert "content" not in file_entry.model_dump()
+
+    @pytest.mark.asyncio
+    async def test_normalizes_files_dict_and_file_path_entries(self) -> None:
+        """Real providers may return files as a dict or use file_path."""
+        mock_response = {
+            "files": {
+                "include/ScoringManager.hh": {
+                    "content": "#pragma once\nclass ScoringManager {};\n",
+                    "rationale": "Scoring header",
+                },
+                "src/ScoringManager.cc": {
+                    "file_path": "src/ScoringManager.cc",
+                    "content": '#include "ScoringManager.hh"\n',
+                },
+            }
+        }
+
+        with patch(
+            "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+
+            mock_result = AsyncMock()
+            mock_result.error = None
+            mock_result.content = "{}"
+            mock_result.parsed_json = mock_response
+            mock_gw.call.return_value = mock_result
+
+            result = await run_module_agent("scoring", {"module_name": "scoring"})
+
+        assert result.status == "generated"
+        assert {f.path for f in result.generated_files} == {
+            "include/ScoringManager.hh",
+            "src/ScoringManager.cc",
+        }
+
+    @pytest.mark.asyncio
+    async def test_normalizes_main_cmake_main_path_to_root(self) -> None:
+        """main_cmake must place main.cc at the 08_geant4 root."""
+        mock_response = {
+            "files": [
+                {
+                    "path": "src/main.cc",
+                    "new_content": "int main() { return 0; }\n",
+                }
+            ]
+        }
+
+        with patch(
+            "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+
+            mock_result = AsyncMock()
+            mock_result.error = None
+            mock_result.content = "{}"
+            mock_result.parsed_json = mock_response
+            mock_gw.call.return_value = mock_result
+
+            result = await run_module_agent("main_cmake", {"module_name": "main_cmake"})
+
+        assert [f.path for f in result.generated_files] == ["main.cc"]
+
+    @pytest.mark.asyncio
+    async def test_normalizes_snake_case_file_keys(self) -> None:
+        """Providers may key files as scoring_manager_hh/scoring_manager_cc."""
+        mock_response = {
+            "scoring_manager_hh": "#pragma once\nclass ScoringManager {};\n",
+            "scoring_manager_cc": '#include "ScoringManager.hh"\n',
+        }
+
+        with patch(
+            "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+
+            mock_result = AsyncMock()
+            mock_result.error = None
+            mock_result.content = "{}"
+            mock_result.parsed_json = mock_response
+            mock_gw.call.return_value = mock_result
+
+            result = await run_module_agent("scoring", {"module_name": "scoring"})
+
+        assert {f.path for f in result.generated_files} == {
+            "include/ScoringManager.hh",
+            "src/ScoringManager.cc",
+        }

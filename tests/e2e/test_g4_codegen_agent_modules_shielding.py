@@ -1,5 +1,6 @@
 """E2E test — shielding config codegen pipeline with mock provider."""
-  # noqa: E501  # noqa: E501
+
+# noqa: E501  # noqa: E501
 from __future__ import annotations
 
 # noqa: E501  # noqa: E501

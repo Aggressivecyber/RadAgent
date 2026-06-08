@@ -38,6 +38,11 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Create solids (G4Box, G4Tubs, etc.)",
             "Create logical volumes",
             "Build component hierarchy",
+            "Use MaterialRegistry for all material lookup",
+            "Use PlacementManager for all non-world physical volume placement",
+            "World physical volume may be constructed directly with null mother",
+            "Expose logical volumes needed by sensitive_detector without creating detectors",
+            "Do not include, instantiate, register, or attach SensitiveDetector",
         ],
         "output_files": [
             "include/DetectorConstruction.hh",
@@ -48,12 +53,18 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "forbidden_patterns": [
             "G4ParticleGun",
             "G4VSensitiveDetector",
+            "SensitiveDetector",
+            "SetSensitiveDetector",
         ],
     },
     "placement": {
         "module_type": "placement",
         "responsibilities": [
             "Manage G4PVPlacement instances",
+            (
+                "Expose PlacementManager::PlaceVolume(logical, name, mother, position, "
+                "rotation, copy_no, check_overlaps)"
+            ),
             "Handle mother-child relationships",
             "Apply translations and rotations",
             "checkOverlaps configuration",
@@ -110,15 +121,18 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "module_type": "sensitive_detector",
         "responsibilities": [
             "Implement ProcessHits",
-            "Define Hit class",
+            "Define Hit class with energy, position, and trackID accessors",
             "Register with G4SDManager",
-            "Attach to logical volumes",
+            "Attach to logical volumes without static methods that use instance state",
+            "Use GetName() or explicit detector names, never hallucinated SensitiveDetectorName",
         ],
         "output_files": [
+            "include/Hit.hh",
+            "src/Hit.cc",
             "include/SensitiveDetector.hh",
             "src/SensitiveDetector.cc",
         ],
-        "required_symbols": ["SensitiveDetector"],
+        "required_symbols": ["SensitiveDetector", "Hit", "HitsCollection"],
         "dependencies": [],
         "forbidden_patterns": [
             "G4ParticleGun",
@@ -127,10 +141,19 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "scoring": {
         "module_type": "scoring",
         "responsibilities": [
-            "Manage dose/edep scoring",
-            "Configure primitive scorers",
-            "Handle mesh scoring",
-            "Scoring output contract",
+            "Manage scoring IDs and edep/dose data interfaces",
+            (
+                "Expose dose_Gy helper using detector mass from logical volume "
+                "or explicit interface input"
+            ),
+            "Provide scoring records for output_manager",
+            "Do not write CSV/JSON files; output_manager owns file output",
+            (
+                "Do not set or replace sensitive detector ownership; "
+                "sensitive_detector owns SD attachment"
+            ),
+            "Do not create geometry or materials; geometry owns placements and volumes",
+            "Do not use placeholder scorers; use G4PSDoseDeposit only for dose/edep",
         ],
         "output_files": [
             "include/ScoringManager.hh",
@@ -140,6 +163,9 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "dependencies": ["sensitive_detector"],
         "forbidden_patterns": [
             "G4ParticleGun",
+            "G4PVPlacement",
+            "G4Box",
+            "G4NistManager",
         ],
     },
     "output_manager": {
@@ -149,6 +175,9 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Manage output package",
             "Run/event summary",
             "Metadata management",
+            "Write CSV rows in the exact same order as the CSV header",
+            "For edep scoring output, use stable columns EventID,edep_MeV,dose_Gy",
+            "Never write fixed CSV columns by directly iterating std::map key order",
         ],
         "output_files": [
             "include/OutputManager.hh",
@@ -195,6 +224,9 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "Generate CMakeLists.txt",
             "Generate run.mac and init.mac",
             "Directory structure",
+            "Use the actual generated physics module class/header in main.cc",
+            "List main.cc and generated src/*.cc explicitly in CMakeLists.txt",
+            "Avoid double initialization between main.cc and init.mac",
         ],
         "output_files": [
             "main.cc",

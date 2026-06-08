@@ -34,6 +34,7 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     module_results: dict[str, Any]
     module_gate_results: dict[str, Any]
     module_repair_results: dict[str, Any]
+    layer_gate_results: dict[str, Any]
 
     # Integration
     static_semantic_scan: dict[str, Any]
@@ -42,6 +43,7 @@ class G4CodegenSubgraphState(TypedDict, total=False):
 
     # Interface contracts
     interface_contracts: dict[str, Any]
+    global_code_repair_report: dict[str, Any]
 
     # Output
     proposed_patch: dict[str, Any]
@@ -93,7 +95,7 @@ class ModuleContext(BaseModel):
     geant4_api_rules: list[str] = Field(default_factory=list)
     existing_generated_file_summaries: list[dict[str, Any]] = Field(default_factory=list)
     previous_failures: list[dict[str, Any]] = Field(default_factory=list)
-    run_mode: str = "dev"
+    run_mode: str = "strict"
 
 
 # ── Generated Module File ────────────────────────────────────────────
@@ -141,6 +143,7 @@ class ModuleGateResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     reviewer_notes: str | None = None
+    scorecard: dict[str, Any] = Field(default_factory=dict)
 
 
 # ── Codegen Plan ─────────────────────────────────────────────────────

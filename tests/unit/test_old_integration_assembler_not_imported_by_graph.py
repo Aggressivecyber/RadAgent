@@ -11,9 +11,7 @@ class TestOldIntegrationAssemblerDeleted:
 
     def test_old_assembler_deleted(self):
         old_path = Path("agent_core/g4_codegen/nodes/integration_assembler.py")
-        assert not old_path.exists(), (
-            "Old integration_assembler.py must be deleted"
-        )
+        assert not old_path.exists(), "Old integration_assembler.py must be deleted"
 
 
 class TestOldIntegrationAssemblerNotImportedByGraph:

@@ -10,8 +10,8 @@ from agent_core.g4_codegen.schemas import CodegenPlan
 
 CORE_MODULES = [
     "material",
-    "geometry",
     "placement",
+    "geometry",
     "source",
     "physics",
     "sensitive_detector",
@@ -23,13 +23,13 @@ CORE_MODULES = [
 
 MODULE_ORDER = [
     "material",
-    "geometry",
-    "placement",
-    "source",
     "physics",
+    "source",
+    "output_manager",
+    "placement",
+    "geometry",
     "sensitive_detector",
     "scoring",
-    "output_manager",
     "action_initialization",
     "main_cmake",
 ]
@@ -52,7 +52,7 @@ def detect_scenario_type(g4_model_ir: dict[str, Any]) -> str:
 def build_codegen_plan(
     g4_model_ir: dict[str, Any],
     job_id: str,
-    run_mode: str = "dev",
+    run_mode: str = "strict",
 ) -> dict[str, Any]:
     """Build codegen plan from G4ModelIR.
 

@@ -7,9 +7,10 @@ Flow:
     → plan_code_architecture
     → build_module_contracts
     → build_module_contexts
-    → [for each module: agent → hard_gate → llm_gate → repair_if_needed]
+    → [layered parallel module groups: agent → hard_gate → llm_gate → repair_if_needed]
     → build_interface_contracts
     → integration_assembler
+    → global_code_repair_agent
     → static_semantic_scanner
     → cross_file_hard_gate
     → cross_file_llm_gate
@@ -30,31 +31,52 @@ from agent_core.g4_codegen.graph_nodes import (
     build_module_contracts_node,
     cross_file_hard_gate_node,
     cross_file_llm_gate_node,
+    global_code_repair_node,
     integration_assembler_node,
+    layer_consistency_gate_node,
     persist_codegen_output_node,
     plan_code_architecture_node,
     plan_geometry_strategy_node,
     repair_module_node,
     run_module_agent_node,
     run_module_hard_gate_node,
+    run_module_layer_node,
     run_module_llm_gate_node,
     static_semantic_scanner_node,
 )
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 
-# Module execution order
-MODULE_ORDER = [
-    "material",
-    "geometry",
-    "placement",
-    "source",
-    "physics",
-    "sensitive_detector",
-    "scoring",
-    "output_manager",
-    "action_initialization",
-    "main_cmake",
+# Layered module execution plan. Modules inside a layer run in parallel; the
+# layer gate waits for all module chains to complete before releasing the next
+# layer.
+MODULE_LAYERS = [
+    (
+        "foundation_modules",
+        [
+            "material",
+            "physics",
+            "source",
+            "output_manager",
+        ],
+    ),
+    (
+        "detector_modules",
+        [
+            "placement",
+            "geometry",
+            "sensitive_detector",
+            "scoring",
+        ],
+    ),
+    (
+        "application_modules",
+        [
+            "action_initialization",
+            "main_cmake",
+        ],
+    ),
 ]
+MODULE_ORDER = [module for _, modules in MODULE_LAYERS for module in modules]
 
 
 def build_g4_codegen_subgraph() -> StateGraph:
@@ -93,10 +115,25 @@ def build_g4_codegen_subgraph() -> StateGraph:
             f"repair_{module_name}",
             _make_repair_node(module_name),
         )
+        graph.add_node(
+            f"{module_name}_complete",
+            _make_module_complete_node(module_name),
+        )
+
+    for layer_name, module_names in MODULE_LAYERS:
+        graph.add_node(
+            f"run_{layer_name}",
+            _make_module_layer_node(layer_name, module_names),
+        )
+        graph.add_node(
+            f"{layer_name}_gate",
+            _make_layer_gate_node(f"{layer_name}_gate", module_names),
+        )
 
     # ── Integration nodes ─────────────────────────────────────────────
     graph.add_node("build_interface_contracts", build_interface_contracts_node)
     graph.add_node("integration_assembler", integration_assembler_node)
+    graph.add_node("global_code_repair_agent", global_code_repair_node)
     graph.add_node("static_semantic_scanner", static_semantic_scanner_node)
     graph.add_node("cross_file_hard_gate", cross_file_hard_gate_node)
     graph.add_node("cross_file_llm_gate", cross_file_llm_gate_node)
@@ -110,71 +147,35 @@ def build_g4_codegen_subgraph() -> StateGraph:
     graph.add_edge("plan_code_architecture", "build_module_contracts")
     graph.add_edge("build_module_contracts", "build_module_contexts")
 
-    # ── Flow: Module agents (sequential) ──────────────────────────────
-    # First module connects from build_module_contexts
-    graph.add_edge("build_module_contexts", f"run_{MODULE_ORDER[0]}_agent")
+    # ── Flow: Module agents (layered parallel DAG) ────────────────────
+    graph.add_edge("build_module_contexts", f"run_{MODULE_LAYERS[0][0]}")
 
-    for i, module_name in enumerate(MODULE_ORDER):
-        # Agent → Hard gate
-        graph.add_edge(f"run_{module_name}_agent", f"{module_name}_hard_gate")
+    for layer_index, (layer_name, module_names) in enumerate(MODULE_LAYERS):
+        run_node = f"run_{layer_name}"
+        gate_node = f"{layer_name}_gate"
 
-        # Hard gate → conditional: LLM gate or repair or next module
+        graph.add_edge(run_node, gate_node)
+
+        if layer_index + 1 < len(MODULE_LAYERS):
+            next_node = f"run_{MODULE_LAYERS[layer_index + 1][0]}"
+        else:
+            next_node = "build_interface_contracts"
         graph.add_conditional_edges(
-            f"{module_name}_hard_gate",
-            _route_after_hard_gate(module_name),
+            gate_node,
+            _route_after_layer_gate(gate_node, next_node),
             {
-                f"{module_name}_llm_gate": f"{module_name}_llm_gate",
-                f"repair_{module_name}": f"repair_{module_name}",
-                _next_module_or_integration(i): _next_module_or_integration(i),
-            },
-        )
-
-        # LLM gate → conditional: next module or repair
-        graph.add_conditional_edges(
-            f"{module_name}_llm_gate",
-            _route_after_llm_gate(module_name),
-            {
-                _next_module_or_integration(i): _next_module_or_integration(i),
-                f"repair_{module_name}": f"repair_{module_name}",
-            },
-        )
-
-        # Repair → conditional: hard gate or skip to next module
-        graph.add_conditional_edges(
-            f"repair_{module_name}",
-            _route_after_repair(module_name),
-            {
-                f"{module_name}_hard_gate": f"{module_name}_hard_gate",
-                _next_module_or_integration(i): _next_module_or_integration(i),
+                next_node: next_node,
+                "persist_codegen_output": "persist_codegen_output",
             },
         )
 
     # ── Flow: Integration ─────────────────────────────────────────────
     graph.add_edge("build_interface_contracts", "integration_assembler")
-    graph.add_edge("integration_assembler", "static_semantic_scanner")
-    graph.add_conditional_edges(
-        "static_semantic_scanner",
-        _route_after_static_scan,
-        {
-            "cross_file_hard_gate": "cross_file_hard_gate",
-            "persist_codegen_output": "persist_codegen_output",
-        },
-    )
-    graph.add_conditional_edges(
-        "cross_file_hard_gate",
-        _route_after_cross_hard_gate,
-        {
-            "cross_file_llm_gate": "cross_file_llm_gate",
-            "persist_codegen_output": "persist_codegen_output",
-        },
-    )
-    graph.add_conditional_edges(
-        "cross_file_llm_gate",
-        _route_after_cross_llm_gate,
-        {
-            "persist_codegen_output": "persist_codegen_output",
-        },
-    )
+    graph.add_edge("integration_assembler", "global_code_repair_agent")
+    graph.add_edge("global_code_repair_agent", "static_semantic_scanner")
+    graph.add_edge("static_semantic_scanner", "cross_file_hard_gate")
+    graph.add_edge("cross_file_hard_gate", "cross_file_llm_gate")
+    graph.add_edge("cross_file_llm_gate", "persist_codegen_output")
     graph.add_edge("persist_codegen_output", END)
 
     return graph
@@ -219,14 +220,43 @@ def _make_repair_node(module_name: str) -> Any:
     return _run
 
 
+def _make_module_layer_node(layer_name: str, module_names: list[str]) -> Any:
+    """Create a node that runs one module layer concurrently."""
+
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return await run_module_layer_node(state, layer_name, module_names)
+
+    return _run
+
+
+def _make_module_complete_node(module_name: str) -> Any:
+    """Create a no-op terminal node for a module branch."""
+
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return {"current_node": f"{module_name}_complete"}
+
+    return _run
+
+
+def _make_layer_start_node(layer_name: str) -> Any:
+    """Create a no-op fan-out node for a parallel module layer."""
+
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return {"current_node": f"start_{layer_name}"}
+
+    return _run
+
+
+def _make_layer_gate_node(layer_gate_name: str, module_names: list[str]) -> Any:
+    """Create a layer consistency gate node."""
+
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return await layer_consistency_gate_node(state, layer_gate_name, module_names)
+
+    return _run
+
+
 # ── Routing functions ────────────────────────────────────────────────
-
-
-def _next_module_or_integration(current_index: int) -> str:
-    """Get the next module name or integration node."""
-    if current_index + 1 < len(MODULE_ORDER):
-        return f"run_{MODULE_ORDER[current_index + 1]}_agent"
-    return "build_interface_contracts"
 
 
 def _route_after_hard_gate(module_name: str) -> Any:
@@ -243,15 +273,26 @@ def _route_after_hard_gate(module_name: str) -> Any:
 
 
 def _route_after_llm_gate(module_name: str) -> Any:
-    """Route after LLM gate: pass → next, fail → repair."""
+    """Route after LLM gate: pass → module complete, fail → repair."""
 
     def _route(state: G4CodegenSubgraphState) -> str:
         gate_results = state.get("module_gate_results", {})
         llm_gate = gate_results.get(module_name, {}).get("llm", {})
         if llm_gate.get("status") == "pass":
-            idx = MODULE_ORDER.index(module_name)
-            return _next_module_or_integration(idx)
+            return f"{module_name}_complete"
         return f"repair_{module_name}"
+
+    return _route
+
+
+def _route_after_layer_gate(layer_gate_name: str, next_node: str) -> Any:
+    """Route after a layer gate: pass continues, fail persists failed state."""
+
+    def _route(state: G4CodegenSubgraphState) -> str:
+        gate = state.get("layer_gate_results", {}).get(layer_gate_name, {})
+        if gate.get("status") == "pass":
+            return next_node
+        return "persist_codegen_output"
 
     return _route
 
@@ -278,18 +319,17 @@ def _route_after_static_scan(state: G4CodegenSubgraphState) -> str:
 
 
 def _route_after_repair(module_name: str) -> Any:
-    """Route after repair: success → hard gate, failed → persist (terminate codegen).
+    """Route after repair: success → hard gate, failed → module complete.
 
-    P0-14/P0-15: When repair fails after max attempts, terminate codegen
-    by routing to persist_codegen_output. Do NOT loop back to hard gate.
+    The layer consistency gate terminates codegen if any branch failed. This
+    avoids multiple parallel branches writing final output at once.
     """
 
     def _route(state: G4CodegenSubgraphState) -> str:
         repair_results = state.get("module_repair_results", {})
         repair = repair_results.get(module_name, {})
         if repair.get("status") == "failed":
-            # P0-15: Repair failed — terminate codegen, go to persist
-            return "persist_codegen_output"
+            return f"{module_name}_complete"
         return f"{module_name}_hard_gate"
 
     return _route

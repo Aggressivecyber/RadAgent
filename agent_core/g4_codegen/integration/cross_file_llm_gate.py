@@ -5,8 +5,18 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from agent_core.models.gateway import get_model_gateway
+from agent_core.models.gateway import _safe_parse_json, get_model_gateway
 from agent_core.models.schemas import ModelTask, ModelTier
+
+OVERALL_PASS_THRESHOLD = 0.85
+DIMENSION_PASS_THRESHOLD = 0.75
+REQUIRED_DIMENSIONS = {
+    "cross_module_consistency",
+    "geant4_lifecycle_correctness",
+    "interface_compatibility",
+    "hallucination_risk",
+    "build_and_artifact_risk",
+}
 
 CROSS_FILE_LLM_GATE_PROMPT = """你是 RadAgent 的 Geant4 全工程审查 Agent。
 
@@ -23,15 +33,32 @@ CROSS_FILE_LLM_GATE_PROMPT = """你是 RadAgent 的 Geant4 全工程审查 Agent
 8. 是否需要 human confirmation
 9. 是否可以进入 patch_subgraph
 
-返回 JSON：
+返回严格 JSON：
 {
   "status": "pass | fail",
-  "checks": [],
+  "overall_score": 0.0,
+  "dimensions": {
+    "cross_module_consistency": 0.0,
+    "geant4_lifecycle_correctness": 0.0,
+    "interface_compatibility": 0.0,
+    "hallucination_risk": 0.0,
+    "build_and_artifact_risk": 0.0
+  },
+  "checks": [
+    {"check": "...", "status": "pass | fail", "message": "...", "evidence": "..."}
+  ],
   "risks": [],
+  "blocking_issues": [],
   "required_fixes": [],
   "requires_human_confirmation": false,
   "reviewer_notes": "..."
 }
+
+通过条件：
+- overall_score 必须 >= 0.85；
+- 每个 dimensions 分数必须 >= 0.75；
+- blocking_issues 必须为空；
+- 若存在跨模块 ABI 不一致、CMake 漏文件、伪造 CAD/TCAD/SPICE、artifact 不可产生风险，必须 fail。
 """
 
 
@@ -83,10 +110,23 @@ async def run_cross_file_llm_gate(
         else:
             cross_file_hard_gate = {}
 
+    changed_files = proposed_patch.get("changed_files", [])
+    module_names = sorted({f.get("module_name", "") for f in changed_files if f.get("module_name")})
+    file_manifest = [
+        {
+            "path": f.get("path", ""),
+            "module_name": f.get("module_name", ""),
+            "generated_by": f.get("generated_by", ""),
+        }
+        for f in changed_files
+    ]
+
     code_review_bundle: dict[str, Any] = {
         "proposed_patch_metadata": {
             "patch_type": proposed_patch.get("patch_type", proposed_patch.get("change_type", "")),
-            "total_files": len(proposed_patch.get("changed_files", [])),
+            "total_files": len(changed_files),
+            "modules_present": module_names,
+            "file_manifest": file_manifest,
         },
         "module_gate_summary": module_gate_results,
         "static_semantic_scan": static_semantic_scan,
@@ -100,7 +140,7 @@ async def run_cross_file_llm_gate(
         "interface_contracts": interface_contracts or {},
     }
 
-    for f in proposed_patch.get("changed_files", []):
+    for f in changed_files:
         code_review_bundle["file_details"].append(
             {
                 "path": f.get("path", ""),
@@ -109,13 +149,13 @@ async def run_cross_file_llm_gate(
                 "includes": _extract_includes(f.get("new_content", "")),
                 "classes": _extract_classes(f.get("new_content", "")),
                 "public_methods": _extract_public_methods(f.get("new_content", "")),
-                "content_excerpt": f.get("new_content", "")[:2000],
+                "content_excerpt": f.get("new_content", "")[:800],
             }
         )
 
     # ── Build LLM prompt ─────────────────────────────────────────────
     user_prompt = f"""代码审查包：
-{json.dumps(code_review_bundle, indent=2, ensure_ascii=False)[:6000]}
+{json.dumps(code_review_bundle, indent=2, ensure_ascii=False)[:50000]}
 
 请审查全工程语义一致性。返回 JSON。"""
 
@@ -126,6 +166,7 @@ async def run_cross_file_llm_gate(
         user_prompt=user_prompt,
         response_format="json",
         max_tokens=4096,
+        metadata={"job_id": job_id, "module_name": "cross_file"},
     )
 
     if llm_result.error:
@@ -138,7 +179,9 @@ async def run_cross_file_llm_gate(
         return gate_result
 
     try:
-        data = llm_result.parsed_json or json.loads(llm_result.content.strip())
+        data = llm_result.parsed_json or _safe_parse_json(llm_result.content) or json.loads(
+            llm_result.content.strip()
+        )
     except (json.JSONDecodeError, TypeError):
         gate_result = {
             "status": "fail",
@@ -148,12 +191,21 @@ async def run_cross_file_llm_gate(
         _persist_result(gate_result, job_id)
         return gate_result
 
+    scorecard = _normalize_scorecard(data)
+    score_errors = _scorecard_errors(scorecard)
+    required_fixes = _normalize_messages(data.get("required_fixes", []))
+    blocking_issues = _normalize_messages(data.get("blocking_issues", []))
+    status = _normalize_gate_status(data.get("status", "fail"))
+    if status == "pass" and (score_errors or blocking_issues):
+        status = "fail"
+
     gate_result = {
-        "status": data.get("status", "fail"),
-        "checks": data.get("checks", []),
-        "errors": data.get("required_fixes", []),
-        "warnings": data.get("risks", []),
+        "status": status,
+        "checks": _normalize_checks(data.get("checks", [])),
+        "errors": [*score_errors, *blocking_issues, *required_fixes],
+        "warnings": _normalize_messages(data.get("risks", [])),
         "reviewer_notes": data.get("reviewer_notes"),
+        "scorecard": scorecard,
     }
 
     _persist_result(gate_result, job_id)
@@ -193,3 +245,93 @@ def _extract_public_methods(content: str) -> list[str]:
     import re
 
     return re.findall(r"\bpublic:\s*(?:.*?)?\b(\w+)\s*\(", content, re.DOTALL)
+
+
+def _normalize_gate_status(value: Any) -> str:
+    status = str(value or "fail").lower()
+    if status in {"pass", "passed", "ok"}:
+        return "pass"
+    if status in {"skipped", "skip"}:
+        return "skipped"
+    return "fail"
+
+
+def _normalize_checks(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        value = [value] if value else []
+    normalized: list[dict[str, Any]] = []
+    for idx, item in enumerate(value, start=1):
+        if isinstance(item, dict):
+            check = dict(item)
+            check.setdefault("check", f"cross_file_check_{idx}")
+            check.setdefault("status", "pass")
+            check.setdefault("message", "")
+            normalized.append(check)
+        else:
+            normalized.append(
+                {
+                    "check": f"cross_file_check_{idx}",
+                    "status": "pass",
+                    "message": str(item),
+                }
+            )
+    return normalized
+
+
+def _normalize_messages(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        value = [value] if value else []
+    messages: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            messages.append(json.dumps(item, ensure_ascii=False))
+        else:
+            messages.append(str(item))
+    return messages
+
+
+def _normalize_scorecard(data: dict[str, Any]) -> dict[str, Any]:
+    dimensions_raw = data.get("dimensions", {})
+    if not isinstance(dimensions_raw, dict):
+        dimensions_raw = {}
+    dimensions: dict[str, float] = {}
+    for name in REQUIRED_DIMENSIONS:
+        raw = dimensions_raw.get(name)
+        if isinstance(raw, dict):
+            raw = raw.get("score")
+        dimensions[name] = _score_to_float(raw)
+    return {
+        "overall_score": _score_to_float(data.get("overall_score")),
+        "dimensions": dimensions,
+        "thresholds": {
+            "overall_score": OVERALL_PASS_THRESHOLD,
+            "dimension_score": DIMENSION_PASS_THRESHOLD,
+        },
+    }
+
+
+def _score_to_float(value: Any) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, score))
+
+
+def _scorecard_errors(scorecard: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    overall = float(scorecard.get("overall_score", 0.0))
+    if overall < OVERALL_PASS_THRESHOLD:
+        errors.append(
+            f"Cross-file LLM gate overall_score {overall:.2f} below threshold "
+            f"{OVERALL_PASS_THRESHOLD:.2f}"
+        )
+    dimensions = scorecard.get("dimensions", {})
+    for name in sorted(REQUIRED_DIMENSIONS):
+        score = float(dimensions.get(name, 0.0))
+        if score < DIMENSION_PASS_THRESHOLD:
+            errors.append(
+                f"Cross-file LLM gate dimension '{name}' score {score:.2f} below threshold "
+                f"{DIMENSION_PASS_THRESHOLD:.2f}"
+            )
+    return errors

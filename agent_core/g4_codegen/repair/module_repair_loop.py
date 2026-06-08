@@ -6,7 +6,11 @@ import json
 import logging
 from typing import Any
 
-from agent_core.g4_codegen.schemas import ModuleAgentResult, ModuleGateResult
+from agent_core.g4_codegen.module_agents.base import (
+    _extract_generated_file_entries,
+    _normalize_generated_path,
+)
+from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult, ModuleGateResult
 from agent_core.models.gateway import get_model_gateway
 from agent_core.models.schemas import ModelTask, ModelTier
 
@@ -27,7 +31,33 @@ REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块修复 Agent。
 1. 只修复当前模块的文件
 2. 不要重新生成整个工程
 3. 修复后的代码必须通过硬门禁
-4. 输出 JSON 格式
+4. 必须输出纯 JSON 对象，不得输出 Markdown、解释文字或代码围栏
+5. JSON 顶层必须包含 generated_files 数组
+6. generated_files 中每个对象必须包含：
+   path、operation、new_content、generated_by、module_name、rationale
+7. 如果只修改部分文件，可以只返回修改文件；系统会按 path 合并未修改文件
+8. 每个文件对象的路径字段固定为 path
+9. 每个文件对象的完整文件内容字段固定为 new_content
+10. JSON 顶层必须包含 generated_files 数组
+11. generated_files 数组必须包含完整可写入文件，不是文件摘要、计划或说明
+
+输出格式：
+{
+  "module_name": "<module_name>",
+  "status": "repaired",
+  "generated_files": [
+    {
+      "path": "include/Example.hh",
+      "operation": "create_or_replace",
+      "new_content": "...完整文件内容...",
+      "generated_by": "<module_name>_module_agent",
+      "module_name": "<module_name>",
+      "rationale": "修复原因"
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}
 """
 
 
@@ -36,6 +66,7 @@ async def repair_module(
     module_context: dict[str, Any],
     original_result: ModuleAgentResult,
     gate_result: ModuleGateResult,
+    job_id: str | None = None,
     max_attempts: int = MAX_REPAIR_ATTEMPTS,
 ) -> ModuleAgentResult:
     """Attempt to repair a failed module.
@@ -47,18 +78,32 @@ async def repair_module(
     3. Re-run hard gate
     4. If pass, return repaired result
     """
-    from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+    from agent_core.observability import record_event
 
     attempts: list[dict[str, Any]] = []
     current_result = original_result
 
     for attempt in range(max_attempts):
         logger.info("Repair attempt %d/%d for %s", attempt + 1, max_attempts, module_name)
+        record_event(
+            job_id=job_id,
+            event_type="module_repair_attempt_start",
+            status="running",
+            phase="g4_codegen",
+            module_name=module_name,
+            summary=f"{module_name} repair attempt {attempt + 1}/{max_attempts}",
+            metrics={"attempt": attempt + 1, "max_attempts": max_attempts},
+            errors=list(gate_result.errors),
+            warnings=list(gate_result.warnings),
+        )
 
         # Build repair context
         repair_context = {
             "module_name": module_name,
             "module_context": module_context,
+            "current_generated_files": [
+                file_entry.model_dump() for file_entry in current_result.generated_files
+            ],
             "previous_errors": current_result.errors,
             "gate_errors": gate_result.errors,
             "gate_warnings": gate_result.warnings,
@@ -72,13 +117,30 @@ async def repair_module(
             task=ModelTask.FAILURE_DIAGNOSIS,
             tier=ModelTier.MAX,
             system_prompt=REPAIR_SYSTEM_PROMPT,
-            user_prompt=f"修复上下文：\n{json.dumps(repair_context, indent=2, ensure_ascii=False)[:4000]}",  # noqa: E501
+            user_prompt=(
+                "请修复下面的模块代码，并严格按 system prompt 中的 JSON schema 返回：\n"
+                f"{json.dumps(repair_context, indent=2, ensure_ascii=False)[:30000]}"
+            ),
             response_format="json",
             max_tokens=65536,
-            metadata={"module_name": module_name, "repair_attempt": attempt + 1},
+            metadata={
+                "module_name": module_name,
+                "job_id": job_id,
+                "repair_attempt": attempt + 1,
+            },
         )
 
         if result.error:
+            record_event(
+                job_id=job_id,
+                event_type="module_repair_attempt_result",
+                status="failed",
+                phase="g4_codegen",
+                module_name=module_name,
+                summary=f"{module_name} repair call failed on attempt {attempt + 1}",
+                metrics={"attempt": attempt + 1},
+                errors=[result.error],
+            )
             attempts.append(
                 {
                     "attempt": attempt + 1,
@@ -92,6 +154,16 @@ async def repair_module(
         try:
             data = result.parsed_json or json.loads(result.content.strip())
         except (json.JSONDecodeError, TypeError) as exc:
+            record_event(
+                job_id=job_id,
+                event_type="module_repair_attempt_result",
+                status="failed",
+                phase="g4_codegen",
+                module_name=module_name,
+                summary=f"{module_name} repair returned invalid JSON on attempt {attempt + 1}",
+                metrics={"attempt": attempt + 1},
+                errors=[f"Invalid JSON: {exc}"],
+            )
             attempts.append(
                 {
                     "attempt": attempt + 1,
@@ -102,16 +174,26 @@ async def repair_module(
             continue
 
         # Build repaired result
-        from agent_core.g4_codegen.schemas import GeneratedModuleFile
-
         repaired_files: list[GeneratedModuleFile] = []
-        for f in data.get("generated_files", []):
+        for f in _extract_generated_file_entries(data):
             try:
+                if not isinstance(f, dict):
+                    raise TypeError(f"file entry must be object, got {type(f).__name__}")
+                new_content = f.get("new_content", f.get("content"))
+                if new_content is None:
+                    raise KeyError("new_content")
+                path = f.get(
+                    "path",
+                    f.get("file_path", f.get("filepath", f.get("filename", f.get("name")))),
+                )
+                if path is None:
+                    raise KeyError("path")
+                path = _normalize_generated_path(module_name, path)
                 repaired_files.append(
                     GeneratedModuleFile(
-                        path=f["path"],
+                        path=path,
                         operation=f.get("operation", "create_or_replace"),
-                        new_content=f["new_content"],
+                        new_content=new_content,
                         generated_by=f.get("generated_by", f"{module_name}_module_agent"),
                         module_name=f.get("module_name", module_name),
                         rationale=f.get("rationale", "repaired"),
@@ -121,10 +203,20 @@ async def repair_module(
                         used_references=f.get("used_references", []),
                     )
                 )
-            except (KeyError, TypeError):
-                pass
+            except (KeyError, TypeError) as exc:
+                logger.warning("Skipping invalid repair file entry for %s: %s", module_name, exc)
 
         if not repaired_files:
+            record_event(
+                job_id=job_id,
+                event_type="module_repair_attempt_result",
+                status="failed",
+                phase="g4_codegen",
+                module_name=module_name,
+                summary=f"{module_name} repair returned no valid files on attempt {attempt + 1}",
+                metrics={"attempt": attempt + 1},
+                errors=["No valid files in repair response"],
+            )
             attempts.append(
                 {
                     "attempt": attempt + 1,
@@ -134,26 +226,61 @@ async def repair_module(
             )
             continue
 
+        merged_files_by_path = {f.path: f for f in current_result.generated_files}
+        for f in repaired_files:
+            merged_files_by_path[f.path] = f
+        if module_name == "main_cmake":
+            for macro_name in ("run.mac", "init.mac"):
+                macro_path = f"macros/{macro_name}"
+                if macro_path in merged_files_by_path:
+                    merged_files_by_path.pop(macro_name, None)
+        _prune_files_outside_module_contract(module_name, module_context, merged_files_by_path)
+        merged_files = list(merged_files_by_path.values())
+
         repaired_result = ModuleAgentResult(
             module_name=module_name,
             status="repaired",
-            generated_files=repaired_files,
+            generated_files=merged_files,
+            repair_attempts=attempts,
             errors=data.get("errors", []),
             warnings=data.get("warnings", []),
         )
 
-        # Re-run hard gate
-        gate = run_hard_gate_checks(module_name, repaired_files)
+        # Re-run the same module-specific hard gate used by the graph node.
+        # The generic base gate is not enough for module boundary checks such
+        # as scoring-vs-output ownership.
+        from agent_core.g4_codegen.graph_nodes import _get_hard_gate_function
+
+        gate = _get_hard_gate_function(module_name)(merged_files, module_status="repaired")
+        record_event(
+            job_id=job_id,
+            event_type="module_repair_attempt_result",
+            status="passed" if gate.status == "pass" else "failed",
+            phase="g4_codegen",
+            module_name=module_name,
+            summary=f"{module_name} repair hard gate {gate.status} on attempt {attempt + 1}",
+            metrics={
+                "attempt": attempt + 1,
+                "repaired_file_count": len(repaired_files),
+                "generated_file_count": len(merged_files),
+                "hard_gate_error_count": len(gate.errors),
+            },
+            errors=list(gate.errors),
+            warnings=list(gate.warnings),
+        )
         attempts.append(
             {
                 "attempt": attempt + 1,
                 "status": "repaired",
                 "gate_status": gate.status,
+                "repaired_file_count": len(repaired_files),
+                "generated_file_count": len(merged_files),
             }
         )
 
         if gate.status == "pass":
             logger.info("Module %s repaired successfully on attempt %d", module_name, attempt + 1)
+            repaired_result.repair_attempts = attempts
             return repaired_result
 
         current_result = repaired_result
@@ -190,3 +317,29 @@ def save_repair_summary(
 
     path = repair_dir / f"{module_name}_repair_summary.json"
     path.write_text(json.dumps(summary, indent=2, ensure_ascii=False))
+
+
+def _prune_files_outside_module_contract(
+    module_name: str,
+    module_context: dict[str, Any],
+    merged_files_by_path: dict[str, GeneratedModuleFile],
+) -> None:
+    """Keep repaired module output inside the module contract file scope."""
+    contract = module_context.get("module_contract")
+    if not isinstance(contract, dict):
+        return
+    output_files = contract.get("output_files")
+    if not isinstance(output_files, list) or not output_files:
+        return
+
+    allowed_paths = {
+        _normalize_generated_path(module_name, path)
+        for path in output_files
+        if isinstance(path, str) and path.strip()
+    }
+    if not allowed_paths:
+        return
+
+    for path in list(merged_files_by_path):
+        if path not in allowed_paths:
+            merged_files_by_path.pop(path, None)

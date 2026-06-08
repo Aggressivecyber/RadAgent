@@ -11,6 +11,18 @@ from agent_core.g4_codegen.integration.cross_file_llm_gate import run_cross_file
 from agent_core.models.gateway import reset_model_gateway
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 
+PASS_SCORECARD = {
+    "overall_score": 0.95,
+    "dimensions": {
+        "cross_module_consistency": 0.95,
+        "geant4_lifecycle_correctness": 0.95,
+        "interface_compatibility": 0.95,
+        "hallucination_risk": 0.95,
+        "build_and_artifact_risk": 0.95,
+    },
+    "blocking_issues": [],
+}
+
 
 @pytest.fixture(autouse=True)
 def _reset() -> None:
@@ -83,7 +95,17 @@ class TestCrossFileLlmGateUsesCodeReviewBundle:
                     tier=ModelTier.MAX,
                     provider=ModelProvider.MOCK,
                     model_name="mock",
-                    content='{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": "OK"}',  # noqa: E501
+                    content=json.dumps(
+                        {
+                            "status": "pass",
+                            "checks": [],
+                            "risks": [],
+                            "required_fixes": [],
+                            "requires_human_confirmation": False,
+                            "reviewer_notes": "OK",
+                            **PASS_SCORECARD,
+                        }
+                    ),
                     parsed_json={
                         "status": "pass",
                         "checks": [],
@@ -91,6 +113,7 @@ class TestCrossFileLlmGateUsesCodeReviewBundle:
                         "required_fixes": [],
                         "requires_human_confirmation": False,
                         "reviewer_notes": "OK",
+                        **PASS_SCORECARD,
                     },
                     usage={},
                     latency_ms=0.0,
@@ -150,7 +173,17 @@ class TestCrossFileLlmGateDoesNotOnlyUseContentLength:
                     tier=ModelTier.MAX,
                     provider=ModelProvider.MOCK,
                     model_name="mock",
-                    content='{"status": "pass", "checks": [], "risks": [], "required_fixes": [], "requires_human_confirmation": false, "reviewer_notes": ""}',  # noqa: E501
+                    content=json.dumps(
+                        {
+                            "status": "pass",
+                            "checks": [],
+                            "risks": [],
+                            "required_fixes": [],
+                            "requires_human_confirmation": False,
+                            "reviewer_notes": "",
+                            **PASS_SCORECARD,
+                        }
+                    ),
                     parsed_json={
                         "status": "pass",
                         "checks": [],
@@ -158,6 +191,7 @@ class TestCrossFileLlmGateDoesNotOnlyUseContentLength:
                         "required_fixes": [],
                         "requires_human_confirmation": False,
                         "reviewer_notes": "",
+                        **PASS_SCORECARD,
                     },
                     usage={},
                     latency_ms=0.0,

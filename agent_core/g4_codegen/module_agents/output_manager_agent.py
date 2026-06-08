@@ -20,6 +20,23 @@ OUTPUT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 输出管理模块编码 Ag
 严格要求：
 1. 只生成 OutputManager 相关文件
 2. 输出 JSON 格式
+3. CSV header 必须稳定，事件行必须严格按 header 顺序写入
+4. 对当前 IR，CSV 至少包含 EventID,edep_MeV,dose_Gy
+5. 不得通过直接遍历 std::map/std::unordered_map 来写固定 CSV 列
+6. 如果提供 RecordEventData(map)，必须显式按 edep_MeV、dose_Gy 的顺序读取 key
+7. OutputManager.hh 必须声明以下稳定接口，供 action_initialization 模块调用：
+   static OutputManager* Instance();
+   void BeginRun(const G4Run* run);
+   void EndRun(const G4Run* run);
+   void BeginEvent(const G4Event* event);
+   void EndEvent(const G4Event* event);
+   void RecordStep(const G4Step* step);
+   void WriteEvent(const G4Event* event);
+8. OutputManager.hh 必须 forward declare G4Run、G4Event、G4Step，或 include 对应 Geant4 头文件
+9. OutputManager.cc 必须实现上述所有稳定接口
+10. OutputManager 不直接依赖 ScoringManager；不得 include ScoringManager.hh
+11. OutputManager 不调用 ScoringManager::Instance、GetEdepMeV、GetDoseGy 等方法
+12. scoring 数据通过 RecordEventData 参数或 action 层传入，OutputManager 只负责写出
 """
 
 

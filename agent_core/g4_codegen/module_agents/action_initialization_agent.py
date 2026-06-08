@@ -23,7 +23,15 @@ ACTION_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 动作初始化模块编码
 
 严格要求：
 1. 只生成 ActionInitialization 及相关 action 文件
-2. 输出 JSON 格式
+2. 使用 OutputManager 的稳定接口，且只能调用：
+   OutputManager::Instance()->BeginRun(const G4Run*)
+   OutputManager::Instance()->EndRun(const G4Run*)
+   OutputManager::Instance()->BeginEvent(const G4Event*)
+   OutputManager::Instance()->EndEvent(const G4Event*)
+   OutputManager::Instance()->RecordStep(const G4Step*)
+   OutputManager::Instance()->WriteEvent(const G4Event*)
+3. 不得调用 BeginOfRun、EndOfRun、BeginOfEvent、EndOfEvent、RecordEventData 等非稳定接口
+4. 输出 JSON 格式
 """
 
 

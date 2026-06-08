@@ -8,11 +8,13 @@ from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleGateResult
 
 def run_material_hard_gate(
     generated_files: list[GeneratedModuleFile],
+    module_status: str | None = None,
 ) -> ModuleGateResult:
     """Run hard gate checks for material module."""
     return run_hard_gate_checks(
         module_name="material",
         generated_files=generated_files,
+        module_status=module_status,
         forbidden_patterns=[
             "G4PVPlacement",
             "G4ParticleGun",

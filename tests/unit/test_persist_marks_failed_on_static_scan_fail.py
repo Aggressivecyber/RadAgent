@@ -24,7 +24,7 @@ class TestPersistMarksFailedOnStaticScanFail:
         """When static scan fails, g4_codegen_status should be 'failed'."""
         state = {
             "job_id": "test_static_fail",
-            "run_mode": "dev",
+            "run_mode": "strict",
             "proposed_patch": {
                 "changed_files": [
                     {"path": "src/Test.cc", "new_content": "// test"},
@@ -46,11 +46,11 @@ class TestPersistMarksFailedOnStaticScanFail:
         assert result["g4_codegen_status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_passed_status_when_all_pass(self, workspace: Path) -> None:
-        """When all checks pass, g4_codegen_status should be 'passed'."""
+    async def test_failed_status_when_module_coverage_missing(self, workspace: Path) -> None:
+        """Scan/cross-gate pass is not enough without all module agents."""
         state = {
             "job_id": "test_all_pass",
-            "run_mode": "dev",
+            "run_mode": "strict",
             "proposed_patch": {
                 "changed_files": [
                     {"path": "src/Test.cc", "new_content": "// test"},
@@ -63,4 +63,4 @@ class TestPersistMarksFailedOnStaticScanFail:
 
         result = await persist_codegen_output_node(state)
 
-        assert result["g4_codegen_status"] == "passed"
+        assert result["g4_codegen_status"] == "failed"

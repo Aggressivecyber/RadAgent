@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
+from agent_core.g4_codegen.module_gates.material_hard_gate import run_material_hard_gate
 from agent_core.g4_codegen.schemas import GeneratedModuleFile
 
 
@@ -40,4 +41,18 @@ def test_unknown_status_rejected():
 def test_none_status_not_checked():
     """When module_status is None, skip the check (backward compat)."""
     result = run_hard_gate_checks("test", [_valid_file()], module_status=None)
+    assert result.status == "pass"
+
+
+def test_module_hard_gate_wrapper_accepts_module_status():
+    file_entry = GeneratedModuleFile(
+        path="include/MaterialRegistry.hh",
+        new_content="#pragma once\nclass MaterialRegistry {};\n",
+        generated_by="material_module_agent",
+        module_name="material",
+        rationale="test",
+    )
+
+    result = run_material_hard_gate([file_entry], module_status="generated")
+
     assert result.status == "pass"

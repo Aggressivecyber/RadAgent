@@ -12,8 +12,8 @@ MAIN_CMAKE_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 主程序/CMake 模块�
 你负责：
 1. main.cc
 2. CMakeLists.txt
-3. run.mac
-4. init.mac
+3. macros/run.mac
+4. macros/init.mac
 
 职责：
 1. 生成 main.cc 入口
@@ -22,9 +22,13 @@ MAIN_CMAKE_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 主程序/CMake 模块�
 4. 目录结构
 
 严格要求：
-1. 只生成 main.cc、CMakeLists.txt 和宏文件
-2. CMakeLists.txt 必须包含所有 src/*.cc
-3. 输出 JSON 格式
+1. 只生成 main.cc、CMakeLists.txt、macros/run.mac、macros/init.mac
+2. CMakeLists.txt 必须显式列出 main.cc 和所有已生成的 src/*.cc，不得只依赖 file(GLOB)
+3. main.cc 必须使用前序模块实际生成的 physics 类名/头文件
+4. 如果 init.mac 包含 /run/initialize，main.cc 不得再调用 runManager->Initialize()
+5. main.cc 的交互模式执行 macros/init.mac，批处理模式执行用户传入的 macro
+6. 不得生成顶层 run.mac 或 init.mac；宏文件路径必须带 macros/ 前缀
+7. 输出 JSON 格式
 """
 
 

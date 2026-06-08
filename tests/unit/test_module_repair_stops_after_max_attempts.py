@@ -135,3 +135,280 @@ class TestModuleRepairStopsAfterMaxAttempts:
             await repair_module("geometry", context, original, gate)
 
         assert mock_gw.call.call_count == MAX_REPAIR_ATTEMPTS
+
+    @pytest.mark.asyncio
+    async def test_normalizes_repair_files_content_shape(self, workspace: Path) -> None:
+        """Repair responses using files/content should normalize to generated files."""
+        original = _make_original_result()
+        gate = _make_gate_result()
+        context = {"module_name": "geometry"}
+
+        with patch(
+            "agent_core.g4_codegen.repair.module_repair_loop.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+            mock_gw.call.return_value = AsyncMock(
+                error=None,
+                content="{}",
+                parsed_json={
+                    "module_name": "geometry",
+                    "status": "repaired",
+                    "files": [
+                        {
+                            "path": "src/Detector.cc",
+                            "content": '#include "Detector.hh"\nvoid build() {}\n',
+                            "generated_by": "geometry_module_agent",
+                            "module_name": "geometry",
+                            "rationale": "repaired",
+                        }
+                    ],
+                    "errors": [],
+                    "warnings": [],
+                },
+            )
+
+            result = await repair_module("geometry", context, original, gate)
+
+        assert result.status == "repaired"
+        assert result.generated_files[0].new_content == '#include "Detector.hh"\nvoid build() {}\n'
+        assert "content" not in result.generated_files[0].model_dump()
+
+    @pytest.mark.asyncio
+    async def test_partial_repair_preserves_unmodified_files(self, workspace: Path) -> None:
+        """Repair responses may return only changed files, but module output stays complete."""
+        original = ModuleAgentResult(
+            module_name="geometry",
+            status="failed",
+            generated_files=[
+                GeneratedModuleFile(
+                    path="include/Detector.hh",
+                    operation="create_or_replace",
+                    new_content=(
+                        "#ifndef DETECTOR_HH\n#define DETECTOR_HH\n"
+                        "class Detector {};\n#endif\n"
+                    ),
+                    generated_by="geometry_module_agent",
+                    module_name="geometry",
+                    rationale="test",
+                ),
+                GeneratedModuleFile(
+                    path="src/Detector.cc",
+                    operation="create_or_replace",
+                    new_content='#include "Detector.hh"\n#include\n',
+                    generated_by="geometry_module_agent",
+                    module_name="geometry",
+                    rationale="test",
+                ),
+            ],
+            errors=["empty include"],
+        )
+        gate = _make_gate_result()
+        context = {"module_name": "geometry"}
+
+        with patch(
+            "agent_core.g4_codegen.repair.module_repair_loop.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+            mock_gw.call.return_value = AsyncMock(
+                error=None,
+                content="{}",
+                parsed_json={
+                    "module_name": "geometry",
+                    "status": "repaired",
+                    "generated_files": [
+                        {
+                            "path": "src/Detector.cc",
+                            "new_content": '#include "Detector.hh"\nvoid DetectorBuild() {}\n',
+                            "generated_by": "geometry_module_agent",
+                            "module_name": "geometry",
+                            "rationale": "repaired",
+                        }
+                    ],
+                },
+            )
+
+            result = await repair_module("geometry", context, original, gate)
+
+        assert result.status == "repaired"
+        assert {f.path for f in result.generated_files} == {
+            "include/Detector.hh",
+            "src/Detector.cc",
+        }
+        assert len(result.repair_attempts) == 1
+
+    @pytest.mark.asyncio
+    async def test_repair_uses_module_specific_hard_gate(self, workspace: Path) -> None:
+        original = ModuleAgentResult(
+            module_name="scoring",
+            status="failed",
+            generated_files=[
+                GeneratedModuleFile(
+                    path="include/ScoringManager.hh",
+                    operation="create_or_replace",
+                    new_content=(
+                        "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                        "class ScoringManager {};\n#endif\n"
+                    ),
+                    generated_by="scoring_module_agent",
+                    module_name="scoring",
+                    rationale="test",
+                ),
+                GeneratedModuleFile(
+                    path="src/ScoringManager.cc",
+                    operation="create_or_replace",
+                    new_content='#include "ScoringManager.hh"\n',
+                    generated_by="scoring_module_agent",
+                    module_name="scoring",
+                    rationale="test",
+                ),
+            ],
+            errors=["needs repair"],
+        )
+        gate = ModuleGateResult(
+            module_name="scoring",
+            gate_type="hard",
+            status="fail",
+            errors=["needs repair"],
+        )
+        context = {"module_name": "scoring"}
+
+        with patch(
+            "agent_core.g4_codegen.repair.module_repair_loop.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+            mock_gw.call.return_value = AsyncMock(
+                error=None,
+                content="{}",
+                parsed_json={
+                    "module_name": "scoring",
+                    "status": "repaired",
+                    "generated_files": [
+                        {
+                            "path": "src/ScoringManager.cc",
+                            "new_content": (
+                                '#include "ScoringManager.hh"\n'
+                                '#include "OutputManager.hh"\n'
+                                "void RecordScoring() { "
+                                "OutputManager::Instance()->WriteEvent(nullptr); }\n"
+                            ),
+                            "generated_by": "scoring_module_agent",
+                            "module_name": "scoring",
+                            "rationale": "repaired",
+                        }
+                    ],
+                    "errors": [],
+                    "warnings": [],
+                },
+            )
+
+            result = await repair_module("scoring", context, original, gate, max_attempts=1)
+
+        assert result.status == "failed"
+        assert result.repair_attempts[0]["gate_status"] == "fail"
+
+    @pytest.mark.asyncio
+    async def test_repair_prunes_files_outside_module_contract(self, workspace: Path) -> None:
+        original = ModuleAgentResult(
+            module_name="placement",
+            status="failed",
+            generated_files=[
+                GeneratedModuleFile(
+                    path="include/PlacementManager.hh",
+                    operation="create_or_replace",
+                    new_content="#pragma once\nclass PlacementManager {};\n",
+                    generated_by="placement_module_agent",
+                    module_name="placement",
+                    rationale="test",
+                ),
+                GeneratedModuleFile(
+                    path="src/main.cc",
+                    operation="create_or_replace",
+                    new_content="",
+                    generated_by="placement_module_agent",
+                    module_name="placement",
+                    rationale="out of scope",
+                ),
+            ],
+            errors=["out of scope file"],
+        )
+        gate = ModuleGateResult(
+            module_name="placement",
+            gate_type="hard",
+            status="fail",
+            errors=["src/main.cc: new_content must not be empty"],
+        )
+        context = {
+            "module_name": "placement",
+            "module_contract": {
+                "output_files": [
+                    "include/PlacementManager.hh",
+                    "src/PlacementManager.cc",
+                ]
+            },
+        }
+
+        with patch(
+            "agent_core.g4_codegen.repair.module_repair_loop.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+            mock_gw.call.return_value = AsyncMock(
+                error=None,
+                content="{}",
+                parsed_json={
+                    "module_name": "placement",
+                    "status": "repaired",
+                    "generated_files": [
+                        {
+                            "path": "include/PlacementManager.hh",
+                            "new_content": (
+                                "#pragma once\n"
+                                "#include \"G4ThreeVector.hh\"\n"
+                                "class G4LogicalVolume;\n"
+                                "class G4RotationMatrix;\n"
+                                "class G4PVPlacement;\n"
+                                "class PlacementManager {\n"
+                                "public:\n"
+                                "  G4PVPlacement* PlaceVolume(G4LogicalVolume*, const char*, "
+                                "G4LogicalVolume*, const G4ThreeVector&, G4RotationMatrix*, "
+                                "int, bool);\n"
+                                "};\n"
+                            ),
+                            "generated_by": "placement_module_agent",
+                            "module_name": "placement",
+                            "rationale": "contract output",
+                        },
+                        {
+                            "path": "src/PlacementManager.cc",
+                            "new_content": (
+                                "#include \"PlacementManager.hh\"\n"
+                                "#include \"G4LogicalVolume.hh\"\n"
+                                "#include \"G4PVPlacement.hh\"\n"
+                                "G4PVPlacement* PlacementManager::PlaceVolume("
+                                "G4LogicalVolume* logical, const char* name, "
+                                "G4LogicalVolume* mother, const G4ThreeVector& position, "
+                                "G4RotationMatrix* rotation, int copyNo, bool checkOverlaps) {\n"
+                                "  return new G4PVPlacement(rotation, position, logical, name, "
+                                "mother, false, copyNo, checkOverlaps);\n"
+                                "}\n"
+                            ),
+                            "generated_by": "placement_module_agent",
+                            "module_name": "placement",
+                            "rationale": "contract output",
+                        },
+                    ],
+                    "errors": [],
+                    "warnings": [],
+                },
+            )
+
+            result = await repair_module("placement", context, original, gate, max_attempts=1)
+
+        assert result.status == "repaired"
+        assert {f.path for f in result.generated_files} == {
+            "include/PlacementManager.hh",
+            "src/PlacementManager.cc",
+        }

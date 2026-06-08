@@ -1,4 +1,4 @@
-.PHONY: lint typecheck test test-all format clean
+.PHONY: lint typecheck test test-all test-real-modules test-real-full-graph format clean
 
 lint:
 	ruff check agent_core/ tests/
@@ -11,6 +11,12 @@ test:
 
 test-all:
 	pytest tests/ -v --tb=short
+
+test-real-modules:
+	python scripts/run_real_module_tests.py
+
+test-real-full-graph:
+	python scripts/run_real_full_graph_test.py
 
 format:
 	ruff format agent_core/ tests/

@@ -68,12 +68,8 @@ class TestPatchSubgraphRejectsContentField:
         assert result["patch_status"] in ("failed", "rejected"), (
             f"Expected failed/rejected, got: {result['patch_status']}"
         )
-        has_content_error = any(
-            "content" in e.lower() for e in result.get("errors", [])
-        )
-        assert has_content_error, (
-            f"Expected content-related error, got: {result.get('errors', [])}"
-        )
+        has_content_error = any("content" in e.lower() for e in result.get("errors", []))
+        assert has_content_error, f"Expected content-related error, got: {result.get('errors', [])}"
         # File must NOT have been written
         written_file = code_dir / "src" / "test.cc"
         assert not written_file.exists(), (

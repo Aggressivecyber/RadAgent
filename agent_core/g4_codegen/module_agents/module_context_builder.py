@@ -16,7 +16,7 @@ def build_module_context(
     geometry_strategy_plan: dict[str, Any],
     code_architecture_plan: dict[str, Any],
     job_id: str,
-    run_mode: str = "dev",
+    run_mode: str = "strict",
     previous_failures: list[dict[str, Any]] | None = None,
     existing_file_summaries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -51,9 +51,12 @@ def build_module_context(
     ctx_dir.mkdir(parents=True, exist_ok=True)
 
     ctx_path = ctx_dir / f"{module_name}.json"
-    ctx_path.write_text(json.dumps(context.model_dump(), indent=2, ensure_ascii=False))
+    context_data = context.model_dump()
+    context_data["job_id"] = job_id
 
-    return context.model_dump()
+    ctx_path.write_text(json.dumps(context_data, indent=2, ensure_ascii=False))
+
+    return context_data
 
 
 def _extract_ir_subset(module_name: str, g4_model_ir: dict[str, Any]) -> dict[str, Any]:
@@ -77,6 +80,8 @@ def _extract_ir_subset(module_name: str, g4_model_ir: dict[str, Any]) -> dict[st
     if module_name in ("sensitive_detector", "scoring"):
         subset["scoring"] = g4_model_ir.get("scoring", [])
         subset["components"] = g4_model_ir.get("components", [])
+        subset["materials"] = g4_model_ir.get("materials", [])
+        subset["sensitive_detectors"] = g4_model_ir.get("sensitive_detectors", [])
 
     if module_name in ("output_manager",):
         subset["scoring"] = g4_model_ir.get("scoring", [])
@@ -103,6 +108,21 @@ def _get_geant4_api_rules(module_name: str) -> list[str]:
         "geometry": [
             "G4VUserDetectorConstruction::Construct() 返回 world LV",
             "Solid 创建后不可修改",
+            (
+                "G4ModelIR global_units.length 默认是 mm；所有 component dimensions "
+                "和 placement position 都按该单位解释"
+            ),
+            (
+                "box dimensions 中 dx/dy/dz 表示全长；构造 G4Box 时必须传 "
+                "half-length: dx/2、dy/2、dz/2，并乘以 mm"
+            ),
+            "placement position 坐标不要缩放；按 IR 数值乘以 mm",
+            "材料查找必须通过 MaterialRegistry，不要在 geometry 模块直接调用 G4NistManager",
+            "world 物理体可直接构造为 null mother；非 world 物理体放置必须通过 PlacementManager",
+            (
+                "PlacementManager 预期接口：PlaceVolume(logical, name, mother, position, "
+                "rotation, copy_no, check_overlaps)"
+            ),
         ],
         "placement": [
             "G4PVPlacement 需要 rotation matrix 和 translation vector",
@@ -121,8 +141,17 @@ def _get_geant4_api_rules(module_name: str) -> list[str]:
             "Hit 必须实现 draw() 和 print()",
         ],
         "scoring": [
-            "G4MultiFunctionalDetector 用于 primitive scoring",
-            "G4VPrimitiveScorer 需要注册到 detector",
+            (
+                "如使用 primitive scoring，可使用 G4MultiFunctionalDetector 和 "
+                "G4VPrimitiveScorer；不要声称已注册未实现的 scorer"
+            ),
+            (
+                "不得硬编码 detector mass；dose_Gy 必须基于 IR 中几何尺寸和材料密度计算，"
+                "或通过显式接口参数传入质量"
+            ),
+            "能量沉积以 Geant4 内部能量单位累计；转换到 J 时使用 edep / joule，不要乘以 MeV",
+            "不要 SetSensitiveDetector 或覆盖 sensitive_detector 模块的 ownership",
+            "不要写 CSV/JSON 文件；输出由 output_manager 模块负责",
         ],
         "output_manager": [
             "文件 I/O 在 BeginOfRunAction 和 EndOfRunAction 中处理",

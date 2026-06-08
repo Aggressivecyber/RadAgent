@@ -8,10 +8,16 @@ from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleGateResult
 
 def run_geometry_hard_gate(
     generated_files: list[GeneratedModuleFile],
+    module_status: str | None = None,
 ) -> ModuleGateResult:
     """Run hard gate checks for geometry module."""
     return run_hard_gate_checks(
         module_name="geometry",
         generated_files=generated_files,
-        forbidden_patterns=["G4ParticleGun", "G4VSensitiveDetector"],
+        module_status=module_status,
+        forbidden_patterns=[
+            "G4ParticleGun",
+            "SensitiveDetector",
+            "SetSensitiveDetector",
+        ],
     )

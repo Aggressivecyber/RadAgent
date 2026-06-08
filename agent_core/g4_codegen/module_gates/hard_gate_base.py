@@ -35,7 +35,7 @@ def run_hard_gate_checks(
     """Run deterministic hard gate checks on generated files.
 
     Checks:
-    0. P0-10: module_status must be 'generated' or 'repaired'
+    0. module_status must be 'generated' or 'repaired'
     1. new_content is non-empty
     2. path is valid
     3. No Markdown fence
@@ -49,7 +49,7 @@ def run_hard_gate_checks(
     11. generated_by is correct
     12. module_name is correct
     """
-    # P0-10: Reject failed module status
+    # Reject failed module status
     if module_status and module_status not in ("generated", "repaired"):
         return ModuleGateResult(
             module_name=module_name,
@@ -92,6 +92,7 @@ def run_hard_gate_checks(
 
     for f in generated_files:
         file_checks = _check_single_file(f, module_name, forbidden_patterns or [])
+        file_checks.extend(_check_module_specific_file(f, module_name))
         checks.extend(file_checks)
         for c in file_checks:
             if c["status"] == "fail":
@@ -140,7 +141,7 @@ def _check_single_file(
     checks.append(
         {
             "check": "valid_path",
-            "status": "pass" if f.path and "/" in f.path else "fail",
+            "status": "pass" if _is_valid_generated_path(f.path) else "fail",
             "message": "path must be valid",
         }
     )
@@ -162,7 +163,10 @@ def _check_single_file(
 
     # Check header guard
     if f.path.endswith(".hh") or f.path.endswith(".h"):
-        has_guard = "#pragma once" in content or re.search(r"#ifndef\s+\w+_H", content)
+        has_guard = "#pragma once" in content or bool(
+            re.search(r"#ifndef\s+([A-Za-z_]\w*)", content)
+            and re.search(r"#define\s+([A-Za-z_]\w*)", content)
+        )
         checks.append(
             {
                 "check": "header_guard",
@@ -207,3 +211,43 @@ def _check_single_file(
     )
 
     return checks
+
+
+def _check_module_specific_file(
+    f: GeneratedModuleFile,
+    expected_module: str,
+) -> list[dict[str, Any]]:
+    """Run deterministic checks that are specific to one module contract."""
+    if expected_module != "output_manager":
+        return []
+
+    content = f.new_content
+    checks: list[dict[str, Any]] = []
+    if f.path.endswith((".cc", ".cpp")):
+        iterates_quantity_map = bool(
+            re.search(
+                r"RecordEventData\s*\([^)]*\)\s*\{(?:(?!\n\}).)*for\s*\([^)]*:\s*quantities\s*\)",
+                content,
+                re.DOTALL,
+            )
+        )
+        checks.append(
+            {
+                "check": "output_manager_stable_csv_column_order",
+                "status": "fail" if iterates_quantity_map else "pass",
+                "message": (
+                    "RecordEventData must not write fixed CSV columns by directly "
+                    "iterating quantities; read values in the same order as the CSV header"
+                ),
+            }
+        )
+
+    return checks
+
+
+def _is_valid_generated_path(path: str) -> bool:
+    if not path:
+        return False
+    if path in {"CMakeLists.txt", "main.cc"}:
+        return True
+    return "/" in path

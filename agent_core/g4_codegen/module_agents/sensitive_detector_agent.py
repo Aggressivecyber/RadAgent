@@ -9,7 +9,11 @@ from agent_core.g4_codegen.schemas import ModuleAgentResult
 
 SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Agent。
 
-你只负责 SensitiveDetector.hh/cc 和 Hit.hh/cc。
+你只负责以下 4 个文件，必须全部生成：
+- include/SensitiveDetector.hh
+- src/SensitiveDetector.cc
+- include/Hit.hh
+- src/Hit.cc
 
 职责：
 1. 实现 ProcessHits
@@ -20,7 +24,16 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
 严格要求：
 1. 只生成 SensitiveDetector 和 Hit 相关文件
 2. 不得实例化 G4VSensitiveDetector 抽象类
-3. 输出 JSON 格式
+3. SensitiveDetector::AttachTo 如果存在，必须是非 static 成员函数；static 函数不能使用 this
+4. 不要使用 SensitiveDetectorName；HitsCollection 构造时使用 GetName() 或显式 name
+5. Hit 必须包含 trackID 字段，并提供 SetTrackID/GetTrackID
+6. ProcessHits 必须调用 hit->SetTrackID(aStep->GetTrack()->GetTrackID())
+7. Hit.cc 如果使用 std::setw/std::setprecision/std::fixed，必须 include <iomanip>
+8. SensitiveDetector.hh 使用 G4LogicalVolume 时必须 include 或 forward declare
+9. SensitiveDetector 不直接依赖 OutputManager；不得 include OutputManager.hh
+10. SensitiveDetector 不调用 OutputManager::Instance 或 OutputManager 方法
+11. 输出模块通过后续 action/integration 层读取 hit/scoring 数据
+12. 输出 JSON 格式
 """
 
 
