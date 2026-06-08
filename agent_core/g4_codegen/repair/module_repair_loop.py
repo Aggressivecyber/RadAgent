@@ -104,7 +104,7 @@ async def repair_module(
                 file_entry.model_dump() for file_entry in current_result.generated_files
             ],
             "implementation_requirements": _module_repair_requirements(module_name),
-            "gate_requirements": _format_gate_requirements(gate_result),
+            "gate_requirements": _format_gate_requirements(module_name, gate_result),
             "attempt": attempt + 1,
             "max_attempts": max_attempts,
         }
@@ -343,17 +343,42 @@ def _prune_files_outside_module_contract(
             merged_files_by_path.pop(path, None)
 
 
-def _format_gate_requirements(gate_result: ModuleGateResult) -> list[str]:
+def _format_gate_requirements(
+    module_name: str,
+    gate_result: ModuleGateResult,
+) -> list[str]:
     """Convert gate feedback into prescriptive requirements for the repair agent."""
     requirements: list[str] = []
     for message in [*gate_result.errors, *gate_result.warnings]:
         if not isinstance(message, str) or not message.strip():
             continue
         text = message.strip()
+        if _is_contradicted_by_module_requirements(module_name, text):
+            continue
         if ": " in text:
             text = text.split(": ", 1)[1]
         requirements.append(f"Make the repaired code satisfy this requirement: {text}")
     return requirements
+
+
+def _is_contradicted_by_module_requirements(module_name: str, text: str) -> bool:
+    """Filter LLM feedback that conflicts with hard module API facts."""
+    if module_name != "scoring":
+        return False
+
+    lowered = text.lower()
+    contradicted_phrases = (
+        "getscoremap() method",
+        "getscoremap() call",
+        "getscoremap method",
+        "getscoremap is non-existent",
+        "non-existent g4vscoringmesh::getscoremap",
+        "replace getscoremap",
+        "use of g4vscoringmesh::getscoremap",
+        "proper use of g4vscoringmesh::gethitsmap",
+        "typically g4thitsmap<g4double>",
+    )
+    return any(phrase in lowered for phrase in contradicted_phrases)
 
 
 def _module_repair_requirements(module_name: str) -> list[str]:

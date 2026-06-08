@@ -107,6 +107,9 @@ async def run_llm_gate(
 
     user_prompt = f"""模块名称：{module_name}
 
+模块专用审查事实和约束：
+{json.dumps(_module_review_requirements(module_name), indent=2, ensure_ascii=False)}
+
 模块上下文：
 {json.dumps(module_context, indent=2, ensure_ascii=False)[:12000]}
 
@@ -260,3 +263,33 @@ def _scorecard_errors(scorecard: dict[str, Any]) -> list[str]:
                 f"{DIMENSION_PASS_THRESHOLD:.2f}"
             )
     return errors
+
+
+def _module_review_requirements(module_name: str) -> list[str]:
+    """Facts the LLM gate must use when reviewing module-specific APIs."""
+    if module_name == "scoring":
+        return [
+            (
+                "For this project's installed Geant4, "
+                "G4VScoringMesh.hh defines MeshScoreMap as "
+                "std::map<G4String, G4THitsMap<G4StatDouble>*>."
+            ),
+            (
+                "For this project's installed Geant4, "
+                "G4VScoringMesh::GetScoreMap() exists and returns MeshScoreMap."
+            ),
+            (
+                "Do not fail scoring code merely for using G4VScoringMesh::GetScoreMap(); "
+                "that API is the required command-based scoring mesh read path here."
+            ),
+            (
+                "Do fail scoring code that uses mesh->GetScorer(), GetHitsMap(), "
+                "G4VScorer, or dynamic_cast to G4THitsMap."
+            ),
+            (
+                "A correct scoring read assigns scoreMap.find(...)->second directly to "
+                "G4THitsMap<G4StatDouble>* and extracts values with GetObject(copyNo) "
+                "or GetMap()->find(copyNo), then G4StatDouble::sum_wx()."
+            ),
+        ]
+    return []
