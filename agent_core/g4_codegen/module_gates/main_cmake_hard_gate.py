@@ -62,10 +62,11 @@ def _append_main_cmake_checks(
             }
         )
 
+    main_code = _strip_cpp_comments(main)
     double_initialize = bool(
         main
         and init
-        and "runManager->Initialize()" in main
+        and "runManager->Initialize()" in main_code
         and "/run/initialize" in init
     )
     checks.append(
@@ -145,3 +146,8 @@ def _append_main_cmake_checks(
 
 def _strip_cmake_comments(content: str) -> str:
     return "\n".join(line.split("#", 1)[0] for line in content.splitlines())
+
+
+def _strip_cpp_comments(content: str) -> str:
+    without_block_comments = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+    return re.sub(r"//.*", "", without_block_comments)

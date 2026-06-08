@@ -539,7 +539,8 @@ def _module_repair_requirements(module_name: str) -> list[str]:
             ),
             (
                 "If macros/init.mac contains /run/initialize, main.cc must not call "
-                "runManager->Initialize()."
+                "runManager->Initialize(), and comments should not contain that exact "
+                "call token."
             ),
         ]
     return []

@@ -206,6 +206,10 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         "notes": [
             "Use actual generated class names and constructors from upstream summaries.",
             "CMake must list all generated .cc files explicitly or by a safe glob policy.",
+            (
+                "If macros/init.mac contains /run/initialize, main.cc should execute "
+                "the macro and omit the runManager initialize call token."
+            ),
         ],
     },
 }

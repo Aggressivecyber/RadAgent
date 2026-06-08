@@ -58,6 +58,32 @@ def test_main_cmake_hard_gate_accepts_explicit_sources_and_single_initialize() -
     assert result.status == "pass"
 
 
+def test_main_cmake_hard_gate_ignores_initialize_mentions_in_comments() -> None:
+    result = run_main_cmake_hard_gate(
+        [
+            _file(
+                "CMakeLists.txt",
+                "cmake_minimum_required(VERSION 3.16)\n"
+                "project(RadAgentG4)\n"
+                "add_executable(RadAgentG4 main.cc src/DetectorConstruction.cc)\n",
+            ),
+            _file(
+                "main.cc",
+                "int main() {\n"
+                "  // runManager->Initialize() is intentionally omitted.\n"
+                "  /* Do not call runManager->Initialize() here. */\n"
+                "  return 0;\n"
+                "}\n",
+            ),
+            _file("macros/init.mac", "/run/initialize\n"),
+            _file("macros/run.mac", "/run/beamOn 1\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "pass"
+
+
 def test_main_cmake_hard_gate_rejects_src_main_cc() -> None:
     result = run_main_cmake_hard_gate(
         [
