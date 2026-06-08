@@ -448,6 +448,11 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "not const G4RotationMatrix*."
             ),
             (
+                "If PlacementManager.hh mentions G4RotationMatrix*, include "
+                "G4RotationMatrix.hh; do not forward declare class G4RotationMatrix "
+                "because Geant4 defines it as an alias."
+            ),
+            (
                 "When accepting const G4Transform3D&, create a non-const local copy before "
                 "passing it to G4PVPlacement."
             ),
@@ -541,6 +546,18 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "If macros/init.mac contains /run/initialize, main.cc must not call "
                 "runManager->Initialize(), and comments should not contain that exact "
                 "call token."
+            ),
+            (
+                "main.cc must include ActionInitialization.hh and register "
+                "new ActionInitialization() with the run manager."
+            ),
+            (
+                "Do not define RunAction, EventAction, SteppingAction, or "
+                "ActionInitialization classes inside main.cc."
+            ),
+            (
+                "Do not call OutputManager::Instance() or ScoringManager::Instance() "
+                "from main.cc; generated action modules own runtime callbacks."
             ),
         ]
     return []

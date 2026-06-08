@@ -48,7 +48,15 @@ def test_main_cmake_hard_gate_accepts_explicit_sources_and_single_initialize() -
                 "# Explicit list of all source files; do not use file(GLOB).\n"
                 "add_executable(RadAgentG4 main.cc src/DetectorConstruction.cc)\n",
             ),
-            _file("main.cc", "int main() { return 0; }\n"),
+            _file(
+                "main.cc",
+                '#include "ActionInitialization.hh"\n'
+                "int main() {\n"
+                "  auto* runManager = GetRunManager();\n"
+                "  runManager->SetUserInitialization(new ActionInitialization());\n"
+                "  return 0;\n"
+                "}\n",
+            ),
             _file("macros/init.mac", "/run/initialize\n"),
             _file("macros/run.mac", "/run/beamOn 1\n"),
         ],
@@ -69,7 +77,10 @@ def test_main_cmake_hard_gate_ignores_initialize_mentions_in_comments() -> None:
             ),
             _file(
                 "main.cc",
+                '#include "ActionInitialization.hh"\n'
                 "int main() {\n"
+                "  auto* runManager = GetRunManager();\n"
+                "  runManager->SetUserInitialization(new ActionInitialization());\n"
                 "  // runManager->Initialize() is intentionally omitted.\n"
                 "  /* Do not call runManager->Initialize() here. */\n"
                 "  return 0;\n"
@@ -158,3 +169,56 @@ def test_main_cmake_hard_gate_rejects_output_manager_action_casts() -> None:
 
     assert result.status == "fail"
     assert any("OutputManager" in error for error in result.errors)
+
+
+def test_main_cmake_hard_gate_rejects_inline_action_classes() -> None:
+    result = run_main_cmake_hard_gate(
+        [
+            _file(
+                "CMakeLists.txt",
+                "cmake_minimum_required(VERSION 3.16)\n"
+                "project(RadAgentG4)\n"
+                "add_executable(RadAgentG4 main.cc src/DetectorConstruction.cc)\n",
+            ),
+            _file(
+                "main.cc",
+                '#include "G4UserRunAction.hh"\n'
+                "class MyRunAction : public G4UserRunAction {};\n"
+                "int main() { return 0; }\n",
+            ),
+            _file("macros/init.mac", "/run/initialize\n"),
+            _file("macros/run.mac", "/run/beamOn 1\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("must not define" in error for error in result.errors)
+
+
+def test_main_cmake_hard_gate_rejects_direct_runtime_singleton_calls() -> None:
+    result = run_main_cmake_hard_gate(
+        [
+            _file(
+                "CMakeLists.txt",
+                "cmake_minimum_required(VERSION 3.16)\n"
+                "project(RadAgentG4)\n"
+                "add_executable(RadAgentG4 main.cc src/DetectorConstruction.cc)\n",
+            ),
+            _file(
+                "main.cc",
+                '#include "ActionInitialization.hh"\n'
+                '#include "OutputManager.hh"\n'
+                "int main() {\n"
+                "  runManager->SetUserInitialization(new ActionInitialization());\n"
+                "  OutputManager::Instance()->BeginRun(nullptr);\n"
+                "}\n",
+            ),
+            _file("macros/init.mac", "/run/initialize\n"),
+            _file("macros/run.mac", "/run/beamOn 1\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("OutputManager::Instance" in error for error in result.errors)

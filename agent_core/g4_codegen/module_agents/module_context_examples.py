@@ -72,6 +72,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         ),
         "notes": [
             "Pass a non-const G4RotationMatrix* to G4PVPlacement.",
+            "Include G4RotationMatrix.hh instead of forward declaring G4RotationMatrix.",
             "Return G4VPhysicalVolume* from placement helper interfaces.",
             "Use G4LogicalVolume* for mother logical volume parameters.",
             "Keep overlap checks enabled unless the IR explicitly says otherwise.",
@@ -209,6 +210,10 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             (
                 "If macros/init.mac contains /run/initialize, main.cc should execute "
                 "the macro and omit the runManager initialize call token."
+            ),
+            (
+                "main.cc should include ActionInitialization.hh and register the "
+                "generated ActionInitialization rather than defining action classes."
             ),
         ],
     },

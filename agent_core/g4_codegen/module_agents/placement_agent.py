@@ -36,6 +36,8 @@ PLACEMENT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 放置模块编码 Agent
    也应返回 G4VPhysicalVolume*，并直接返回 PlaceVolume(...) 的结果。
    如果 PlacementManager.hh 的公开声明返回或引用 G4PVPlacement*，头文件必须
    include G4PVPlacement.hh 或声明 class G4PVPlacement;，不能只在 .cc 中 include。
+   PlacementManager.hh 如果使用 G4RotationMatrix*，必须 include G4RotationMatrix.hh；
+   不要写 class G4RotationMatrix;，因为 Geant4 将 G4RotationMatrix 定义为别名。
 7. 如果提供 G4Transform3D overload，传给 G4PVPlacement 前必须使用非 const 局部副本，
    例如 G4Transform3D placementTransform = transform;
    new G4PVPlacement(placementTransform, logical, name, mother, ...)

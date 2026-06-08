@@ -62,6 +62,28 @@ def _append_placement_api_checks(
         if not f.path.endswith((".hh", ".cc")):
             continue
 
+        forward_declares_rotation_matrix_alias = bool(
+            f.path.endswith((".hh", ".h"))
+            and re.search(r"\bclass\s+G4RotationMatrix\s*;", content)
+        )
+        checks.append(
+            {
+                "check": "placement_header_does_not_forward_declare_g4rotationmatrix",
+                "status": (
+                    "fail" if forward_declares_rotation_matrix_alias else "pass"
+                ),
+                "message": (
+                    "PlacementManager.hh must include G4RotationMatrix.hh instead of "
+                    "forward declaring class G4RotationMatrix"
+                ),
+            }
+        )
+        if forward_declares_rotation_matrix_alias:
+            errors.append(
+                f"{f.path}: include G4RotationMatrix.hh; Geant4 defines "
+                "G4RotationMatrix as an alias, not a forward-declarable class"
+            )
+
         has_const_rotation = bool(
             re.search(r"\bconst\s+G4RotationMatrix\s*\*\s+\w+", content)
         )

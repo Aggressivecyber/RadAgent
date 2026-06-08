@@ -173,6 +173,17 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
         updated_header,
         flags=re.DOTALL,
     )
+    updated_header = re.sub(
+        r"^\s*class\s+G4RotationMatrix\s*;\s*\n?",
+        "",
+        updated_header,
+        flags=re.MULTILINE,
+    )
+    if (
+        "G4RotationMatrix" in updated_header
+        and "G4RotationMatrix.hh" not in updated_header
+    ):
+        updated_header = _ensure_include_text(updated_header, "G4RotationMatrix.hh")
     if updated_header != header_content:
         header["new_content"] = updated_header
         header_changed = True
@@ -537,6 +548,21 @@ def _ensure_forward_declaration(file_entry: dict[str, Any], class_name: str) -> 
     lines.insert(insert_at, declaration)
     file_entry["new_content"] = "\n".join(lines) + "\n"
     return True
+
+
+def _ensure_include_text(content: str, header_name: str) -> str:
+    quoted = f'#include "{header_name}"'
+    angled = f"#include <{header_name}>"
+    if quoted in content or angled in content:
+        return content
+    lines = content.splitlines()
+    insert_at = 0
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#pragma once") or stripped.startswith("#include"):
+            insert_at = idx + 1
+    lines.insert(insert_at, quoted)
+    return "\n".join(lines) + "\n"
 
 
 def _insert_declaration_text(content: str, declaration: str, anchor: str) -> str:

@@ -43,9 +43,9 @@ def test_placement_hard_gate_accepts_g4pvplacement_forward_declaration() -> None
             _file(
                 "include/PlacementManager.hh",
                 "#pragma once\n"
+                '#include "G4RotationMatrix.hh"\n'
                 "class G4PVPlacement;\n"
                 "class G4LogicalVolume;\n"
-                "class G4RotationMatrix;\n"
                 "class PlacementManager {\n"
                 "public:\n"
                 "  static G4PVPlacement* Place(G4LogicalVolume*, G4RotationMatrix*);\n"
@@ -65,9 +65,9 @@ def test_placement_hard_gate_rejects_placevolume_return_type_mismatch() -> None:
             _file(
                 "include/PlacementManager.hh",
                 "#pragma once\n"
+                '#include "G4RotationMatrix.hh"\n'
                 "class G4PVPlacement;\n"
                 "class G4LogicalVolume;\n"
-                "class G4RotationMatrix;\n"
                 "class PlacementManager {\n"
                 "public:\n"
                 "  G4VPhysicalVolume* PlaceVolume(G4RotationMatrix*);\n"
@@ -96,9 +96,9 @@ def test_placement_hard_gate_rejects_physical_volume_mother_parameter() -> None:
             _file(
                 "include/PlacementManager.hh",
                 "#pragma once\n"
+                '#include "G4RotationMatrix.hh"\n'
                 "class G4VPhysicalVolume;\n"
                 "class G4LogicalVolume;\n"
-                "class G4RotationMatrix;\n"
                 "class G4ThreeVector;\n"
                 "class PlacementManager {\n"
                 "public:\n"
@@ -114,3 +114,24 @@ def test_placement_hard_gate_rejects_physical_volume_mother_parameter() -> None:
 
     assert result.status == "fail"
     assert any("G4LogicalVolume* mother" in error for error in result.errors)
+
+
+def test_placement_hard_gate_rejects_g4rotationmatrix_forward_declaration() -> None:
+    result = run_placement_hard_gate(
+        [
+            _file(
+                "include/PlacementManager.hh",
+                "#pragma once\n"
+                "class G4RotationMatrix;\n"
+                "class PlacementManager {\n"
+                "public:\n"
+                "  void Place(G4RotationMatrix* rotation);\n"
+                "};\n",
+            ),
+            _file("src/PlacementManager.cc", '#include "PlacementManager.hh"\n'),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4RotationMatrix.hh" in error for error in result.errors)

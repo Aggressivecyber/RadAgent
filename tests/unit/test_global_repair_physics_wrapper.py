@@ -118,6 +118,8 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
     assert "manager.PlaceVolume(" in source
     assert "Instance()" not in source
     assert "static G4VPhysicalVolume* Place(" in header
+    assert '#include "G4RotationMatrix.hh"' in header
+    assert "class G4RotationMatrix;" not in header
     assert "G4VPhysicalVolume* mother" not in header
     assert "G4VPhysicalVolume* mother" not in source
     assert "G4LogicalVolume* mother" in header

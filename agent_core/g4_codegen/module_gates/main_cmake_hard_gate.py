@@ -136,6 +136,54 @@ def _append_main_cmake_checks(
             ),
         }
     )
+    defines_inline_actions = bool(
+        re.search(
+            r"\bclass\s+[A-Za-z_]\w*\s*:\s*public\s+"
+            r"(?:G4UserRunAction|G4UserEventAction|G4UserSteppingAction|"
+            r"G4VUserActionInitialization)\b",
+            main,
+        )
+    )
+    checks.append(
+        {
+            "check": "main_does_not_define_action_classes",
+            "status": "fail" if defines_inline_actions else "pass",
+            "message": (
+                "main.cc must not define RunAction/EventAction/SteppingAction/"
+                "ActionInitialization classes; use the action_initialization module"
+            ),
+        }
+    )
+    main_calls_runtime_singletons = bool(
+        re.search(r"\b(?:OutputManager|ScoringManager)::Instance\s*\(", main)
+    )
+    checks.append(
+        {
+            "check": "main_does_not_call_output_or_scoring_singletons",
+            "status": "fail" if main_calls_runtime_singletons else "pass",
+            "message": (
+                "main.cc must not call OutputManager::Instance() or "
+                "ScoringManager::Instance(); user action modules own those calls"
+            ),
+        }
+    )
+    uses_action_initialization = bool(
+        re.search(r"#include\s+[<\"]ActionInitialization\.hh[>\"]", main)
+        and re.search(
+            r"SetUserInitialization\s*\(\s*(?:new\s+)?ActionInitialization\b",
+            main,
+        )
+    )
+    checks.append(
+        {
+            "check": "main_registers_action_initialization_module",
+            "status": "pass" if uses_action_initialization else "fail",
+            "message": (
+                "main.cc must include ActionInitialization.hh and register "
+                "new ActionInitialization() with the run manager"
+            ),
+        }
+    )
 
     result.checks.extend(checks)
     for check in checks:
