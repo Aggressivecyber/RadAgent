@@ -1,3 +1,1 @@
-# Confirmation Report
-
-Status: approved
+# Report

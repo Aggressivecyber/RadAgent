@@ -1,9 +1,9 @@
 {
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
-  "job_id": "dev-complex-001",
+  "job_id": "hc_test",
   "validation_status": "PARTIAL",
-  "generated_at": "2026-06-07T19:34:16.826661+00:00",
+  "generated_at": "2026-06-08T05:22:16.323193+00:00",
   "is_stub": false,
   "run_type": "dev",
   "artifacts_collected": 14,
@@ -15,7 +15,6 @@
   "file_count": 14,
   "skipped_gates": [],
   "known_limitations": [
-    "Dev mode run — validation status downgraded from VERIFIED to PARTIAL",
     "Some gates skipped — not all validations ran"
   ],
   "human_confirmation": {

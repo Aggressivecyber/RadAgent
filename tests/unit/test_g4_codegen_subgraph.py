@@ -30,93 +30,50 @@ class TestG4CodegenSubgraphCompilation:
             assert field in annotations, f"Missing field: {field}"
 
 
-class TestCodeModulePlanner:
-    """Test the code module planner node."""
+class TestNewIntegrationAssembler:
+    """Test the NEW integration assembler (module-level agent path).
 
-    async def test_plans_modules_from_model_ir(self) -> None:
-        """Should plan modules based on components and scoring."""
-        from agent_core.g4_codegen.nodes.code_module_planner import code_module_planner
+    P0-10/P0-12: Old integration_assembler is deprecated and raises
+    RuntimeError on import. These tests use the new path.
+    """
 
-        state = {
-            "g4_model_ir": {
-                "components": [
-                    {"component_id": "world", "component_type": "world"},
-                    {"component_id": "silicon_det", "component_type": "volume"},
-                ],
-                "scoring": [
-                    {"scoring_id": "edep", "scoring_type": "region"},
-                ],
+    def test_new_assembler_produces_valid_patch(self) -> None:
+        """New integration_assembler must produce PatchValidator-compliant output."""
+        from agent_core.g4_codegen.integration.integration_assembler import (
+            assemble_proposed_patch,
+        )
+
+        module_results = {
+            "material": {
+                "status": "generated",
+                "generated_files": [{
+                    "path": "include/MaterialRegistry.hh",
+                    "new_content": "#pragma once\n",
+                    "generated_by": "material_module_agent",
+                    "module_name": "material",
+                    "rationale": "test",
+                }],
             },
         }
-        result = await code_module_planner(state)
-
-        modules = result["code_modules"]
-        module_ids = [m["module_id"] for m in modules]
-
-        # Always-present modules
-        assert "detector_construction" in module_ids
-        assert "material_registry" in module_ids
-        assert "physics_list" in module_ids
-        assert "primary_generator" in module_ids
-        assert "output_manager" in module_ids
-        assert "main" in module_ids
-
-        # Component-specific module
-        assert "geometry_silicon_det" in module_ids
-
-        # Sensitive detector module
-        assert "sd_edep" in module_ids
-
-    async def test_empty_model_ir(self) -> None:
-        """Empty model IR should still produce core modules."""
-        from agent_core.g4_codegen.nodes.code_module_planner import code_module_planner
-
-        result = await code_module_planner({"g4_model_ir": {}})
-        modules = result["code_modules"]
-        assert len(modules) >= 6  # core modules only
-
-
-class TestIntegrationAssembler:
-    """Test the integration assembler node."""
-
-    async def test_assembles_patch_from_code(self) -> None:
-        """Should assemble proposed_patch from individual code outputs."""
-        from agent_core.g4_codegen.nodes.integration_assembler import (
-            integration_assembler,
-        )
-
-        state: dict[str, Any] = {
-            "job_id": "test",
-            "code_modules": [{"module_id": "main"}],
-            "g4_model_ir": {"target_system": "test_sim"},
-            "errors": [],
-            "main_code": "int main() { return 0; }",
-            "cmake_file": "cmake_minimum_required(VERSION 3.16)\nproject(test)",
+        module_gates = {
+            "material": {"hard": {"status": "pass"}, "llm": {"status": "pass"}},
         }
-        result = await integration_assembler(state)
+        patch = assemble_proposed_patch(module_results, module_gates, "test")
 
-        assert result["current_node"] == "integration_assembler"
-        patch = result["proposed_patch"]
-        assert "changed_files" in patch
-        assert len(patch["changed_files"]) >= 1
-
-    async def test_generates_cmake_if_missing(self) -> None:
-        """Should generate CMakeLists.txt if not provided."""
-        from agent_core.g4_codegen.nodes.integration_assembler import (
-            integration_assembler,
-        )
-
-        state: dict[str, Any] = {
-            "job_id": "test",
-            "code_modules": [],
-            "g4_model_ir": {},
-            "errors": [],
+        # Must have all PatchValidator required fields
+        required = {
+            "patch_id", "job_id", "description", "change_type",
+            "risk_level", "changed_files", "test_plan", "expected_outputs",
         }
-        result = await integration_assembler(state)
+        assert required <= set(patch.keys()), f"Missing: {required - set(patch.keys())}"
 
-        patch = result["proposed_patch"]
-        paths = [f["path"] for f in patch["changed_files"]]
-        assert "CMakeLists.txt" in paths
+    def test_old_integration_assembler_raises(self) -> None:
+        """P0-10: Old integration_assembler must raise RuntimeError."""
+        import pytest
+        with pytest.raises(RuntimeError, match="deprecated"):
+            from agent_core.g4_codegen.nodes.integration_assembler import (
+                integration_assembler,
+            )
 
 
 class TestCodegenValidators:

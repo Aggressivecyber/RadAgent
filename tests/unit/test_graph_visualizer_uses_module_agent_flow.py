@@ -1,4 +1,4 @@
-"""Test that graph visualizer uses module agent flow keywords."""
+"""P0-13: graph_visualizer uses module agent flow, not legacy codegen."""
 
 from __future__ import annotations
 
@@ -14,49 +14,58 @@ from agent_core.visualization.graph_visualizer import (
 class TestGraphVisualizerUsesModuleAgentFlow:
     """Verify graph visualizer output includes module agent flow keywords."""
 
-    def test_main_graph_contains_codegen_subgraph(self) -> None:
-        """Main graph diagram should reference g4_codegen_subgraph."""
+    def test_main_graph_contains_codegen_subgraph(self):
         diagram = draw_main_graph()
-
         assert "g4_codegen_subgraph" in diagram
-        assert "代码生成" in diagram or "Codegen" in diagram.lower() or "codegen" in diagram.lower()
 
-    def test_codegen_subgraph_contains_module_agents(self) -> None:
-        """G4 codegen subgraph should contain module agent flow keywords."""
+    def test_codegen_spec_has_module_agents(self):
         spec = get_g4_codegen_subgraph_spec()
+        node_ids = {n.node_id for n in spec.nodes}
+        assert "run_material_agent" in node_ids
+        assert "run_geometry_agent" in node_ids
+        assert "run_main_cmake_agent" in node_ids
 
-        # Check node IDs contain module agent related keywords
-        node_ids = [n.node_id for n in spec.nodes]
+    def test_codegen_spec_has_module_gates(self):
+        spec = get_g4_codegen_subgraph_spec()
+        node_ids = {n.node_id for n in spec.nodes}
+        assert "material_hard_gate" in node_ids
+        assert "material_llm_gate" in node_ids
+        assert "geometry_hard_gate" in node_ids
 
-        # Should have module-related nodes
-        module_keywords = [
-            "module_agents", "module_gates", "integration_assembler",
-            "static_semantic_scanner", "cross_file_hard_gate",
-            "cross_file_llm_gate", "proposed_patch",
-        ]
-        found = [kw for kw in module_keywords if any(kw in nid for nid in node_ids)]
-        assert len(found) >= 3, (
-            f"Expected at least 3 module flow keywords in nodes, found: {found}"
-        )
+    def test_codegen_spec_has_cross_file_gates(self):
+        spec = get_g4_codegen_subgraph_spec()
+        node_ids = {n.node_id for n in spec.nodes}
+        assert "cross_file_hard_gate" in node_ids
+        assert "cross_file_llm_gate" in node_ids
+        assert "static_semantic_scanner" in node_ids
 
-    def test_draw_subgraph_codegen(self) -> None:
-        """draw_subgraph('g4_codegen') should produce valid Mermaid."""
+    def test_codegen_spec_has_integration_assembler(self):
+        spec = get_g4_codegen_subgraph_spec()
+        node_ids = {n.node_id for n in spec.nodes}
+        assert "integration_assembler" in node_ids
+        assert "persist_codegen_output" in node_ids
+
+    def test_codegen_spec_no_legacy_nodes(self):
+        spec = get_g4_codegen_subgraph_spec()
+        node_ids = {n.node_id for n in spec.nodes}
+        legacy = {
+            "material_registry_codegen", "component_geometry_codegen",
+            "placement_codegen", "source_codegen", "physics_macro_codegen",
+            "sensitive_detector_codegen", "scoring_codegen",
+            "output_manager_codegen", "code_module_planner",
+            "geometry_builder_plan_node",
+        }
+        found_legacy = legacy & node_ids
+        assert not found_legacy, f"Legacy nodes found: {found_legacy}"
+
+    def test_draw_subgraph_codegen(self):
         diagram = draw_subgraph("g4_codegen")
-
         assert "flowchart" in diagram
-        # Updated: new visualizer uses different node names
-        assert "integration_assembler" in diagram or "codegen" in diagram.lower()
 
-    def test_draw_all_includes_codegen(self) -> None:
-        """draw_all should include g4_codegen subgraph."""
+    def test_draw_all_includes_codegen(self):
         diagrams = draw_all()
-
         assert "g4_codegen" in diagrams
-        assert "material" in diagrams["g4_codegen"] or "codegen" in diagrams["g4_codegen"].lower()
 
-    def test_draw_combined_includes_module_flow(self) -> None:
-        """Combined diagram should include module agent flow."""
+    def test_draw_combined_includes_module_flow(self):
         diagram = draw_combined()
-
         assert "g4_codegen_subgraph" in diagram
-        assert "persist" in diagram or "codegen" in diagram.lower()

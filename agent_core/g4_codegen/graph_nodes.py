@@ -145,6 +145,14 @@ async def run_module_agent_node(
     # Inject summaries into the context dict
     ctx = dict(ctx)
     ctx["existing_generated_file_summaries"] = summaries
+    ctx["actual_context_used_by_agent"] = True
+
+    # P0-14: Persist effective context (with summaries) to disk
+    from agent_core.config.workspace import get_job_dir as _get_job_dir
+    _ctx_dir = _get_job_dir(job_id) / "06_codegen" / "module_contexts"
+    _ctx_dir.mkdir(parents=True, exist_ok=True)
+    _eff_path = _ctx_dir / f"{module_name}.effective.json"
+    _eff_path.write_text(json.dumps(ctx, indent=2, ensure_ascii=False))
 
     # Import and run the appropriate agent
     agent_fn = _get_agent_function(module_name)

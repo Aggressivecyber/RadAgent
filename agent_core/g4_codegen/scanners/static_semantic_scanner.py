@@ -1,4 +1,8 @@
-"""Static semantic scanner — checks generated code for forbidden patterns."""
+"""Static semantic scanner — checks generated code for forbidden patterns.
+
+P0-6/P0-7: Severe issues (abstract instantiation, CAD claims, fake outputs,
+G4Box fallback) are errors that cause scan failure, not just warnings.
+"""
 
 from __future__ import annotations
 
@@ -6,25 +10,49 @@ import json
 import re
 from typing import Any
 
-SCAN_PATTERNS = [
-    (r"#include\s*$", "empty_include"),
-    (r"#include\s+\s+", "include_whitespace_only"),
-    (r"```", "markdown_fence"),
-    (r"TODO", "todo_marker"),
-    (r"NotImplemented", "not_implemented"),
-    (r"dummy", "dummy_marker"),
-    (r"stub", "stub_marker"),
-    (r"PLACEHOLDER", "placeholder_marker"),
-    (r"std::map\s+\w+\s*;", "untyped_std_map"),
-    (r"std::map\s+registry_", "untyped_registry_map"),
-    (r"std::map\s+detectors_", "untyped_detectors_map"),
-    (r"new\s+G4VSensitiveDetector", "abstract_instantiation_sd"),
-    (r"new\s+G4VHit", "abstract_instantiation_hit"),
-    (r"G4Box\s*\(\s*\"fallback", "g4box_fallback"),
-    (r"FreeCAD", "freecad_reference"),
-    (r"cadmesh", "cadmesh_reference"),
-    (r"STEP.*convert", "step_conversion_claim"),
+# ── Error patterns (always fail the scan) ──────────────────────────
+# P0-7: These are severe issues that must cause status=fail.
+ERROR_PATTERNS: list[tuple[str, str]] = [
+    # Empty include (broken C++)
+    ("empty_include", r"^\s*#include\s*$"),
+    ("include_whitespace_only", r"^\s*#include\s+\s*$"),
+    # Abstract base class instantiation (compilation error)
+    ("abstract_sensitive_detector", r"new\s+G4VSensitiveDetector"),
+    ("abstract_hit", r"new\s+G4VHit"),
+    ("abstract_detector_construction", r"new\s+G4VUserDetectorConstruction"),
+    ("abstract_primary_generator", r"new\s+G4VUserPrimaryGeneratorAction"),
+    ("abstract_action_initialization", r"new\s+G4VUserActionInitialization"),
+    # Untyped std::map (compilation error)
+    ("untyped_registry_map", r"std::map\s+registry_"),
+    ("untyped_detectors_map", r"std::map\s+detectors_"),
+    # CAD/GDML fake conversion claims
+    ("freecad_reference", r"FreeCAD"),
+    ("cadmesh_reference", r"cadmesh|CADMesh"),
+    ("step_conversion_claim", r"STEP.*convert|convert.*STEP"),
+    ("stl_conversion_claim", r"STL.*convert|convert.*STL"),
+    ("ply_conversion_claim", r"PLY.*convert|convert.*PLY"),
+    # G4Box fallback (not real geometry)
+    ("g4box_fallback", r"G4Box\s*\(\s*\"fallback|fallback.*G4Box"),
+    # Fake TCAD/SPICE output
+    ("fake_tcad_output", r"fake.*TCAD|TCAD.*fake|dummy.*TCAD"),
+    ("fake_spice_output", r"fake.*SPICE|SPICE.*fake|dummy.*SPICE"),
+    # Content field (must use new_content)
+    ("content_field_used", r"\"content\"\s*:"),
+    # Markdown fence (LLM artifact)
+    ("markdown_fence", r"```"),
 ]
+
+# ── Warning patterns (logged but do not fail the scan) ─────────────
+WARNING_PATTERNS: list[tuple[str, str]] = [
+    ("todo_marker", r"TODO"),
+    ("not_implemented", r"NotImplemented"),
+    ("stub_marker", r"\bstub\b"),
+    ("dummy_marker", r"\bdummy\b"),
+    ("placeholder_marker", r"PLACEHOLDER|\{\{|\}\}"),
+    ("untyped_std_map", r"std::map\s+\w+\s*;"),
+]
+
+_REGEX_FLAGS = re.IGNORECASE | re.MULTILINE
 
 
 def scan_generated_code(
@@ -33,16 +61,9 @@ def scan_generated_code(
 ) -> dict[str, Any]:
     """Scan all generated code for forbidden patterns.
 
-    Checks:
-    1. Empty includes
-    2. Markdown fences
-    3. TODO/NotImplemented/stub/dummy/PLACEHOLDER
-    4. Untyped std::map
-    5. Abstract class instantiation
-    6. G4Box fallback markers
-    7. Fake CAD conversion
-    8. Missing new_content
-    9. Presence of content field
+    P0-6: Severe issues cause status=fail (not just warning).
+    P0-7: Includes abstract instantiation, CAD claims, fake outputs,
+    G4Box fallback, content field usage.
     """
     findings: list[dict[str, Any]] = []
     all_passed = True
@@ -52,12 +73,15 @@ def scan_generated_code(
         content = f.get("new_content", "")
 
         # Check for 'content' field (must use 'new_content')
-        if "content" in f and "new_content" not in f:
+        if "content" in f:
             findings.append({
                 "file": path,
-                "issue": "missing_new_content",
+                "issue": "content_field_present",
                 "severity": "error",
-                "message": "File uses 'content' instead of 'new_content'",
+                "message": (
+                    "File contains deprecated 'content' field; "
+                    "only 'new_content' is allowed"
+                ),
             })
             all_passed = False
 
@@ -71,20 +95,26 @@ def scan_generated_code(
             all_passed = False
             continue
 
-        # Scan for patterns
-        for pattern, issue_name in SCAN_PATTERNS:
-            if re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
+        # Scan error patterns (always fail)
+        for issue_name, pattern in ERROR_PATTERNS:
+            if re.search(pattern, content, _REGEX_FLAGS):
                 findings.append({
                     "file": path,
                     "issue": issue_name,
-                    "severity": "error" if issue_name in (
-                        "empty_include", "untyped_std_map", "abstract_instantiation_sd",
-                        "untyped_registry_map", "untyped_detectors_map",
-                    ) else "warning",
-                    "message": f"Found {issue_name}",
+                    "severity": "error",
+                    "message": f"Found forbidden pattern: {issue_name}",
                 })
-                if issue_name in ("empty_include", "untyped_std_map", "abstract_instantiation_sd"):
-                    all_passed = False
+                all_passed = False
+
+        # Scan warning patterns (log but don't fail)
+        for issue_name, pattern in WARNING_PATTERNS:
+            if re.search(pattern, content, _REGEX_FLAGS):
+                findings.append({
+                    "file": path,
+                    "issue": issue_name,
+                    "severity": "warning",
+                    "message": f"Found warning pattern: {issue_name}",
+                })
 
     result = {
         "status": "pass" if all_passed else "fail",

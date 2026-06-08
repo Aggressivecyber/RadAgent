@@ -1,5 +1,5 @@
 {
-  "decision": "allow_rag",
-  "geometry_evidence_count": 1,
-  "materials_evidence_count": 5
+  "decision": "unknown",
+  "geometry_evidence_count": 0,
+  "materials_evidence_count": 0
 }

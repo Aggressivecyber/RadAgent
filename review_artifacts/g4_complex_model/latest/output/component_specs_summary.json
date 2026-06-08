@@ -1,17 +1,9 @@
 {
-  "total_components": 9,
+  "total_components": 1,
   "component_ids": [
-    "world",
-    "housing",
-    "pcb",
-    "detector_si",
-    "oxide_layer",
-    "shielding_front",
-    "shielding_back",
-    "sensitive_air_gap",
-    "cable_channel"
+    "world"
   ],
-  "materials_count": 5,
-  "sources_count": 1,
-  "scoring_count": 4
+  "materials_count": 0,
+  "sources_count": 0,
+  "scoring_count": 0
 }

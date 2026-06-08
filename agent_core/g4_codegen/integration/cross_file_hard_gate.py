@@ -1,9 +1,20 @@
-"""Cross-file hard gate — validates consistency across all generated files."""
+"""Cross-file hard gate — validates consistency across all generated files.
+
+P0-1 to P0-5: Uses relative paths (no 08_geant4/ prefix).
+Checks CMakeLists.txt, main.cc, source inclusion, core module completeness.
+"""
 
 from __future__ import annotations
 
 import json
 from typing import Any
+
+# P0-5: 10 core modules that must each have at least one file
+REQUIRED_MODULES = [
+    "material", "geometry", "placement", "source", "physics",
+    "sensitive_detector", "scoring", "output_manager",
+    "action_initialization", "main_cmake",
+]
 
 
 def run_cross_file_hard_gate(
@@ -13,14 +24,11 @@ def run_cross_file_hard_gate(
 ) -> dict[str, Any]:
     """Run cross-file hard gate checks.
 
-    Validates:
-    1. CMakeLists.txt contains all src/*.cc
-    2. main.cc includes exist
-    3. Header/source pairs match
-    4. No duplicate main
-    5. No duplicate class definitions
-    6. All files have new_content
-    7. No 'content' field (must use 'new_content')
+    P0-1: All paths are relative to 08_geant4 (no prefix).
+    P0-2: Checks CMakeLists.txt exists.
+    P0-3: Checks main.cc exists.
+    P0-4: Checks CMakeLists.txt includes all src/*.cc.
+    P0-5: Checks 10 core modules each have at least one file.
     """
     checks: list[dict[str, Any]] = []
     errors: list[str] = []
@@ -30,45 +38,124 @@ def run_cross_file_hard_gate(
     file_paths = {f["path"] for f in files}
     file_contents = {f["path"]: f.get("new_content", "") for f in files}
 
-    # Check all files have new_content
+    # ── Per-file checks ──────────────────────────────────────────────
     for f in files:
+        path = f.get("path", "")
+
+        # P0-8: Reject any 'content' field (even with new_content)
         if "content" in f:
             checks.append({
                 "check": "no_content_field",
-                "file": f["path"],
+                "file": path,
                 "status": "fail",
-                "message": "File uses 'content' instead of 'new_content'",
+                "message": (
+                    "File uses deprecated 'content' field; "
+                    "only 'new_content' is allowed"
+                ),
             })
             all_passed = False
-            errors.append(f"{f['path']}: uses 'content' field")
+            errors.append(f"{path}: uses 'content' field")
 
+        # Check non-empty new_content
         if not f.get("new_content", "").strip():
             checks.append({
                 "check": "non_empty_new_content",
-                "file": f["path"],
+                "file": path,
                 "status": "fail",
                 "message": "new_content is empty",
             })
             all_passed = False
 
-    # Check CMakeLists.txt includes all source files
-    cmake_content = file_contents.get("08_geant4/CMakeLists.txt", "")
-    if cmake_content:
-        src_files = [p for p in file_paths if p.startswith("08_geant4/src/") and p.endswith(".cc")]
+        # Check required per-file fields
+        for required_field in ("path", "new_content", "zone", "generated_by", "module_name"):
+            if not f.get(required_field):
+                checks.append({
+                    "check": f"file_has_{required_field}",
+                    "file": path,
+                    "status": "fail",
+                    "message": f"Missing required field: {required_field}",
+                })
+                all_passed = False
+
+    # ── P0-2: CMakeLists.txt must exist ──────────────────────────────
+    has_cmake = "CMakeLists.txt" in file_paths
+    checks.append({
+        "check": "cmake_exists",
+        "status": "pass" if has_cmake else "fail",
+        "message": (
+            "CMakeLists.txt is present"
+            if has_cmake
+            else "CMakeLists.txt is required"
+        ),
+    })
+    if not has_cmake:
+        all_passed = False
+        errors.append("CMakeLists.txt is missing from proposed_patch")
+
+    # ── P0-3: main.cc must exist ─────────────────────────────────────
+    has_main = "main.cc" in file_paths
+    checks.append({
+        "check": "main_cc_exists",
+        "status": "pass" if has_main else "fail",
+        "message": (
+            "main.cc is present" if has_main else "main.cc is required"
+        ),
+    })
+    if not has_main:
+        all_passed = False
+        errors.append("main.cc is missing from proposed_patch")
+
+    # ── P0-4: CMakeLists.txt must include all src/*.cc ───────────────
+    # P0-1: Use relative paths (no 08_geant4/ prefix)
+    cmake_content = file_contents.get("CMakeLists.txt", "")
+    src_files = sorted(
+        p for p in file_paths if p.startswith("src/") and p.endswith(".cc")
+    )
+    if cmake_content and src_files:
         for src in src_files:
             src_name = src.split("/")[-1]
-            if src_name not in cmake_content:
+            # Check if CMake references the source file
+            if src_name not in cmake_content and src not in cmake_content:
                 checks.append({
                     "check": "cmake_includes_source",
                     "file": src,
                     "status": "fail",
-                    "message": f"CMakeLists.txt missing {src_name}",
+                    "message": (
+                        f"CMakeLists.txt does not include {src_name}"
+                    ),
                 })
                 all_passed = False
+                errors.append(
+                    f"CMakeLists.txt does not include {src_name}"
+                )
 
-    # Check header/source pairs
-    headers = {p for p in file_paths if p.endswith(".hh") or p.endswith(".h")}
-    sources = {p for p in file_paths if p.endswith(".cc") or p.endswith(".cpp")}
+    # ── P0-5: Core module completeness ───────────────────────────────
+    modules_in_patch = {f.get("module_name", "") for f in files}
+    for module in REQUIRED_MODULES:
+        present = module in modules_in_patch
+        checks.append({
+            "check": "required_module_present",
+            "module_name": module,
+            "status": "pass" if present else "fail",
+            "message": (
+                f"Module '{module}' has generated files"
+                if present
+                else f"Required module '{module}' has no generated files"
+            ),
+        })
+        if not present:
+            all_passed = False
+            errors.append(f"Required module '{module}' has no generated files")
+
+    # ── Header/source pair check ─────────────────────────────────────
+    headers = {
+        p for p in file_paths
+        if p.endswith(".hh") or p.endswith(".hpp") or p.endswith(".h")
+    }
+    sources = {
+        p for p in file_paths
+        if p.endswith(".cc") or p.endswith(".cpp")
+    }
     for src in sources:
         expected_header = (
             src.replace("/src/", "/include/")
@@ -86,7 +173,7 @@ def run_cross_file_hard_gate(
                     "message": f"Source may not include {header_name}",
                 })
 
-    # Check no duplicate main
+    # ── No duplicate main ────────────────────────────────────────────
     main_count = sum(
         1 for p, c in file_contents.items()
         if "int main(" in c and p.endswith(".cc")

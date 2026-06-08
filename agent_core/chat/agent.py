@@ -90,8 +90,13 @@ class ChatAgent:
 
     # ── RAG search ──────────────────────────────────────────────────
 
+    _CACHE_DIR = "simulation_workspace/.cache"
+
     async def _ensure_rag(self) -> Any:
-        """Lazily initialize the RAG client with Geant4 documents."""
+        """Lazily initialize the RAG client with Geant4 documents.
+
+        Embeddings are cached to disk so subsequent startups are instant.
+        """
         if self._rag_initialized:
             return self._rag
         self._rag_initialized = True
@@ -108,8 +113,17 @@ class ChatAgent:
             if not self._doc_store_loaded:
                 store = Geant4DocStore()
                 docs = store.get_documents()
-                count = await rag.index_documents(docs)
-                logger.info("Chat RAG: indexed %d Geant4 documents", count)
+
+                # Try loading cached embeddings
+                loaded = self._load_cached_embeddings(rag, docs)
+                if loaded:
+                    logger.info("Chat RAG: loaded %d cached embeddings", rag.index.size)
+                else:
+                    # Slow path: embed via Ollama
+                    count = await rag.index_documents(docs)
+                    logger.info("Chat RAG: indexed %d Geant4 documents", count)
+                    self._save_embeddings_cache(rag, docs)
+
                 self._doc_store_loaded = True
 
             self._rag = rag
@@ -117,6 +131,84 @@ class ChatAgent:
         except Exception as exc:
             logger.warning("Chat RAG init failed: %s", exc)
             return None
+
+    def _load_cached_embeddings(self, rag: Any, docs: list) -> bool:
+        """Load embeddings from cache. Returns True on success."""
+        import hashlib
+        from pathlib import Path
+
+        import numpy as np
+
+        from agent_core.context.rag_client import RAGDocument
+
+        cache_dir = Path(self._CACHE_DIR)
+        cache_file = cache_dir / "g4_doc_embeddings.npz"
+        hash_file = cache_dir / "g4_doc_hash.txt"
+
+        if not cache_file.exists() or not hash_file.exists():
+            return False
+
+        # Check if documents changed (hash of doc_ids + content)
+        doc_hash = hashlib.sha256(
+            "|".join(d.doc_id + d.content for d in docs).encode()
+        ).hexdigest()[:16]
+
+        saved_hash = hash_file.read_text().strip()
+        if doc_hash != saved_hash:
+            return False
+
+        try:
+            data = np.load(cache_file)
+            embeddings = data["embeddings"]
+            if embeddings.shape[0] != len(docs):
+                return False
+
+            from agent_core.context.rag_client import RAGDocument
+
+            rag_docs = [
+                RAGDocument(
+                    doc_id=d.doc_id,
+                    title=d.title,
+                    content=d.content,
+                    source=d.source,
+                    metadata=d.metadata,
+                )
+                for d in docs
+            ]
+            rag.index.add_documents(rag_docs, list(embeddings))
+            return True
+        except Exception as exc:
+            logger.warning("Cache load failed: %s", exc)
+            return False
+
+    def _save_embeddings_cache(self, rag: Any, docs: list) -> None:
+        """Save computed embeddings to disk cache."""
+        import hashlib
+        from pathlib import Path
+
+        import numpy as np
+
+        if rag.index.size == 0:
+            return
+
+        cache_dir = Path(self._CACHE_DIR)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        cache_file = cache_dir / "g4_doc_embeddings.npz"
+        hash_file = cache_dir / "g4_doc_hash.txt"
+
+        try:
+            # Save embeddings
+            np.savez(cache_file, embeddings=rag.index._embeddings)
+
+            # Save hash
+            doc_hash = hashlib.sha256(
+                "|".join(d.doc_id + d.content for d in docs).encode()
+            ).hexdigest()[:16]
+            hash_file.write_text(doc_hash)
+            logger.info("Chat RAG: embeddings cached to %s", cache_file)
+        except Exception as exc:
+            logger.warning("Cache save failed: %s", exc)
 
     async def _search_rag(self, query: str) -> list[dict[str, Any]]:
         """Search Geant4 knowledge base for relevant context."""

@@ -102,23 +102,34 @@ class TestRequiredG4CodeStructure:
                     f"Module {mod['module_id']}: header not in include/"
                 )
 
-    async def test_integration_assembler_generates_cmake(self) -> None:
-        """Integration assembler must produce CMakeLists.txt."""
-        from agent_core.g4_codegen.nodes.integration_assembler import (
-            integration_assembler,
+    def test_new_integration_assembler_generates_cmake(self) -> None:
+        """P0-12: New integration assembler must produce CMakeLists.txt."""
+        from agent_core.g4_codegen.integration.integration_assembler import (
+            assemble_proposed_patch,
         )
 
-        state: dict[str, Any] = {
-            "job_id": "struct_test",
-            "code_modules": [
-                {"module_id": "main"},
-                {"module_id": "detector_construction"},
-            ],
-            "g4_model_ir": {"target_system": "test"},
-            "errors": [],
+        module_results = {
+            "main_cmake": {
+                "status": "generated",
+                "generated_files": [{
+                    "path": "CMakeLists.txt",
+                    "new_content": "cmake_minimum_required(VERSION 3.16)\n",
+                    "generated_by": "main_cmake_module_agent",
+                    "module_name": "main_cmake",
+                    "rationale": "test",
+                }, {
+                    "path": "main.cc",
+                    "new_content": "int main(){return 0;}\n",
+                    "generated_by": "main_cmake_module_agent",
+                    "module_name": "main_cmake",
+                    "rationale": "test",
+                }],
+            },
         }
-        result = await integration_assembler(state)
-        patch = result["proposed_patch"]
+        gates = {
+            "main_cmake": {"hard": {"status": "pass"}, "llm": {"status": "pass"}},
+        }
+        patch = assemble_proposed_patch(module_results, gates, "struct_test")
         paths = [f["path"] for f in patch["changed_files"]]
         assert "CMakeLists.txt" in paths
 
