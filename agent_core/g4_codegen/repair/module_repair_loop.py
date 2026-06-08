@@ -363,10 +363,19 @@ def _format_gate_requirements(
 
 def _is_contradicted_by_module_requirements(module_name: str, text: str) -> bool:
     """Filter LLM feedback that conflicts with hard module API facts."""
+    lowered = text.lower()
+    if module_name == "sensitive_detector":
+        contradicted_phrases = (
+            "redundant collectionname",
+            "g4vsensitivedetector already adds",
+            "remove the 'collectionname.push_back",
+            "remove collectionname.push_back",
+        )
+        return any(phrase in lowered for phrase in contradicted_phrases)
+
     if module_name != "scoring":
         return False
 
-    lowered = text.lower()
     contradicted_phrases = (
         "getscoremap() method",
         "getscoremap() call",
@@ -406,6 +415,14 @@ def _module_repair_requirements(module_name: str) -> list[str]:
             (
                 "Register hits collections with collectionName.push_back(...), "
                 "not collectionName.insert(...)."
+            ),
+            (
+                "Do not remove collectionName.push_back(...); Geant4 requires the "
+                "concrete sensitive detector to register its hits collection names."
+            ),
+            (
+                "Include G4THitsCollection.hh in SensitiveDetector.cc when using "
+                "G4THitsCollection<Hit>."
             ),
             (
                 "Include G4SystemOfUnits.hh in every Hit/SensitiveDetector file "

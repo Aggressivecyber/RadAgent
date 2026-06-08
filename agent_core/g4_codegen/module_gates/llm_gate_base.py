@@ -292,4 +292,19 @@ def _module_review_requirements(module_name: str) -> list[str]:
                 "or GetMap()->find(copyNo), then G4StatDouble::sum_wx()."
             ),
         ]
+    if module_name == "sensitive_detector":
+        return [
+            (
+                "G4VSensitiveDetector.hh documents that concrete sensitive detectors "
+                "must set hits collection names in the protected collectionName vector."
+            ),
+            (
+                "Do not fail code merely because it calls collectionName.push_back(...); "
+                "this is the required way to register the hits collection name here."
+            ),
+            (
+                "SensitiveDetector.cc must include G4THitsCollection.hh when it directly "
+                "uses G4THitsCollection<Hit>."
+            ),
+        ]
     return []

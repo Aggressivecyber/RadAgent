@@ -36,6 +36,20 @@ def run_scoring_hard_gate(
 
     for f in generated_files:
         content = f.new_content
+        if f.path.endswith((".hh", ".h")) and "G4String" in content:
+            has_g4string_include = bool(
+                re.search(r"#include\s+[<\"]G4String\.hh[>\"]", content)
+            )
+            checks.append(
+                {
+                    "check": "scoring_g4string_header_include",
+                    "status": "pass" if has_g4string_include else "fail",
+                    "message": "Scoring headers that use G4String must include G4String.hh",
+                }
+            )
+            if not has_g4string_include:
+                errors.append(f"{f.path}: must include G4String.hh when declaring G4String")
+
         if f.path.endswith((".cc", ".hh")) and "CellFlux" in content:
             uses_cell_flux_class = "G4PSCellFlux" in content
             uses_dose_as_cell_flux = bool(
