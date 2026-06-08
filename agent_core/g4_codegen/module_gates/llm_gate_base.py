@@ -40,6 +40,13 @@ MODULE_LLM_GATE_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块审查 Agent
 10. 如果某个跨模块连接应由 integration、action_initialization 或 output_manager 负责，
     不得把该要求作为当前模块失败原因。
 
+输出要求：
+1. 只输出一个 JSON 对象；
+2. 不得输出 Markdown、代码围栏、解释文字、前后缀文本；
+3. JSON 字段名必须使用下面的固定 schema；
+4. status 只能是 "pass" 或 "fail"；
+5. 分数必须是 0 到 1 之间的数字。
+
 返回严格 JSON：
 {
   "status": "pass | fail",

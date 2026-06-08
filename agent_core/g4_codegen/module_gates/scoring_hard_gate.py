@@ -82,6 +82,22 @@ def run_scoring_hard_gate(
             )
             errors.append(f"{f.path}: ScoringManager must not write files")
 
+        if "G4THitsMap" in content and re.search(
+            r"\b[A-Za-z_]\w*\s*(?:->|\.)\s*find\s*\(",
+            content,
+        ):
+            checks.append(
+                {
+                    "check": "scoring_g4thitsmap_access_api",
+                    "status": "fail",
+                    "message": (
+                        "Use (*hits_map)[copyNo] or hits_map->GetMap()->find(copyNo); "
+                        "do not call find() directly on G4THitsMap"
+                    ),
+                }
+            )
+            errors.append(f"{f.path}: invalid direct G4THitsMap find() access")
+
     return ModuleGateResult(
         module_name="scoring",
         gate_type="hard",

@@ -84,3 +84,50 @@ def test_scoring_hard_gate_rejects_output_manager_calls() -> None:
 
     assert result.status == "fail"
     assert any("must not write files" in e for e in result.errors)
+
+
+def test_scoring_hard_gate_rejects_direct_g4thitsmap_find() -> None:
+    result = run_scoring_hard_gate(
+        [
+            _file(
+                "include/ScoringManager.hh",
+                "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                "class ScoringManager {};\n#endif\n",
+            ),
+            _file(
+                "src/ScoringManager.cc",
+                '#include "ScoringManager.hh"\n'
+                '#include "G4THitsMap.hh"\n'
+                "void ReadScoring(G4THitsMap<double>* edepMap) {\n"
+                "  auto it = edepMap->find(0);\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4THitsMap find" in e for e in result.errors)
+
+
+def test_scoring_hard_gate_allows_g4thitsmap_get_map_find() -> None:
+    result = run_scoring_hard_gate(
+        [
+            _file(
+                "include/ScoringManager.hh",
+                "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                "class ScoringManager {};\n#endif\n",
+            ),
+            _file(
+                "src/ScoringManager.cc",
+                '#include "ScoringManager.hh"\n'
+                '#include "G4THitsMap.hh"\n'
+                "void ReadScoring(G4THitsMap<double>* edepMap) {\n"
+                "  auto it = edepMap->GetMap()->find(0);\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert not any("G4THitsMap find" in e for e in result.errors)
