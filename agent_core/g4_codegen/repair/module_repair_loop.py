@@ -425,6 +425,10 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "G4THitsCollection<Hit>."
             ),
             (
+                "Do not call SetLogicalVolume; if AttachTo exists, attach with "
+                "G4LogicalVolume::SetSensitiveDetector(this)."
+            ),
+            (
                 "Include G4SystemOfUnits.hh in every Hit/SensitiveDetector file "
                 "that uses Geant4 or CLHEP units."
             ),

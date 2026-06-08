@@ -131,6 +131,22 @@ def run_sensitive_detector_hard_gate(
             if static_attach:
                 errors.append("Static SensitiveDetector::AttachTo uses this")
 
+        if re.search(r"\bSetLogicalVolume\s*\(", source.new_content):
+            checks.append(
+                {
+                    "check": "sensitive_detector_no_set_logical_volume",
+                    "status": "fail",
+                    "message": (
+                        "G4VSensitiveDetector has no SetLogicalVolume API; use "
+                        "G4LogicalVolume::SetSensitiveDetector(this)"
+                    ),
+                }
+            )
+            errors.append(
+                "SensitiveDetector must not call SetLogicalVolume; use "
+                "G4LogicalVolume::SetSensitiveDetector(this)"
+            )
+
         process_hits = re.search(
             r"G4bool\s+SensitiveDetector::ProcessHits\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}",
             source.new_content,
