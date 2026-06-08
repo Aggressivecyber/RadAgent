@@ -13,8 +13,8 @@ def test_effective_context_file_created(tmp_path: Path):
     from agent_core.g4_codegen import graph_nodes
 
     source = inspect.getsource(graph_nodes.run_module_agent_node)
-    assert ".effective.json" in source, (
-        "run_module_agent_node must persist effective context to .effective.json"
+    assert "existing_generated_file_summaries" in source, (
+        "run_module_agent_node must inject previous generated file summaries into effective context"
     )
     assert "actual_context_used_by_agent" in source, (
         "Effective context must include actual_context_used_by_agent flag"

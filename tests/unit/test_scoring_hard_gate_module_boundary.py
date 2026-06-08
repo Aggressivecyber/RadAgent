@@ -131,3 +131,73 @@ def test_scoring_hard_gate_allows_g4thitsmap_get_map_find() -> None:
     )
 
     assert not any("G4THitsMap find" in e for e in result.errors)
+
+
+def test_scoring_hard_gate_rejects_mesh_get_scorer() -> None:
+    result = run_scoring_hard_gate(
+        [
+            _file(
+                "include/ScoringManager.hh",
+                "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                "class ScoringManager {};\n#endif\n",
+            ),
+            _file(
+                "src/ScoringManager.cc",
+                '#include "ScoringManager.hh"\n'
+                "void Read(auto* mesh) {\n"
+                '  auto* scorer = mesh->GetScorer("edepScorer");\n'
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("GetScorer" in e for e in result.errors)
+
+
+def test_scoring_hard_gate_rejects_dynamic_cast_hits_map() -> None:
+    result = run_scoring_hard_gate(
+        [
+            _file(
+                "include/ScoringManager.hh",
+                "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                "class ScoringManager {};\n#endif\n",
+            ),
+            _file(
+                "src/ScoringManager.cc",
+                '#include "ScoringManager.hh"\n'
+                '#include "G4THitsMap.hh"\n'
+                "void Read(void* scorer) {\n"
+                "  auto* map = dynamic_cast<G4THitsMap<G4double>*>(scorer);\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("dynamic_cast" in e for e in result.errors)
+
+
+def test_scoring_hard_gate_requires_g4statdouble_for_score_map() -> None:
+    result = run_scoring_hard_gate(
+        [
+            _file(
+                "include/ScoringManager.hh",
+                "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                "class ScoringManager {};\n#endif\n",
+            ),
+            _file(
+                "src/ScoringManager.cc",
+                '#include "ScoringManager.hh"\n'
+                "void Read(auto* mesh) {\n"
+                "  auto scoreMap = mesh->GetScoreMap();\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4StatDouble" in e for e in result.errors)

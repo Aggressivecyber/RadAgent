@@ -40,7 +40,7 @@ class TestRunBaseGates:
 
         state = {
             "job_id": "test",
-            "execution_mode": "dev_no_geant4_env",
+            "execution_mode": "strict",
             "context_decision": "allow_rag",
             "task_spec": {"simulation_scope": ["geant4"]},
             "g4_model_ir": {},
@@ -70,7 +70,7 @@ class TestRunBaseGates:
 
         state = {
             "job_id": "test",
-            "execution_mode": "mvp1_acceptance",
+            "execution_mode": "acceptance",
             "context_decision": "allow_rag",
             "task_spec": {},
             "g4_model_ir": {},

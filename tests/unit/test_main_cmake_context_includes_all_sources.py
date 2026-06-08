@@ -28,7 +28,7 @@ class TestMainCmakeContextIncludesAllSources:
         # Simulate state with one completed module
         state: dict[str, Any] = {
             "job_id": "test_main_cmake",
-            "run_mode": "dev",
+            "run_mode": "strict",
             "module_contexts": {
                 "main_cmake": {
                     "module_name": "main_cmake",
@@ -39,7 +39,7 @@ class TestMainCmakeContextIncludesAllSources:
                     "code_architecture_plan": {},
                     "geant4_api_rules": [],
                     "existing_generated_file_summaries": [],
-                    "run_mode": "dev",
+                    "run_mode": "strict",
                 },
             },
             "module_results": {

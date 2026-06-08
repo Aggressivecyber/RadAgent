@@ -141,7 +141,7 @@ class TestRichManifest:
         state = {
             "job_id": "test3",
             "g4_model_ir_path": str(ir_path),
-            "validation_status": "PARTIAL",
+            "validation_status": "failed",
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
@@ -194,7 +194,7 @@ class TestRichManifest:
         state = {
             "job_id": "test4",
             "g4_model_ir_path": str(ir_path),
-            "validation_status": "PARTIAL",
+            "validation_status": "failed",
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
@@ -208,7 +208,7 @@ class TestRichManifest:
         assert review["schema_version"] == "v3"
         assert review["is_stub"] is False
         assert "generated_at" in review
-        assert review["validation_status"] == "PARTIAL"
+        assert review["validation_status"] == "failed"
         assert review["artifacts_collected"] > 0
 
     async def test_empty_state_produces_manifest(
@@ -244,79 +244,15 @@ class TestRichManifest:
         assert isinstance(manifest["files"], list)
 
 
-class TestDevModeValidationStatus:
-    """Verify dev mode forces validation_status to PARTIAL (never VERIFIED)."""
-
-    async def test_dev_mode_downgrades_verified_to_partial(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Dev mode with VERIFIED input must downgrade to PARTIAL."""
-        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-
-        ir_dir = tmp_path / "jobs" / "dev_test" / "03_model_ir"
-        ir_dir.mkdir(parents=True)
-        ir_path = ir_dir / "g4_model_ir.json"
-        ir_path.write_text(
-            json.dumps(
-                {
-                    "components": [
-                        {
-                            "component_id": "world",
-                            "component_type": "world",
-                            "geometry_type": "box",
-                        },
-                        {
-                            "component_id": "target",
-                            "component_type": "volume",
-                            "geometry_type": "cylinder",
-                        },
-                    ],
-                    "materials": ["G4_AIR"],
-                    "sources": [],
-                    "scoring": [],
-                }
-            )
-        )
-
-        state = {
-            "job_id": "dev_test",
-            "execution_mode": "dev",  # Dev mode
-            "validation_status": "VERIFIED",  # Should be downgraded
-            "g4_model_ir_path": str(ir_path),
-            "gate_results": [],
-            "errors": [],
-        }
-        collect_result = await collect_artifacts(state)
-        manifest_result = await generate_artifact_manifest(
-            {
-                **state,
-                **collect_result,
-            }
-        )
-
-        manifest_path = Path(manifest_result["artifact_manifest_path"])
-        manifest = json.loads(manifest_path.read_text())
-
-        # Must be PARTIAL, not VERIFIED
-        assert manifest["validation_status"] == "PARTIAL", (
-            f"Dev mode must downgrade VERIFIED to PARTIAL, got {manifest['validation_status']}"
-        )
-        assert manifest["run_type"] == "dev"
-
-        # Known limitations should mention dev mode downgrade
-        limitations = " ".join(manifest.get("known_limitations", []))
-        assert "dev mode" in limitations.lower(), (
-            f"Known limitations should mention dev mode downgrade: {limitations}"
-        )
+class TestStrictValidationStatus:
+    """Verify strict/acceptance artifact manifests preserve explicit final status."""
 
     async def test_acceptance_mode_preserves_verified(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Acceptance mode should preserve VERIFIED status."""
+        """Acceptance mode should preserve passed status."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
         ir_dir = tmp_path / "jobs" / "acc_test" / "03_model_ir"
@@ -335,8 +271,8 @@ class TestDevModeValidationStatus:
 
         state = {
             "job_id": "acc_test",
-            "execution_mode": "acceptance",  # Acceptance mode
-            "validation_status": "VERIFIED",  # Should be preserved
+            "execution_mode": "acceptance",
+            "validation_status": "passed",
             "g4_model_ir_path": str(ir_path),
             "gate_results": [],
             "errors": [],
@@ -352,22 +288,21 @@ class TestDevModeValidationStatus:
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         manifest = json.loads(manifest_path.read_text())
 
-        # Acceptance mode preserves VERIFIED
-        assert manifest["validation_status"] == "VERIFIED"
+        assert manifest["validation_status"] == "passed"
         assert manifest["run_type"] == "acceptance"
 
-    async def test_dev_mode_with_partial_stays_partial(
+    async def test_strict_failed_stays_failed(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Dev mode with PARTIAL input should stay PARTIAL."""
+        """Strict mode with failed input should stay failed."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
         state = {
-            "job_id": "dev_partial",
-            "execution_mode": "dev",
-            "validation_status": "PARTIAL",  # Already PARTIAL
+            "job_id": "strict_failed",
+            "execution_mode": "strict",
+            "validation_status": "failed",
             "errors": [],
         }
         collect_result = await collect_artifacts(state)
@@ -381,8 +316,8 @@ class TestDevModeValidationStatus:
         manifest_path = Path(manifest_result["artifact_manifest_path"])
         manifest = json.loads(manifest_path.read_text())
 
-        assert manifest["validation_status"] == "PARTIAL"
-        assert manifest["run_type"] == "dev"
+        assert manifest["validation_status"] == "failed"
+        assert manifest["run_type"] == "strict"
 
 
 class TestModelIRSummaryExtraction:
@@ -425,8 +360,8 @@ class TestModelIRSummaryExtraction:
 
         state = {
             "job_id": "complex_test",
-            "execution_mode": "dev",
-            "validation_status": "PARTIAL",
+            "execution_mode": "strict",
+            "validation_status": "failed",
             "g4_model_ir_path": str(ir_path),
             "gate_results": [],
             "errors": [],

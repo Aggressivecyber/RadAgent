@@ -29,7 +29,7 @@ class TestModuleContextIncludesPreviousFileSummaries:
             geometry_strategy_plan={},
             code_architecture_plan={},
             job_id="test_ctx",
-            run_mode="dev",
+            run_mode="strict",
         )
 
         assert "existing_generated_file_summaries" in ctx
@@ -57,7 +57,7 @@ class TestModuleContextIncludesPreviousFileSummaries:
             geometry_strategy_plan={},
             code_architecture_plan={},
             job_id="test_ctx2",
-            run_mode="dev",
+            run_mode="strict",
             existing_file_summaries=summaries,
         )
 
@@ -73,7 +73,7 @@ class TestModuleContextIncludesPreviousFileSummaries:
             geometry_strategy_plan={},
             code_architecture_plan={},
             job_id="test_ctx3",
-            run_mode="dev",
+            run_mode="strict",
         )
 
         required_keys = [

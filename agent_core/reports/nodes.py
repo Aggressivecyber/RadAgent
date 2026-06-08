@@ -54,7 +54,7 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
 
     # Determine termination reason
     if verified:
-        termination = "completed_verified"
+        termination = "completed_passed"
     elif context_decision == "block_no_context":
         termination = "blocked_no_context"
     elif "reserved" in str(simulation_scope):

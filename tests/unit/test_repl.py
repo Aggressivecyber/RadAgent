@@ -21,7 +21,7 @@ from agent_core.repl import (
 @pytest.fixture
 def repl() -> RadAgentREPL:
     """Create a RadAgentREPL instance with mocked console."""
-    r = RadAgentREPL(execution_mode="dev_no_geant4_env")
+    r = RadAgentREPL(execution_mode="strict")
     r.console = MagicMock()
     return r
 
@@ -32,7 +32,7 @@ def repl_with_state(repl: RadAgentREPL, tmp_path: Path) -> RadAgentREPL:
     repl.state = {
         "job_id": "test-job-123",
         "user_query": "Test simulation",
-        "execution_mode": "dev_no_geant4_env",
+        "execution_mode": "strict",
         "errors": [],
         "retry_count": 0,
         "max_retries_reached": False,
@@ -68,11 +68,11 @@ class TestRadAgentREPLInit:
 
     def test_default_execution_mode(self) -> None:
         r = RadAgentREPL()
-        assert r.execution_mode == "mvp1_acceptance"
+        assert r.execution_mode == "strict"
 
     def test_custom_execution_mode(self) -> None:
-        r = RadAgentREPL(execution_mode="dev_no_geant4_env")
-        assert r.execution_mode == "dev_no_geant4_env"
+        r = RadAgentREPL(execution_mode="strict")
+        assert r.execution_mode == "strict"
 
     def test_initial_state_empty(self, repl: RadAgentREPL) -> None:
         assert repl.state == {}
@@ -255,7 +255,7 @@ class TestCmdStatus:
     async def test_status_shows_key_fields(self, repl_with_state: RadAgentREPL) -> None:
         """Status should show key status fields."""
         repl_with_state.state["g4_modeling_status"] = "passed"
-        repl_with_state.state["validation_status"] = "VERIFIED"
+        repl_with_state.state["validation_status"] = "passed"
         await repl_with_state.cmd_status()
         repl_with_state.console.print.assert_called()
 
@@ -467,7 +467,11 @@ class TestCmdConfirm:
         repl_with_state.state["confirmation_request_path"] = str(request_path)
 
         # Mock input to return 'a' (approve)
-        with patch("builtins.input", return_value="a"):
+        with (
+            patch("builtins.input", return_value="a"),
+            patch.object(repl_with_state, "_run_phase", new_callable=AsyncMock, return_value=True),
+            patch.object(repl_with_state, "_auto_remaining", new_callable=AsyncMock),
+        ):
             await repl_with_state.cmd_confirm()
 
         response = repl_with_state.state["raw_human_response"]
@@ -494,7 +498,11 @@ class TestCmdConfirm:
         request_path.write_text(json.dumps(request_data), encoding="utf-8")
         repl_with_state.state["confirmation_request_path"] = str(request_path)
 
-        with patch.object(repl_with_state, "_prompt_choice", return_value="a"):
+        with (
+            patch.object(repl_with_state, "_prompt_choice", return_value="a"),
+            patch.object(repl_with_state, "_run_phase", new_callable=AsyncMock, return_value=True),
+            patch.object(repl_with_state, "_auto_remaining", new_callable=AsyncMock),
+        ):
             await repl_with_state.cmd_confirm()
 
         response = repl_with_state.state["raw_human_response"]
@@ -521,6 +529,8 @@ class TestCmdConfirm:
         with (
             patch.object(repl_with_state, "_prompt_choice", return_value="e"),
             patch.object(repl_with_state, "_prompt_text", return_value="200 MeV"),
+            patch.object(repl_with_state, "_run_phase", new_callable=AsyncMock, return_value=True),
+            patch.object(repl_with_state, "_auto_remaining", new_callable=AsyncMock),
         ):
             await repl_with_state.cmd_confirm()
 
@@ -547,7 +557,11 @@ class TestCmdConfirm:
         request_path.write_text(json.dumps(request_data), encoding="utf-8")
         repl_with_state.state["confirmation_request_path"] = str(request_path)
 
-        with patch.object(repl_with_state, "_prompt_choice", return_value="r"):
+        with (
+            patch.object(repl_with_state, "_prompt_choice", return_value="r"),
+            patch.object(repl_with_state, "_run_phase", new_callable=AsyncMock, return_value=True),
+            patch.object(repl_with_state, "_auto_remaining", new_callable=AsyncMock),
+        ):
             await repl_with_state.cmd_confirm()
 
         response = repl_with_state.state["raw_human_response"]

@@ -22,11 +22,11 @@ def test_failed_routes_to_persist():
             "material": {"status": "failed", "attempts": 3},
         },
     }
-    assert route_fn(state) == "persist_codegen_output"
+    assert route_fn(state) == "material_complete"
 
 
 def test_failed_does_not_route_to_next_module():
-    """P0-15: Failed repair must NOT go to next module."""
+    """P0-15: Failed repair must NOT go to the next module branch."""
     route_fn = _route_after_repair("material")
     state = {
         "module_repair_results": {
@@ -35,7 +35,7 @@ def test_failed_does_not_route_to_next_module():
     }
     result = route_fn(state)
     assert result != "run_geometry_agent"
-    assert result == "persist_codegen_output"
+    assert result == "material_complete"
 
 
 def test_missing_repair_result_routes_to_hard_gate():

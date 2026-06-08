@@ -59,7 +59,7 @@ def artifact_state_with_confirmation(tmp_path, monkeypatch):
         "construction_ledger_path": "",
         "code_module_plan_path": "",
         "proposed_patch_path": "",
-        "validation_status": "PARTIAL",
+        "validation_status": "failed",
         "errors": [],
     }
 

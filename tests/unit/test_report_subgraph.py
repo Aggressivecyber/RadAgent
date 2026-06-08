@@ -22,8 +22,8 @@ class TestGenerateFinalReport:
         state = {
             "job_id": "test_job",
             "user_query": "test query",
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "VERIFIED",
+            "execution_mode": "strict",
+            "validation_status": "passed",
             "context_decision": "allow_rag",
             "simulation_scope": ["geant4"],
             "failed_gates": [],
@@ -33,19 +33,19 @@ class TestGenerateFinalReport:
         }
         result = await generate_final_report(state)
         assert result["verified"] is True
-        assert result["termination_reason"] == "completed_verified"
+        assert result["termination_reason"] == "completed_passed"
         assert Path(result["final_report_path"]).exists()
 
         report = Path(result["final_report_path"]).read_text()
-        assert "VERIFIED" in report
+        assert "passed" in report
         assert "test query" in report
 
     async def test_failed_report(self, temp_workspace: Path) -> None:
         state = {
             "job_id": "test_job",
             "user_query": "test query",
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "FAILED",
+            "execution_mode": "strict",
+            "validation_status": "failed",
             "context_decision": "allow_rag",
             "simulation_scope": ["geant4"],
             "failed_gates": ["Gate 5"],
@@ -62,8 +62,8 @@ class TestGenerateFinalReport:
         state = {
             "job_id": "test_job",
             "user_query": "geant4 + tcad + spice",
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "VERIFIED",
+            "execution_mode": "strict",
+            "validation_status": "passed",
             "context_decision": "allow_rag",
             "simulation_scope": ["geant4", "tcad", "spice"],
             "failed_gates": [],
@@ -137,8 +137,8 @@ class TestGenerateFinalReport:
         state = {
             "job_id": "test_job",
             "user_query": "test",
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "VERIFIED",
+            "execution_mode": "strict",
+            "validation_status": "passed",
             "context_decision": "allow_rag",
             "simulation_scope": ["geant4"],
             "failed_gates": [],
@@ -194,8 +194,8 @@ class TestGenerateFinalReport:
         state = {
             "job_id": "test_job",
             "user_query": "test",
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "PARTIAL",
+            "execution_mode": "strict",
+            "validation_status": "failed",
             "context_decision": "allow_rag",
             "simulation_scope": ["geant4"],
             "failed_gates": ["Static Check"],
@@ -215,13 +215,13 @@ class TestGenerateFinalReport:
         # Must show passed/failed counts in the table
         assert "Missing CMakeLists.txt" in report
 
-    async def test_report_partial_status(self, temp_workspace: Path) -> None:
-        """PARTIAL validation status should not be marked as verified."""
+    async def test_report_failed_status(self, temp_workspace: Path) -> None:
+        """failed validation status should not be marked as verified."""
         state = {
             "job_id": "test_job",
             "user_query": "test",
-            "execution_mode": "dev_no_geant4_env",
-            "validation_status": "PARTIAL",
+            "execution_mode": "strict",
+            "validation_status": "failed",
             "context_decision": "allow_rag",
             "simulation_scope": ["geant4"],
             "failed_gates": [],
@@ -232,5 +232,5 @@ class TestGenerateFinalReport:
         result = await generate_final_report(state)
         assert result["verified"] is False
         report = Path(result["final_report_path"]).read_text()
-        assert "PARTIAL" in report
-        assert "VERIFIED" not in report or "PARTIAL" in report
+        assert "failed" in report
+        assert "passed" not in report or "failed" in report

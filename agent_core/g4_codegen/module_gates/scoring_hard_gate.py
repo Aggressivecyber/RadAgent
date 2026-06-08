@@ -98,6 +98,50 @@ def run_scoring_hard_gate(
             )
             errors.append(f"{f.path}: invalid direct G4THitsMap find() access")
 
+        invalid_mesh_access_patterns = [
+            (
+                r"\bGetScorer\s*\(",
+                "G4VScoringMesh does not expose GetScorer(); use GetScoreMap()",
+            ),
+            (
+                r"dynamic_cast\s*<\s*G4THitsMap\s*<[^>]+>\s*\*\s*>\s*\(",
+                "Do not dynamic_cast primitive scorers to G4THitsMap; use GetScoreMap()",
+            ),
+            (
+                r"\bG4VScorer\b",
+                "Do not use hallucinated G4VScorer; use G4VScoringMesh::GetScoreMap()",
+            ),
+            (
+                r"\bGetHitsMap\s*\(",
+                "Do not read scoring mesh results through GetHitsMap(); use GetScoreMap()",
+            ),
+        ]
+        for pattern, message in invalid_mesh_access_patterns:
+            if re.search(pattern, content, re.DOTALL):
+                checks.append(
+                    {
+                        "check": "scoring_mesh_result_access_api",
+                        "status": "fail",
+                        "message": message,
+                    }
+                )
+                errors.append(f"{f.path}: {message}")
+
+        if "GetScoreMap()" in content and "G4StatDouble" not in content:
+            checks.append(
+                {
+                    "check": "scoring_score_map_value_type",
+                    "status": "fail",
+                    "message": (
+                        "GetScoreMap() values are G4THitsMap<G4StatDouble>*; "
+                        "include/use G4StatDouble"
+                    ),
+                }
+            )
+            errors.append(
+                f"{f.path}: GetScoreMap() values require G4StatDouble and sum_wx() extraction"
+            )
+
     return ModuleGateResult(
         module_name="scoring",
         gate_type="hard",

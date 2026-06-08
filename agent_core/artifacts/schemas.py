@@ -19,7 +19,7 @@ class ArtifactSubgraphState(TypedDict, total=False):
     validation_status: str
 
     # Runtime context
-    execution_mode: str  # "dev" or "acceptance"
+    execution_mode: str  # "strict", "test", "acceptance", or "production"
     gate_results: list[dict[str, Any]]  # Gate check results for skipped_gates extraction
     g4_model_ir: dict[str, Any]  # Direct Model IR data (alternative to path)
 

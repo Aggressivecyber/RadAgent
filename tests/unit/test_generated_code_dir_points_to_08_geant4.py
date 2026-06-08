@@ -25,7 +25,7 @@ class TestGeneratedCodeDirPointsTo08Geant4:
 
         state = {
             "job_id": "test_dir_job",
-            "run_mode": "dev",
+            "run_mode": "strict",
             "proposed_patch": {
                 "changed_files": [
                     {"path": "src/test.cc", "new_content": "// test"},
@@ -49,7 +49,7 @@ class TestGeneratedCodeDirPointsTo08Geant4:
 
         state = {
             "job_id": "test_abs_job",
-            "run_mode": "dev",
+            "run_mode": "strict",
             "proposed_patch": {
                 "changed_files": [
                     {"path": "src/test.cc", "new_content": "// test"},

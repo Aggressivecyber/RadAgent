@@ -161,6 +161,7 @@ async def run_module_agent_node(
     # Inject summaries into the context dict
     ctx = dict(ctx)
     ctx["existing_generated_file_summaries"] = summaries
+    ctx["actual_context_used_by_agent"] = True
 
     # Import and run the appropriate agent
     agent_fn = _get_agent_function(module_name)

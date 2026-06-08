@@ -10,7 +10,7 @@ def test_codegen_state_has_run_mode():
     state: G4CodegenSubgraphState = {
         "job_id": "test",
         "run_mode": "acceptance",
-        "execution_mode": "mvp1_acceptance",
+        "execution_mode": "acceptance",
     }
     assert state["run_mode"] == "acceptance"
 
@@ -18,10 +18,11 @@ def test_codegen_state_has_run_mode():
 def test_codegen_state_has_execution_mode():
     state: G4CodegenSubgraphState = {
         "job_id": "test",
-        "run_mode": "dev",
-        "execution_mode": "dev_no_geant4_env",
+        "run_mode": "strict",
+        "execution_mode": "strict",
     }
-    assert state["execution_mode"] == "dev_no_geant4_env"
+    assert state["run_mode"] == "strict"
+    assert state["execution_mode"] == "strict"
 
 
 def test_codegen_plan_schema_has_requires_human_confirmation():
