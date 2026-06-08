@@ -409,6 +409,10 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "To read a cell value, use hitsMap->GetObject(copyNo) and then "
                 "G4StatDouble::sum_wx(), or use hitsMap->GetMap()->find(copyNo)."
             ),
+            (
+                "Use G4ScoringManager::GetScoringManager() to obtain the scoring manager "
+                "singleton; do not allocate G4ScoringManager with new."
+            ),
         ]
     if module_name == "sensitive_detector":
         return [
@@ -486,6 +490,25 @@ def _module_repair_requirements(module_name: str) -> list[str]:
             (
                 "Expose only one GetMaterial string overload, preferably "
                 "GetMaterial(const G4String&), to avoid string literal ambiguity."
+            ),
+        ]
+    if module_name == "main_cmake":
+        return [
+            (
+                "CMakeLists.txt must list the root entry file as main.cc, not src/main.cc."
+            ),
+            (
+                "CMakeLists.txt must explicitly list every generated src/*.cc file from "
+                "existing_generated_file_summaries."
+            ),
+            "Do not use file(GLOB) in CMake code or comments.",
+            (
+                "Keep generated macros under macros/run.mac and macros/init.mac; do not "
+                "return root-level run.mac or init.mac."
+            ),
+            (
+                "Instantiate PhysicsListFactoryWrapper using the constructor declared in "
+                "the generated physics header."
             ),
         ]
     return []

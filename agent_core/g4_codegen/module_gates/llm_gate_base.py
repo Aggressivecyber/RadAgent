@@ -291,6 +291,10 @@ def _module_review_requirements(module_name: str) -> list[str]:
                 "G4THitsMap<G4StatDouble>* and extracts values with GetObject(copyNo) "
                 "or GetMap()->find(copyNo), then G4StatDouble::sum_wx()."
             ),
+            (
+                "Scoring code must obtain the manager singleton with "
+                "G4ScoringManager::GetScoringManager(); do not allocate it with new."
+            ),
         ]
     if module_name == "sensitive_detector":
         return [
@@ -305,6 +309,10 @@ def _module_review_requirements(module_name: str) -> list[str]:
             (
                 "SensitiveDetector.cc must include G4THitsCollection.hh when it directly "
                 "uses G4THitsCollection<Hit>."
+            ),
+            (
+                "#include <iomanip> is a valid C++ standard header and is required when "
+                "Hit.cc uses std::setw, std::setprecision, or std::fixed."
             ),
         ]
     return []

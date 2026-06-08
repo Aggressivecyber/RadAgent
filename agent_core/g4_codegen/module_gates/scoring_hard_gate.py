@@ -36,6 +36,19 @@ def run_scoring_hard_gate(
 
     for f in generated_files:
         content = f.new_content
+        if re.search(r"\bnew\s+G4ScoringManager\s*\(", content):
+            checks.append(
+                {
+                    "check": "scoring_manager_singleton_api",
+                    "status": "fail",
+                    "message": (
+                        "Use G4ScoringManager::GetScoringManager(); "
+                        "do not allocate G4ScoringManager with new"
+                    ),
+                }
+            )
+            errors.append(f"{f.path}: use G4ScoringManager::GetScoringManager()")
+
         if f.path.endswith((".hh", ".h")) and "G4String" in content:
             has_g4string_include = bool(
                 re.search(r"#include\s+[<\"]G4String\.hh[>\"]", content)
