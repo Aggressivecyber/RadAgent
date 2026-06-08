@@ -85,16 +85,24 @@ async def run_module_agent(
         or ""
     )
 
+    effective_system_prompt = (
+        system_prompt
+        if system_prompt == MODULE_CODEGEN_SYSTEM_PROMPT
+        else f"{MODULE_CODEGEN_SYSTEM_PROMPT}\n\n模块专用要求：\n{system_prompt}"
+    )
+
     user_prompt = f"""模块上下文：
 {json.dumps(module_context, indent=2, ensure_ascii=False)}
 
 请根据 ModuleContract 和 ModuleContext 生成当前模块的完整文件内容。
-输出 JSON，不要输出额外文字。"""
+输出 JSON，不要输出额外文字。
+JSON 顶层必须直接包含 module_name、status、generated_files、warnings、errors。
+不得输出 {{"{module_name}": ...}} 这种按模块名包裹的嵌套对象。"""
 
     result = await gateway.call(
         task=ModelTask.CODEGEN,
         tier=ModelTier.PRO,
-        system_prompt=system_prompt,
+        system_prompt=effective_system_prompt,
         user_prompt=user_prompt,
         response_format="json",
         max_tokens=65536,
