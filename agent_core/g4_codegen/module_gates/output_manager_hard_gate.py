@@ -108,3 +108,36 @@ def _append_output_manager_interface_checks(
         if check["status"] == "fail":
             result.status = "fail"
             result.errors.append(check["message"])
+
+    has_one_arg_write_event_decl = bool(
+        re.search(
+            r"\bWriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*\s*\)\s*;",
+            header,
+        )
+    )
+    has_one_arg_write_event_def = bool(
+        re.search(
+            r"\bOutputManager::WriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*"
+            r"\s*\)",
+            source,
+        )
+    )
+    signature_checks = [
+        {
+            "check": "output_manager_declares_one_arg_write_event",
+            "status": "pass" if has_one_arg_write_event_decl else "fail",
+            "message": "OutputManager.hh must declare void WriteEvent(const G4Event* event)",
+        },
+        {
+            "check": "output_manager_defines_one_arg_write_event",
+            "status": "pass" if has_one_arg_write_event_def else "fail",
+            "message": (
+                "OutputManager.cc must define void OutputManager::WriteEvent(const G4Event*)"
+            ),
+        },
+    ]
+    result.checks.extend(signature_checks)
+    for check in signature_checks:
+        if check["status"] == "fail":
+            result.status = "fail"
+            result.errors.append(check["message"])

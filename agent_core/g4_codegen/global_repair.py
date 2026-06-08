@@ -167,6 +167,12 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
         "static G4VPhysicalVolume* Place(",
         header_content,
     )
+    updated_header = re.sub(
+        r"(\bPlaceVolume\s*\([^;]*?)G4VPhysicalVolume\s*\*\s*mother",
+        r"\1G4LogicalVolume* mother",
+        updated_header,
+        flags=re.DOTALL,
+    )
     if updated_header != header_content:
         header["new_content"] = updated_header
         header_changed = True
@@ -183,6 +189,12 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
         source_content,
     )
     source_content = re.sub(
+        r"(\bPlacementManager::PlaceVolume\s*\([^)]*?)G4VPhysicalVolume\s*\*\s*mother",
+        r"\1G4LogicalVolume* mother",
+        source_content,
+        flags=re.DOTALL,
+    )
+    source_content = re.sub(
         r"return\s+Instance\(\)->PlaceVolume\s*\(\s*"
         r"logical\s*,\s*logical->GetName\(\)\s*,\s*mother\s*,\s*position\s*,\s*"
         r"rotation\s*,\s*0\s*,\s*checkOverlaps\s*\)\s*;",
@@ -194,6 +206,18 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
         ),
         source_content,
     )
+    if "void SetCheckOverlaps" in header.get("new_content", ""):
+        source_content = re.sub(
+            r"return\s+manager\.PlaceVolume\(\s*"
+            r"rotation,\s*position,\s*logical,\s*logical->GetName\(\),\s*mother,\s*"
+            r"false,\s*0,\s*checkOverlaps\s*\)\s*;",
+            (
+                "manager.SetCheckOverlaps(checkOverlaps);\n"
+                "    return manager.PlaceVolume(\n"
+                "        rotation, position, logical, logical->GetName(), mother, false, 0);"
+            ),
+            source_content,
+        )
     source_changed = False
     if "PlacementManager::Place(" not in source_content:
         source["new_content"] = (
@@ -328,15 +352,31 @@ def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str,
     if "class G4Step;" not in header_content and "#include \"G4Step.hh\"" not in header_content:
         header_content = "class G4Step;\n" + header_content
     declarations = [
-        ("BeginRun(", "void BeginRun(const G4Run* run);", "Instance"),
-        ("EndRun(", "void EndRun(const G4Run* run);", "BeginRun"),
-        ("BeginEvent(", "void BeginEvent(const G4Event* event);", "EndRun"),
-        ("EndEvent(", "void EndEvent(const G4Event* anEvent);", "BeginEvent"),
-        ("RecordStep(", "void RecordStep(const G4Step* step);", "EndEvent"),
-        ("WriteEvent(", "void WriteEvent(const G4Event* anEvent);", "RecordStep"),
+        (r"\bBeginRun\s*\(\s*const\s+G4Run\s*\*", "void BeginRun(const G4Run* run);", "Instance"),
+        (r"\bEndRun\s*\(\s*const\s+G4Run\s*\*", "void EndRun(const G4Run* run);", "BeginRun"),
+        (
+            r"\bBeginEvent\s*\(\s*const\s+G4Event\s*\*",
+            "void BeginEvent(const G4Event* event);",
+            "EndRun",
+        ),
+        (
+            r"\bEndEvent\s*\(\s*const\s+G4Event\s*\*",
+            "void EndEvent(const G4Event* anEvent);",
+            "BeginEvent",
+        ),
+        (
+            r"\bRecordStep\s*\(\s*const\s+G4Step\s*\*",
+            "void RecordStep(const G4Step* step);",
+            "EndEvent",
+        ),
+        (
+            r"\bWriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*\s*\)\s*;",
+            "void WriteEvent(const G4Event* anEvent);",
+            "RecordStep",
+        ),
     ]
-    for marker, declaration, anchor in declarations:
-        if marker not in header_content:
+    for marker_pattern, declaration, anchor in declarations:
+        if not re.search(marker_pattern, header_content):
             header_content = _insert_declaration_text(header_content, declaration, anchor)
     if header_content != original_header:
         header["new_content"] = header_content
@@ -368,7 +408,11 @@ def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str,
         additions.append("void OutputManager::EndEvent(const G4Event*) {}\n")
     if "OutputManager::RecordStep(" not in source_content:
         additions.append("void OutputManager::RecordStep(const G4Step*) {}\n")
-    if "OutputManager::WriteEvent(" not in source_content:
+    if not re.search(
+        r"\bOutputManager::WriteEvent\s*\(\s*const\s+G4Event\s*\*\s*[A-Za-z_]\w*"
+        r"\s*\)",
+        source_content,
+    ):
         additions.append(
             "void OutputManager::WriteEvent(const G4Event* anEvent) {\n"
             "    EndEvent(anEvent);\n"
@@ -397,6 +441,27 @@ def _repair_scoring_manager(by_path: dict[str, dict[str, Any]], report: dict[str
     updated = re.sub(
         r"\bauto\s*&\s+([A-Za-z_]\w*)\s*=\s*([^;]*->\s*GetScoreMap\s*\(\s*\))\s*;",
         r"auto \1 = \2;",
+        updated,
+    )
+    updated = re.sub(
+        r"\bmesh\s*->\s*GetElementCenter\s*\(\s*copyNo\s*,\s*center\s*\)\s*;",
+        (
+            "const int nxRaw = static_cast<int>(fMeshNBins.x());\n"
+            "        const int nyRaw = static_cast<int>(fMeshNBins.y());\n"
+            "        const int nzRaw = static_cast<int>(fMeshNBins.z());\n"
+            "        const int nx = nxRaw > 0 ? nxRaw : 1;\n"
+            "        const int ny = nyRaw > 0 ? nyRaw : 1;\n"
+            "        const int nz = nzRaw > 0 ? nzRaw : 1;\n"
+            "        const int iz = copyNo / (nx * ny);\n"
+            "        const int rem = copyNo % (nx * ny);\n"
+            "        const int iy = rem / nx;\n"
+            "        const int ix = rem % nx;\n"
+            "        center = fMeshCenter + G4ThreeVector(\n"
+            "            ((ix + 0.5) / nx - 0.5) * fMeshFullSize.x(),\n"
+            "            ((iy + 0.5) / ny - 0.5) * fMeshFullSize.y(),\n"
+            "            ((iz + 0.5) / nz - 0.5)\n"
+            "                * fMeshFullSize.z());"
+        ),
         updated,
     )
     if updated != content:

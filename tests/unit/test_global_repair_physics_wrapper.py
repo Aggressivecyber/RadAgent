@@ -71,9 +71,10 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
                     "#pragma once\n"
                     "class PlacementManager {\n"
                     "public:\n"
+                    "  void SetCheckOverlaps(G4bool);\n"
                     "  G4PVPlacement* PlaceVolume(G4RotationMatrix*, const G4ThreeVector&, "
-                    "G4LogicalVolume*, const G4String&, G4LogicalVolume*, G4bool, G4int, "
-                    "G4bool);\n"
+                    "G4LogicalVolume*, const G4String&, G4VPhysicalVolume* mother, "
+                    "G4bool, G4int);\n"
                     "};\n"
                 ),
                 "module_name": "placement",
@@ -92,6 +93,11 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
                     "    return Instance()->PlaceVolume(\n"
                     "        logical, logical->GetName(), mother, position, rotation, 0,\n"
                     "        checkOverlaps);\n"
+                    "}\n"
+                    "G4VPhysicalVolume* PlacementManager::PlaceVolume(\n"
+                    "    G4RotationMatrix*, const G4ThreeVector&, G4LogicalVolume*, "
+                    "const G4String&, G4VPhysicalVolume* mother, G4bool, G4int) {\n"
+                    "    return nullptr;\n"
                     "}\n"
                 ),
                 "module_name": "placement",
@@ -112,6 +118,10 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
     assert "manager.PlaceVolume(" in source
     assert "Instance()" not in source
     assert "static G4VPhysicalVolume* Place(" in header
+    assert "G4VPhysicalVolume* mother" not in header
+    assert "G4VPhysicalVolume* mother" not in source
+    assert "G4LogicalVolume* mother" in header
+    assert "manager.SetCheckOverlaps(checkOverlaps);" in source
     assert report["issues_fixed"]
 
 
@@ -204,6 +214,8 @@ def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_p
                     "  G4String meshName = scMgr->GetMeshName(iMesh);\n"
                     "  auto* mesh = scMgr->GetMesh(fMeshName);\n"
                     "  auto& scoreMap = mesh->GetScoreMap();\n"
+                    "  G4ThreeVector center;\n"
+                    "  mesh->GetElementCenter(copyNo, center);\n"
                     "}\n"
                 ),
                 "module_name": "scoring",
@@ -259,9 +271,11 @@ def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_p
 
     assert "GetMeshName" not in by_path["src/ScoringManager.cc"]
     assert "GetMesh(fMeshName)" not in by_path["src/ScoringManager.cc"]
+    assert "GetElementCenter" not in by_path["src/ScoringManager.cc"]
     assert '"scoringMesh"' in by_path["src/ScoringManager.cc"]
     assert "GetMesh(0)" in by_path["src/ScoringManager.cc"]
     assert "auto scoreMap = mesh->GetScoreMap();" in by_path["src/ScoringManager.cc"]
+    assert "const int nxRaw" in by_path["src/ScoringManager.cc"]
     assert "G4THitsCollection<::Hit>* fHitsCollection" in by_path[
         "include/SensitiveDetector.hh"
     ]

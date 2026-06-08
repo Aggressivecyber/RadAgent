@@ -274,7 +274,10 @@ class TestAssembleProposedPatchPatchValidatorContract:
                 {"path": "main.cc", "new_content": "int main() { return 0; }\n"},
                 {
                     "path": "src/OutputManager.cc",
-                    "new_content": "void OutputManager::EndEvent(const G4Event*) {}\n",
+                    "new_content": (
+                        "void OutputManager::EndEvent(const G4Event*) {}\n"
+                        "void OutputManager::WriteEvent(const G4Event*, double, double) {}\n"
+                    ),
                 },
                 {
                     "path": "include/OutputManager.hh",
@@ -282,6 +285,7 @@ class TestAssembleProposedPatchPatchValidatorContract:
                         "class OutputManager {\n"
                         "public:\n"
                         "    void EndEvent(const G4Event* anEvent);\n"
+                        "    void WriteEvent(const G4Event* anEvent, double edep, double dose);\n"
                         "};\n"
                     ),
                 },
@@ -295,5 +299,8 @@ class TestAssembleProposedPatchPatchValidatorContract:
         )
         source = next(f for f in repaired["changed_files"] if f["path"] == "src/OutputManager.cc")
         assert "WriteEvent(const G4Event* anEvent)" in header["new_content"]
+        assert "WriteEvent(const G4Event* anEvent, double edep, double dose)" in header[
+            "new_content"
+        ]
         assert "OutputManager::WriteEvent(" in source["new_content"]
         assert report["status"] == "passed"

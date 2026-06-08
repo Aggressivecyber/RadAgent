@@ -155,6 +155,10 @@ def run_scoring_hard_gate(
                 r"\bGetMesh\s*\(\s*(?!\d+\s*\))[^)]*\)",
                 "G4ScoringManager::GetMesh requires an integer mesh index; use GetMesh(0)",
             ),
+            (
+                r"\bGetElementCenter\s*\(",
+                "G4VScoringMesh has no GetElementCenter API; compute bin centers locally",
+            ),
         ]
         for pattern, message in invalid_mesh_access_patterns:
             if re.search(pattern, content, re.DOTALL):

@@ -88,3 +88,29 @@ def test_placement_hard_gate_rejects_placevolume_return_type_mismatch() -> None:
 
     assert result.status == "fail"
     assert any("G4VPhysicalVolume" in error for error in result.errors)
+
+
+def test_placement_hard_gate_rejects_physical_volume_mother_parameter() -> None:
+    result = run_placement_hard_gate(
+        [
+            _file(
+                "include/PlacementManager.hh",
+                "#pragma once\n"
+                "class G4VPhysicalVolume;\n"
+                "class G4LogicalVolume;\n"
+                "class G4RotationMatrix;\n"
+                "class G4ThreeVector;\n"
+                "class PlacementManager {\n"
+                "public:\n"
+                "  G4VPhysicalVolume* PlaceVolume(G4RotationMatrix*, "
+                "const G4ThreeVector&, G4LogicalVolume*, const G4String&, "
+                "G4VPhysicalVolume* mother, G4bool, G4int);\n"
+                "};\n",
+            ),
+            _file("src/PlacementManager.cc", '#include "PlacementManager.hh"\n'),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4LogicalVolume* mother" in error for error in result.errors)

@@ -100,6 +100,27 @@ def _append_placement_api_checks(
             errors.append(
                 f"{f.path}: copy const G4Transform3D& into a non-const local before G4PVPlacement"
             )
+        placevolume_mother_physical = bool(
+            re.search(
+                r"\bPlaceVolume\s*\([^;{)]*G4VPhysicalVolume\s*\*\s*mother",
+                content,
+                re.DOTALL,
+            )
+        )
+        checks.append(
+            {
+                "check": "placement_mother_parameter_is_logical_volume",
+                "status": "fail" if placevolume_mother_physical else "pass",
+                "message": (
+                    "PlacementManager::PlaceVolume mother parameter must be "
+                    "G4LogicalVolume*, not G4VPhysicalVolume*"
+                ),
+            }
+        )
+        if placevolume_mother_physical:
+            errors.append(
+                f"{f.path}: use G4LogicalVolume* mother for G4PVPlacement mother logical"
+            )
         if f.path.endswith((".hh", ".h")) and "G4PVPlacement" in content:
             declares_g4pvplacement = (
                 "#include <G4PVPlacement.hh>" in content
