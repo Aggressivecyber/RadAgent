@@ -316,7 +316,11 @@ def _module_review_requirements(module_name: str) -> list[str]:
             ),
             (
                 "SensitiveDetector.cc must include G4THitsCollection.hh when it directly "
-                "uses G4THitsCollection<Hit>."
+                "uses G4THitsCollection<::Hit>."
+            ),
+            (
+                "SensitiveDetector must add hits to G4THitsCollection with insert(hit); "
+                "do not accept fHitsCollection->push_back(hit)."
             ),
             (
                 "#include <iomanip> is a valid C++ standard header and is required when "

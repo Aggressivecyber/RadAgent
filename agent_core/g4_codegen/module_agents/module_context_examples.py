@@ -134,6 +134,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         "notes": [
             "Register collection names with collectionName.push_back(...).",
             "Use G4THitsCollection<::Hit> inside SensitiveDetector class scope.",
+            "Add hits with fHitsCollection->insert(hit), not push_back(hit).",
             "Attach with logicalVolume->SetSensitiveDetector(this) when an attach helper exists.",
         ],
     },
@@ -150,6 +151,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         ),
         "notes": [
             "Use G4VScoringMesh::GetScoreMap() for command-based mesh results.",
+            "Store GetScoreMap() by value with auto scoreMap, not auto& scoreMap.",
             "Use G4ScoringManager::GetMesh(0) for the single configured mesh.",
             "Do not write output files; OutputManager owns persistence.",
         ],

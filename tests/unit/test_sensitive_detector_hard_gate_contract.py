@@ -139,3 +139,68 @@ def test_sensitive_detector_hard_gate_rejects_unqualified_hit_collection_type() 
 
     assert result.status == "fail"
     assert any("G4THitsCollection<::Hit>" in error for error in result.errors)
+
+
+def test_sensitive_detector_hard_gate_rejects_hits_collection_push_back() -> None:
+    result = run_sensitive_detector_hard_gate(
+        [
+            _file("include/Hit.hh", "#pragma once\nclass Hit { public: void SetTrackID(int); };\n"),
+            _file("src/Hit.cc", '#include "Hit.hh"\n'),
+            _file(
+                "include/SensitiveDetector.hh",
+                "#pragma once\n"
+                '#include "G4THitsCollection.hh"\n'
+                '#include "Hit.hh"\n'
+                "class SensitiveDetector {\n"
+                "  G4THitsCollection<::Hit>* fHitsCollection;\n"
+                "};\n",
+            ),
+            _file(
+                "src/SensitiveDetector.cc",
+                '#include "SensitiveDetector.hh"\n'
+                '#include "G4THitsCollection.hh"\n'
+                "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                "  ::Hit* hit = new ::Hit();\n"
+                "  hit->SetTrackID(step->GetTrack()->GetTrackID());\n"
+                "  fHitsCollection->push_back(hit);\n"
+                "  return true;\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("insert(hit)" in error for error in result.errors)
+
+
+def test_sensitive_detector_hard_gate_rejects_inline_allocator_declarations() -> None:
+    result = run_sensitive_detector_hard_gate(
+        [
+            _file(
+                "include/Hit.hh",
+                "#pragma once\n"
+                "class Hit {\n"
+                "public:\n"
+                "  inline void* operator new(size_t);\n"
+                "  inline void operator delete(void*);\n"
+                "  void SetTrackID(int);\n"
+                "  int GetTrackID() const;\n"
+                "};\n",
+            ),
+            _file("src/Hit.cc", '#include "Hit.hh"\n'),
+            _file("include/SensitiveDetector.hh", "#pragma once\nclass SensitiveDetector {};\n"),
+            _file(
+                "src/SensitiveDetector.cc",
+                "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                "  ::Hit* hit = new ::Hit();\n"
+                "  hit->SetTrackID(step->GetTrack()->GetTrackID());\n"
+                "  return true;\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("must not be inline" in error for error in result.errors)

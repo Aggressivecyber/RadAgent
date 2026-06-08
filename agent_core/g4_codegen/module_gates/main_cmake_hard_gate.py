@@ -118,6 +118,23 @@ def _append_main_cmake_checks(
             ),
         }
     )
+    output_manager_as_action = bool(
+        re.search(
+            r"SetUserAction\s*\(\s*static_cast\s*<\s*G4User(?:Run|Event|Stepping)Action\s*\*"
+            r">\s*\(\s*[A-Za-z_]\w*\s*\)\s*\)",
+            main,
+        )
+    )
+    checks.append(
+        {
+            "check": "main_does_not_register_output_manager_as_action",
+            "status": "fail" if output_manager_as_action else "pass",
+            "message": (
+                "main.cc must not register OutputManager as a Geant4 user action; "
+                "register real RunAction/EventAction/SteppingAction via ActionInitialization"
+            ),
+        }
+    )
 
     result.checks.extend(checks)
     for check in checks:

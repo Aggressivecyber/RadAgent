@@ -104,3 +104,31 @@ def test_main_cmake_hard_gate_rejects_wrapper_as_physics_list() -> None:
 
     assert result.status == "fail"
     assert any("CreatePhysicsList" in error for error in result.errors)
+
+
+def test_main_cmake_hard_gate_rejects_output_manager_action_casts() -> None:
+    result = run_main_cmake_hard_gate(
+        [
+            _file(
+                "CMakeLists.txt",
+                "cmake_minimum_required(VERSION 3.16)\n"
+                "project(RadAgentG4)\n"
+                "add_executable(RadAgentG4 main.cc src/DetectorConstruction.cc)\n",
+            ),
+            _file(
+                "main.cc",
+                '#include "OutputManager.hh"\n'
+                "int main() {\n"
+                "  auto* runManager = GetRunManager();\n"
+                "  auto* outputMgr = OutputManager::Instance();\n"
+                "  runManager->SetUserAction(static_cast<G4UserRunAction*>(outputMgr));\n"
+                "}\n",
+            ),
+            _file("macros/init.mac", "/run/initialize\n"),
+            _file("macros/run.mac", "/run/beamOn 1\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("OutputManager" in error for error in result.errors)

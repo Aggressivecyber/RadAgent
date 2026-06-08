@@ -227,6 +227,20 @@ def run_sensitive_detector_hard_gate(
                 "SensitiveDetector.cc must use G4THitsCollection<::Hit>, not "
                 "G4THitsCollection<Hit>"
             )
+        if re.search(r"\bfHitsCollection\s*->\s*push_back\s*\(", source.new_content):
+            checks.append(
+                {
+                    "check": "sensitive_detector_hits_collection_insert_api",
+                    "status": "fail",
+                    "message": (
+                        "G4THitsCollection does not have push_back(); use "
+                        "fHitsCollection->insert(hit)"
+                    ),
+                }
+            )
+            errors.append(
+                "SensitiveDetector.cc must use fHitsCollection->insert(hit), not push_back"
+            )
 
     if hit_header:
         declares_track_id = (
@@ -241,6 +255,31 @@ def run_sensitive_detector_hard_gate(
         )
         if not declares_track_id:
             errors.append("Hit.hh must declare SetTrackID and GetTrackID")
+        inline_allocator_decls = bool(
+            re.search(
+                r"\binline\s+void\s*\*\s*operator\s+new\s*\(\s*size_t\s*\)\s*;",
+                hit_header.new_content,
+            )
+            or re.search(
+                r"\binline\s+void\s+operator\s+delete\s*\(\s*void\s*\*\s*\)\s*;",
+                hit_header.new_content,
+            )
+        )
+        checks.append(
+            {
+                "check": "hit_allocator_not_inline_declaration_only",
+                "status": "fail" if inline_allocator_decls else "pass",
+                "message": (
+                    "Hit.hh must not declare allocator operator new/delete as inline unless "
+                    "the full definitions are also in the header"
+                ),
+            }
+        )
+        if inline_allocator_decls:
+            errors.append(
+                "Hit.hh allocator operator new/delete declarations must not be inline "
+                "when definitions are in Hit.cc"
+            )
 
     if hit_source:
         uses_iomanip = bool(re.search(r"std::(setw|setprecision|fixed)\b", hit_source.new_content))

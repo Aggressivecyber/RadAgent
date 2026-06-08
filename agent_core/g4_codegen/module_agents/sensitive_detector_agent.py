@@ -50,7 +50,12 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
     fHitsCollection = new G4THitsCollection<::Hit>(GetName(), collectionName[0]);
     不要写 G4THitsCollection<Hit>，因为在 SensitiveDetector 类作用域内
     Hit 会被 G4VSensitiveDetector::Hit 成员名遮蔽。
-19. 输出 JSON 格式
+19. 向 G4THitsCollection 添加 hit 时使用 fHitsCollection->insert(hit);
+    不要写 fHitsCollection->push_back(hit)，G4THitsCollection 没有 push_back 成员。
+20. 如果 Hit.hh 声明自定义 allocator 的 operator new/delete，并且定义写在 Hit.cc，
+    头文件声明不要加 inline；使用 static void* operator new(size_t);
+    static void operator delete(void*);。只有当完整函数体也写在头文件时才允许 inline。
+21. 输出 JSON 格式
 """
 
 

@@ -297,9 +297,20 @@ def _repair_main_physics_constructor(
             f"runManager->SetUserInitialization({wrapper_name}->CreatePhysicsList());",
             updated,
         )
+    physics_changed = updated != content
+    before_output_action = updated
+    updated = re.sub(
+        r"\n\s*runManager->SetUserAction\s*\(\s*static_cast\s*<\s*"
+        r"G4User(?:Run|Event|Stepping)Action\s*\*>\s*\(\s*[A-Za-z_]\w*\s*\)\s*\)\s*;",
+        "",
+        updated,
+    )
     if updated != content:
         main["new_content"] = updated
-        _fixed(report, "main.cc", "matched PhysicsListFactoryWrapper physics list creation")
+        if physics_changed:
+            _fixed(report, "main.cc", "matched PhysicsListFactoryWrapper physics list creation")
+        if before_output_action != updated:
+            _fixed(report, "main.cc", "removed invalid OutputManager user action casts")
 
 
 def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
@@ -383,6 +394,11 @@ def _repair_scoring_manager(by_path: dict[str, dict[str, Any]], report: dict[str
         r"\1(0)",
         updated,
     )
+    updated = re.sub(
+        r"\bauto\s*&\s+([A-Za-z_]\w*)\s*=\s*([^;]*->\s*GetScoreMap\s*\(\s*\))\s*;",
+        r"auto \1 = \2;",
+        updated,
+    )
     if updated != content:
         source["new_content"] = updated
         _fixed(report, "ScoringManager", "normalized G4ScoringManager mesh access")
@@ -390,7 +406,7 @@ def _repair_scoring_manager(by_path: dict[str, dict[str, Any]], report: dict[str
 
 def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
     changed = False
-    for path in ("include/SensitiveDetector.hh", "src/SensitiveDetector.cc"):
+    for path in ("include/SensitiveDetector.hh", "src/SensitiveDetector.cc", "include/Hit.hh"):
         entry = by_path.get(path)
         if not entry:
             continue
@@ -399,6 +415,21 @@ def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[
         updated = re.sub(
             r"\bHit\s*\*\s+hit\s*=\s*new\s+Hit\s*\(\s*\)\s*;",
             "::Hit* hit = new ::Hit();",
+            updated,
+        )
+        updated = re.sub(
+            r"\bfHitsCollection\s*->\s*push_back\s*\(\s*([A-Za-z_]\w*)\s*\)\s*;",
+            r"fHitsCollection->insert(\1);",
+            updated,
+        )
+        updated = re.sub(
+            r"\binline\s+(void\s*\*\s*operator\s+new\s*\(\s*size_t\s*\)\s*;)",
+            r"\1",
+            updated,
+        )
+        updated = re.sub(
+            r"\binline\s+(void\s+operator\s+delete\s*\(\s*void\s*\*\s*\)\s*;)",
+            r"\1",
             updated,
         )
         if updated != content:

@@ -159,6 +159,39 @@ def test_global_repair_normalizes_two_argument_default_cut(monkeypatch, tmp_path
     )
 
 
+def test_global_repair_removes_output_manager_action_casts(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    patch = {
+        "changed_files": [
+            {
+                "path": "main.cc",
+                "new_content": (
+                    '#include "OutputManager.hh"\n'
+                    "int main() {\n"
+                    "  auto* outputMgr = OutputManager::Instance();\n"
+                    "  runManager->SetUserAction(static_cast<G4UserRunAction*>(outputMgr));\n"
+                    "  runManager->SetUserAction(static_cast<G4UserEventAction*>(outputMgr));\n"
+                    "  runManager->SetUserAction(static_cast<G4UserSteppingAction*>(outputMgr));\n"
+                    "}\n"
+                ),
+                "module_name": "main_cmake",
+                "generated_by": "main_cmake_module_agent",
+            },
+        ]
+    }
+
+    repaired, report = run_global_code_repair(patch, "job")
+    main = {file["path"]: file["new_content"] for file in repaired["changed_files"]}["main.cc"]
+
+    assert "static_cast<G4UserRunAction*>" not in main
+    assert "static_cast<G4UserEventAction*>" not in main
+    assert "static_cast<G4UserSteppingAction*>" not in main
+    assert any(
+        issue["message"] == "removed invalid OutputManager user action casts"
+        for issue in report["issues_fixed"]
+    )
+
+
 def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
     patch = {
@@ -170,10 +203,24 @@ def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_p
                     "  auto* scMgr = G4ScoringManager::GetScoringManager();\n"
                     "  G4String meshName = scMgr->GetMeshName(iMesh);\n"
                     "  auto* mesh = scMgr->GetMesh(fMeshName);\n"
+                    "  auto& scoreMap = mesh->GetScoreMap();\n"
                     "}\n"
                 ),
                 "module_name": "scoring",
                 "generated_by": "scoring_module_agent",
+            },
+            {
+                "path": "include/Hit.hh",
+                "new_content": (
+                    "#pragma once\n"
+                    "class Hit {\n"
+                    "public:\n"
+                    "  inline void* operator new(size_t);\n"
+                    "  inline void operator delete(void*);\n"
+                    "};\n"
+                ),
+                "module_name": "sensitive_detector",
+                "generated_by": "sensitive_detector_module_agent",
             },
             {
                 "path": "include/SensitiveDetector.hh",
@@ -197,6 +244,7 @@ def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_p
                     "}\n"
                     "G4bool SensitiveDetector::ProcessHits(G4Step*, G4TouchableHistory*) {\n"
                     "  Hit* hit = new Hit();\n"
+                    "  fHitsCollection->push_back(hit);\n"
                     "  return true;\n"
                     "}\n"
                 ),
@@ -213,9 +261,13 @@ def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_p
     assert "GetMesh(fMeshName)" not in by_path["src/ScoringManager.cc"]
     assert '"scoringMesh"' in by_path["src/ScoringManager.cc"]
     assert "GetMesh(0)" in by_path["src/ScoringManager.cc"]
+    assert "auto scoreMap = mesh->GetScoreMap();" in by_path["src/ScoringManager.cc"]
     assert "G4THitsCollection<::Hit>* fHitsCollection" in by_path[
         "include/SensitiveDetector.hh"
     ]
     assert "new G4THitsCollection<::Hit>" in by_path["src/SensitiveDetector.cc"]
     assert "::Hit* hit = new ::Hit();" in by_path["src/SensitiveDetector.cc"]
+    assert "fHitsCollection->insert(hit);" in by_path["src/SensitiveDetector.cc"]
+    assert "inline void* operator new" not in by_path["include/Hit.hh"]
+    assert "inline void operator delete" not in by_path["include/Hit.hh"]
     assert report["issues_fixed"]

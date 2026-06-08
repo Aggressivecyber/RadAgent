@@ -181,6 +181,18 @@ def run_scoring_hard_gate(
             errors.append(
                 f"{f.path}: GetScoreMap() values require G4StatDouble and sum_wx() extraction"
             )
+        if re.search(r"\bauto\s*&\s+\w+\s*=\s*[^;]*->\s*GetScoreMap\s*\(\s*\)", content):
+            checks.append(
+                {
+                    "check": "scoring_score_map_not_nonconst_lvalue_ref",
+                    "status": "fail",
+                    "message": (
+                        "GetScoreMap() returns a map value; store it with auto scoreMap, "
+                        "not auto& scoreMap"
+                    ),
+                }
+            )
+            errors.append(f"{f.path}: store GetScoreMap() by value, not non-const reference")
 
     return ModuleGateResult(
         module_name="scoring",
