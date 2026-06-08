@@ -22,6 +22,11 @@ class G4CodegenSubgraphState(TypedDict, total=False):
 
     # Loaded data
     g4_model_ir: dict[str, Any]
+    rag_context: list[dict[str, Any]]
+    rag_score: float
+    web_context: list[dict[str, Any]]
+    web_search_available: bool
+    context_decision: str
 
     # Planning outputs
     codegen_plan: dict[str, Any]
@@ -92,7 +97,11 @@ class ModuleContext(BaseModel):
     geometry_strategy_plan: dict[str, Any]
     code_architecture_plan: dict[str, Any]
     rag_snippets: list[dict[str, Any]] = Field(default_factory=list)
+    web_context: list[dict[str, Any]] = Field(default_factory=list)
     geant4_api_rules: list[str] = Field(default_factory=list)
+    module_code_example: dict[str, Any] = Field(default_factory=dict)
+    interface_context: dict[str, Any] = Field(default_factory=dict)
+    context_retrieval_policy: dict[str, Any] = Field(default_factory=dict)
     existing_generated_file_summaries: list[dict[str, Any]] = Field(default_factory=list)
     previous_failures: list[dict[str, Any]] = Field(default_factory=list)
     run_mode: str = "strict"

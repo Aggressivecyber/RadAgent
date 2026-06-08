@@ -113,6 +113,11 @@ async def build_module_contexts_node(
     module_contracts = state.get("module_contracts", {})
     job_id = state.get("job_id", "unknown")
     run_mode = state.get("run_mode", "strict")
+    rag_context = state.get("rag_context", [])
+    rag_score = state.get("rag_score")
+    web_context = state.get("web_context", [])
+    context_decision = state.get("context_decision")
+    web_search_available = state.get("web_search_available")
 
     contexts: dict[str, Any] = {}
     for module_name, contract in module_contracts.items():
@@ -125,6 +130,11 @@ async def build_module_contexts_node(
             code_architecture_plan=code_architecture,
             job_id=job_id,
             run_mode=run_mode,
+            rag_context=rag_context,
+            rag_score=rag_score,
+            web_context=web_context,
+            context_decision=context_decision,
+            web_search_available=web_search_available,
         )
         contexts[module_name] = ctx
 

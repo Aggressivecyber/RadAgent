@@ -5,6 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agent_core.g4_codegen.module_agents.module_context_examples import (
+    build_context_retrieval_policy,
+    get_module_code_example,
+    get_module_interface_context,
+)
 from agent_core.g4_codegen.schemas import ModuleContext
 
 
@@ -19,6 +24,11 @@ def build_module_context(
     run_mode: str = "strict",
     previous_failures: list[dict[str, Any]] | None = None,
     existing_file_summaries: list[dict[str, Any]] | None = None,
+    rag_context: list[dict[str, Any]] | None = None,
+    rag_score: float | None = None,
+    web_context: list[dict[str, Any]] | None = None,
+    context_decision: str | None = None,
+    web_search_available: bool | None = None,
 ) -> dict[str, Any]:
     """Build context for a module agent.
 
@@ -29,6 +39,8 @@ def build_module_context(
 
     # Get Geant4 API rules
     api_rules = _get_geant4_api_rules(module_name)
+    selected_rag = _select_context_snippets(module_name, rag_context or [])
+    selected_web = _select_context_snippets(module_name, web_context or [])
 
     context = ModuleContext(
         module_name=module_name,
@@ -37,8 +49,16 @@ def build_module_context(
         codegen_plan=codegen_plan,
         geometry_strategy_plan=geometry_strategy_plan,
         code_architecture_plan=code_architecture_plan,
-        rag_snippets=[],
+        rag_snippets=selected_rag,
+        web_context=selected_web,
         geant4_api_rules=api_rules,
+        module_code_example=get_module_code_example(module_name),
+        interface_context=get_module_interface_context(module_name),
+        context_retrieval_policy=build_context_retrieval_policy(
+            rag_score=rag_score,
+            context_decision=context_decision,
+            web_search_available=web_search_available,
+        ),
         existing_generated_file_summaries=existing_file_summaries or [],
         previous_failures=previous_failures or [],
         run_mode=run_mode,
@@ -57,6 +77,49 @@ def build_module_context(
     ctx_path.write_text(json.dumps(context_data, indent=2, ensure_ascii=False))
 
     return context_data
+
+
+def _select_context_snippets(
+    module_name: str,
+    context_entries: list[dict[str, Any]],
+    *,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Select RAG/web snippets relevant to a module without losing global facts."""
+    if not context_entries:
+        return []
+
+    keywords = _module_context_keywords(module_name)
+    selected: list[dict[str, Any]] = []
+    global_entries: list[dict[str, Any]] = []
+    for entry in context_entries:
+        text = json.dumps(entry, ensure_ascii=False).lower()
+        if any(keyword in text for keyword in keywords):
+            selected.append(entry)
+        elif any(keyword in text for keyword in ("geant4", "g4", "cmake", "run manager")):
+            global_entries.append(entry)
+
+    combined = selected + global_entries
+    if not combined:
+        combined = context_entries
+    return combined[:limit]
+
+
+def _module_context_keywords(module_name: str) -> set[str]:
+    common = {"geant4", "g4", "cmake", "run manager"}
+    by_module = {
+        "material": {"material", "g4material", "g4nistmanager", "nist"},
+        "geometry": {"geometry", "detectorconstruction", "g4box", "logicalvolume"},
+        "placement": {"placement", "g4pvplacement", "rotation", "transform"},
+        "source": {"source", "particlegun", "primarygenerator"},
+        "physics": {"physics", "physlist", "ftfp_bert", "production cut"},
+        "sensitive_detector": {"sensitive", "processhits", "hitscollection", "hit"},
+        "scoring": {"scoring", "scoremap", "scoringmesh", "primitive scorer"},
+        "output_manager": {"output", "csv", "json", "metadata", "file"},
+        "action_initialization": {"actioninitialization", "runaction", "user action"},
+        "main_cmake": {"main.cc", "cmakelists", "executable", "macro"},
+    }
+    return common | by_module.get(module_name, set())
 
 
 def _extract_ir_subset(module_name: str, g4_model_ir: dict[str, Any]) -> dict[str, Any]:
@@ -103,7 +166,7 @@ def _get_geant4_api_rules(module_name: str) -> list[str]:
     module_rules: dict[str, list[str]] = {
         "material": [
             "G4NistManager::Instance()->FindOrBuildMaterial() 用于 NIST 材料",
-            "自定义材料使用 G4Material::Create()",
+            "自定义材料使用 new G4Material(name, density, ncomponents) 后 AddElement(...)",
         ],
         "geometry": [
             "G4VUserDetectorConstruction::Construct() 返回 world LV",

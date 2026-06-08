@@ -21,6 +21,9 @@ MODULE_CODEGEN_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 C++ 模块级编码
 你必须根据 ModuleContract、ModuleContext、G4ModelIR 子集、
 规则、RAG 参考片段和 Geant4 API 约束，
 生成当前模块需要的完整文件内容。
+ModuleContext 中的 module_code_example 是当前模块风格和接口示例，
+interface_context 是上下游模块接口边界，
+context_retrieval_policy 规定信息不足时如何使用 RAG 和 web 证据。
 
 严格要求：
 1. 只生成当前模块负责的文件。
@@ -42,6 +45,13 @@ MODULE_CODEGEN_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 C++ 模块级编码
 17. 每个文件对象的完整文件内容字段固定为 new_content。
 18. JSON 顶层必须包含 generated_files 数组。
 19. generated_files 数组必须包含完整可写入文件，不是文件摘要、计划或说明。
+20. 必须遵守 module_code_example 的 owned_files 和 primary_symbols；示例只用于接口形状，
+    不能照抄成占位实现。
+21. 生成代码前先检查 interface_context 和 existing_generated_file_summaries；
+    调用上游模块时必须匹配其真实类名、构造函数和 public 方法。
+22. 如果 Geant4 API、宏命令、ownership、构造函数或 scoring 访问方式不确定，
+    必须优先使用 rag_snippets；RAG 不足时使用 web_context 中的可信 Geant4/CERN 来源。
+23. 使用 RAG 或 web 得到的 API 事实必须写入 used_references；没有证据不得发明 API。
 
 返回格式：
 {
