@@ -314,6 +314,77 @@ def test_global_repair_main_uses_material_registry_singleton_for_detector(
     assert report["issues_fixed"]
 
 
+def test_global_repair_adds_placement_place_declaration_before_include_guard(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    patch = {
+        "changed_files": [
+            {
+                "path": "CMakeLists.txt",
+                "new_content": (
+                    "cmake_minimum_required(VERSION 3.16)\n"
+                    "project(RadSim LANGUAGES CXX)\n"
+                    "add_executable(radapp main.cc src/PlacementManager.cc)\n"
+                ),
+                "module_name": "main_cmake",
+                "generated_by": "main_cmake_module_agent",
+            },
+            {
+                "path": "include/PlacementManager.hh",
+                "new_content": (
+                    "#ifndef PLACEMENT_MANAGER_HH\n"
+                    "#define PLACEMENT_MANAGER_HH\n"
+                    "class G4LogicalVolume;\n"
+                    "class G4RotationMatrix;\n"
+                    "class G4VPhysicalVolume;\n"
+                    "class G4ThreeVector;\n"
+                    "class PlacementManager {\n"
+                    "public:\n"
+                    "  static G4VPhysicalVolume* Place(\n"
+                    "      G4RotationMatrix* rotation, const G4ThreeVector& position,\n"
+                    "      G4LogicalVolume* logical, const char* name,\n"
+                    "      G4LogicalVolume* mother);\n"
+                    "};\n"
+                    "#endif\n"
+                ),
+                "module_name": "placement",
+                "generated_by": "placement_module_agent",
+            },
+            {
+                "path": "src/PlacementManager.cc",
+                "new_content": (
+                    '#include "PlacementManager.hh"\n'
+                    "G4VPhysicalVolume* PlacementManager::Place(\n"
+                    "    G4LogicalVolume* logical,\n"
+                    "    const G4ThreeVector& position,\n"
+                    "    G4RotationMatrix* rotation,\n"
+                    "    G4LogicalVolume* mother,\n"
+                    "    G4bool checkOverlaps) {\n"
+                    "  return PlacementManager::PlaceVolume(\n"
+                    "      rotation, position, logical, logical->GetName(), mother,\n"
+                    "      false, 0, checkOverlaps);\n"
+                    "}\n"
+                ),
+                "module_name": "placement",
+                "generated_by": "placement_module_agent",
+            },
+        ]
+    }
+
+    repaired, report = run_global_code_repair(patch, "job")
+    header = {file["path"]: file["new_content"] for file in repaired["changed_files"]}[
+        "include/PlacementManager.hh"
+    ]
+
+    assert (
+        "G4LogicalVolume* logical,\n"
+        "                                  const G4ThreeVector& position"
+    ) in header
+    assert header.index("G4LogicalVolume* logical") < header.index("#endif")
+    assert report["issues_fixed"]
+
+
 def test_global_repair_main_uses_default_detector_constructor_when_required(
     monkeypatch, tmp_path
 ) -> None:

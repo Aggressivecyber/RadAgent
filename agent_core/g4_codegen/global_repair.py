@@ -763,6 +763,14 @@ def _insert_before_private_or_class_end_text(content: str, declaration: str) -> 
         return content
     if "private:" in content:
         return content.replace("private:", f"    {declaration}\nprivate:", 1)
+    updated = re.sub(
+        r"\n};(\s*\n\s*#endif\b)",
+        f"\n    {declaration}\n}};\\1",
+        content,
+        count=1,
+    )
+    if updated != content:
+        return updated
     return re.sub(r"\n};\s*$", f"\n    {declaration}\n}};\n", content, count=1)
 
 

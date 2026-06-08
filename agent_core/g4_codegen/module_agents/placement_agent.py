@@ -34,6 +34,9 @@ PLACEMENT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 放置模块编码 Agent
    作为 G4PVPlacement 的 mother 参数。
    返回类型建议使用 G4VPhysicalVolume*。如果提供 static Place(...) 兼容接口，
    也应返回 G4VPhysicalVolume*，并直接返回 PlaceVolume(...) 的结果。
+   PlacementManager.cc 中任何 PlacementManager::Place(...) out-of-class 定义，
+   必须在 PlacementManager.hh 中有完全匹配的 static Place(...) 声明；不要只在
+   .cc 中定义未声明的 overload。
    如果 PlaceVolume 是 static，static Place(...) 必须直接调用
    PlacementManager::PlaceVolume(...)；不要创建 PlacementManager 实例。
    如果 PlacementManager.hh 的公开声明返回或引用 G4PVPlacement*，头文件必须

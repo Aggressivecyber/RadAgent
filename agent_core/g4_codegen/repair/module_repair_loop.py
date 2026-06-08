@@ -585,4 +585,18 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "new DetectorConstruction() and do not pass MaterialRegistry."
             ),
         ]
+    if module_name == "placement":
+        return [
+            (
+                "Every out-of-class PlacementManager::Place(...) definition in "
+                "PlacementManager.cc must have a matching static Place(...) declaration "
+                "with the same parameter order and types in PlacementManager.hh."
+            ),
+            (
+                "Prefer the compatibility signature "
+                "static G4VPhysicalVolume* Place(G4LogicalVolume* logical, "
+                "const G4ThreeVector& position, G4RotationMatrix* rotation, "
+                "G4LogicalVolume* mother, G4bool checkOverlaps = true)."
+            ),
+        ]
     return []
