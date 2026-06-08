@@ -34,6 +34,14 @@ CROSS_FILE_LLM_GATE_PROMPT = """你是 RadAgent 的 Geant4 全工程审查 Agent
 8. 是否需要 human confirmation
 9. 是否可以进入 patch_subgraph
 
+关键规则：
+- 如果输入中的 module_gate_status_table 显示某模块 hard_status 和 llm_status 都是 pass，
+  不得声称该模块缺少 gate review。
+- 如果 all_required_module_gates_pass 为 true，不得以“缺少模块 LLM review”、
+  “缺少 hard gate data” 或 “module review corrupted”为失败理由；只能基于真实代码、
+  接口、CMake、Geant4 API 或 artifact 风险提出失败。
+- module_gate_status_table 是比长 JSON 摘要更高优先级的事实表。
+
 返回严格 JSON：
 {
   "status": "pass | fail",
@@ -127,6 +135,7 @@ async def run_cross_file_llm_gate(
     ]
 
     code_review_bundle: dict[str, Any] = {
+        "module_gate_status_table": _build_module_gate_status_table(module_gate_results),
         "proposed_patch_metadata": {
             "patch_type": proposed_patch.get("patch_type", proposed_patch.get("change_type", "")),
             "total_files": len(changed_files),
@@ -162,7 +171,13 @@ async def run_cross_file_llm_gate(
     )
 
     # ── Build LLM prompt ─────────────────────────────────────────────
-    user_prompt = f"""代码审查包：
+    status_table = code_review_bundle["module_gate_status_table"]
+    user_prompt = f"""模块 gate 覆盖事实（最高优先级）：
+{json.dumps(status_table, indent=2, ensure_ascii=False)}
+
+若 all_required_module_gates_pass 为 true，不得声称缺少模块 hard/LLM gate review。
+
+代码审查包：
 {json.dumps(code_review_bundle, indent=2, ensure_ascii=False)[:30000]}
 
 请审查全工程语义一致性。只返回一个 JSON 对象，不得返回空内容。"""
@@ -272,6 +287,58 @@ def _complete_module_gate_results_from_disk(
         completed.setdefault(module_name, {})
         completed[module_name].setdefault(gate_type, gate_data)
     return completed
+
+
+REQUIRED_MODULES = {
+    "material",
+    "geometry",
+    "placement",
+    "source",
+    "physics",
+    "sensitive_detector",
+    "scoring",
+    "output_manager",
+    "action_initialization",
+    "main_cmake",
+}
+
+
+def _build_module_gate_status_table(
+    module_gate_results: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a compact, high-priority gate coverage table for the LLM."""
+    rows: list[dict[str, Any]] = []
+    missing_modules: list[str] = []
+    incomplete_modules: list[str] = []
+    for module_name in sorted(REQUIRED_MODULES):
+        gates = module_gate_results.get(module_name, {})
+        hard_status = gates.get("hard", {}).get("status", "missing")
+        llm_status = gates.get("llm", {}).get("status", "missing")
+        hard_present = isinstance(gates.get("hard"), dict)
+        llm_present = isinstance(gates.get("llm"), dict)
+        if not gates:
+            missing_modules.append(module_name)
+        if hard_status != "pass" or llm_status != "pass":
+            incomplete_modules.append(module_name)
+        rows.append(
+            {
+                "module_name": module_name,
+                "hard_present": hard_present,
+                "llm_present": llm_present,
+                "hard_status": hard_status,
+                "llm_status": llm_status,
+                "llm_overall_score": gates.get("llm", {})
+                .get("scorecard", {})
+                .get("overall_score"),
+            }
+        )
+    return {
+        "required_modules": sorted(REQUIRED_MODULES),
+        "missing_modules": missing_modules,
+        "incomplete_modules": incomplete_modules,
+        "all_required_module_gates_pass": not missing_modules and not incomplete_modules,
+        "rows": rows,
+    }
 
 
 # ── Helper functions for C++ parsing ─────────────────────────────────
