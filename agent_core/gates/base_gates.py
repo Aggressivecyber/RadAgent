@@ -268,6 +268,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     # Gate 6: Build/Parse
     g6_severity = "fail"
     g6_message = "Build not verified"
+    build_result: dict[str, Any] = {}
     try:
         from agent_core.tools.geant4_runner import Geant4Runner
 
@@ -310,9 +311,15 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         }
     )
 
-    # Gate 7: Unit Test — cannot auto-pass
-    g7_severity = "fail"
-    g7_message = "Unit tests required; no unit test result artifact found"
+    # Gate 7: Unit Test — uses the real ctest artifact from Geant4Runner.
+    unit_result_path = output_dir / "unit_test_result.json"
+    if unit_result_path.is_file():
+        unit_result = json.loads(unit_result_path.read_text(encoding="utf-8"))
+        g7_severity = "pass" if unit_result.get("success") is True else "fail"
+        g7_message = "Unit/ctest artifact passed" if g7_severity == "pass" else "ctest failed"
+    else:
+        g7_severity = "fail"
+        g7_message = "Unit tests required; no unit test result artifact found"
     gate_results.append(
         {
             "gate_id": 7,
@@ -321,11 +328,11 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "checked_items": [
                 {"item": "unit test execution", "result": g7_severity},
             ],
-            "passed_items": [],
+            "passed_items": ["ctest passed"] if g7_severity == "pass" else [],
             "failed_items": [g7_message] if g7_severity == "fail" else [],
             "warnings": [],
-            "evidence": [],
-            "file_paths": [],
+            "evidence": [str(unit_result_path)] if unit_result_path.is_file() else [],
+            "file_paths": [str(unit_result_path)] if unit_result_path.is_file() else [],
             "message": g7_message,
         }
     )
@@ -376,9 +383,15 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             }
         )
 
-    # Gate 9: Smoke Simulation
-    g9_severity = "fail"
-    g9_message = "Smoke simulation required; no smoke simulation result artifact found"
+    # Gate 9: Smoke Simulation — uses the real smoke artifact from Geant4Runner.
+    smoke_result_path = output_dir / "smoke_simulation_result.json"
+    if smoke_result_path.is_file():
+        smoke_result = json.loads(smoke_result_path.read_text(encoding="utf-8"))
+        g9_severity = "pass" if smoke_result.get("success") is True else "fail"
+        g9_message = "Smoke simulation passed" if g9_severity == "pass" else "Smoke failed"
+    else:
+        g9_severity = "fail"
+        g9_message = "Smoke simulation required; no smoke simulation result artifact found"
     gate_results.append(
         {
             "gate_id": 9,
@@ -387,11 +400,11 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "checked_items": [
                 {"item": "smoke simulation (1000 events)", "result": g9_severity},
             ],
-            "passed_items": [],
+            "passed_items": ["smoke simulation passed"] if g9_severity == "pass" else [],
             "failed_items": [g9_message] if g9_severity == "fail" else [],
             "warnings": [],
-            "evidence": [],
-            "file_paths": [],
+            "evidence": [str(smoke_result_path)] if smoke_result_path.is_file() else [],
+            "file_paths": [str(smoke_result_path)] if smoke_result_path.is_file() else [],
             "message": g9_message,
         }
     )

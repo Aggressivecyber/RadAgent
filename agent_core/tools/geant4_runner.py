@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import shutil
@@ -99,7 +100,7 @@ class Geant4Runner:
             env_prefix += f"export G4_OUTPUT_DIR={output_dir}; "
         if job_id != "unknown":
             env_prefix += f"export G4_JOB_ID={job_id}; "
-        rc, out, err = await self._run(env_prefix + cmd)
+        rc, out, err = await self._run(env_prefix + cmd, cwd=str(Path(executable).parent))
         return {
             "success": rc == 0,
             "output_dir": output_dir or str(Path(executable).parent),
@@ -151,6 +152,7 @@ class Geant4Runner:
                 "warnings": [bld["errors"]],
             }
 
+        unit = await self._run_ctest(build_dir, _output_dir)
         macro_path = Path(project_dir) / "macros" / "run.mac"
         sim = await self.simulate(
             bld["executable_path"],
@@ -159,12 +161,21 @@ class Geant4Runner:
             output_dir=_output_dir,
             job_id=job_id,
         )
+        self._write_smoke_result(_output_dir, sim)
+        self._materialize_output_contract(
+            output_dir=_output_dir,
+            executable_dir=str(Path(bld["executable_path"]).parent),
+            job_id=job_id,
+            events=events,
+            sim=sim,
+        )
         return {
-            "success": sim["success"],
+            "success": unit["success"] and sim["success"],
             "has_geant4": True,
             "output_dir": _output_dir,
             "output_summary": sim["log"][-500:] if sim["log"] else "",
-            "warnings": [sim["errors"]] if sim["errors"] else [],
+            "unit_test_result": unit,
+            "warnings": [msg for msg in (unit.get("errors"), sim["errors"]) if msg],
         }
 
     async def structure_check(self, project_dir: str) -> dict[str, Any]:
@@ -188,3 +199,104 @@ class Geant4Runner:
                 issues.append(f"Missing '{dirname}/' directory")
 
         return {"valid": len(issues) == 0, "issues": issues}
+
+    async def _run_ctest(self, build_dir: str, output_dir: str) -> dict[str, Any]:
+        rc, out, err = await self._run("ctest --output-on-failure", cwd=build_dir)
+        result = {
+            "success": rc == 0,
+            "command": "ctest --output-on-failure",
+            "stdout": out[-4000:],
+            "errors": err[-4000:],
+        }
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        (Path(output_dir) / "unit_test_result.json").write_text(
+            json.dumps(result, indent=2),
+            encoding="utf-8",
+        )
+        return result
+
+    def _write_smoke_result(self, output_dir: str, sim: dict[str, Any]) -> None:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        result = {
+            "success": bool(sim.get("success")),
+            "log_tail": str(sim.get("log", ""))[-4000:],
+            "errors": str(sim.get("errors", ""))[-4000:],
+        }
+        (Path(output_dir) / "smoke_simulation_result.json").write_text(
+            json.dumps(result, indent=2),
+            encoding="utf-8",
+        )
+
+    def _materialize_output_contract(
+        self,
+        *,
+        output_dir: str,
+        executable_dir: str,
+        job_id: str,
+        events: int,
+        sim: dict[str, Any],
+    ) -> None:
+        out_dir = Path(output_dir)
+        exe_dir = Path(executable_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        for name in ("output.csv", "run_summary.json", "metadata.json"):
+            src = exe_dir / name
+            if src.is_file():
+                shutil.copy2(src, out_dir / name)
+
+        output_csv = out_dir / "output.csv"
+        if output_csv.is_file():
+            text = output_csv.read_text(encoding="utf-8", errors="replace")
+            lines = [line for line in text.splitlines() if line.strip()]
+            if lines:
+                header = lines[0]
+                rows = lines[1:]
+                (out_dir / "event_table.csv").write_text(text, encoding="utf-8")
+                self._write_quantity_csv(out_dir / "edep_3d.csv", header, rows, "edep_MeV")
+                self._write_quantity_csv(out_dir / "dose_3d.csv", header, rows, "dose_Gy")
+
+        summary_path = out_dir / "run_summary.json"
+        if summary_path.is_file():
+            try:
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                summary = {}
+        else:
+            summary = {}
+        summary.setdefault("job_id", job_id)
+        summary.setdefault("events_requested", events)
+        summary.setdefault("smoke_success", bool(sim.get("success")))
+        (out_dir / "g4_summary.json").write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
+
+        provenance_path = out_dir / "provenance.json"
+        if not provenance_path.is_file():
+            provenance = {
+                "job_id": job_id,
+                "runner": "Geant4Runner.smoke_test",
+                "source": "real Geant4 smoke simulation",
+            }
+            provenance_path.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
+
+    def _write_quantity_csv(
+        self,
+        path: Path,
+        header: str,
+        rows: list[str],
+        quantity: str,
+    ) -> None:
+        columns = [col.strip() for col in header.split(",")]
+        try:
+            event_idx = columns.index("EventID")
+            value_idx = columns.index(quantity)
+        except ValueError:
+            return
+        output = [f"EventID,{quantity}"]
+        for row in rows:
+            values = [value.strip() for value in row.split(",")]
+            if len(values) > max(event_idx, value_idx):
+                output.append(f"{values[event_idx]},{values[value_idx]}")
+        path.write_text("\n".join(output) + "\n", encoding="utf-8")
