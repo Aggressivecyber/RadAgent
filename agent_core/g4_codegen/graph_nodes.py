@@ -237,8 +237,22 @@ def _extract_public_methods(content: str) -> list[str]:
     """Extract public method names from C++ content."""
     import re
 
-    # Match methods after 'public:' keyword
-    return re.findall(r"\bpublic:\s*(?:.*?)?\b(\w+)\s*\(", content, re.DOTALL)
+    methods: list[str] = []
+    public_blocks = re.findall(
+        r"\bpublic:\s*(.*?)(?=\bprivate:|\bprotected:|\n};|$)",
+        content,
+        re.DOTALL,
+    )
+    for block in public_blocks:
+        for match in re.finditer(
+            r"(?:~?[A-Za-z_]\w*|operator\s+\w+)\s*\(",
+            block,
+        ):
+            name = match.group(0).split("(", 1)[0].strip()
+            if name in {"if", "for", "while", "switch", "return"}:
+                continue
+            methods.append(name)
+    return sorted(set(methods))
 
 
 def _get_agent_function(module_name: str):  # type: ignore[no-untyped-def]

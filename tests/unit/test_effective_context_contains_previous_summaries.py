@@ -43,3 +43,39 @@ def test_extract_file_summary_with_empty_content():
     assert summary["classes"] == []
     assert summary["includes"] == []
     assert summary["public_methods"] == []
+
+
+def test_extract_file_summary_lists_all_public_methods():
+    file_data = {
+        "path": "include/OutputManager.hh",
+        "new_content": (
+            "#pragma once\n"
+            "class OutputManager {\n"
+            "public:\n"
+            "  static OutputManager* Instance();\n"
+            "  void BeginRun(const G4Run* run);\n"
+            "  void EndRun(const G4Run* run);\n"
+            "  void BeginEvent(const G4Event* event);\n"
+            "  void EndEvent(const G4Event* event);\n"
+            "  void RecordStep(const G4Step* step);\n"
+            "  void WriteEvent(const G4Event* event);\n"
+            "private:\n"
+            "  int count_ = 0;\n"
+            "};\n"
+        ),
+        "generated_by": "output_manager_module_agent",
+        "module_name": "output_manager",
+    }
+
+    summary = _extract_file_summary("output_manager", file_data)
+    methods = set(summary["public_methods"])
+
+    assert {
+        "Instance",
+        "BeginRun",
+        "EndRun",
+        "BeginEvent",
+        "EndEvent",
+        "RecordStep",
+        "WriteEvent",
+    }.issubset(methods)

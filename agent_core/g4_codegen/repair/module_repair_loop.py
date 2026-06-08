@@ -510,5 +510,13 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "Instantiate PhysicsListFactoryWrapper using the constructor declared in "
                 "the generated physics header."
             ),
+            (
+                "Pass physicsWrapper->CreatePhysicsList() to "
+                "runManager->SetUserInitialization(...); do not pass the wrapper object."
+            ),
+            (
+                "If macros/init.mac contains /run/initialize, main.cc must not call "
+                "runManager->Initialize()."
+            ),
         ]
     return []
