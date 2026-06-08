@@ -440,6 +440,11 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "ProcessHits must store the track id with "
                 "hit->SetTrackID(step->GetTrack()->GetTrackID())."
             ),
+            (
+                "Use G4Allocator<Hit>::MallocSingle() in operator new and "
+                "G4Allocator<Hit>::FreeSingle(static_cast<Hit*>(ptr)) in operator "
+                "delete; do not call nonexistent alloc/free methods."
+            ),
             "Use G4UnitsTable.hh for G4BestUnit; do not include G4BestUnit.hh.",
         ]
     if module_name == "placement":

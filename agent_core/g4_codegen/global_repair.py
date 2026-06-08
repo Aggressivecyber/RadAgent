@@ -673,6 +673,16 @@ def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[
             updated,
         )
         updated = re.sub(
+            r"\b([A-Za-z_]\w*)\.alloc\s*\(\s*size\s*\)",
+            r"\1.MallocSingle()",
+            updated,
+        )
+        updated = re.sub(
+            r"\b([A-Za-z_]\w*)\.free\s*\(\s*(?:\(\s*Hit\s*\*\s*\))?\s*([A-Za-z_]\w*)\s*\)",
+            r"\1.FreeSingle(static_cast<Hit*>(\2))",
+            updated,
+        )
+        updated = re.sub(
             r"\binline\s+(void\s*\*\s*operator\s+new\s*\(\s*size_t\s*\)\s*;)",
             r"\1",
             updated,

@@ -564,6 +564,21 @@ def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_p
                 "generated_by": "sensitive_detector_module_agent",
             },
             {
+                "path": "src/Hit.cc",
+                "new_content": (
+                    '#include "Hit.hh"\n'
+                    "G4Allocator<Hit> fAllocator;\n"
+                    "void* Hit::operator new(size_t size) {\n"
+                    "  return fAllocator.alloc(size);\n"
+                    "}\n"
+                    "void Hit::operator delete(void* hit) {\n"
+                    "  fAllocator.free((Hit*)hit);\n"
+                    "}\n"
+                ),
+                "module_name": "sensitive_detector",
+                "generated_by": "sensitive_detector_module_agent",
+            },
+            {
                 "path": "include/SensitiveDetector.hh",
                 "new_content": (
                     "#pragma once\n"
@@ -613,4 +628,8 @@ def test_global_repair_scoring_and_sensitive_compile_patterns(monkeypatch, tmp_p
     assert "fHitsCollection->insert(hit);" in by_path["src/SensitiveDetector.cc"]
     assert "inline void* operator new" not in by_path["include/Hit.hh"]
     assert "inline void operator delete" not in by_path["include/Hit.hh"]
+    assert "fAllocator.MallocSingle()" in by_path["src/Hit.cc"]
+    assert "fAllocator.FreeSingle(static_cast<Hit*>(hit))" in by_path["src/Hit.cc"]
+    assert ".alloc(" not in by_path["src/Hit.cc"]
+    assert ".free(" not in by_path["src/Hit.cc"]
     assert report["issues_fixed"]

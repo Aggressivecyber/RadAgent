@@ -306,6 +306,24 @@ def run_sensitive_detector_hard_gate(
         )
         if uses_iomanip and not has_iomanip:
             errors.append("Hit.cc must include <iomanip> when using std::setw/std::setprecision")
+        uses_invalid_allocator_api = bool(
+            re.search(r"\bG4Allocator\s*<", hit_source.new_content)
+            and re.search(r"\.\s*(alloc|free)\s*\(", hit_source.new_content)
+        )
+        checks.append(
+            {
+                "check": "hit_allocator_uses_geant4_api",
+                "status": "fail" if uses_invalid_allocator_api else "pass",
+                "message": (
+                    "G4Allocator uses MallocSingle()/FreeSingle(); it has no alloc/free methods"
+                ),
+            }
+        )
+        if uses_invalid_allocator_api:
+            errors.append(
+                "Hit.cc allocator operator new/delete must use MallocSingle()/FreeSingle(), "
+                "not alloc/free"
+            )
 
     for f in generated_files:
         if not f.path.endswith((".cc", ".hh")):
