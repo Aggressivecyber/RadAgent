@@ -72,6 +72,23 @@ def _append_physics_ownership_checks(
                     ),
                 }
             )
+        if f.path.endswith((".cc", ".hh")) and re.search(
+            r"CreatePhysicsList\s*\([^)]*\)\s*(?:const\s*)?\{[^{}]*"
+            r"G4PhysListFactory\s+\w+\s*;[^{}]*"
+            r"\w+\.GetReferencePhysList\s*\(",
+            content,
+            re.DOTALL,
+        ):
+            checks.append(
+                {
+                    "check": "physics_factory_lifetime_not_local",
+                    "status": "fail",
+                    "message": (
+                        "Do not create a local G4PhysListFactory inside CreatePhysicsList(); "
+                        "use a member or static factory and cache fPhysicsList"
+                    ),
+                }
+            )
 
     result.checks.extend(checks)
     for check in checks:

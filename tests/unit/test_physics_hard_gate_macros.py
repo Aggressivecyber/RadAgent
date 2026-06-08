@@ -64,3 +64,31 @@ def test_physics_hard_gate_allows_valid_run_cut_macro() -> None:
     )
 
     assert not any("/process/em/setCut" in error for error in result.errors)
+
+
+def test_physics_hard_gate_rejects_local_factory_in_create_physics_list() -> None:
+    result = run_physics_hard_gate(
+        [
+            _file(
+                "include/PhysicsListFactoryWrapper.hh",
+                "#ifndef PHYSICSLISTFACTORYWRAPPER_HH\n"
+                "#define PHYSICSLISTFACTORYWRAPPER_HH\n"
+                "class PhysicsListFactoryWrapper {};\n"
+                "#endif\n",
+            ),
+            _file(
+                "src/PhysicsListFactoryWrapper.cc",
+                '#include "PhysicsListFactoryWrapper.hh"\n'
+                '#include "G4PhysListFactory.hh"\n'
+                "G4VModularPhysicsList* PhysicsListFactoryWrapper::CreatePhysicsList() {\n"
+                "  G4PhysListFactory factory;\n"
+                '  return factory.GetReferencePhysList("FTFP_BERT");\n'
+                "}\n",
+            ),
+            _file("macros/physics_list.mac", "/run/setCut 0.1 mm\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("local G4PhysListFactory" in error for error in result.errors)

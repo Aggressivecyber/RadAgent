@@ -17,6 +17,17 @@ def _file(content: str) -> GeneratedModuleFile:
     )
 
 
+def _named_file(path: str, content: str) -> GeneratedModuleFile:
+    return GeneratedModuleFile(
+        path=path,
+        operation="create_or_replace",
+        new_content=content,
+        generated_by="output_manager_module_agent",
+        module_name="output_manager",
+        rationale="test",
+    )
+
+
 def test_output_manager_hard_gate_rejects_quantity_map_csv_iteration() -> None:
     result = run_output_manager_hard_gate(
         [
@@ -57,3 +68,38 @@ def test_output_manager_hard_gate_allows_header_ordered_lookup() -> None:
     )
 
     assert result.status == "pass"
+
+
+def test_output_manager_hard_gate_requires_summary_and_metadata_interfaces() -> None:
+    result = run_output_manager_hard_gate(
+        [
+            _named_file(
+                "include/OutputManager.hh",
+                "#ifndef OUTPUTMANAGER_HH\n#define OUTPUTMANAGER_HH\n"
+                "class G4Run; class G4Event; class G4Step;\n"
+                "class OutputManager { public:\n"
+                "static OutputManager* Instance();\n"
+                "void BeginRun(const G4Run*); void EndRun(const G4Run*);\n"
+                "void BeginEvent(const G4Event*); void EndEvent(const G4Event*);\n"
+                "void RecordStep(const G4Step*); void WriteEvent(const G4Event*);\n"
+                "};\n#endif\n",
+            ),
+            _named_file(
+                "src/OutputManager.cc",
+                '#include "OutputManager.hh"\n'
+                "OutputManager* OutputManager::Instance(){return nullptr;}\n"
+                "void OutputManager::BeginRun(const G4Run*){}\n"
+                "void OutputManager::EndRun(const G4Run*){}\n"
+                "void OutputManager::BeginEvent(const G4Event*){}\n"
+                "void OutputManager::EndEvent(const G4Event*){}\n"
+                "void OutputManager::RecordStep(const G4Step*){}\n"
+                "void OutputManager::WriteEvent(const G4Event*){}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("SetRunMetadata" in error for error in result.errors)
+    assert any("WriteRunSummary" in error for error in result.errors)
+    assert any("WriteMetadata" in error for error in result.errors)

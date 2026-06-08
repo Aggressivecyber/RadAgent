@@ -45,6 +45,9 @@ def _append_output_manager_interface_checks(
         ("EndEvent", "EndEvent("),
         ("RecordStep", "RecordStep("),
         ("WriteEvent", "WriteEvent("),
+        ("SetRunMetadata", "SetRunMetadata("),
+        ("WriteRunSummary", "WriteRunSummary("),
+        ("WriteMetadata", "WriteMetadata("),
     ]
     checks: list[dict[str, str]] = []
     for method_name, declaration_marker in required_methods:

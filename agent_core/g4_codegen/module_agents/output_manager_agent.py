@@ -32,11 +32,19 @@ OUTPUT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 输出管理模块编码 Ag
    void EndEvent(const G4Event* event);
    void RecordStep(const G4Step* step);
    void WriteEvent(const G4Event* event);
-8. OutputManager.hh 必须 forward declare G4Run、G4Event、G4Step，或 include 对应 Geant4 头文件
-9. OutputManager.cc 必须实现上述所有稳定接口
-10. OutputManager 不直接依赖 ScoringManager；不得 include ScoringManager.hh
-11. OutputManager 不调用 ScoringManager::Instance、GetEdepMeV、GetDoseGy 等方法
-12. scoring 数据通过 RecordEventData 参数或 action 层传入，OutputManager 只负责写出
+8. OutputManager.hh 必须声明运行摘要和元数据接口：
+   void SetRunMetadata(const std::string& key, const std::string& value);
+   void WriteRunSummary();
+   void WriteMetadata();
+9. OutputManager.cc 必须实现运行摘要和元数据管理：
+   BeginRun/EndRun 更新 run-level counters 或调用 WriteRunSummary/WriteMetadata
+   SetRunMetadata 存储 simulation configuration、material info、physics list、job id 等键值
+10. OutputManager.hh 必须 forward declare G4Run、G4Event、G4Step，或 include 对应 Geant4 头文件
+11. OutputManager.cc 必须实现上述所有稳定接口
+12. OutputManager 不直接依赖 ScoringManager；不得 include ScoringManager.hh
+13. OutputManager 不调用 ScoringManager::Instance、GetEdepMeV、GetDoseGy 等方法
+14. scoring 数据通过 RecordEventData 参数或 action 层传入，OutputManager 只负责写出
+15. 不得出现 placeholder、TODO、dummy、stub、NotImplemented 等占位实现或占位注释
 """
 
 
