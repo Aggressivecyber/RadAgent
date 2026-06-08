@@ -148,6 +148,28 @@ def run_sensitive_detector_hard_gate(
         if not has_track_id:
             errors.append("ProcessHits must call hit->SetTrackID(step->GetTrack()->GetTrackID())")
 
+        uses_hits_collection = bool(re.search(r"\bG4THitsCollection\s*<", source.new_content))
+        has_hits_collection_include = bool(
+            re.search(r"#include\s+[<\"]G4THitsCollection\.hh[>\"]", source.new_content)
+        )
+        checks.append(
+            {
+                "check": "sensitive_detector_hits_collection_include",
+                "status": "pass"
+                if not uses_hits_collection or has_hits_collection_include
+                else "fail",
+                "message": (
+                    "SensitiveDetector.cc must include G4THitsCollection.hh when using "
+                    "G4THitsCollection<Hit>"
+                ),
+            }
+        )
+        if uses_hits_collection and not has_hits_collection_include:
+            errors.append(
+                "SensitiveDetector.cc must include G4THitsCollection.hh when using "
+                "G4THitsCollection<Hit>"
+            )
+
     if hit_header:
         declares_track_id = (
             "SetTrackID" in hit_header.new_content and "GetTrackID" in hit_header.new_content

@@ -37,7 +37,11 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
     对应文件必须 include "G4SystemOfUnits.hh"
 13. SensitiveDetector 构造函数中注册 hits collection 时必须使用 collectionName.push_back(GetName())
     或 collectionName.push_back("<collection_name>")；不要调用 collectionName.insert(...)
-14. 输出 JSON 格式
+14. SensitiveDetector.cc 或 .hh 只要使用 G4THitsCollection<Hit>，
+    对应文件必须 include "G4THitsCollection.hh"
+15. SensitiveDetector.cc 使用 step->GetTrack()、GetPreStepPoint()、GetPosition()、GetCurrentEvent()
+    时必须 include 对应 Geant4 头文件，不能依赖隐式 include
+16. 输出 JSON 格式
 """
 
 
