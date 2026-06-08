@@ -104,3 +104,38 @@ def test_sensitive_detector_hard_gate_rejects_unqualified_hit_allocation() -> No
 
     assert result.status == "fail"
     assert any("::Hit" in error for error in result.errors)
+
+
+def test_sensitive_detector_hard_gate_rejects_unqualified_hit_collection_type() -> None:
+    result = run_sensitive_detector_hard_gate(
+        [
+            _file("include/Hit.hh", "#pragma once\nclass Hit { public: void SetTrackID(int); };\n"),
+            _file("src/Hit.cc", '#include "Hit.hh"\n'),
+            _file(
+                "include/SensitiveDetector.hh",
+                "#pragma once\n"
+                '#include "G4THitsCollection.hh"\n'
+                '#include "Hit.hh"\n'
+                "class SensitiveDetector {\n"
+                "  G4THitsCollection<Hit>* fHitsCollection;\n"
+                "};\n",
+            ),
+            _file(
+                "src/SensitiveDetector.cc",
+                '#include "SensitiveDetector.hh"\n'
+                '#include "G4THitsCollection.hh"\n'
+                "void SensitiveDetector::Initialize(G4HCofThisEvent*) {\n"
+                "  fHitsCollection = new G4THitsCollection<Hit>(GetName(), collectionName[0]);\n"
+                "}\n"
+                "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                "  ::Hit* hit = new ::Hit();\n"
+                "  hit->SetTrackID(step->GetTrack()->GetTrackID());\n"
+                "  return true;\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4THitsCollection<::Hit>" in error for error in result.errors)

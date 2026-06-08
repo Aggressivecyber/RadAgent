@@ -91,6 +91,21 @@ def run_sensitive_detector_hard_gate(
                 "SensitiveDetector.hh uses G4LogicalVolume but does not include or "
                 "forward declare it"
             )
+        if re.search(r"\bG4THitsCollection\s*<\s*Hit\s*>", header.new_content):
+            checks.append(
+                {
+                    "check": "sensitive_detector_hits_collection_qualified_hit_type",
+                    "status": "fail",
+                    "message": (
+                        "Use G4THitsCollection<::Hit> in SensitiveDetector class scope; "
+                        "unqualified Hit is hidden by G4VSensitiveDetector::Hit"
+                    ),
+                }
+            )
+            errors.append(
+                "SensitiveDetector.hh must use G4THitsCollection<::Hit>, not "
+                "G4THitsCollection<Hit>"
+            )
 
     if source:
         if "SensitiveDetectorName" in source.new_content:
@@ -195,6 +210,21 @@ def run_sensitive_detector_hard_gate(
         if uses_hits_collection and not has_hits_collection_include:
             errors.append(
                 "SensitiveDetector.cc must include G4THitsCollection.hh when using "
+                "G4THitsCollection<Hit>"
+            )
+        if re.search(r"\bG4THitsCollection\s*<\s*Hit\s*>", source.new_content):
+            checks.append(
+                {
+                    "check": "sensitive_detector_source_qualified_hit_collection_type",
+                    "status": "fail",
+                    "message": (
+                        "Use G4THitsCollection<::Hit> in SensitiveDetector methods; "
+                        "unqualified Hit is hidden by G4VSensitiveDetector::Hit"
+                    ),
+                }
+            )
+            errors.append(
+                "SensitiveDetector.cc must use G4THitsCollection<::Hit>, not "
                 "G4THitsCollection<Hit>"
             )
 

@@ -65,10 +65,14 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "      const G4ThreeVector& position, G4LogicalVolume* logical,\n"
             "      const G4String& name, G4LogicalVolume* mother,\n"
             "      G4bool many, G4int copyNo, G4bool checkOverlaps);\n"
+            "  static G4VPhysicalVolume* Place(G4LogicalVolume* logical,\n"
+            "      const G4ThreeVector& position, G4RotationMatrix* rotation,\n"
+            "      G4LogicalVolume* mother, G4bool checkOverlaps = true);\n"
             "};\n"
         ),
         "notes": [
             "Pass a non-const G4RotationMatrix* to G4PVPlacement.",
+            "Return G4VPhysicalVolume* from placement helper interfaces.",
             "Keep overlap checks enabled unless the IR explicitly says otherwise.",
         ],
     },
@@ -109,6 +113,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         "notes": [
             "GetReferencePhysList returns a list handed to Geant4 run manager ownership.",
             "Do not delete fPhysicsList.",
+            "Use SetDefaultCutValue(value) with one argument; do not pass particle names.",
         ],
     },
     "sensitive_detector": {
@@ -128,6 +133,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         ),
         "notes": [
             "Register collection names with collectionName.push_back(...).",
+            "Use G4THitsCollection<::Hit> inside SensitiveDetector class scope.",
             "Attach with logicalVolume->SetSensitiveDetector(this) when an attach helper exists.",
         ],
     },
@@ -144,6 +150,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         ),
         "notes": [
             "Use G4VScoringMesh::GetScoreMap() for command-based mesh results.",
+            "Use G4ScoringManager::GetMesh(0) for the single configured mesh.",
             "Do not write output files; OutputManager owns persistence.",
         ],
     },

@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+from agent_core.g4_codegen.module_gates.placement_hard_gate import run_placement_hard_gate
+from agent_core.g4_codegen.schemas import GeneratedModuleFile
+
+
+def _file(path: str, content: str) -> GeneratedModuleFile:
+    return GeneratedModuleFile(
+        path=path,
+        operation="create_or_replace",
+        new_content=content,
+        generated_by="placement_module_agent",
+        module_name="placement",
+        rationale="test",
+    )
+
+
+def test_placement_hard_gate_rejects_missing_g4pvplacement_declaration() -> None:
+    result = run_placement_hard_gate(
+        [
+            _file(
+                "include/PlacementManager.hh",
+                "#pragma once\n"
+                "class G4LogicalVolume;\n"
+                "class G4RotationMatrix;\n"
+                "class PlacementManager {\n"
+                "public:\n"
+                "  static G4PVPlacement* Place(G4LogicalVolume*, G4RotationMatrix*);\n"
+                "};\n",
+            ),
+            _file("src/PlacementManager.cc", '#include "PlacementManager.hh"\n'),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4PVPlacement" in error for error in result.errors)
+
+
+def test_placement_hard_gate_accepts_g4pvplacement_forward_declaration() -> None:
+    result = run_placement_hard_gate(
+        [
+            _file(
+                "include/PlacementManager.hh",
+                "#pragma once\n"
+                "class G4PVPlacement;\n"
+                "class G4LogicalVolume;\n"
+                "class G4RotationMatrix;\n"
+                "class PlacementManager {\n"
+                "public:\n"
+                "  static G4PVPlacement* Place(G4LogicalVolume*, G4RotationMatrix*);\n"
+                "};\n",
+            ),
+            _file("src/PlacementManager.cc", '#include "PlacementManager.hh"\n'),
+        ],
+        module_status="generated",
+    )
+
+    assert not any("G4PVPlacement" in error for error in result.errors)
+
+
+def test_placement_hard_gate_rejects_placevolume_return_type_mismatch() -> None:
+    result = run_placement_hard_gate(
+        [
+            _file(
+                "include/PlacementManager.hh",
+                "#pragma once\n"
+                "class G4PVPlacement;\n"
+                "class G4LogicalVolume;\n"
+                "class G4RotationMatrix;\n"
+                "class PlacementManager {\n"
+                "public:\n"
+                "  G4VPhysicalVolume* PlaceVolume(G4RotationMatrix*);\n"
+                "  static G4PVPlacement* Place(G4LogicalVolume*, G4RotationMatrix*);\n"
+                "};\n",
+            ),
+            _file(
+                "src/PlacementManager.cc",
+                '#include "PlacementManager.hh"\n'
+                "G4PVPlacement* PlacementManager::Place(G4LogicalVolume*, "
+                "G4RotationMatrix* rotation) {\n"
+                "  return PlaceVolume(rotation);\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4VPhysicalVolume" in error for error in result.errors)

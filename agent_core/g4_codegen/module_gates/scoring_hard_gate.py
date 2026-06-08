@@ -151,6 +151,10 @@ def run_scoring_hard_gate(
                 r"\bGetMeshName\s*\(",
                 "G4ScoringManager has no GetMeshName(i); store the configured mesh name",
             ),
+            (
+                r"\bGetMesh\s*\(\s*(?!\d+\s*\))[^)]*\)",
+                "G4ScoringManager::GetMesh requires an integer mesh index; use GetMesh(0)",
+            ),
         ]
         for pattern, message in invalid_mesh_access_patterns:
             if re.search(pattern, content, re.DOTALL):

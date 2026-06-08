@@ -95,6 +95,20 @@ def _append_physics_ownership_checks(
                     ),
                 }
             )
+        if f.path.endswith((".cc", ".hh")) and re.search(
+            r"\bSetDefaultCutValue\s*\(\s*[^,\)]+,\s*['\"]",
+            content,
+        ):
+            checks.append(
+                {
+                    "check": "physics_default_cut_single_argument",
+                    "status": "fail",
+                    "message": (
+                        "SetDefaultCutValue accepts one default cut value; do not pass "
+                        "particle names such as gamma, e-, e+, or proton"
+                    ),
+                }
+            )
 
     result.checks.extend(checks)
     for check in checks:

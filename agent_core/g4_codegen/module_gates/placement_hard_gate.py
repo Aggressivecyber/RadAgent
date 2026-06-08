@@ -100,6 +100,46 @@ def _append_placement_api_checks(
             errors.append(
                 f"{f.path}: copy const G4Transform3D& into a non-const local before G4PVPlacement"
             )
+        if f.path.endswith((".hh", ".h")) and "G4PVPlacement" in content:
+            declares_g4pvplacement = (
+                "#include <G4PVPlacement.hh>" in content
+                or '#include "G4PVPlacement.hh"' in content
+                or re.search(r"\bclass\s+G4PVPlacement\s*;", content)
+            )
+            checks.append(
+                {
+                    "check": "placement_header_declares_g4pvplacement",
+                    "status": "pass" if declares_g4pvplacement else "fail",
+                    "message": (
+                        "PlacementManager.hh must include G4PVPlacement.hh or forward "
+                        "declare class G4PVPlacement when declarations use G4PVPlacement*"
+                    ),
+                }
+            )
+            if not declares_g4pvplacement:
+                errors.append(
+                    f"{f.path}: declare class G4PVPlacement or include G4PVPlacement.hh"
+                )
+        if f.path.endswith(".cc") and re.search(
+            r"\bG4PVPlacement\*\s+PlacementManager::Place\s*\([^)]*\)\s*\{"
+            r"(?:(?!\n\}).)*\breturn\s+[^;]*PlaceVolume\s*\(",
+            content,
+            re.DOTALL,
+        ):
+            checks.append(
+                {
+                    "check": "placement_static_place_return_type_matches_placevolume",
+                    "status": "fail",
+                    "message": (
+                        "PlacementManager::Place must return G4VPhysicalVolume* when it "
+                        "returns PlaceVolume(...); do not force a G4PVPlacement* return"
+                    ),
+                }
+            )
+            errors.append(
+                f"{f.path}: return G4VPhysicalVolume* from PlacementManager::Place "
+                "when delegating to PlaceVolume"
+            )
 
     result.checks.extend(checks)
     if errors:

@@ -154,18 +154,34 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
         return
 
     place_decl = (
-        "static G4PVPlacement* Place(G4LogicalVolume* logical,\n"
-        "                                const G4ThreeVector& position,\n"
-        "                                G4RotationMatrix* rotation,\n"
-        "                                G4LogicalVolume* mother,\n"
-        "                                G4bool checkOverlaps = true);"
+        "static G4VPhysicalVolume* Place(G4LogicalVolume* logical,\n"
+        "                                  const G4ThreeVector& position,\n"
+        "                                  G4RotationMatrix* rotation,\n"
+        "                                  G4LogicalVolume* mother,\n"
+        "                                  G4bool checkOverlaps = true);"
     )
     header_changed = False
+    header_content = header.get("new_content", "")
+    updated_header = re.sub(
+        r"\bstatic\s+G4PVPlacement\*\s+Place\s*\(",
+        "static G4VPhysicalVolume* Place(",
+        header_content,
+    )
+    if updated_header != header_content:
+        header["new_content"] = updated_header
+        header_changed = True
+    if _ensure_forward_declaration(header, "G4VPhysicalVolume"):
+        header_changed = True
     if " Place(" not in header.get("new_content", ""):
         header_changed = _insert_before_private_or_class_end(header, place_decl)
 
     source_content = source.get("new_content", "")
     original_source = source_content
+    source_content = re.sub(
+        r"\bG4PVPlacement\*\s+PlacementManager::Place\s*\(",
+        "G4VPhysicalVolume* PlacementManager::Place(",
+        source_content,
+    )
     source_content = re.sub(
         r"return\s+Instance\(\)->PlaceVolume\s*\(\s*"
         r"logical\s*,\s*logical->GetName\(\)\s*,\s*mother\s*,\s*position\s*,\s*"
@@ -182,7 +198,7 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
     if "PlacementManager::Place(" not in source_content:
         source["new_content"] = (
             source_content.rstrip()
-            + "\n\nG4PVPlacement* PlacementManager::Place(\n"
+            + "\n\nG4VPhysicalVolume* PlacementManager::Place(\n"
             + "    G4LogicalVolume* logical,\n"
             + "    const G4ThreeVector& position,\n"
             + "    G4RotationMatrix* rotation,\n"
@@ -222,17 +238,28 @@ def _repair_physics_factory(by_path: dict[str, dict[str, Any]], report: dict[str
     source_content = source.get("new_content", "")
     original_source = source_content
     source_content = re.sub(
+        r"\bSetDefaultCutValue\s*\(\s*([^,\)]+(?:\([^)]*\))?[^,\)]*)\s*,\s*"
+        r"['\"][^'\"]+['\"]\s*\)\s*;",
+        r"SetDefaultCutValue(\1);",
+        source_content,
+    )
+    cut_changed = source_content != original_source
+    before_list_adapter = source_content
+    source_content = re.sub(
         r"\n\s*G4VModularPhysicsList\s*\*\s*PhysicsListFactoryWrapper::list\s*"
         r"\(\s*\)\s*\{.*?\n\}\s*",
         "\n",
         source_content,
         flags=re.DOTALL,
     )
+    list_adapter_changed = source_content != before_list_adapter
     if source_content != original_source:
         source["new_content"] = source_content
 
-    if header_content != original_header or source_content != original_source:
+    if header_content != original_header or list_adapter_changed:
         _fixed(report, "PhysicsListFactoryWrapper", "removed invalid list adapter")
+    if cut_changed:
+        _fixed(report, "PhysicsListFactoryWrapper", "normalized SetDefaultCutValue usage")
 
 
 def _repair_main_physics_constructor(
@@ -350,24 +377,35 @@ def _repair_scoring_manager(by_path: dict[str, dict[str, Any]], report: dict[str
         return
     content = source.get("new_content", "")
     updated = re.sub(r"scMgr->GetMeshName\s*\(\s*iMesh\s*\)", '"scoringMesh"', content)
-    if updated != content:
-        source["new_content"] = updated
-        _fixed(report, "ScoringManager", "removed nonexistent G4ScoringManager::GetMeshName")
-
-
-def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
-    source = by_path.get("src/SensitiveDetector.cc")
-    if not source:
-        return
-    content = source.get("new_content", "")
     updated = re.sub(
-        r"\bHit\s*\*\s+hit\s*=\s*new\s+Hit\s*\(\s*\)\s*;",
-        "::Hit* hit = new ::Hit();",
-        content,
+        r"(\b(?:scManager|scMgr|scoringManager)\s*->\s*GetMesh\s*)"
+        r"\(\s*(?:fMeshName|meshName|\"[^\"]+\"|'[^']+')\s*\)",
+        r"\1(0)",
+        updated,
     )
     if updated != content:
         source["new_content"] = updated
-        _fixed(report, "SensitiveDetector", "qualified Hit allocation")
+        _fixed(report, "ScoringManager", "normalized G4ScoringManager mesh access")
+
+
+def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
+    changed = False
+    for path in ("include/SensitiveDetector.hh", "src/SensitiveDetector.cc"):
+        entry = by_path.get(path)
+        if not entry:
+            continue
+        content = entry.get("new_content", "")
+        updated = re.sub(r"\bG4THitsCollection\s*<\s*Hit\s*>", "G4THitsCollection<::Hit>", content)
+        updated = re.sub(
+            r"\bHit\s*\*\s+hit\s*=\s*new\s+Hit\s*\(\s*\)\s*;",
+            "::Hit* hit = new ::Hit();",
+            updated,
+        )
+        if updated != content:
+            entry["new_content"] = updated
+            changed = True
+    if changed:
+        _fixed(report, "SensitiveDetector", "qualified Hit collection and allocation types")
 
 
 def _ensure_public_declaration(
@@ -383,6 +421,26 @@ def _ensure_public_declaration(
         updated = _insert_before_private_or_class_end_text(content, declaration)
     file_entry["new_content"] = updated
     return updated != content
+
+
+def _ensure_forward_declaration(file_entry: dict[str, Any], class_name: str) -> bool:
+    content = file_entry.get("new_content", "")
+    declaration = f"class {class_name};"
+    if (
+        declaration in content
+        or f'#include "{class_name}.hh"' in content
+        or f"#include <{class_name}.hh>" in content
+    ):
+        return False
+    lines = content.splitlines()
+    insert_at = 0
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#include") or stripped.startswith("#define"):
+            insert_at = idx + 1
+    lines.insert(insert_at, declaration)
+    file_entry["new_content"] = "\n".join(lines) + "\n"
+    return True
 
 
 def _insert_declaration_text(content: str, declaration: str, anchor: str) -> str:

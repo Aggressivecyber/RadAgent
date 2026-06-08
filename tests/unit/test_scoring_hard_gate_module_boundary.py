@@ -248,3 +248,27 @@ def test_scoring_hard_gate_rejects_get_mesh_name() -> None:
 
     assert result.status == "fail"
     assert any("GetMeshName" in e for e in result.errors)
+
+
+def test_scoring_hard_gate_rejects_get_mesh_by_name() -> None:
+    result = run_scoring_hard_gate(
+        [
+            _file(
+                "include/ScoringManager.hh",
+                "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                '#include "G4String.hh"\n'
+                "class ScoringManager { G4String fMeshName; };\n#endif\n",
+            ),
+            _file(
+                "src/ScoringManager.cc",
+                '#include "ScoringManager.hh"\n'
+                "void RecordScoring() {\n"
+                "  auto* mesh = scManager->GetMesh(fMeshName);\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("GetMesh(0)" in e for e in result.errors)

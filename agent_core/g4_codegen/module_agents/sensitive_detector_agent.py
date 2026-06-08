@@ -45,7 +45,12 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
     附加探测器；不得调用不存在的 SetLogicalVolume 或 G4VSensitiveDetector::SetLogicalVolume
 17. 在 SensitiveDetector::ProcessHits 中创建 hit 时使用 ::Hit* hit = new ::Hit();
     避免 Hit 类型名被 G4VSensitiveDetector 成员函数名遮蔽
-18. 输出 JSON 格式
+18. 声明或创建 hits collection 时也必须使用全局 Hit 类型：
+    G4THitsCollection<::Hit>* fHitsCollection;
+    fHitsCollection = new G4THitsCollection<::Hit>(GetName(), collectionName[0]);
+    不要写 G4THitsCollection<Hit>，因为在 SensitiveDetector 类作用域内
+    Hit 会被 G4VSensitiveDetector::Hit 成员名遮蔽。
+19. 输出 JSON 格式
 """
 
 

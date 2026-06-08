@@ -138,3 +138,27 @@ def test_physics_hard_gate_rejects_real_delete_statement() -> None:
 
     assert result.status == "fail"
     assert any("must not delete fPhysicsList" in error for error in result.errors)
+
+
+def test_physics_hard_gate_rejects_two_argument_default_cut() -> None:
+    result = run_physics_hard_gate(
+        [
+            _file(
+                "include/PhysicsListFactoryWrapper.hh",
+                "#pragma once\nclass PhysicsListFactoryWrapper {};\n",
+            ),
+            _file(
+                "src/PhysicsListFactoryWrapper.cc",
+                '#include "PhysicsListFactoryWrapper.hh"\n'
+                "G4VUserPhysicsList* PhysicsListFactoryWrapper::CreatePhysicsList() {\n"
+                "  fPhysicsList->SetDefaultCutValue(0.7*mm, \"gamma\");\n"
+                "  return fPhysicsList;\n"
+                "}\n",
+            ),
+            _file("macros/physics_list.mac", "/run/setCut 0.1 mm\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("SetDefaultCutValue accepts one" in error for error in result.errors)
