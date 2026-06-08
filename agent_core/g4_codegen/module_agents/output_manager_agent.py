@@ -45,6 +45,8 @@ OUTPUT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 输出管理模块编码 Ag
 13. OutputManager 不调用 ScoringManager::Instance、GetEdepMeV、GetDoseGy 等方法
 14. scoring 数据通过 RecordEventData 参数或 action 层传入，OutputManager 只负责写出
 15. 不得出现 placeholder、TODO、dummy、stub、NotImplemented 等占位实现或占位注释
+16. OutputManager.hh 只要声明 G4String 成员或参数，必须 include "G4String.hh"，
+    不要依赖 G4Types.hh 或其他头文件的隐式包含
 """
 
 

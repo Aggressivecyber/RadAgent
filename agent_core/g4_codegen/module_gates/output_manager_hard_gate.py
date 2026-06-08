@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from agent_core.g4_codegen.module_gates.hard_gate_base import run_hard_gate_checks
 from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleGateResult
 
@@ -88,6 +90,18 @@ def _append_output_manager_interface_checks(
             ),
         }
     )
+
+    if "G4String" in header:
+        has_g4string_include = bool(
+            re.search(r"#include\s+[<\"]G4String\.hh[>\"]", header)
+        )
+        checks.append(
+            {
+                "check": "output_manager_g4string_header_include",
+                "status": "pass" if has_g4string_include else "fail",
+                "message": "OutputManager.hh must include G4String.hh when declaring G4String",
+            }
+        )
 
     result.checks.extend(checks)
     for check in checks:
