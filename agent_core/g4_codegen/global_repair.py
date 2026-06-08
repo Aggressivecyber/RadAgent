@@ -42,6 +42,7 @@ def run_global_code_repair(
     _repair_placement_manager(by_path, report)
     _repair_physics_factory(by_path, report)
     _repair_main_physics_constructor(by_path, report)
+    _repair_main_detector_constructor(by_path, report)
     _repair_output_manager(by_path, report)
     _repair_scoring_manager(by_path, report)
     _repair_sensitive_detector(by_path, report)
@@ -189,7 +190,10 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
         header_changed = True
     if _ensure_forward_declaration(header, "G4VPhysicalVolume"):
         header_changed = True
-    if " Place(" not in header.get("new_content", ""):
+    if not re.search(
+        r"\bstatic\s+G4VPhysicalVolume\*\s+Place\s*\(\s*G4LogicalVolume\*\s+logical",
+        header.get("new_content", ""),
+    ):
         header_changed = _insert_before_private_or_class_end(header, place_decl)
 
     source_content = source.get("new_content", "")
@@ -229,6 +233,17 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
             ),
             source_content,
         )
+    source_content = re.sub(
+        r"static\s+PlacementManager\s+manager;\s*\n\s*return\s+manager\.PlaceVolume"
+        r"\(\s*rotation,\s*position,\s*logical,\s*logical->GetName\(\),\s*mother,\s*"
+        r"false,\s*0,\s*checkOverlaps\s*\)\s*;",
+        (
+            "return PlacementManager::PlaceVolume(\n"
+            "        rotation, position, logical, logical->GetName(), mother, false, 0,\n"
+            "        checkOverlaps);"
+        ),
+        source_content,
+    )
     source_changed = False
     if "PlacementManager::Place(" not in source_content:
         source["new_content"] = (
@@ -239,8 +254,7 @@ def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[s
             + "    G4RotationMatrix* rotation,\n"
             + "    G4LogicalVolume* mother,\n"
             + "    G4bool checkOverlaps) {\n"
-            + "    static PlacementManager manager;\n"
-            + "    return manager.PlaceVolume(\n"
+            + "    return PlacementManager::PlaceVolume(\n"
             + "        rotation, position, logical, logical->GetName(), mother, false, 0,\n"
             + "        checkOverlaps);\n"
             + "}\n"
@@ -346,6 +360,56 @@ def _repair_main_physics_constructor(
             _fixed(report, "main.cc", "matched PhysicsListFactoryWrapper physics list creation")
         if before_output_action != updated:
             _fixed(report, "main.cc", "removed invalid OutputManager user action casts")
+
+
+def _repair_main_detector_constructor(
+    by_path: dict[str, dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    main = by_path.get("main.cc")
+    detector_header = by_path.get("include/DetectorConstruction.hh")
+    if not main or not detector_header:
+        return
+
+    detector_content = detector_header.get("new_content", "")
+    if not re.search(r"\bDetectorConstruction\s*\(\s*MaterialRegistry\s*\*", detector_content):
+        return
+
+    content = main.get("new_content", "")
+    original = content
+    if "MaterialRegistry.hh" not in content:
+        content = _ensure_include_text(content, "MaterialRegistry.hh")
+    if "materialRegistry" not in content:
+        with_registry = re.sub(
+            r"(\bauto\*\s+runManager\s*=\s*G4RunManagerFactory::CreateRunManager\(\)\s*;\s*)",
+            (
+                "\\1\n"
+                "    auto* materialRegistry = new MaterialRegistry();\n"
+                "    materialRegistry->Initialize();\n"
+            ),
+            content,
+            count=1,
+        )
+        if with_registry == content:
+            with_registry = re.sub(
+                r"(\brunManager->SetUserInitialization\s*\(\s*new\s+DetectorConstruction)",
+                (
+                    "auto* materialRegistry = new MaterialRegistry();\n"
+                    "    materialRegistry->Initialize();\n\n"
+                    "    \\1"
+                ),
+                content,
+                count=1,
+            )
+        content = with_registry
+    content = re.sub(
+        r"new\s+DetectorConstruction\s*\(\s*\)",
+        "new DetectorConstruction(materialRegistry)",
+        content,
+    )
+    if content != original:
+        main["new_content"] = content
+        _fixed(report, "main.cc", "matched DetectorConstruction MaterialRegistry constructor")
 
 
 def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:

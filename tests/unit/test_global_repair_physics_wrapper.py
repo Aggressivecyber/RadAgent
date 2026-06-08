@@ -71,10 +71,9 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
                     "#pragma once\n"
                     "class PlacementManager {\n"
                     "public:\n"
-                    "  void SetCheckOverlaps(G4bool);\n"
                     "  G4PVPlacement* PlaceVolume(G4RotationMatrix*, const G4ThreeVector&, "
                     "G4LogicalVolume*, const G4String&, G4VPhysicalVolume* mother, "
-                    "G4bool, G4int);\n"
+                    "G4bool, G4int, G4bool);\n"
                     "};\n"
                 ),
                 "module_name": "placement",
@@ -96,7 +95,7 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
                     "}\n"
                     "G4VPhysicalVolume* PlacementManager::PlaceVolume(\n"
                     "    G4RotationMatrix*, const G4ThreeVector&, G4LogicalVolume*, "
-                    "const G4String&, G4VPhysicalVolume* mother, G4bool, G4int) {\n"
+                    "const G4String&, G4VPhysicalVolume* mother, G4bool, G4int, G4bool) {\n"
                     "    return nullptr;\n"
                     "}\n"
                 ),
@@ -114,8 +113,8 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
         file["path"]: file["new_content"] for file in repaired["changed_files"]
     }["include/PlacementManager.hh"]
 
-    assert "static PlacementManager manager;" in source
-    assert "manager.PlaceVolume(" in source
+    assert "static PlacementManager manager;" not in source
+    assert "PlacementManager::PlaceVolume(" in source
     assert "Instance()" not in source
     assert "static G4VPhysicalVolume* Place(" in header
     assert '#include "G4RotationMatrix.hh"' in header
@@ -123,7 +122,52 @@ def test_global_repair_placement_adapter_uses_static_manager(monkeypatch, tmp_pa
     assert "G4VPhysicalVolume* mother" not in header
     assert "G4VPhysicalVolume* mother" not in source
     assert "G4LogicalVolume* mother" in header
-    assert "manager.SetCheckOverlaps(checkOverlaps);" in source
+    assert report["issues_fixed"]
+
+
+def test_global_repair_main_uses_detector_material_registry_constructor(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    patch = {
+        "changed_files": [
+            {
+                "path": "main.cc",
+                "new_content": (
+                    '#include "DetectorConstruction.hh"\n'
+                    "int main() {\n"
+                    "    auto* runManager = G4RunManagerFactory::CreateRunManager();\n"
+                    "    runManager->SetUserInitialization(new DetectorConstruction());\n"
+                    "}\n"
+                ),
+                "module_name": "main_cmake",
+                "generated_by": "main_cmake_module_agent",
+            },
+            {
+                "path": "include/DetectorConstruction.hh",
+                "new_content": (
+                    "#pragma once\n"
+                    "class MaterialRegistry;\n"
+                    "class DetectorConstruction {\n"
+                    "public:\n"
+                    "  DetectorConstruction(MaterialRegistry* registry);\n"
+                    "};\n"
+                ),
+                "module_name": "geometry",
+                "generated_by": "geometry_module_agent",
+            },
+        ]
+    }
+
+    repaired, report = run_global_code_repair(patch, "job")
+    main = {file["path"]: file["new_content"] for file in repaired["changed_files"]}[
+        "main.cc"
+    ]
+
+    assert '#include "MaterialRegistry.hh"' in main
+    assert "auto* materialRegistry = new MaterialRegistry();" in main
+    assert "materialRegistry->Initialize();" in main
+    assert "new DetectorConstruction(materialRegistry)" in main
     assert report["issues_fixed"]
 
 

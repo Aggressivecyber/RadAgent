@@ -456,6 +456,11 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "When accepting const G4Transform3D&, create a non-const local copy before "
                 "passing it to G4PVPlacement."
             ),
+            (
+                "If PlaceVolume is static, static Place must call "
+                "PlacementManager::PlaceVolume(...) directly; do not create a "
+                "PlacementManager instance."
+            ),
             "Keep placement code limited to PlacementManager.hh and PlacementManager.cc.",
         ]
     if module_name == "physics":
@@ -558,6 +563,11 @@ def _module_repair_requirements(module_name: str) -> list[str]:
             (
                 "Do not call OutputManager::Instance() or ScoringManager::Instance() "
                 "from main.cc; generated action modules own runtime callbacks."
+            ),
+            (
+                "Use the real DetectorConstruction constructor from the generated "
+                "header; if it takes MaterialRegistry*, create and initialize a "
+                "MaterialRegistry and pass it to DetectorConstruction."
             ),
         ]
     return []
