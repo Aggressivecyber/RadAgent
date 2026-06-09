@@ -50,13 +50,13 @@ EOF
 
 # ── 参数解析 ────────────────────────────────────────────────────────
 
-MODE="mvp1_acceptance"
+MODE="acceptance"
 ACTION="run"  # run | setup | check
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dev)
-            MODE="dev_no_geant4_env"
+            MODE="test"
             shift
             ;;
         --mode)
@@ -76,7 +76,7 @@ while [[ $# -gt 0 ]]; do
             echo -e "${BOLD}Usage:${NC}"
             echo "  ./repl.sh                         # 默认 acceptance 模式"
             echo "  ./repl.sh --dev                   # 开发模式"
-            echo "  ./repl.sh --mode mvp1_acceptance  # 显式指定模式"
+            echo "  ./repl.sh --mode acceptance       # 显式指定模式 (strict|test|acceptance|production)"
             echo "  ./repl.sh --setup                 # 安装依赖"
             echo "  ./repl.sh --check                 # 检查环境"
             echo ""
@@ -170,7 +170,7 @@ check_ollama() {
 }
 
 check_geant4() {
-    if [[ "$MODE" == "dev_no_geant4_env" ]]; then
+    if [[ "$MODE" == "test" ]]; then
         return
     fi
 

@@ -31,6 +31,12 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+desktop = [
+    "PySide6>=6.7",
+]
+
+[project.scripts]
+radagent-desktop = "agent_core.desktop.app:main"
 
 [tool.setuptools.packages.find]
 include = ["agent_core*"]
