@@ -60,6 +60,13 @@ context_retrieval_policy 规定信息不足时如何使用 RAG 和 web 证据。
 27. 如果 ModuleContext.runtime_failure_context 非空，必须把其中 gate、build、ctest、
     smoke simulation、artifact contract 报告当作当前实现约束；只输出满足这些约束的新代码，
     不要复述旧失败过程。
+28. 必须通过 G4-G No Magic Number gate：除 0、1、2、0.0、1.0、2.0、0.5、
+    180、360 和带 CLHEP 单位的数值外，所有数字必须先定义为具名 const/constexpr/enum，
+    再在代码中引用。数组维度、buffer size、setprecision、文件权限、坐标方向、
+    循环上界都不得直接写数字 literal。
+29. 常见写法要求：std::array<T, kAxisCount>，char buf[kCommandBufferSize]，
+    std::setprecision(kCsvPrecision)，mkdir(path, kOutputDirectoryMode)，
+    G4ThreeVector(0.0, 0.0, 1.0)；不要写 G4ThreeVector(0., 0., 1.)。
 
 返回格式：
 {

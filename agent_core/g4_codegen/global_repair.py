@@ -48,6 +48,7 @@ def run_global_code_repair(
     _repair_output_manager(by_path, report)
     _repair_scoring_manager(by_path, report)
     _repair_sensitive_detector(by_path, report)
+    _repair_no_magic_numbers(by_path, report)
 
     repaired_patch.setdefault("metadata", {})
     repaired_patch["metadata"]["global_code_repair"] = {
@@ -697,6 +698,192 @@ def _repair_sensitive_detector(by_path: dict[str, dict[str, Any]], report: dict[
             changed = True
     if changed:
         _fixed(report, "SensitiveDetector", "qualified Hit collection and allocation types")
+
+
+def _repair_no_magic_numbers(
+    by_path: dict[str, dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    changed_paths: list[str] = []
+    scoring_header = by_path.get("include/ScoringManager.hh")
+    scoring_source = by_path.get("src/ScoringManager.cc")
+    if scoring_header:
+        content = scoring_header.get("new_content", "")
+        updated = _repair_scoring_header_axis_constant(content)
+        if updated != content:
+            scoring_header["new_content"] = updated
+            changed_paths.append("include/ScoringManager.hh")
+    if scoring_source:
+        content = scoring_source.get("new_content", "")
+        updated = _repair_scoring_source_axis_and_buffers(content)
+        if updated != content:
+            scoring_source["new_content"] = updated
+            changed_paths.append("src/ScoringManager.cc")
+
+    detector_source = by_path.get("src/DetectorConstruction.cc")
+    if detector_source:
+        content = detector_source.get("new_content", "")
+        updated = _normalize_g4threevector_decimal_literals(content)
+        if updated != content:
+            detector_source["new_content"] = updated
+            changed_paths.append("src/DetectorConstruction.cc")
+
+    source_entry = by_path.get("src/PrimaryGeneratorAction.cc")
+    if source_entry:
+        content = source_entry.get("new_content", "")
+        updated = _normalize_g4threevector_decimal_literals(content)
+        if updated != content:
+            source_entry["new_content"] = updated
+            changed_paths.append("src/PrimaryGeneratorAction.cc")
+
+    output_source = by_path.get("src/OutputManager.cc")
+    if output_source:
+        content = output_source.get("new_content", "")
+        updated = _repair_output_manager_magic_numbers(content)
+        if updated != content:
+            output_source["new_content"] = updated
+            changed_paths.append("src/OutputManager.cc")
+
+    if changed_paths:
+        _fixed(
+            report,
+            "G4-G No Magic Number",
+            "promoted common numeric literals to named constants in "
+            + ", ".join(sorted(set(changed_paths))),
+        )
+
+
+def _repair_scoring_header_axis_constant(content: str) -> str:
+    updated = content
+    if "std::array" in updated and "<cstddef>" not in updated:
+        updated = _ensure_system_include_text(updated, "cstddef")
+    if "kAxisCount" not in updated:
+        updated = re.sub(
+            r"(public:\s*)",
+            "\\1\n    static constexpr std::size_t kAxisCount = 3;\n",
+            updated,
+            count=1,
+        )
+    updated = re.sub(r"std::array<([^,\n>]+),\s*3\s*>", r"std::array<\1, kAxisCount>", updated)
+    updated = re.sub(
+        r"(\b(?:const\s+)?G4(?:double|int)\s+\w+\s*)\[\s*3\s*\]",
+        r"\1[kAxisCount]",
+        updated,
+    )
+    return updated
+
+
+def _repair_scoring_source_axis_and_buffers(content: str) -> str:
+    updated = content
+    if "std::array" in updated and "<cstddef>" not in updated:
+        updated = _ensure_system_include_text(updated, "cstddef")
+    constants: list[str] = []
+    if "kCommandBufferSize" not in updated:
+        constants.append("constexpr std::size_t kCommandBufferSize = 256;")
+    if constants:
+        updated = _ensure_anonymous_namespace_constants(updated, constants)
+    updated = re.sub(
+        r"(ScoringManager::SetMeshParameters\s*\(\s*const\s+G4double\s+\w+\s*)"
+        r"\[\s*3\s*\]",
+        r"\1[ScoringManager::kAxisCount]",
+        updated,
+    )
+    updated = re.sub(
+        r"(ScoringManager::SetMeshParameters\s*\([^)]*?const\s+G4double\s+\w+\s*)"
+        r"\[\s*3\s*\]",
+        r"\1[ScoringManager::kAxisCount]",
+        updated,
+        flags=re.DOTALL,
+    )
+    updated = re.sub(
+        r"(ScoringManager::SetMeshParameters\s*\([^)]*?const\s+G4int\s+\w+\s*)"
+        r"\[\s*3\s*\]",
+        r"\1[ScoringManager::kAxisCount]",
+        updated,
+        flags=re.DOTALL,
+    )
+    updated = re.sub(r"\bchar\s+(\w+)\s*\[\s*256\s*\]", r"char \1[kCommandBufferSize]", updated)
+    updated = re.sub(
+        r"\bG4double\s+(\w+)\s*\[\s*3\s*\]",
+        r"G4double \1[ScoringManager::kAxisCount]",
+        updated,
+    )
+    updated = re.sub(
+        r"\bint\s+(\w+)\s*=\s*0\s*;\s*\1\s*<\s*3\s*;",
+        r"std::size_t \1 = 0; \1 < ScoringManager::kAxisCount;",
+        updated,
+    )
+    updated = re.sub(
+        r"\bG4int\s+(\w+)\s*=\s*0\s*;\s*\1\s*<\s*3\s*;",
+        r"std::size_t \1 = 0; \1 < ScoringManager::kAxisCount;",
+        updated,
+    )
+    return updated
+
+
+def _normalize_g4threevector_decimal_literals(content: str) -> str:
+    updated = re.sub(
+        r"G4ThreeVector\s*\(\s*0\.\s*,\s*0\.\s*,\s*0\.\s*\)",
+        "G4ThreeVector(0.0, 0.0, 0.0)",
+        content,
+    )
+    updated = re.sub(
+        r"G4ThreeVector\s*\(\s*0\.\s*,\s*0\.\s*,\s*1\.\s*\)",
+        "G4ThreeVector(0.0, 0.0, 1.0)",
+        updated,
+    )
+    return updated
+
+
+def _repair_output_manager_magic_numbers(content: str) -> str:
+    updated = content
+    if "kCsvPrecision" not in updated:
+        updated = _ensure_anonymous_namespace_constants(
+            updated,
+            ["constexpr int kCsvPrecision = 6;"],
+        )
+    if "mkdir(" in updated and "kOutputDirectoryMode" not in updated:
+        updated = _ensure_anonymous_namespace_constants(
+            updated,
+            ["constexpr mode_t kOutputDirectoryMode = 0755;"],
+        )
+    updated = re.sub(
+        r"std::setprecision\s*\(\s*6\s*\)",
+        "std::setprecision(kCsvPrecision)",
+        updated,
+    )
+    updated = re.sub(
+        r"mkdir\s*\(\s*fOutputDir\.c_str\(\)\s*,\s*0755\s*\)",
+        "mkdir(fOutputDir.c_str(), kOutputDirectoryMode)",
+        updated,
+    )
+    return updated
+
+
+def _ensure_system_include_text(content: str, header_name: str) -> str:
+    include = f"#include <{header_name}>"
+    if include in content:
+        return content
+    lines = content.splitlines()
+    insert_at = 0
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#include"):
+            insert_at = idx + 1
+    lines.insert(insert_at, include)
+    return "\n".join(lines) + "\n"
+
+
+def _ensure_anonymous_namespace_constants(content: str, constants: list[str]) -> str:
+    missing = [constant for constant in constants if constant not in content]
+    if not missing:
+        return content
+    block = "namespace {\n" + "\n".join(missing) + "\n}\n\n"
+    include_matches = list(re.finditer(r"^\s*#include\b.*$", content, flags=re.MULTILINE))
+    if not include_matches:
+        return block + content
+    insert_at = include_matches[-1].end()
+    return content[:insert_at] + "\n\n" + block + content[insert_at:].lstrip("\n")
 
 
 def _ensure_public_declaration(

@@ -45,6 +45,12 @@ REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块修复 Agent。
 13. 必须阅读 repair_context.retrieval_context 中的 RAG 和 web 证据；
     使用其中 API 事实时必须写入 generated_files[].used_references。
 14. 如果 RAG/web 证据与硬门禁要求冲突，以硬门禁要求为准；不得使用无证据的 Geant4 API。
+15. 必须通过 G4-G No Magic Number gate：除 0、1、2、0.0、1.0、2.0、0.5、
+    180、360 和带 CLHEP 单位的数值外，所有数字必须先定义为具名 const/constexpr/enum。
+    数组维度、buffer size、setprecision、文件权限、坐标方向、循环上界不得直接写数字。
+16. 修复方式示例：std::array<T, kAxisCount>，char buf[kCommandBufferSize]，
+    std::setprecision(kCsvPrecision)，mkdir(path, kOutputDirectoryMode)，
+    G4ThreeVector(0.0, 0.0, 1.0)；不要写 G4ThreeVector(0., 0., 1.)。
 
 输出格式：
 {
