@@ -163,7 +163,7 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
         "notes": [
             "Use G4VScoringMesh::GetScoreMap() for command-based mesh results.",
             "Store GetScoreMap() by value with auto scoreMap, not auto& scoreMap.",
-            "Use G4ScoringManager::GetMesh(0) for the single configured mesh.",
+            "Use scManager->GetMesh(0) with literal 0 for the single configured mesh.",
             "Compute bin centers locally; do not call nonexistent GetElementCenter().",
             "Do not write output files; OutputManager owns persistence.",
         ],

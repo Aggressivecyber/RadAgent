@@ -325,9 +325,11 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "cell value, use hitsMap->GetObject(copyNo) and then G4StatDouble::sum_wx(), "
             "or inspect hitsMap->GetMap()->find(copyNo). Use "
             "G4ScoringManager::GetScoringManager() to access the scoring manager singleton; "
-            "do not allocate G4ScoringManager with new. G4VScoringMesh does not provide "
-            "GetNumberOfCells(); store the configured nBin values in ScoringManager and "
-            "compute total cells as nBinsX * nBinsY * nBinsZ."
+            "do not allocate G4ScoringManager with new. For the single configured command "
+            "scoring mesh, read it with scManager->GetMesh(0); do not pass a mesh name, "
+            "G4String, variable, or named constant to GetMesh. G4VScoringMesh does not "
+            "provide GetNumberOfCells(); store the configured nBin values in ScoringManager "
+            "and compute total cells as nBinsX * nBinsY * nBinsZ."
         ),
         "source": "geant4_scoring_documentation",
     },

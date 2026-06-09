@@ -663,6 +663,12 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "Use G4ScoringManager::GetScoringManager() to obtain the scoring manager "
                 "singleton; do not allocate G4ScoringManager with new."
             ),
+            (
+                "When reading the single configured scoring mesh, call GetMesh with the "
+                "literal zero argument: auto* mesh = scManager->GetMesh(0). Do not use "
+                "fMeshName, \"scoringMesh\", kExpectedMeshIndex, kMeshIndex, meshIndex, "
+                "or any other variable/constant as the GetMesh argument."
+            ),
         ]
     if module_name == "physics":
         return [

@@ -274,6 +274,30 @@ def test_scoring_hard_gate_rejects_get_mesh_by_name() -> None:
     assert any("GetMesh(0)" in e for e in result.errors)
 
 
+def test_scoring_hard_gate_rejects_get_mesh_by_named_constant() -> None:
+    result = run_scoring_hard_gate(
+        [
+            _file(
+                "include/ScoringManager.hh",
+                "#ifndef SCORINGMANAGER_HH\n#define SCORINGMANAGER_HH\n"
+                "class ScoringManager {};\n#endif\n",
+            ),
+            _file(
+                "src/ScoringManager.cc",
+                '#include "ScoringManager.hh"\n'
+                "namespace { constexpr int kExpectedMeshIndex = 0; }\n"
+                "void RecordScoring() {\n"
+                "  auto* mesh = scManager->GetMesh(kExpectedMeshIndex);\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("GetMesh(0)" in e for e in result.errors)
+
+
 def test_scoring_hard_gate_rejects_get_score_map_nonconst_ref() -> None:
     result = run_scoring_hard_gate(
         [

@@ -153,7 +153,11 @@ def run_scoring_hard_gate(
             ),
             (
                 r"\bGetMesh\s*\(\s*(?!\d+\s*\))[^)]*\)",
-                "G4ScoringManager::GetMesh requires an integer mesh index; use GetMesh(0)",
+                (
+                    "G4ScoringManager::GetMesh must be called as GetMesh(0) for the "
+                    "single configured mesh; use literal 0, not a mesh name, variable, "
+                    "or named constant"
+                ),
             ),
             (
                 r"\bGetElementCenter\s*\(",
