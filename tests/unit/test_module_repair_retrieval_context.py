@@ -154,3 +154,93 @@ async def test_repair_module_passes_retrieval_context_to_model(
     assert "retrieval_context" in user_prompt
     assert "Use /run/initialize" in user_prompt
     assert "https://geant4-userdoc.web.cern.ch/" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_repair_module_normalizes_object_used_references(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    original = ModuleAgentResult(
+        module_name="sensitive_detector",
+        status="generated",
+        generated_files=[
+            GeneratedModuleFile(
+                path="src/SensitiveDetector.cc",
+                operation="create_or_replace",
+                new_content='#include "SensitiveDetector.hh"\n',
+                generated_by="sensitive_detector_module_agent",
+                module_name="sensitive_detector",
+                rationale="test",
+            )
+        ],
+    )
+    gate = ModuleGateResult(
+        module_name="sensitive_detector",
+        gate_type="hard",
+        status="fail",
+        errors=[
+            "SensitiveDetector.cc must include G4THitsCollection.hh when using "
+            "G4THitsCollection<Hit>"
+        ],
+    )
+
+    with (
+        patch(
+            "agent_core.g4_codegen.repair.module_repair_loop._collect_repair_evidence",
+            new=AsyncMock(return_value={"rag": {"status": "pass"}, "web": {"status": "pass"}}),
+        ),
+        patch("agent_core.g4_codegen.repair.module_repair_loop.get_model_gateway") as gateway_fn,
+        patch("agent_core.g4_codegen.graph_nodes._get_hard_gate_function") as hard_gate_fn,
+    ):
+        gateway = AsyncMock()
+        gateway.call.return_value = AsyncMock(
+            error=None,
+            content="{}",
+            parsed_json={
+                "module_name": "sensitive_detector",
+                "status": "repaired",
+                "generated_files": [
+                    {
+                        "path": "src/SensitiveDetector.cc",
+                        "new_content": (
+                            '#include "SensitiveDetector.hh"\n'
+                            '#include "G4THitsCollection.hh"\n'
+                            "void TouchHitsCollection() {}\n"
+                        ),
+                        "generated_by": "sensitive_detector_module_agent",
+                        "module_name": "sensitive_detector",
+                        "rationale": "include required hits collection header",
+                        "used_references": [
+                            {
+                                "doc_id": "g4_hits_collection",
+                                "title": "Geant4 Application Developers Guide",
+                            }
+                        ],
+                    }
+                ],
+                "errors": [],
+                "warnings": [],
+            },
+        )
+        gateway_fn.return_value = gateway
+        hard_gate_fn.return_value = lambda files, module_status=None: ModuleGateResult(
+            module_name="sensitive_detector",
+            gate_type="hard",
+            status="pass",
+        )
+
+        result = await repair_module(
+            "sensitive_detector",
+            {"module_name": "sensitive_detector", "job_id": "repair_job"},
+            original,
+            gate,
+            job_id="repair_job",
+            max_attempts=1,
+        )
+
+    assert result.status == "repaired"
+    assert result.generated_files[0].used_references == [
+        '{"doc_id": "g4_hits_collection", "title": "Geant4 Application Developers Guide"}'
+    ]

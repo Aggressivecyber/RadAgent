@@ -9,6 +9,7 @@ from typing import Any
 from agent_core.g4_codegen.module_agents.base import (
     _extract_generated_file_entries,
     _normalize_generated_path,
+    _normalize_string_list,
 )
 from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult, ModuleGateResult
 from agent_core.models.gateway import get_model_gateway
@@ -44,6 +45,9 @@ REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块修复 Agent。
     只输出满足这些约束的新代码，不要复述旧失败过程。
 13. 必须阅读 repair_context.retrieval_context 中的 RAG 和 web 证据；
     使用其中 API 事实时必须写入 generated_files[].used_references。
+    used_references 必须是字符串数组，例如
+    ["Geant4 Application Developers Guide: G4THitsCollection"]；
+    不得返回对象、字典或嵌套数组。
 14. 如果 RAG/web 证据与硬门禁要求冲突，以硬门禁要求为准；不得使用无证据的 Geant4 API。
 15. 必须通过 G4-G No Magic Number gate：除 0、1、2、0.0、1.0、2.0、0.5、
     180、360 和带 CLHEP 单位的数值外，所有数字必须先定义为具名 const/constexpr/enum。
@@ -66,7 +70,8 @@ REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块修复 Agent。
       "new_content": "...完整文件内容...",
       "generated_by": "<module_name>_module_agent",
       "module_name": "<module_name>",
-      "rationale": "修复原因"
+      "rationale": "修复原因",
+      "used_references": ["Geant4 Application Developers Guide: relevant API"]
     }
   ],
   "errors": [],
@@ -221,13 +226,13 @@ async def repair_module(
                         generated_by=f.get("generated_by", f"{module_name}_module_agent"),
                         module_name=f.get("module_name", module_name),
                         rationale=f.get("rationale", "repaired"),
-                        dependencies=f.get("dependencies", []),
-                        satisfies=f.get("satisfies", []),
-                        risk_notes=f.get("risk_notes", []),
-                        used_references=f.get("used_references", []),
+                        dependencies=_normalize_string_list(f.get("dependencies", [])),
+                        satisfies=_normalize_string_list(f.get("satisfies", [])),
+                        risk_notes=_normalize_string_list(f.get("risk_notes", [])),
+                        used_references=_normalize_string_list(f.get("used_references", [])),
                     )
                 )
-            except (KeyError, TypeError) as exc:
+            except (KeyError, TypeError, ValueError) as exc:
                 logger.warning("Skipping invalid repair file entry for %s: %s", module_name, exc)
 
         if not repaired_files:
