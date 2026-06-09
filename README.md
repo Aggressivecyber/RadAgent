@@ -1,247 +1,302 @@
-# RadAgent — Geant4 Complex Modeling Agent
+# RadAgent
 
-基于 LangGraph 主图 + 8 子图架构的 Geant4 复杂建模智能体系统。
+RadAgent is an agentic radiation-simulation coding system for turning natural
+language requirements into reviewable Geant4 projects. It combines a LangGraph
+pipeline, retrieval context, model planning, human confirmation, module-level
+C++ generation, validation gates, artifact collection, and persistent workspace
+metadata.
 
-## 架构概览
+The current implementation is focused on Geant4 detector/model generation.
+TCAD and SPICE assets exist in the repository as knowledge-base and benchmark
+material, but they are not the primary production pipeline yet.
 
+## What It Does
+
+RadAgent can:
+
+- classify user intent and route simulation requests through a structured pipeline;
+- retrieve Geant4 context from local RAG sources and optional web context;
+- build a Geant4 Model IR with geometry, materials, sources, physics, sensitive
+  detectors, scoring, and output contracts;
+- pause for human confirmation when generated assumptions need approval;
+- generate a Geant4 C++ project through independent module agents;
+- validate generated code with module gates, cross-file integration checks,
+  build/smoke/data-contract gates, and report generation;
+- persist jobs, projects, resume snapshots, events, artifacts, and chat context
+  in a workspace SQLite database;
+- expose the same core operations through CLI, REPL, and a UI-neutral
+  application service layer.
+
+## Pipeline
+
+The main graph is a scheduler. Domain work lives in subgraphs and service
+modules, while the main state mostly stores paths and status fields.
+
+```text
+user request
+  -> intent / response handling
+  -> prepare_workspace
+  -> context
+  -> task_planning
+  -> g4_modeling
+  -> human_confirmation
+  -> g4_codegen
+  -> patch
+  -> gate
+  -> artifact
+  -> report
 ```
-用户自然语言输入
-    │
-    ▼
-┌──────────────────────────────────────────────────────────┐
-│                    Main Graph (调度器)                     │
-│   仅负责调度，不包含领域逻辑。所有 I/O 通过 JSON 文件路径。  │
-│   TCAD/SPICE scope 被 HARD BLOCK — 仅路由到 report。       │
-└──────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────┐   ┌──────────────┐   ┌──────────────┐
-│ Context │──▶│ Task Planning│──▶│ G4 Modeling  │
-│ Subgraph│   │ Subgraph     │   │ Subgraph     │
-└─────────┘   └──────────────┘   └──────────────┘
-                                        │
-                                        ▼
-┌─────────┐   ┌──────────────┐   ┌──────────────┐
-│ Artifact│◀──│ Gate Valid.  │◀──│ Patch        │◀──┐
-│ Subgraph│   │ Subgraph     │   │ Subgraph     │   │
-└────┬────┘   └──────────────┘   └──────────────┘   │
-     │              ▲                        ▲        │
-     ▼              │                        │        │
-┌─────────┐         │               ┌──────────────┐  │
-│ Report  │         └───────────────│ G4 Codegen   │──┘
-│ Subgraph│   (failure routing)     │ Subgraph     │
-└─────────┘                         └──────────────┘
+
+The phase order is shared by the CLI/REPL and `RadAgentAppService`:
+
+| Phase | Purpose |
+| --- | --- |
+| `prepare_workspace` | Create the job workspace and register it in metadata storage. |
+| `context` | Retrieve and score RAG/web evidence. |
+| `task_planning` | Convert user requirements into a task spec. |
+| `g4_modeling` | Build and validate the Geant4 Model IR. |
+| `human_confirmation` | Ask the user to approve or edit uncertain assumptions. |
+| `g4_codegen` | Generate module-scoped Geant4 C++ and integrate it. |
+| `patch` | Validate and apply the proposed patch/package. |
+| `gate` | Run validation gates and classify failures. |
+| `artifact` | Collect reviewable outputs. |
+| `report` | Produce the final job report. |
+
+## Interfaces
+
+### One-Shot CLI
+
+```bash
+python -m agent_core.main "simulate a 10 MeV proton beam incident on a silicon detector"
+python -m agent_core.main --job-id my_job --status
+python -m agent_core.main --list-jobs
 ```
 
-### 8 个子图
+Execution mode can be selected with:
 
-| 子图 | 职责 | 内部节点数 |
-|------|------|-----------|
-| **Context** | RAG + Web 上下文收集，证据评分 | 6 |
-| **Task Planning** | 解析用户需求，生成 task spec | 3 |
-| **G4 Modeling** | Model IR 构建（15 节点管线） | 15 |
-| **G4 Codegen** | 模块化 C++ 代码生成 | 11 |
-| **Patch** | Patch 格式审查 + 权限校验 + 应用 | 3 |
-| **Gate Validation** | 19 道门禁检查（Gate 0-11 + G4-A~G4-G） | 4 |
-| **Artifact** | GitHub-reviewable 产物收集 | 3 |
-| **Report** | 最终报告生成 | 1 |
-
-### 设计原则
-
-1. **主图仅调度** — 不处理几何、C++ 代码、门禁细节
-2. **子图隔离** — 每个子图有独立的输入/输出 schema，可独立测试
-3. **JSON 文件 I/O** — 子图间通信只通过结构化 JSON 文件路径
-4. **路径化状态** — 主状态只持有文件路径，不持有内联数据
-5. **禁止未批准简化** — 复杂模型需用户明确批准才可简化
-6. **TCAD/SPICE 硬阻断** — 非 geant4 scope 被路由到 report_subgraph，不进入建模/代码生成
-
-### 当前范围
-
-- ✅ **支持**: Geant4 复杂真实建模
-- 🚫 **保留（未实现）**: TCAD Sentaurus、ngspice
-- TCAD/SPICE scope 会被 `report_subgraph` 阻断，报告标注 "reserved for later MVP"
-- 复杂建模使用 Geant4 Model IR（9+ 组件，5+ 材料，4 种 scoring）
-- `latest` artifact 必须是真实复杂样例，不允许 stub
-
-## 门禁系统
-
-### 基础门禁 (Gate 0-11)
-
-| Gate | 名称 | 说明 |
-|------|------|------|
-| 0 | Context Sufficiency | RAG + Web 上下文充分性 |
-| 1 | Task Spec Schema | 任务规格完整性 |
-| 2 | Model IR Schema | Model IR 完整性 |
-| 3 | Patch Format | Patch 格式正确性 |
-| 4 | File Permissions | 文件权限策略合规 |
-| 5 | Static Analysis | Geant4 代码结构检查（src/include/CMakeLists.txt） |
-| 6 | Build/Parse | 编译或语法检查 |
-| 7 | Unit Tests | 核心功能单元测试（验收模式不可自动通过） |
-| 8 | Data Contract | g4_output_package 格式校验 |
-| 9 | Smoke Test | 小规模仿真验证（验收模式不可自动通过） |
-| 10 | Benchmark Regression | 基准测试对比 |
-| 11 | Physics Sanity | NaN/Inf/负值检查 |
-
-### G4 建模门禁 (G4-A ~ G4-G)
-
-| Gate | 名称 | 说明 |
-|------|------|------|
-| G4-A | Model Completeness | 必需组件/材料/源/物理列表完整 |
-| G4-B | **No Unapproved Simplification** | 检测缺失组件、层合并、简化 — 复杂模型只有 world+silicon 必须失败 |
-| G4-C | Geometry Interface | 母子体积接口一致性 |
-| G4-D | Overlap Policy | 无体积重叠 |
-| G4-E | Evidence Traceability | 每个参数有证据来源 |
-| G4-F | Code Module Boundary | 代码模块边界清晰 |
-| G4-G | No Magic Number | 无硬编码物理常数 |
-
-### Gate 输出格式
-
-每个 gate 输出详细结构（禁止只写 OK）：
-
-```json
-{
-  "gate_id": "G4-B",
-  "name": "No Unapproved Simplification",
-  "status": "pass | fail | skipped",
-  "checked_items": [{"item": "housing preserved", "result": "pass"}],
-  "passed_items": ["housing preserved", "pcb preserved"],
-  "failed_items": [],
-  "warnings": [],
-  "evidence": ["component_ids: ..."],
-  "file_paths": [],
-  "message": "..."
-}
+```bash
+python -m agent_core.main --mode strict "..."
 ```
+
+Supported modes are `strict`, `test`, `acceptance`, and `production`.
+
+### Interactive REPL
+
+```bash
+python -m agent_core.main -i
+```
+
+Useful commands:
+
+```text
+/run <query>          start a new pipeline job
+/step                 run the next phase
+/status               show current phase and key statuses
+/confirm              review and submit human confirmation
+/model                inspect the current Model IR
+/code                 list generated source files
+/build                configure and build generated Geant4 code
+/sim [events]         run the built simulation
+/results              list simulation outputs
+/gates                inspect gate results
+/jobs                 list jobs in the current project
+/resume <job_id>      restore the latest persisted job snapshot
+/projects             list workspace projects
+/project new <name>   create and switch to a project
+/project use <slug>   switch projects
+/chat <message>       ask a contextual chat question
+```
+
+### Application Service Layer
+
+`agent_core.app.service.RadAgentAppService` is a UI-neutral facade for desktop,
+web, or API frontends. It owns session state, emits structured events, and
+provides operations for jobs, phases, artifacts, build, and simulation without
+depending on Rich or prompt-toolkit.
+
+Minimal example:
+
+```python
+import asyncio
+from agent_core.app.service import RadAgentAppService
+
+
+async def main() -> None:
+    service = RadAgentAppService(execution_mode="strict")
+    status = await service.start_job(
+        "simulate a proton beam through an aluminum shield and silicon detector",
+        auto_continue=True,
+    )
+    print(status.job_id, status.status, status.current_phase)
+
+
+asyncio.run(main())
+```
+
+## Workspace And Persistence
+
+By default, RadAgent writes runtime data under:
+
+```text
+simulation_workspace/
+  radagent.db
+  jobs/
+    <job_id>/
+      00_input/
+      01_context/
+      02_task_plan/
+      03_modeling/
+      04_human_confirmation/
+      05_model_ir/
+      06_codegen/
+      07_patch/
+      08_gate_validation/
+      09_artifacts/
+      10_report/
+      logs/
+```
+
+Set a different workspace root with:
+
+```bash
+export RADAGENT_WORKSPACE_ROOT=/path/to/workspace
+```
+
+`radagent.db` is a SQLite metadata database. It stores:
+
+- projects and current-project selection;
+- jobs and their lifecycle status;
+- phase snapshots for `/resume`;
+- artifact indexes pointing to files on disk;
+- structured events;
+- chat sessions/messages and tool-call records.
+
+Large outputs remain as files. The database is the control plane, not a blob
+store.
+
+## Architecture
+
+Key packages:
+
+```text
+agent_core/
+  app/                 UI-neutral service layer and Pydantic response schemas
+  chat/                conversational assistant with RAG/web/job context
+  context/             RAG and web-context retrieval nodes
+  g4_modeling/         Model IR schemas, modeling nodes, validators, codegen helpers
+  g4_codegen/          module agents, module gates, repair loop, integration checks
+  gates/               validation gate runners and schemas
+  graph/               LangGraph main graph, routes, subgraph builders, main state
+  human_confirmation/  confirmation request/response handling
+  intent/              intent schemas, fallback rules, router, response routing
+  models/              model gateway, tiers, usage, tool-call logging
+  observability/       job-scoped events and failure bundles
+  patching/            patch contract review and application
+  reports/             final report nodes and schemas
+  response/            non-pipeline response handling
+  storage/             SQLite workspace metadata repository
+  tools/               shell, patch, web search, Geant4 runner wrappers
+  workspace/           job directory and stage path management
+```
+
+The Geant4 codegen layer is module-oriented. Independent agents generate and
+validate modules such as geometry, placement, material, physics, source,
+sensitive detector, scoring, action initialization, output manager, and
+`main`/CMake. Integration gates then check cross-file contracts before outputs
+are persisted.
+
+## Validation
+
+Validation is layered:
+
+- schema checks for task specs, Model IR, patch payloads, and gate results;
+- modeling gates for completeness, no unapproved simplification, geometry
+  interfaces, overlap policy, evidence traceability, module boundaries, and
+  magic-number policy;
+- module-specific hard gates and LLM review gates for generated Geant4 code;
+- static semantic scans and cross-file hard/LLM integration gates;
+- build, smoke-test, output-contract, benchmark, and physics-sanity gates.
+
+Generated output is considered useful only when it is accompanied by structured
+gate results and reviewable artifacts.
 
 ## Review Artifacts
 
-每次成功运行后，产物自动收集到 `review_artifacts/g4_complex_model/latest/`。
+Review artifacts are collected under `review_artifacts/` and job workspaces.
+The repository includes a current sample under:
 
-**当前 artifact 是基于真实复杂探测器模型（非 stub）**：
-
-```
-latest/
-├── README.md
-├── artifact_manifest.json
-├── review_report.json                 # is_stub: false, run_type: dev
-└── output/
-    ├── g4_model_ir.json               # 9 组件, 5 材料, 4 scoring
-    ├── gate_results.json              # 19 gates with detailed checked_items
-    ├── component_specs_summary.json
-    ├── no_simplification_report.json
-    ├── geometry_interface_report.json
-    ├── evidence_traceability_report.json
-    ├── output_manager_contract.json   # g4_output_package 契约
-    ├── model_review_report.md
-    ├── code_module_plan.json
-    ├── construction_ledger.json
-    └── proposed_patch_summary.json
+```text
+review_artifacts/g4_complex_model/latest/
 ```
 
-### 真实复杂模型样例组件
+This directory is intended for code review and regression inspection. Runtime
+job outputs are produced under `simulation_workspace/jobs/<job_id>/`.
 
-| 组件 | 材料 | 角色 |
-|------|------|------|
-| world | G4_AIR | 根体积 |
-| housing | G4_Al | 铝外壳/屏蔽 |
-| pcb | FR4 (custom) | PCB 载板 |
-| sensor_stack | G4_AIR | 传感器组件容器 |
-| top_electrode | G4_Al | 顶部铝电极 |
-| oxide_layer | SiO2 (custom) | 1 μm SiO2 氧化层 |
-| silicon_bulk | G4_Si | 硅衬底 |
-| sensitive_region | G4_Si | 灵敏活性区 |
-| bottom_electrode | G4_Al | 底部铝电极 |
+## Knowledge Bases
 
-## OutputManager 契约 (g4_output_package)
+Local knowledge-base material lives under:
 
-OutputManager 代码生成器从 Model IR scoring specs 读取输出规格，生成：
-
-| 文件 | 内容 |
-|------|------|
-| g4_summary.json | 运行元数据（事件数、束流、物理列表） |
-| edep_3d.csv | 能量沉积 |
-| dose_3d.csv | 剂量分布 |
-| event_table.csv | 事件级数据 |
-| provenance.json | Model IR 来源 |
-| run_log.txt | 运行日志 |
-
-**禁止 OutputManager 自行创造输出字段 — 所有字段来自 scoring spec。**
-
-## 项目结构
-
-```
-RadAgent/
-├── agent_core/
-│   ├── graph/
-│   │   ├── main_graph.py          # 主图构建（调度器）
-│   │   ├── main_state.py          # 主状态定义（路径化）
-│   │   ├── main_routes.py         # 条件路由（TCAD/SPICE 硬阻断）
-│   │   └── subgraphs/             # 8 个子图构建器
-│   ├── context/                   # Context Subgraph
-│   ├── planning/                  # Task Planning Subgraph
-│   ├── g4_modeling/               # G4 Modeling Subgraph
-│   │   ├── schemas/               # G4ModelIR, ComponentSpec, MaterialSpec 等
-│   │   ├── validators/            # NoSimplification, EvidenceTraceability 等
-│   │   └── codegen/               # OutputManager 等代码生成器
-│   ├── g4_codegen/                # G4 Codegen Subgraph
-│   │   ├── nodes/                 # code_module_planner, integration_assembler 等
-│   │   └── validators/            # code_module_boundary, no_magic_number, cmake_structure
-│   ├── patching/                  # Patch Subgraph
-│   ├── gates/
-│   │   ├── base_gates.py          # Gate 0-11
-│   │   ├── g4_modeling_gates.py   # G4-A 到 G4-G
-│   │   ├── gate_runner.py         # 统一运行和汇总
-│   │   └── failure_classifier.py  # 失败归因和回路
-│   ├── artifacts/                 # Artifact Subgraph
-│   ├── reports/                   # Report Subgraph
-│   ├── config/                    # 配置（workspace 路径）
-│   └── main.py                    # 入口点
-├── review_artifacts/              # GitHub-reviewable 产物
-├── tests/
-│   ├── unit/                      # 单元测试（262+）
-│   ├── e2e/                       # 端到端测试（4+）
-│   └── unit/g4_modeling/          # G4 建模专项测试（81+）
-└── scripts/
-    └── generate_complex_model_artifact.py  # artifact 生成脚本
+```text
+knowledge_base/geant4/
+knowledge_base/tcad/
 ```
 
-## 快速开始
+These directories contain preprocessing, indexing, query rewriting, generator,
+and MCP/RAG helper code. Build or refresh indexes only when the source material
+or retrieval behavior changes.
+
+## Development
+
+Install:
 
 ```bash
-# 安装依赖
-pip install -e ".[dev]"
-
-# 配置环境变量
-cp .env.example .env
-
-# 运行全部测试（275 个）
-pytest tests/
-
-# 仅运行单元测试
-pytest tests/unit/
-
-# 仅运行 E2E 测试
-pytest tests/e2e/
-
-# 运行 Agent
-python -m agent_core.main "模拟 10 MeV 质子束垂直入射硅探测器"
+python -m pip install -e ".[dev]"
 ```
 
-## 测试覆盖
+Common checks:
 
-| 测试文件 | 覆盖范围 |
-|----------|---------|
-| test_main_graph_subgraph_routing.py | 主图条件路由 |
-| test_task_planning_scope_guard.py | TCAD/SPICE scope 硬阻断（11 测试） |
-| test_gate_subgraph.py | 基础门禁 + G4 建模门禁 |
-| test_g4_modeling_subgraph.py | G4 建模子图编译和节点 |
-| test_g4_codegen_subgraph.py | G4 代码生成子图 |
-| test_no_simplification_gate_hard.py | G4-B 简化检测（5 硬测试） |
-| test_output_manager_contract.py | OutputManager g4_output_package 契约 |
-| test_required_g4_code_structure.py | Geant4 代码结构 Gate 5 合规 |
-| test_architecture_invariants.py | 架构不变性（29 项检查） |
-| g4_modeling/ | G4 建模专项测试（81+） |
+```bash
+python -m pytest -q tests/unit/test_storage_repository.py tests/unit/test_repl.py
+python -m pytest -q tests/unit/
+python -m ruff check agent_core tests
+python -m compileall -q agent_core
+```
 
-## 许可证
+Some integration and real-module tests require external tools such as Geant4,
+TCAD Sentaurus, ngspice, or configured model providers. Those tests are marked
+in `pyproject.toml` and should not be treated as ordinary local smoke tests.
+
+## Environment Notes
+
+Typical configuration comes from `.env` and `agent_core/config/environment.py`.
+Important values include:
+
+- `RADAGENT_WORKSPACE_ROOT`
+- model provider/API credentials used by `agent_core.models`
+- RAG/web-search availability settings
+- external tool paths for Geant4/TCAD/SPICE integration tests
+
+The project is designed so the main graph and service layer can run in strict
+mode with persisted state, while expensive external validation is guarded by
+mode and environment availability.
+
+## Current Scope
+
+Production focus:
+
+- Geant4 detector/model planning;
+- module-based Geant4 C++ generation;
+- validation and repair loops;
+- persisted local project/job management;
+- CLI, REPL, and service-layer consumption.
+
+Reserved or experimental:
+
+- full TCAD and SPICE pipeline orchestration;
+- multi-user server deployment;
+- remote artifact storage;
+- GUI/frontend packaging beyond the service-layer API.
+
+## License
 
 MIT
