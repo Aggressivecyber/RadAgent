@@ -774,6 +774,13 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "an overload that accepts edep_MeV and dose_Gy."
             ),
             (
+                "Do not write dose_Gy as a hard-coded 0.0 in event rows. Provide an explicit "
+                "dose input interface such as SetEventDoseGy(G4double doseGy) and/or "
+                "WriteEvent(const G4Event* event, G4double edepMeV, G4double doseGy). "
+                "The one-argument WriteEvent adapter may use cached currentEventDoseGy_ "
+                "that upstream action/scoring code can set."
+            ),
+            (
                 "Keep CSV/JSON writing in OutputManager only, and keep ScoringManager out "
                 "of OutputManager includes and calls."
             ),

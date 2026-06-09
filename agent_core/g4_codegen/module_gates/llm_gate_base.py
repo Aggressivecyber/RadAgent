@@ -349,5 +349,11 @@ def _module_review_requirements(module_name: str) -> list[str]:
                 "OutputManager must provide a one-argument WriteEvent(const G4Event*) "
                 "adapter even if it also provides overloads with scoring values."
             ),
+            (
+                "Do fail OutputManager when dose_Gy is always hard-coded as 0.0. A passing "
+                "implementation must expose an explicit dose input path such as "
+                "SetEventDoseGy(G4double) or WriteEvent(const G4Event*, G4double, G4double), "
+                "while keeping the one-argument WriteEvent adapter."
+            ),
         ]
     return []

@@ -63,7 +63,13 @@ OUTPUT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 输出管理模块编码 Ag
     EventAction 会通过 G4Event::SetUserInformation 塞入自定义数据。
 23. RecordStep(const G4Step*) 必须从 step->GetTotalEnergyDeposit() 累积当前事件
     edep_MeV；BeginEvent 清零当前事件缓存，WriteEvent(const G4Event*) 写出事件 ID、
-    当前事件 edep_MeV 和 dose_Gy。dose_Gy 没有可靠体素质量时可写 0.0，但不得伪造。
+    当前事件 edep_MeV 和 dose_Gy。
+24. dose_Gy 不得写死为 0.0。必须提供显式接收 dose 的接口，例如：
+    void SetEventDoseGy(G4double doseGy);
+    void WriteEvent(const G4Event* event, G4double edepMeV, G4double doseGy);
+    一参数 WriteEvent(const G4Event*) 必须保留，且可委托给三参数 overload 使用缓存的
+    currentEventDoseGy_。OutputManager 不直接 include/call ScoringManager；上游 action 或
+    scoring 汇总模块负责把 dose 值传入。
 """
 
 
