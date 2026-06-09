@@ -559,6 +559,11 @@ def _repair_output_manager(by_path: dict[str, dict[str, Any]], report: dict[str,
 
     source_content = source.get("new_content", "")
     source_changed = False
+    normalized_source = _normalize_output_manager_getenv_literals(source_content)
+    if normalized_source != source_content:
+        source_content = normalized_source
+        source["new_content"] = source_content
+        source_changed = True
     additions: list[str] = []
     if "OutputManager::BeginRun(" not in source_content:
         if "OutputManager::BeginOfRun(" in source_content:
@@ -837,6 +842,7 @@ def _normalize_g4threevector_decimal_literals(content: str) -> str:
 
 def _repair_output_manager_magic_numbers(content: str) -> str:
     updated = content
+    updated = _normalize_output_manager_getenv_literals(updated)
     if "kCsvPrecision" not in updated:
         updated = _ensure_anonymous_namespace_constants(
             updated,
@@ -857,6 +863,31 @@ def _repair_output_manager_magic_numbers(content: str) -> str:
         "mkdir(fOutputDir.c_str(), kOutputDirectoryMode)",
         updated,
     )
+    return updated
+
+
+def _normalize_output_manager_getenv_literals(content: str) -> str:
+    env_var_names = {
+        match.group(1)
+        for match in re.finditer(
+            r"(?:const\s+)?char\s*\*\s*(\w+)\s*=\s*\"G4_OUTPUT_DIR\"\s*;",
+            content,
+        )
+    }
+    env_var_names.update(
+        match.group(1)
+        for match in re.finditer(
+            r"(?:const\s+)?std::string\s+(\w+)\s*=\s*\"G4_OUTPUT_DIR\"\s*;",
+            content,
+        )
+    )
+    updated = content
+    for name in sorted(env_var_names):
+        updated = re.sub(
+            rf"\b(std::)?getenv\s*\(\s*{re.escape(name)}\s*\)",
+            lambda match: f'{match.group(1) or ""}getenv("G4_OUTPUT_DIR")',
+            updated,
+        )
     return updated
 
 

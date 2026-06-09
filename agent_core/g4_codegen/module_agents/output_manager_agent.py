@@ -49,6 +49,9 @@ OUTPUT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 输出管理模块编码 Ag
     不要依赖 G4Types.hh 或其他头文件的隐式包含
 17. 运行时输出目录必须读取环境变量 G4_OUTPUT_DIR；如果环境变量不存在，才回退到
     当前工作目录或 output 子目录。不要忽略 G4_OUTPUT_DIR。
+    必须在 OutputManager.cc 中直接写出 std::getenv("G4_OUTPUT_DIR") 或
+    getenv("G4_OUTPUT_DIR")；不要通过 const char* kEnvOutputDir 之类的变量间接传入，
+    因为硬门禁会解析 literal 调用。
 18. 为了让 Geant4Runner 物化验收 artifact，EndRun 后必须在输出目录写出以下固定文件名：
     output.csv、run_summary.json、metadata.json。
     不要写 job0_events.csv、<job_id>_events.csv、<job_id>_run_summary.json 或

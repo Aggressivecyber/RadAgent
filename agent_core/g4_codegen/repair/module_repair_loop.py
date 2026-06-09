@@ -257,6 +257,7 @@ async def repair_module(
                     merged_files_by_path.pop(macro_name, None)
         _prune_files_outside_module_contract(module_name, module_context, merged_files_by_path)
         merged_files = list(merged_files_by_path.values())
+        _postprocess_repaired_module_files(module_name, merged_files)
 
         repaired_result = ModuleAgentResult(
             module_name=module_name,
@@ -316,6 +317,47 @@ async def repair_module(
         repair_attempts=attempts,
         errors=[f"Repair failed after {max_attempts} attempts"] + current_result.errors,
     )
+
+
+def _postprocess_repaired_module_files(
+    module_name: str,
+    generated_files: list[GeneratedModuleFile],
+) -> None:
+    if module_name != "output_manager":
+        return
+    for file_entry in generated_files:
+        if file_entry.path != "src/OutputManager.cc":
+            continue
+        file_entry.new_content = _normalize_output_manager_getenv_literals(
+            file_entry.new_content
+        )
+
+
+def _normalize_output_manager_getenv_literals(content: str) -> str:
+    import re
+
+    env_var_names = {
+        match.group(1)
+        for match in re.finditer(
+            r"(?:const\s+)?char\s*\*\s*(\w+)\s*=\s*\"G4_OUTPUT_DIR\"\s*;",
+            content,
+        )
+    }
+    env_var_names.update(
+        match.group(1)
+        for match in re.finditer(
+            r"(?:const\s+)?std::string\s+(\w+)\s*=\s*\"G4_OUTPUT_DIR\"\s*;",
+            content,
+        )
+    )
+    updated = content
+    for name in sorted(env_var_names):
+        updated = re.sub(
+            rf"\b(std::)?getenv\s*\(\s*{re.escape(name)}\s*\)",
+            lambda match: f'{match.group(1) or ""}getenv("G4_OUTPUT_DIR")',
+            updated,
+        )
+    return updated
 
 
 async def _collect_repair_evidence(
@@ -693,6 +735,11 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "Read G4_OUTPUT_DIR for runtime artifact output and write fixed filenames "
                 "output.csv, run_summary.json, and metadata.json. output.csv must include "
                 "the header EventID,edep_MeV,dose_Gy."
+            ),
+            (
+                'OutputManager.cc must contain a direct literal call std::getenv("G4_OUTPUT_DIR") '
+                'or getenv("G4_OUTPUT_DIR"). Do not pass a variable such as kEnvOutputDir to '
+                "getenv, even if that variable stores the same string."
             ),
             (
                 "Do not define EventData and do not depend on G4VUserEventInformation or "

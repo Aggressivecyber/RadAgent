@@ -67,6 +67,13 @@ void ScoringManager::SetMeshParameters(
 #include <sys/stat.h>
 #include <iomanip>
 
+namespace {
+const char* kEnvOutputDir = "G4_OUTPUT_DIR";
+}
+
+OutputManager::OutputManager() {
+    const char* envDir = std::getenv(kEnvOutputDir);
+}
 void OutputManager::EnsureOutputDirectory() {
     mkdir(fOutputDir.c_str(), 0755);
 }
@@ -113,6 +120,8 @@ G4VPhysicalVolume* DetectorConstruction::Construct() {
         for issue in report["issues_fixed"]
     )
     files = {entry["path"]: entry["new_content"] for entry in repaired["changed_files"]}
+    assert 'std::getenv("G4_OUTPUT_DIR")' in files["src/OutputManager.cc"]
+    assert "std::getenv(kEnvOutputDir)" not in files["src/OutputManager.cc"]
     for path in (
         "include/ScoringManager.hh",
         "src/ScoringManager.cc",
