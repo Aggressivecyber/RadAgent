@@ -387,6 +387,50 @@ class RadAgentStore:
         )
         self.conn.commit()
 
+    def list_artifacts(self, job_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM artifacts
+            WHERE job_id = ?
+            ORDER BY stage ASC, kind ASC, path ASC
+            """,
+            (job_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_events(
+        self,
+        job_id: str,
+        *,
+        limit: int | None = None,
+        run_id: str = "",
+    ) -> list[dict[str, Any]]:
+        params: list[Any] = [job_id]
+        where = "WHERE job_id = ?"
+        if run_id:
+            where += " AND run_id = ?"
+            params.append(run_id)
+        limit_sql = ""
+        if limit is not None:
+            limit_sql = " LIMIT ?"
+            params.append(int(limit))
+        rows = self.conn.execute(
+            f"""
+            SELECT * FROM events
+            {where}
+            ORDER BY created_at DESC, id DESC
+            {limit_sql}
+            """,
+            params,
+        ).fetchall()
+        events = [dict(row) for row in rows]
+        for event in events:
+            try:
+                event["payload"] = json.loads(event.pop("payload_json"))
+            except (TypeError, json.JSONDecodeError):
+                event["payload"] = {}
+        return events
+
     @staticmethod
     def _sha256_file(path: Path) -> str:
         h = hashlib.sha256()
