@@ -122,9 +122,9 @@ def _append_placement_api_checks(
             errors.append(
                 f"{f.path}: copy const G4Transform3D& into a non-const local before G4PVPlacement"
             )
-        placevolume_mother_physical = bool(
+        place_mother_physical = bool(
             re.search(
-                r"\bPlaceVolume\s*\([^;{)]*G4VPhysicalVolume\s*\*\s*mother",
+                r"\bPlace\w*\s*\([^;{)]*G4VPhysicalVolume\s*\*\s*mother",
                 content,
                 re.DOTALL,
             )
@@ -132,16 +132,41 @@ def _append_placement_api_checks(
         checks.append(
             {
                 "check": "placement_mother_parameter_is_logical_volume",
-                "status": "fail" if placevolume_mother_physical else "pass",
+                "status": "fail" if place_mother_physical else "pass",
                 "message": (
-                    "PlacementManager::PlaceVolume mother parameter must be "
+                    "PlacementManager placement API mother parameter must be "
                     "G4LogicalVolume*, not G4VPhysicalVolume*"
                 ),
             }
         )
-        if placevolume_mother_physical:
+        if place_mother_physical:
             errors.append(
                 f"{f.path}: use G4LogicalVolume* mother for G4PVPlacement mother logical"
+            )
+        extra_constructor_many_flag = bool(
+            re.search(
+                r"new\s+G4PVPlacement\s*\([^;]*\bmother\s*,\s*false\s*,\s*many\s*,"
+                r"\s*copyNo\s*,\s*checkOverlaps",
+                content,
+                re.DOTALL,
+            )
+        )
+        checks.append(
+            {
+                "check": "placement_g4pvplacement_uses_eight_argument_logical_mother_constructor",
+                "status": "fail" if extra_constructor_many_flag else "pass",
+                "message": (
+                    "G4PVPlacement logical-mother constructor must be called as "
+                    "new G4PVPlacement(rotation, position, logical, name, mother, "
+                    "many, copyNo, checkOverlaps), without an extra false argument"
+                ),
+            }
+        )
+        if extra_constructor_many_flag:
+            errors.append(
+                f"{f.path}: remove the extra false argument before many in "
+                "new G4PVPlacement(rotation, position, logical, name, mother, "
+                "many, copyNo, checkOverlaps)"
             )
         if f.path.endswith((".hh", ".h")) and "G4PVPlacement" in content:
             declares_g4pvplacement = (

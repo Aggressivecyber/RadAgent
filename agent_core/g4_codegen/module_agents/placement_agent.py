@@ -30,8 +30,13 @@ PLACEMENT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 放置模块编码 Agent
                G4LogicalVolume* logical, const G4String& name,
                G4LogicalVolume* mother, G4bool many, G4int copyNo,
                G4bool checkOverlaps)
+   实现必须直接调用：
+   new G4PVPlacement(rotation, position, logical, name, mother, many, copyNo,
+                    checkOverlaps)
+   不要写成 mother, false, many, copyNo, checkOverlaps；这是 9 参数错误。
    mother 参数必须是 G4LogicalVolume* mother logical，不要使用 G4VPhysicalVolume*
-   作为 G4PVPlacement 的 mother 参数。
+   作为 G4PVPlacement 的 mother 参数；PlacementManager.hh 和 PlacementManager.cc
+   中任何 Place/PlaceVolume 接口都不得声明 G4VPhysicalVolume* mother。
    返回类型建议使用 G4VPhysicalVolume*。如果提供 static Place(...) 兼容接口，
    也应返回 G4VPhysicalVolume*，并直接返回 PlaceVolume(...) 的结果。
    PlacementManager.cc 中任何 PlacementManager::Place(...) out-of-class 定义，

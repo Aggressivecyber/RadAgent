@@ -99,9 +99,12 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
         "title": "G4PVPlacement — Physical Volume Placement",
         "content": (
             "G4PVPlacement(G4RotationMatrix* pRot, const G4ThreeVector& pTrans, "
-            "const G4String& pName, G4LogicalVolume* pLogical, "
-            "G4VPhysicalVolume* pMother, G4bool pMany, G4int pCopyNo, "
-            "G4bool pOverlaps=false) places a logical volume inside a mother volume. "
+            "G4LogicalVolume* pLogical, const G4String& pName, "
+            "G4LogicalVolume* pMotherLogical, G4bool pMany, G4int pCopyNo, "
+            "G4bool pOverlaps=false) places a logical volume inside a mother "
+            "logical volume. Prefer this logical-mother constructor for generated "
+            "RadAgent placement code: new G4PVPlacement(rotation, position, "
+            "logical, name, motherLogical, many, copyNo, checkOverlaps). "
             "Position and rotation are in the mother's coordinate system. "
             "The world volume has no mother (nullptr). Set pOverlaps=true to enable "
             'overlap checking. Include: #include "G4PVPlacement.hh".'

@@ -116,6 +116,80 @@ def test_placement_hard_gate_rejects_physical_volume_mother_parameter() -> None:
     assert any("G4LogicalVolume* mother" in error for error in result.errors)
 
 
+def test_placement_hard_gate_rejects_static_place_physical_volume_mother() -> None:
+    result = run_placement_hard_gate(
+        [
+            _file(
+                "include/PlacementManager.hh",
+                "#pragma once\n"
+                '#include "G4RotationMatrix.hh"\n'
+                "class G4VPhysicalVolume;\n"
+                "class G4LogicalVolume;\n"
+                "class G4ThreeVector;\n"
+                "class PlacementManager {\n"
+                "public:\n"
+                "  static G4VPhysicalVolume* Place(G4LogicalVolume* logical, "
+                "const G4ThreeVector& position, G4RotationMatrix* rotation, "
+                "G4VPhysicalVolume* mother, G4bool checkOverlaps);\n"
+                "};\n",
+            ),
+            _file(
+                "src/PlacementManager.cc",
+                '#include "PlacementManager.hh"\n'
+                "G4VPhysicalVolume* PlacementManager::Place("
+                "G4LogicalVolume* logical, const G4ThreeVector& position, "
+                "G4RotationMatrix* rotation, G4VPhysicalVolume* mother, "
+                "G4bool checkOverlaps) { return nullptr; }\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("G4LogicalVolume* mother" in error for error in result.errors)
+
+
+def test_placement_hard_gate_rejects_extra_false_in_g4pvplacement_constructor() -> None:
+    result = run_placement_hard_gate(
+        [
+            _file(
+                "include/PlacementManager.hh",
+                "#pragma once\n"
+                '#include "G4RotationMatrix.hh"\n'
+                "class G4LogicalVolume;\n"
+                "class G4ThreeVector;\n"
+                "class G4String;\n"
+                "class G4VPhysicalVolume;\n"
+                "class PlacementManager {\n"
+                "public:\n"
+                "  static G4VPhysicalVolume* PlaceVolume("
+                "G4RotationMatrix* rotation, const G4ThreeVector& position, "
+                "G4LogicalVolume* logical, const G4String& name, "
+                "G4LogicalVolume* mother, G4bool many, G4int copyNo, "
+                "G4bool checkOverlaps);\n"
+                "};\n",
+            ),
+            _file(
+                "src/PlacementManager.cc",
+                '#include "PlacementManager.hh"\n'
+                '#include "G4PVPlacement.hh"\n'
+                "G4VPhysicalVolume* PlacementManager::PlaceVolume("
+                "G4RotationMatrix* rotation, const G4ThreeVector& position, "
+                "G4LogicalVolume* logical, const G4String& name, "
+                "G4LogicalVolume* mother, G4bool many, G4int copyNo, "
+                "G4bool checkOverlaps) {\n"
+                "  return new G4PVPlacement(rotation, position, logical, name, "
+                "mother, false, many, copyNo, checkOverlaps);\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("extra false argument" in error for error in result.errors)
+
+
 def test_placement_hard_gate_rejects_g4rotationmatrix_forward_declaration() -> None:
     result = run_placement_hard_gate(
         [

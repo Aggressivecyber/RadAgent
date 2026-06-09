@@ -717,6 +717,18 @@ def _module_repair_requirements(module_name: str) -> list[str]:
     if module_name == "placement":
         return [
             (
+                "Use the Geant4 logical-mother constructor exactly as "
+                "new G4PVPlacement(rotation, position, logical, name, mother, many, "
+                "copyNo, checkOverlaps); do not add an extra false/null argument."
+            ),
+            (
+                "Every PlacementManager public API that accepts a mother volume must "
+                "use G4LogicalVolume* mother, including PlaceVolume(...) and any "
+                "static Place(...) compatibility method. Do not declare or define "
+                "G4VPhysicalVolume* mother in PlacementManager.hh or "
+                "PlacementManager.cc."
+            ),
+            (
                 "Use G4RotationMatrix* for G4PVPlacement rotation arguments, "
                 "not const G4RotationMatrix*."
             ),
@@ -733,6 +745,14 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "If PlaceVolume is static, static Place must call "
                 "PlacementManager::PlaceVolume(...) directly; do not create a "
                 "PlacementManager instance."
+            ),
+            (
+                "A valid minimal implementation is: static G4VPhysicalVolume* "
+                "PlaceVolume(G4RotationMatrix* rotation, const G4ThreeVector& "
+                "position, G4LogicalVolume* logical, const G4String& name, "
+                "G4LogicalVolume* mother, G4bool many, G4int copyNo, "
+                "G4bool checkOverlaps); and return new G4PVPlacement(rotation, "
+                "position, logical, name, mother, many, copyNo, checkOverlaps);"
             ),
             "Keep placement code limited to PlacementManager.hh and PlacementManager.cc.",
         ]
