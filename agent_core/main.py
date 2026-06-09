@@ -21,6 +21,19 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+_PIPELINE_PHASES = [
+    "prepare_workspace",
+    "context",
+    "task_planning",
+    "g4_modeling",
+    "human_confirmation",
+    "g4_codegen",
+    "patch",
+    "gate",
+    "artifact",
+    "report",
+]
+
 
 async def run_agent(
     query: str,
@@ -59,7 +72,43 @@ async def run_agent(
         initial_state,
         config={"recursion_limit": 50},
     )
+    _persist_run_result(result)
     return result
+
+
+def _persist_run_result(result: dict[str, object]) -> None:
+    """Persist one-shot CLI run state for later listing/resume."""
+    job_id = str(result.get("job_id", ""))
+    if not job_id:
+        return
+    try:
+        from agent_core.storage import RadAgentStore
+
+        store = RadAgentStore()
+        current_node = str(result.get("current_node", ""))
+        status = "completed" if result.get("final_report_path") else "failed"
+        if result.get("errors"):
+            status = "failed"
+        phase_idx = len(_PIPELINE_PHASES) if status == "completed" else 0
+        store.save_state_snapshot(
+            job_id=job_id,
+            state=dict(result),
+            completed_phases=_PIPELINE_PHASES[:phase_idx],
+            phase=current_node,
+            current_phase_idx=phase_idx,
+            status=status,
+        )
+        for key, value in result.items():
+            if not isinstance(value, str) or not value:
+                continue
+            if not (key.endswith("_path") or key.endswith("_dir")):
+                continue
+            path = Path(value)
+            if path.exists():
+                stage = path.parent.name if path.is_file() else path.name
+                store.record_artifact(job_id=job_id, path=str(path), stage=stage, kind=key)
+    except Exception:
+        return
 
 
 async def check_status(job_id: str) -> dict:
@@ -127,13 +176,15 @@ def main() -> None:
         return
 
     if args.list_jobs:
-        jobs_dir = get_workspace_root() / "jobs"
-        if jobs_dir.exists():
-            for job in sorted(jobs_dir.iterdir()):
-                if job.is_dir():
-                    report = job / "10_report" / "final_report.md"
-                    status_marker = "DONE" if report.exists() else "WIP"
-                    print(f"  [{status_marker}] {job.name}")
+        from agent_core.storage import RadAgentStore
+
+        store = RadAgentStore()
+        store.import_existing_jobs()
+        jobs = store.list_jobs()
+        if jobs:
+            for job in jobs:
+                status_marker = "DONE" if job["status"] == "completed" else job["status"].upper()
+                print(f"  [{status_marker}] {job['job_id']} ({job['project_slug']})")
         else:
             print("No jobs found.")
         return

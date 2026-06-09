@@ -255,6 +255,22 @@ class ChatAgent:
     def _get_recent_jobs(self) -> list[dict[str, Any]]:
         """Synchronous job listing."""
         try:
+            from agent_core.storage import RadAgentStore
+
+            store = RadAgentStore()
+            store.import_existing_jobs()
+            return [
+                {
+                    "id": job["job_id"],
+                    "query": str(job["user_query"])[:100],
+                    "done": job["status"] == "completed",
+                }
+                for job in store.list_jobs(limit=5)
+            ]
+        except Exception as exc:
+            logger.warning("Database job listing failed: %s", exc)
+
+        try:
             from agent_core.workspace.manager import WorkspaceManager
 
             ws = WorkspaceManager()
@@ -264,27 +280,19 @@ class ChatAgent:
 
             jobs: list[dict[str, Any]] = []
             for job_dir in sorted(jobs_dir.iterdir(), reverse=True):
-                if not job_dir.is_dir():
+                if not job_dir.is_dir() or len(jobs) >= 5:
                     continue
-                if len(jobs) >= 5:
-                    break
-
                 query_file = job_dir / "00_input" / "user_query.md"
-                report_file = job_dir / "10_report" / "final_report.md"
-
                 query = ""
                 if query_file.exists():
                     raw = query_file.read_text(encoding="utf-8").strip()
-                    # Strip markdown header if present
                     lines = raw.split("\n")
                     query = lines[-1].strip() if lines else raw[:80]
-
-                done = report_file.exists()
                 jobs.append(
                     {
                         "id": job_dir.name,
                         "query": query[:100],
-                        "done": done,
+                        "done": (job_dir / "10_report" / "final_report.md").exists(),
                     }
                 )
             return jobs

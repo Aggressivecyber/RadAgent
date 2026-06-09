@@ -23,6 +23,9 @@ Slash commands
 /results       Show simulation output summary.
 /gates         Show gate-check results.
 /jobs          List existing jobs.
+/resume <job>  Resume a persisted job snapshot.
+/projects      List projects.
+/project ...   Create or switch projects.
 /help          Show help text.
 /quit          Exit REPL.
 """
@@ -108,6 +111,7 @@ class RadAgentREPL:
         self._completed_phases: list[str] = []
         self._subgraph_nodes: dict[str, Any] | None = None
         self._chat_agent: Any = None  # lazy-initialized ChatAgent
+        self._store: Any = None  # lazy-initialized RadAgentStore
         # Persistent command history across inputs
         self._history: Any = None
         try:
@@ -180,6 +184,14 @@ class RadAgentREPL:
             self._chat_agent = ChatAgent()
         return self._chat_agent
 
+    def _get_store(self):
+        """Lazy-initialize workspace metadata storage."""
+        if self._store is None:
+            from agent_core.storage import RadAgentStore
+
+            self._store = RadAgentStore()
+        return self._store
+
     # ── Main loop ───────────────────────────────────────────────────
 
     async def run(self) -> None:
@@ -238,6 +250,9 @@ class RadAgentREPL:
         Natural language input goes through the LLM Intent Router first.
         Only simulation_request intents are treated as /run.
         """
+        text = text.strip()
+        if not text:
+            return
         if text.startswith("/"):
             parts = text.split(maxsplit=1)
             cmd = parts[0].lower()
@@ -322,6 +337,9 @@ class RadAgentREPL:
             "/results": lambda: self.cmd_results(),
             "/gates": lambda: self.cmd_gates(),
             "/jobs": lambda: self.cmd_jobs(),
+            "/resume": lambda: self.cmd_resume(arg),
+            "/projects": lambda: self.cmd_projects(),
+            "/project": lambda: self.cmd_project(arg),
             "/tools": lambda: self.cmd_tools(),
             "/chat": lambda: self.cmd_chat(arg),
             "/help": lambda: self.cmd_help(),
@@ -802,30 +820,100 @@ class RadAgentREPL:
 
     async def cmd_jobs(self) -> None:
         """List existing jobs."""
-        from agent_core.workspace.manager import WorkspaceManager
-
-        ws = WorkspaceManager()
-        jobs_dir = ws.root / "jobs"
-        if not jobs_dir.exists():
-            self.console.print("[dim]No jobs found.[/dim]")
-            return
-
-        jobs = sorted(jobs_dir.iterdir())
+        store = self._get_store()
+        store.import_existing_jobs()
+        jobs = store.list_jobs()
         if not jobs:
             self.console.print("[dim]No jobs found.[/dim]")
             return
 
         current_job = self.state.get("job_id", "")
+        project = store.current_project()
+        self.console.print(
+            f"[bold]Jobs[/bold] [dim]project={project['slug']} db={store.db_path}[/dim]"
+        )
         for job in jobs:
-            if not job.is_dir():
-                continue
-            report = job / "10_report" / "final_report.md"
-            marker = "DONE" if report.exists() else "WIP"
+            marker = "DONE" if job["status"] == "completed" else job["status"].upper()
             style = "green" if marker == "DONE" else "yellow"
-            current = " ◀ current" if job.name == current_job else ""
+            current = " ◀ current" if job["job_id"] == current_job else ""
             self.console.print(
-                f"  [{style}][{marker}][/{style}] {job.name}[bold cyan]{current}[/bold cyan]"
+                f"  [{style}][{marker}][/{style}] {job['job_id']}"
+                f" [dim]{job['current_phase']}[/dim][bold cyan]{current}[/bold cyan]"
             )
+
+    async def cmd_resume(self, job_id: str) -> None:
+        """Resume the latest persisted state snapshot for a job."""
+        job_id = job_id.strip()
+        if not job_id:
+            self.console.print("[yellow]Usage:[/yellow] /resume <job_id>")
+            return
+
+        store = self._get_store()
+        snapshot = store.latest_state_snapshot(job_id)
+        job = store.get_job(job_id)
+        if snapshot is None:
+            if job is None:
+                self.console.print(f"[yellow]Job not found:[/yellow] {job_id}")
+                return
+            self.state = {
+                "job_id": job["job_id"],
+                "user_query": job["user_query"],
+                "execution_mode": job["execution_mode"],
+                "run_mode": job["run_mode"],
+                "job_workspace": job["job_workspace"],
+                "errors": [],
+                "retry_count": 0,
+                "max_retries_reached": False,
+                "skipped_gates": [],
+            }
+            self.current_phase_idx = int(job["current_phase_idx"])
+            self._completed_phases = _PIPELINE_PHASES[: self.current_phase_idx]
+        else:
+            self.state = dict(snapshot["state"])
+            self.current_phase_idx = int(snapshot["current_phase_idx"])
+            self._completed_phases = list(snapshot["completed_phases"])
+        self.execution_mode = self.state.get("execution_mode", self.execution_mode)
+        self.console.print(
+            f"[green]Resumed[/green] {job_id} "
+            f"[dim]phase={self.current_phase_idx}/{len(_PIPELINE_PHASES)}[/dim]"
+        )
+
+    async def cmd_projects(self) -> None:
+        """List known projects."""
+        store = self._get_store()
+        current = store.current_project()
+        projects = store.list_projects()
+        for project in projects:
+            marker = "*" if project["id"] == current["id"] else " "
+            self.console.print(
+                f" {marker} {project['slug']} [dim]{project['name']}[/dim]"
+            )
+
+    async def cmd_project(self, arg: str) -> None:
+        """Create or switch projects.
+
+        Usage:
+          /project use <slug-or-id>
+          /project new <name>
+        """
+        parts = arg.strip().split(maxsplit=1)
+        if len(parts) != 2 or parts[0] not in {"use", "new"}:
+            self.console.print("[yellow]Usage:[/yellow] /project use <slug> | /project new <name>")
+            return
+
+        store = self._get_store()
+        action, value = parts
+        if action == "new":
+            project = store.create_project(value)
+            store.set_current_project(str(project["id"]))
+            self.console.print(f"[green]Created project[/green] {project['slug']}")
+            return
+
+        project = store.set_current_project(value)
+        if project is None:
+            self.console.print(f"[yellow]Project not found:[/yellow] {value}")
+            return
+        self.console.print(f"[green]Switched project[/green] {project['slug']}")
 
     async def cmd_tools(self) -> None:
         """Show tool call history and summary."""
@@ -897,6 +985,9 @@ class RadAgentREPL:
                 "[bold]/tools[/bold]         Show LLM/tool call history\n"
                 "[bold]/gates[/bold]         Show gate-check results\n"
                 "[bold]/jobs[/bold]          List existing jobs\n"
+                "[bold]/resume <job>[/bold]  Resume a persisted job\n"
+                "[bold]/projects[/bold]      List projects\n"
+                "[bold]/project use/new[/bold] Switch or create project\n"
                 "[bold]/chat <msg>[/bold]    Chat with AI (with RAG + web + history)\n"
                 "[bold]/chat reset[/bold]    Clear conversation history\n"
                 "[bold]/help[/bold]          Show this help\n"
@@ -963,6 +1054,7 @@ class RadAgentREPL:
 
         self._completed_phases.append(phase)
         self.current_phase_idx = _PIPELINE_PHASES.index(phase) + 1
+        self._persist_phase_state(phase)
         self.console.print(f"  [green]✓ {phase}[/green]")
 
         # Show job ID prominently after workspace is created
@@ -982,6 +1074,41 @@ class RadAgentREPL:
             return False
 
         return True
+
+    def _persist_phase_state(self, phase: str) -> None:
+        """Persist REPL resume state and artifact indexes after a phase."""
+        job_id = self.state.get("job_id")
+        if not job_id:
+            return
+        try:
+            store = self._get_store()
+            status = "completed" if phase == "report" else "running"
+            if self.state.get("confirmation_status") == "pending":
+                status = "paused"
+            store.save_state_snapshot(
+                job_id=job_id,
+                state=self.state,
+                completed_phases=self._completed_phases,
+                phase=phase,
+                current_phase_idx=self.current_phase_idx,
+                status=status,
+            )
+            self._record_state_artifacts(store, job_id)
+        except Exception as exc:
+            logger.warning("Failed to persist REPL state for %s: %s", job_id, exc)
+
+    def _record_state_artifacts(self, store: Any, job_id: str) -> None:
+        """Index path-like state values as artifact metadata."""
+        for key, value in self.state.items():
+            if not isinstance(value, str) or not value:
+                continue
+            if not (key.endswith("_path") or key.endswith("_dir")):
+                continue
+            path = Path(value)
+            if not path.exists():
+                continue
+            stage = path.parent.name if path.is_file() else path.name
+            store.record_artifact(job_id=job_id, path=str(path), stage=stage, kind=key)
 
     async def _exec_prepare_workspace(self) -> dict[str, Any]:
         """Create job directory structure via WorkspaceManager."""
@@ -1013,8 +1140,23 @@ class RadAgentREPL:
         }
         execution_mode = execution_mode_map.get(run_mode, "strict")
 
+        store = self._get_store()
+        project = store.current_project()
+        store.upsert_job(
+            job_id=job_id,
+            user_query=self.state.get("user_query", ""),
+            project_id=str(project["id"]),
+            status="running",
+            current_phase="prepare_workspace",
+            current_phase_idx=0,
+            execution_mode=execution_mode,
+            run_mode=run_mode,
+            job_workspace=str(job.dir),
+        )
+
         return {
             "job_id": job_id,
+            "project_id": str(project["id"]),
             "run_mode": run_mode,
             "execution_mode": execution_mode,
             "workspace_root": str(ws.root),

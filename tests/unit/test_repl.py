@@ -171,6 +171,13 @@ class TestSlashCommands:
             mock_sim.assert_called_once_with("5000")
 
     @pytest.mark.asyncio
+    async def test_resume_routes_to_cmd_resume(self, repl: RadAgentREPL) -> None:
+        """/resume should route to persisted job recovery."""
+        with patch.object(repl, "cmd_resume", new_callable=AsyncMock) as mock_resume:
+            await repl._dispatch_command("/resume", "job-123")
+            mock_resume.assert_called_once_with("job-123")
+
+    @pytest.mark.asyncio
     async def test_quit_raises_quit_exception(self, repl: RadAgentREPL) -> None:
         """/quit should raise _QuitREPLError, not SystemExit."""
         with pytest.raises(_QuitREPLError):
@@ -227,14 +234,59 @@ class TestSlashCommands:
     @pytest.mark.asyncio
     async def test_jobs_no_dir(self, repl: RadAgentREPL, tmp_path: Path) -> None:
         """Jobs with no workspace dir should show a message."""
-        with patch(
-            "agent_core.workspace.manager.WorkspaceManager.root",
-            new_callable=lambda: property(lambda self: tmp_path / "nonexistent"),
-        ):
-            r = RadAgentREPL()
-            r.console = MagicMock()
-            await r.cmd_jobs()
-            r.console.print.assert_called()
+        r = RadAgentREPL()
+        r.console = MagicMock()
+        from agent_core.storage import RadAgentStore
+
+        r._store = RadAgentStore(workspace_root=tmp_path / "nonexistent")
+        await r.cmd_jobs()
+        r.console.print.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_resume_restores_snapshot(
+        self, repl: RadAgentREPL, tmp_path: Path
+    ) -> None:
+        """Resume should restore state, phase index and completed phases."""
+        from agent_core.storage import RadAgentStore
+
+        store = RadAgentStore(workspace_root=tmp_path)
+        store.upsert_job(job_id="job-resume", user_query="simulate")
+        state = {
+            "job_id": "job-resume",
+            "user_query": "simulate",
+            "execution_mode": "strict",
+            "run_mode": "strict",
+        }
+        store.save_state_snapshot(
+            job_id="job-resume",
+            state=state,
+            completed_phases=["prepare_workspace"],
+            phase="context",
+            current_phase_idx=1,
+            status="paused",
+        )
+        repl._store = store
+
+        await repl.cmd_resume("job-resume")
+
+        assert repl.state == state
+        assert repl.current_phase_idx == 1
+        assert repl._completed_phases == ["prepare_workspace"]
+
+    @pytest.mark.asyncio
+    async def test_project_new_and_use(
+        self, repl: RadAgentREPL, tmp_path: Path
+    ) -> None:
+        """Project commands should create and switch the current project."""
+        from agent_core.storage import RadAgentStore
+
+        store = RadAgentStore(workspace_root=tmp_path)
+        repl._store = store
+
+        await repl.cmd_project("new Detector Runs")
+        await repl.cmd_project("use detector-runs")
+
+        assert store.current_project()["slug"] == "detector-runs"
 
 
 # ─── cmd_status with pipeline state ──────────────────────────────────

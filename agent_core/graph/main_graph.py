@@ -65,6 +65,7 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
     Sets workspace paths and maps run_mode to execution_mode for backward compatibility.
     """
     from agent_core.naming import build_job_id
+    from agent_core.storage import RadAgentStore
     from agent_core.workspace.manager import WorkspaceManager
 
     job_id = await build_job_id(
@@ -89,9 +90,23 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
         "production": "production",
     }
     execution_mode = execution_mode_map.get(run_mode, "strict")
+    store = RadAgentStore(workspace_root=ws.root)
+    project = store.current_project()
+    store.upsert_job(
+        job_id=job_id,
+        user_query=state.get("user_query", ""),
+        project_id=str(project["id"]),
+        status="running",
+        current_phase="prepare_workspace",
+        current_phase_idx=0,
+        execution_mode=execution_mode,
+        run_mode=run_mode,
+        job_workspace=str(job.dir),
+    )
 
     return {
         "job_id": job_id,
+        "project_id": str(project["id"]),
         "run_mode": run_mode,
         "execution_mode": execution_mode,
         "workspace_root": str(ws.root),
