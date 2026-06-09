@@ -26,11 +26,12 @@ def test_correct_generated_by_passes():
     assert gen_checks[0]["status"] == "pass"
 
 
-def test_wrong_generated_by_warns():
+def test_wrong_generated_by_fails():
     result = run_hard_gate_checks("material", [_make_file(generated_by="wrong_agent")])
     gen_checks = [c for c in result.checks if c["check"] == "generated_by"]
     assert gen_checks
-    assert gen_checks[0]["status"] == "warn"
+    assert gen_checks[0]["status"] == "fail"
+    assert result.status == "fail"
 
 
 def test_correct_module_name_passes():
@@ -40,8 +41,9 @@ def test_correct_module_name_passes():
     assert mod_checks[0]["status"] == "pass"
 
 
-def test_wrong_module_name_warns():
+def test_wrong_module_name_fails():
     result = run_hard_gate_checks("material", [_make_file(module_name="wrong")])
     mod_checks = [c for c in result.checks if c["check"] == "module_name"]
     assert mod_checks
-    assert mod_checks[0]["status"] == "warn"
+    assert mod_checks[0]["status"] == "fail"
+    assert result.status == "fail"

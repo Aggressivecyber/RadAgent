@@ -367,8 +367,8 @@ class TestModuleRepairStopsAfterMaxAttempts:
                             "new_content": (
                                 "#pragma once\n"
                                 "#include \"G4ThreeVector.hh\"\n"
+                                "#include \"G4RotationMatrix.hh\"\n"
                                 "class G4LogicalVolume;\n"
-                                "class G4RotationMatrix;\n"
                                 "class G4PVPlacement;\n"
                                 "class PlacementManager {\n"
                                 "public:\n"

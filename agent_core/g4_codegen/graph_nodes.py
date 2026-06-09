@@ -118,6 +118,7 @@ async def build_module_contexts_node(
     web_context = state.get("web_context", [])
     context_decision = state.get("context_decision")
     web_search_available = state.get("web_search_available")
+    runtime_failure_context = state.get("runtime_failure_context", {})
 
     contexts: dict[str, Any] = {}
     for module_name, contract in module_contracts.items():
@@ -135,6 +136,7 @@ async def build_module_contexts_node(
             web_context=web_context,
             context_decision=context_decision,
             web_search_available=web_search_available,
+            runtime_failure_context=runtime_failure_context,
         )
         contexts[module_name] = ctx
 
@@ -541,7 +543,15 @@ async def run_module_layer_node(
     module_names: list[str],
 ) -> dict[str, Any]:
     """Run a layer of module pipelines concurrently."""
+    from agent_core.config.environment import resolve_safe_concurrency
+
     layer_started = time.monotonic()
+    max_concurrency = resolve_safe_concurrency(
+        len(module_names),
+        override_env="RADAGENT_G4_MODULE_MAX_CONCURRENCY",
+        hard_cap=4,
+        memory_per_worker_gb=2.0,
+    )
     record_event(
         job_id=state.get("job_id", "unknown"),
         event_type="module_layer_start",
@@ -549,41 +559,49 @@ async def run_module_layer_node(
         phase="g4_codegen",
         layer=layer_name,
         summary=f"Starting module layer {layer_name}",
-        metrics={"module_count": len(module_names)},
+        metrics={"module_count": len(module_names), "max_concurrency": max_concurrency},
         details={"modules": module_names},
     )
+    semaphore = asyncio.Semaphore(max_concurrency)
 
     async def _run_one(module_name: str) -> dict[str, Any]:
-        local_state: dict[str, Any] = dict(state)
-        result: dict[str, Any] = {}
+        async with semaphore:
+            local_state: dict[str, Any] = dict(state)
+            result: dict[str, Any] = {}
 
-        agent_update = await run_module_agent_node(local_state, module_name)
-        _merge_update(local_state, agent_update)
-        _merge_update(result, agent_update)
+            agent_update = await run_module_agent_node(local_state, module_name)
+            _merge_update(local_state, agent_update)
+            _merge_update(result, agent_update)
 
-        for _attempt in range(4):
-            hard_update = await run_module_hard_gate_node(local_state, module_name)
-            _merge_update(local_state, hard_update)
-            _merge_update(result, hard_update)
-            hard = local_state.get("module_gate_results", {}).get(module_name, {}).get("hard", {})
+            for _attempt in range(4):
+                hard_update = await run_module_hard_gate_node(local_state, module_name)
+                _merge_update(local_state, hard_update)
+                _merge_update(result, hard_update)
+                hard = (
+                    local_state.get("module_gate_results", {}).get(module_name, {}).get("hard", {})
+                )
 
-            if hard.get("status") == "pass":
-                llm_update = await run_module_llm_gate_node(local_state, module_name)
-                _merge_update(local_state, llm_update)
-                _merge_update(result, llm_update)
-                llm = local_state.get("module_gate_results", {}).get(module_name, {}).get("llm", {})
-                if llm.get("status") == "pass":
+                if hard.get("status") == "pass":
+                    llm_update = await run_module_llm_gate_node(local_state, module_name)
+                    _merge_update(local_state, llm_update)
+                    _merge_update(result, llm_update)
+                    llm = (
+                        local_state.get("module_gate_results", {})
+                        .get(module_name, {})
+                        .get("llm", {})
+                    )
+                    if llm.get("status") == "pass":
+                        break
+
+                repair_update = await repair_module_node(local_state, module_name)
+                _merge_update(local_state, repair_update)
+                _merge_update(result, repair_update)
+                repair = local_state.get("module_repair_results", {}).get(module_name, {})
+                if repair.get("status") == "failed":
                     break
 
-            repair_update = await repair_module_node(local_state, module_name)
-            _merge_update(local_state, repair_update)
-            _merge_update(result, repair_update)
-            repair = local_state.get("module_repair_results", {}).get(module_name, {})
-            if repair.get("status") == "failed":
-                break
-
-        result["current_node"] = f"run_{layer_name}"
-        return result
+            result["current_node"] = f"run_{layer_name}"
+            return result
 
     module_updates = await asyncio.gather(*[_run_one(module_name) for module_name in module_names])
     combined: dict[str, Any] = {
@@ -612,6 +630,7 @@ async def run_module_layer_node(
         duration_ms=(time.monotonic() - layer_started) * 1000,
         metrics={
             "module_count": len(module_names),
+            "max_concurrency": max_concurrency,
             "error_count": len(layer_errors),
         },
         errors=layer_errors,

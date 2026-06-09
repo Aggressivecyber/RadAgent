@@ -159,6 +159,10 @@ def run_scoring_hard_gate(
                 r"\bGetElementCenter\s*\(",
                 "G4VScoringMesh has no GetElementCenter API; compute bin centers locally",
             ),
+            (
+                r"\bGetNumberOfCells\s*\(",
+                "G4VScoringMesh has no GetNumberOfCells API; compute total cells from saved nBins",
+            ),
         ]
         for pattern, message in invalid_mesh_access_patterns:
             if re.search(pattern, content, re.DOTALL):
@@ -197,6 +201,19 @@ def run_scoring_hard_gate(
                 }
             )
             errors.append(f"{f.path}: store GetScoreMap() by value, not non-const reference")
+
+        if re.search(r"\bfNBins\s*\[\s*3\s*\]", content):
+            checks.append(
+                {
+                    "check": "scoring_named_axis_count",
+                    "status": "fail",
+                    "message": (
+                        "Do not declare fNBins[3] with a raw dimension; use a named "
+                        "constant such as kAxisCount"
+                    ),
+                }
+            )
+            errors.append(f"{f.path}: replace fNBins[3] with a named dimension constant")
 
     return ModuleGateResult(
         module_name="scoring",

@@ -69,9 +69,14 @@ MODULE_LAYERS = [
         ],
     ),
     (
-        "application_modules",
+        "action_modules",
         [
             "action_initialization",
+        ],
+    ),
+    (
+        "application_modules",
+        [
             "main_cmake",
         ],
     ),

@@ -244,7 +244,7 @@ class TestGeant4DocStore:
             assert doc.doc_id, "doc_id must be non-empty"
             assert doc.title, "title must be non-empty"
             assert doc.content, "content must be non-empty"
-            assert doc.source == "geant4_reference"
+            assert doc.source, "source must be non-empty"
 
     def test_document_ids_are_unique(self) -> None:
         store = Geant4DocStore()
@@ -268,6 +268,11 @@ class TestGeant4DocStore:
             "g4vsensitivedetector",
             "g4particlegun",
             "g4runmanager",
+            "g4physlistfactory",
+            "g4vscoringmesh",
+            "g4allocator",
+            "/run/initialize",
+            "g4_output_dir",
             "processhits",
         ):
             assert keyword in titles, f"Doc store must cover '{keyword}'"

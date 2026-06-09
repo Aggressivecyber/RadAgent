@@ -13,17 +13,20 @@ Rules:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_job_dir
+from agent_core.config.workspace import get_job_dir, get_workspace_root
 
 from .doc_store import Geant4DocStore
 from .rag_client import (
     DEFAULT_TOP_K,
+    EMBED_MODEL,
     MIN_RELEVANCE_SCORE,
+    OLLAMA_BASE_URL,
     OllamaEmbedder,
     RAGClient,
 )
@@ -132,12 +135,47 @@ async def _ensure_indexed(client: RAGClient) -> bool:
             return False
 
         try:
-            count = await client.index_documents(docs)
+            sqlite_db = _geant4_sqlite_index_path()
+            if sqlite_db.is_file() and client.load_sqlite_index(sqlite_db):
+                supplemental = client.index.add_lexical_documents(docs)
+                count = client.index.size
+                logger.info(
+                    "Loaded prebuilt Geant4 RAG SQLite index: %s; supplemental_docs=%d",
+                    sqlite_db,
+                    supplemental,
+                )
+            else:
+                cache_path = _rag_index_cache_path(docs)
+                count = await client.index_documents_cached(docs, cache_path)
             logger.info("Indexed %d/%d Geant4 documents", count, len(docs))
             return count > 0
         except Exception as exc:
             logger.error("Failed to index Geant4 documents: %s", exc)
             return False
+
+
+def _geant4_sqlite_index_path() -> Path:
+    return (
+        Path(__file__).resolve().parents[2]
+        / "knowledge_base"
+        / "geant4"
+        / "data"
+        / "geant4_index.db"
+    )
+
+
+def _rag_index_cache_path(docs: list[Any]) -> Path:
+    """Return cache path keyed by doc content and embedding configuration."""
+    fingerprint = hashlib.sha256()
+    fingerprint.update(EMBED_MODEL.encode("utf-8"))
+    fingerprint.update(str(OLLAMA_BASE_URL).encode("utf-8"))
+    for doc in docs:
+        fingerprint.update(doc.doc_id.encode("utf-8"))
+        fingerprint.update(doc.title.encode("utf-8"))
+        fingerprint.update(doc.content.encode("utf-8"))
+        fingerprint.update(doc.source.encode("utf-8"))
+    digest = fingerprint.hexdigest()[:16]
+    return get_workspace_root() / ".cache" / "rag" / f"geant4_doc_index_{digest}.json"
 
 
 def _get_context_dir(job_id: str) -> Path:

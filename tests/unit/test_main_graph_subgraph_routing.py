@@ -135,6 +135,17 @@ class TestRouteAfterGates:
         }
         assert route_after_gates(state) == "g4_codegen_subgraph"
 
+    def test_runtime_gate_dict_routes_to_codegen(self) -> None:
+        state: RadAgentMainState = {
+            "validation_status": "failed",
+            "retry_count": 0,
+            "failed_gates": [
+                {"gate_id": 8, "name": "Data Contract", "status": "fail"},
+                {"gate_id": 9, "name": "Smoke Simulation", "status": "fail"},
+            ],
+        }
+        assert route_after_gates(state) == "g4_codegen_subgraph"
+
     def test_failed_max_retries_reports(self) -> None:
         state: RadAgentMainState = {
             "validation_status": "failed",

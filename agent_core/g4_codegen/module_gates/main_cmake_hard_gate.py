@@ -31,6 +31,7 @@ def _append_main_cmake_checks(
     cmake = by_path.get("CMakeLists.txt", "")
     main = by_path.get("main.cc", "")
     init = by_path.get("macros/init.mac", "")
+    run_macro = by_path.get("macros/run.mac", "")
 
     checks: list[dict[str, str]] = []
     if cmake:
@@ -76,6 +77,24 @@ def _append_main_cmake_checks(
             "message": (
                 "Do not call runManager->Initialize() when init.mac also contains "
                 "/run/initialize"
+            ),
+        }
+    )
+    run_initialize_index = run_macro.find("/run/initialize")
+    run_beam_on_index = run_macro.find("/run/beamOn")
+    run_macro_initializes_before_beam = (
+        bool(run_macro)
+        and run_initialize_index >= 0
+        and run_beam_on_index >= 0
+        and run_initialize_index < run_beam_on_index
+    )
+    checks.append(
+        {
+            "check": "run_macro_initializes_before_beam_on",
+            "status": "pass" if run_macro_initializes_before_beam else "fail",
+            "message": (
+                "macros/run.mac must contain /run/initialize before /run/beamOn "
+                "because smoke tests execute run.mac directly"
             ),
         }
     )

@@ -184,6 +184,38 @@ def _append_placement_api_checks(
                 "when delegating to PlaceVolume"
             )
 
+        if f.path.endswith(".cc"):
+            dereferences_logical_volume = bool(
+                re.search(r"\b(?:logical|mother|[A-Za-z_]\w*)\s*->\s*GetName\s*\(", content)
+                or re.search(
+                    r"\bG4LogicalVolume\s*\*\s*[A-Za-z_]\w*[^;{]*\{[^}]*->",
+                    content,
+                    re.DOTALL,
+                )
+            )
+            has_logical_volume_include = bool(
+                re.search(r"#include\s+[<\"]G4LogicalVolume\.hh[>\"]", content)
+            )
+            checks.append(
+                {
+                    "check": "placement_dereference_logical_volume_requires_full_header",
+                    "status": (
+                        "pass"
+                        if not dereferences_logical_volume or has_logical_volume_include
+                        else "fail"
+                    ),
+                    "message": (
+                        "PlacementManager.cc must include G4LogicalVolume.hh before "
+                        "dereferencing G4LogicalVolume*"
+                    ),
+                }
+            )
+            if dereferences_logical_volume and not has_logical_volume_include:
+                errors.append(
+                    f"{f.path}: include G4LogicalVolume.hh before calling "
+                    "G4LogicalVolume methods such as GetName()"
+                )
+
     result.checks.extend(checks)
     if errors:
         result.status = "fail"

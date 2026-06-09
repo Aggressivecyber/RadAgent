@@ -284,7 +284,13 @@ async def run_real_module_flow(
         if hard_gate.status == "pass" and llm_gate.status == "pass":
             break
         failed_gate = hard_gate if hard_gate.status != "pass" else llm_gate
-        result = await repair_module(module_name, module_context, result, failed_gate)
+        result = await repair_module(
+            module_name,
+            module_context,
+            result,
+            failed_gate,
+            job_id=job_id,
+        )
         save_module_result(result, job_id)
         assert_generated_files(module_name, result, required_symbols)
         files = [GeneratedModuleFile(**f.model_dump()) for f in result.generated_files]

@@ -4,7 +4,7 @@ Maps failed gate IDs to the subgraph that should handle the retry:
 - Gate 0-1 → context_subgraph
 - Gate 2 → g4_modeling_subgraph
 - Gate 3-6 → g4_codegen_subgraph / patch_subgraph
-- Gate 7-11 → patch_subgraph
+- Gate 7-11 → g4_codegen_subgraph for runtime/code contract repair
 - G4-A to G4-C (12-14) → g4_modeling_subgraph
 - G4-D to G4-G (15-18) → g4_codegen_subgraph
 """
@@ -22,11 +22,11 @@ _GATE_RETRY_MAP: dict[int, str] = {
     4: "patch_subgraph",
     5: "g4_codegen_subgraph",
     6: "g4_codegen_subgraph",
-    7: "patch_subgraph",
-    8: "patch_subgraph",
-    9: "patch_subgraph",
+    7: "g4_codegen_subgraph",
+    8: "g4_codegen_subgraph",
+    9: "g4_codegen_subgraph",
     10: "patch_subgraph",
-    11: "patch_subgraph",
+    11: "g4_codegen_subgraph",
     12: "g4_modeling_subgraph",
     13: "g4_modeling_subgraph",
     14: "g4_modeling_subgraph",

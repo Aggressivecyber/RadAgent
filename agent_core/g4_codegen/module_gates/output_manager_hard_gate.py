@@ -24,6 +24,10 @@ def run_output_manager_hard_gate(
             r"\bScoringManager\s*::",
             r"\bScoringManager\s*\*",
             r"\bScoringManager\s+",
+            r"\bEventData\b",
+            r"G4VUserEventInformation",
+            r"GetUserInformation\s*\(",
+            r"SetUserInformation\s*\(",
         ],
     )
     _append_output_manager_interface_checks(result, generated_files)
@@ -138,6 +142,62 @@ def _append_output_manager_interface_checks(
     ]
     result.checks.extend(signature_checks)
     for check in signature_checks:
+        if check["status"] == "fail":
+            result.status = "fail"
+            result.errors.append(check["message"])
+
+    uses_g4_output_dir = bool(
+        re.search(r"\b(?:std::)?getenv\s*\(\s*\"G4_OUTPUT_DIR\"\s*\)", source)
+    )
+    contract_filenames = {
+        "output.csv": "runtime event table consumed by Geant4Runner",
+        "run_summary.json": "runtime summary consumed by Geant4Runner",
+        "metadata.json": "runtime metadata consumed by Geant4Runner",
+    }
+    artifact_checks = [
+        {
+            "check": "output_manager_uses_g4_output_dir",
+            "status": "pass" if uses_g4_output_dir else "fail",
+            "message": "OutputManager.cc must read G4_OUTPUT_DIR for runtime artifacts",
+        },
+    ]
+    for filename, purpose in contract_filenames.items():
+        artifact_checks.append(
+            {
+                "check": f"output_manager_writes_{filename}",
+                "status": "pass" if filename in source else "fail",
+                "message": f"OutputManager.cc must write fixed {filename} for {purpose}",
+            }
+        )
+
+    has_stable_event_header = "EventID,edep_MeV,dose_Gy" in source
+    artifact_checks.append(
+        {
+            "check": "output_manager_output_csv_header_contract",
+            "status": "pass" if has_stable_event_header else "fail",
+            "message": "output.csv header must include EventID,edep_MeV,dose_Gy",
+        }
+    )
+
+    uses_job_prefixed_artifact_name = bool(
+        re.search(
+            r"_(?:events\.csv|run_summary\.json|metadata\.json)",
+            source,
+        )
+    )
+    artifact_checks.append(
+        {
+            "check": "output_manager_uses_fixed_artifact_names",
+            "status": "fail" if uses_job_prefixed_artifact_name else "pass",
+            "message": (
+                "OutputManager.cc must not use job-prefixed artifact filenames; "
+                "write output.csv, run_summary.json, and metadata.json"
+            ),
+        }
+    )
+
+    result.checks.extend(artifact_checks)
+    for check in artifact_checks:
         if check["status"] == "fail":
             result.status = "fail"
             result.errors.append(check["message"])

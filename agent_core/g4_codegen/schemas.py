@@ -27,6 +27,7 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     web_context: list[dict[str, Any]]
     web_search_available: bool
     context_decision: str
+    runtime_failure_context: dict[str, Any]
 
     # Planning outputs
     codegen_plan: dict[str, Any]
@@ -104,6 +105,7 @@ class ModuleContext(BaseModel):
     context_retrieval_policy: dict[str, Any] = Field(default_factory=dict)
     existing_generated_file_summaries: list[dict[str, Any]] = Field(default_factory=list)
     previous_failures: list[dict[str, Any]] = Field(default_factory=list)
+    runtime_failure_context: dict[str, Any] = Field(default_factory=dict)
     run_mode: str = "strict"
 
 

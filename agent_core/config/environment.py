@@ -87,6 +87,14 @@ class SoftwareEnvironment:
 
 
 @dataclass(frozen=True)
+class ConcurrencyEnvironment:
+    cpu_count: int
+    memory_total_gb: float
+    g4_module_max_concurrency: int
+    scenario_max_concurrency: int
+
+
+@dataclass(frozen=True)
 class RadAgentEnvironment:
     model_provider: ModelProvider
     proxy: str
@@ -94,6 +102,7 @@ class RadAgentEnvironment:
     rag_endpoints: dict[str, str]
     models: dict[ModelTier, ModelTierEnvironment]
     software: SoftwareEnvironment
+    concurrency: ConcurrencyEnvironment
 
 
 def _provider_from_env() -> ModelProvider:
@@ -135,6 +144,50 @@ def _model_tier(
         temperature=_env_float(temperature_env, default_temperature),
         max_tokens=_env_int(max_tokens_env, default_max_tokens),
     )
+
+
+def _total_memory_gb() -> float:
+    try:
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        page_count = os.sysconf("SC_PHYS_PAGES")
+        if isinstance(page_size, int) and isinstance(page_count, int):
+            return round((page_size * page_count) / (1024**3), 2)
+    except (OSError, ValueError, AttributeError):
+        pass
+    meminfo = Path("/proc/meminfo")
+    if meminfo.is_file():
+        for line in meminfo.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("MemTotal:"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    return round(int(parts[1]) / (1024**2), 2)
+    return 0.0
+
+
+def resolve_safe_concurrency(
+    workload_count: int,
+    *,
+    override_env: str,
+    hard_cap: int,
+    memory_per_worker_gb: float,
+) -> int:
+    """Return a bounded concurrency level from env override and host resources."""
+    if workload_count <= 0:
+        return 1
+
+    override = _env_int(override_env, 0)
+    if override > 0:
+        return max(1, min(workload_count, override))
+
+    cpu_count = os.cpu_count() or 1
+    memory_total_gb = _total_memory_gb()
+    cpu_based = max(1, cpu_count // 2)
+    mem_based = (
+        max(1, int(memory_total_gb // memory_per_worker_gb))
+        if memory_total_gb > 0 and memory_per_worker_gb > 0
+        else cpu_based
+    )
+    return max(1, min(workload_count, hard_cap, cpu_based, mem_based))
 
 
 def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
@@ -206,6 +259,22 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
             "RADAGENT_MAX_API_KEY_ENV",
         ),
     }
+    concurrency = ConcurrencyEnvironment(
+        cpu_count=os.cpu_count() or 1,
+        memory_total_gb=_total_memory_gb(),
+        g4_module_max_concurrency=resolve_safe_concurrency(
+            10,
+            override_env="RADAGENT_G4_MODULE_MAX_CONCURRENCY",
+            hard_cap=_env_int("RADAGENT_G4_MODULE_HARD_CAP", 4),
+            memory_per_worker_gb=_env_float("RADAGENT_G4_MODULE_MEMORY_GB", 2.0),
+        ),
+        scenario_max_concurrency=resolve_safe_concurrency(
+            32,
+            override_env="RADAGENT_SCENARIO_MAX_CONCURRENCY",
+            hard_cap=_env_int("RADAGENT_SCENARIO_HARD_CAP", 4),
+            memory_per_worker_gb=_env_float("RADAGENT_SCENARIO_MEMORY_GB", 3.0),
+        ),
+    )
 
     return RadAgentEnvironment(
         model_provider=_provider_from_env(),
@@ -218,6 +287,7 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
         },
         models=models,
         software=software,
+        concurrency=concurrency,
     )
 
 

@@ -29,6 +29,7 @@ def build_module_context(
     web_context: list[dict[str, Any]] | None = None,
     context_decision: str | None = None,
     web_search_available: bool | None = None,
+    runtime_failure_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build context for a module agent.
 
@@ -61,6 +62,7 @@ def build_module_context(
         ),
         existing_generated_file_summaries=existing_file_summaries or [],
         previous_failures=previous_failures or [],
+        runtime_failure_context=runtime_failure_context or {},
         run_mode=run_mode,
     )
 

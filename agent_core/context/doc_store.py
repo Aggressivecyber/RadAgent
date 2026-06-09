@@ -109,6 +109,19 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
         "source": "geant4_reference",
     },
     {
+        "doc_id": "g4_rotation_matrix",
+        "title": "G4RotationMatrix — Placement Rotation Type",
+        "content": (
+            "G4PVPlacement rotation arguments use G4RotationMatrix*. In Geant4, "
+            "G4RotationMatrix is provided by G4RotationMatrix.hh and must be included when "
+            "used in generated headers or sources. Do not forward declare "
+            "class G4RotationMatrix because Geant4 may define it through an alias/type "
+            "definition. Include: #include \"G4RotationMatrix.hh\". Use nullptr for no "
+            "rotation and pass non-const G4RotationMatrix* to G4PVPlacement."
+        ),
+        "source": "geant4_reference",
+    },
+    {
         "doc_id": "g4_nist_materials",
         "title": "G4NistManager — NIST Material Database",
         "content": (
@@ -117,6 +130,19 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "G4_WATER, G4_COPPER, G4_ALUMINUM, G4_LEAD, G4_PLASTIC_SC_VINYLTOLUENE. "
             "Use FindOrBuildElement() for individual elements. "
             'Include: #include "G4NistManager.hh".'
+        ),
+        "source": "geant4_reference",
+    },
+    {
+        "doc_id": "g4_nist_material_names",
+        "title": "Geant4 NIST Material Names — Common Pitfalls",
+        "content": (
+            "Common NIST material names include G4_AIR, G4_Galactic, G4_Si, "
+            "G4_SILICON_DIOXIDE, G4_Al, G4_Cu, G4_W, G4_Pb, and G4_WATER. "
+            "Use G4NistManager::Instance()->FindOrBuildMaterial(name) and check for null "
+            "before using the material. Do not invent names such as G4_ALUMINUM when the "
+            "model IR requests G4_Al. RadAgent material modules should map material_id and "
+            "nist_name exactly from Model IR."
         ),
         "source": "geant4_reference",
     },
@@ -175,6 +201,21 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
         "source": "geant4_reference",
     },
     {
+        "doc_id": "g4_phys_list_factory",
+        "title": "G4PhysListFactory — Reference Physics List Factory",
+        "content": (
+            "G4PhysListFactory creates Geant4 reference physics lists such as FTFP_BERT, "
+            "QGSP_BERT, QGSP_BIC, and Shielding. Use "
+            "factory.GetReferencePhysList(\"FTFP_BERT\") to obtain a G4VModularPhysicsList*. "
+            "The factory object must remain valid while creating the list; do not return a "
+            "physics list from a local temporary factory if the wrapper caches related state. "
+            "Production cuts should be set on the physics list with SetDefaultCutValue(value) "
+            "or SetCutValue(value, particleName) where supported by the actual physics-list API. "
+            "Include: #include \"G4PhysListFactory.hh\" and #include \"G4VModularPhysicsList.hh\"."
+        ),
+        "source": "geant4_reference",
+    },
+    {
         "doc_id": "g4_run_manager",
         "title": "G4RunManager — Simulation Execution",
         "content": (
@@ -189,6 +230,46 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
         "source": "geant4_reference",
     },
     {
+        "doc_id": "g4_action_initialization",
+        "title": "G4VUserActionInitialization — User Actions",
+        "content": (
+            "In modern Geant4 applications, derive ActionInitialization from "
+            "G4VUserActionInitialization and override Build() const. Inside Build(), call "
+            "SetUserAction(new PrimaryGeneratorAction(...)) and register optional RunAction, "
+            "EventAction, or SteppingAction objects. main.cc should install actions with "
+            "runManager->SetUserInitialization(new ActionInitialization(...)), not by calling "
+            "SetUserAction directly from main when an ActionInitialization module owns runtime "
+            "callbacks. Include: #include \"G4VUserActionInitialization.hh\"."
+        ),
+        "source": "geant4_reference",
+    },
+    {
+        "doc_id": "g4_run_macros",
+        "title": "Geant4 Run Macros — Initialize Before BeamOn",
+        "content": (
+            "A Geant4 batch macro that starts events must initialize the kernel before "
+            "beamOn. Put /run/initialize before /run/beamOn N. A minimal run.mac is: "
+            "/run/initialize followed by /run/beamOn 1000. If BeamOn is called before "
+            "initialization, Geant4 reports that the kernel should be initialized before "
+            "the first BeamOn and ignores the run. Do not leave placeholder macro lines; "
+            "macro files must contain real Geant4 UI commands or comments only."
+        ),
+        "source": "geant4_application_developers_guide",
+    },
+    {
+        "doc_id": "g4_cmake_project",
+        "title": "Minimal Geant4 CMake Project Contract",
+        "content": (
+            "A generated Geant4 CMakeLists.txt should call cmake_minimum_required, project, "
+            "find_package(Geant4 REQUIRED ui_all vis_all), include(${Geant4_USE_FILE}) when "
+            "using variable-style Geant4 CMake, add_executable(RadAgentG4 main.cc src/*.cc "
+            "listed explicitly), target_include_directories(RadAgentG4 PRIVATE include), and "
+            "target_link_libraries(RadAgentG4 ${Geant4_LIBRARIES}). Avoid file(GLOB) in "
+            "acceptance code because cross-file gates require explicit source wiring."
+        ),
+        "source": "radagent_runtime_contract",
+    },
+    {
         "doc_id": "g4_step_energy_deposit",
         "title": "G4Step — Energy Deposition Access",
         "content": (
@@ -199,6 +280,114 @@ _G4_DOCUMENTS: list[dict[str, str]] = [
             "Copy number: step->GetPreStepPoint()->GetTouchable()->GetCopyNumber(). "
             "Units: energy in MeV, position in mm (default Geant4 units). "
             'Include: #include "G4Step.hh".'
+        ),
+        "source": "geant4_reference",
+    },
+    {
+        "doc_id": "g4_hits_collection",
+        "title": "G4THitsCollection and G4Allocator — Hit Storage",
+        "content": (
+            "A sensitive detector commonly defines a Hit type and stores hits in "
+            "G4THitsCollection<Hit>. Register hit collection names in the detector constructor "
+            "with collectionName.push_back(\"CollectionName\"). In Initialize(G4HCofThisEvent*) "
+            "create the hits collection and add it to the event HCE. Custom Hit allocation uses "
+            "G4Allocator<Hit>::MallocSingle() in operator new and "
+            "G4Allocator<Hit>::FreeSingle(static_cast<Hit*>(ptr)) in operator delete. "
+            "Include: #include \"G4THitsCollection.hh\" and #include \"G4Allocator.hh\"."
+        ),
+        "source": "geant4_application_developers_guide",
+    },
+    {
+        "doc_id": "g4_sensitive_detector_manager",
+        "title": "G4SDManager — Register Sensitive Detectors",
+        "content": (
+            "Sensitive detectors are registered with "
+            "G4SDManager::GetSDMpointer()->AddNewDetector(sd). "
+            "Attach the detector to a logical volume with logicalVolume->SetSensitiveDetector(sd). "
+            "If a helper AttachTo(G4LogicalVolume*) exists, it should call "
+            "SetSensitiveDetector(this). "
+            "Do not call nonexistent SetLogicalVolume on G4VSensitiveDetector. Include "
+            "G4SDManager.hh and G4LogicalVolume.hh where needed."
+        ),
+        "source": "geant4_reference",
+    },
+    {
+        "doc_id": "g4_scoring_mesh_score_map",
+        "title": "G4VScoringMesh — Score Map Access",
+        "content": (
+            "Command-based scoring meshes expose primitive scorer results through "
+            "G4VScoringMesh::GetScoreMap(). The score map associates scorer names with "
+            "G4THitsMap<G4StatDouble>* values. Use scoreMap.find(\"edepScorer\") or "
+            "scoreMap.find(\"doseScorer\") on the score map, not on a hits map. To read a "
+            "cell value, use hitsMap->GetObject(copyNo) and then G4StatDouble::sum_wx(), "
+            "or inspect hitsMap->GetMap()->find(copyNo). Use "
+            "G4ScoringManager::GetScoringManager() to access the scoring manager singleton; "
+            "do not allocate G4ScoringManager with new. G4VScoringMesh does not provide "
+            "GetNumberOfCells(); store the configured nBin values in ScoringManager and "
+            "compute total cells as nBinsX * nBinsY * nBinsZ."
+        ),
+        "source": "geant4_scoring_documentation",
+    },
+    {
+        "doc_id": "g4_logical_volume_complete_type",
+        "title": "G4LogicalVolume — Complete Type Required for Member Access",
+        "content": (
+            "A forward declaration class G4LogicalVolume; is sufficient only for pointer "
+            "or reference declarations. Any source file that calls logicalVolume->GetName(), "
+            "logicalVolume->SetSensitiveDetector(...), or another G4LogicalVolume member "
+            "must include the complete type header: #include \"G4LogicalVolume.hh\". "
+            "PlacementManager.cc and SensitiveDetector.cc should include G4LogicalVolume.hh "
+            "when they dereference G4LogicalVolume*."
+        ),
+        "source": "geant4_reference",
+    },
+    {
+        "doc_id": "g4_scoring_macros",
+        "title": "Geant4 Command-Based Scoring Macro Commands",
+        "content": (
+            "Command-based scoring can create a mesh and primitive scorers with UI commands. "
+            "Typical macro command groups are /score/create/boxMesh, /score/mesh/boxSize, "
+            "/score/mesh/nBin, /score/quantity/energyDeposit, /score/quantity/doseDeposit, "
+            "and /score/close. Generated code should not fake scoring output; scoring setup "
+            "must correspond to actual scorers that OutputManager or ScoringManager reads."
+        ),
+        "source": "geant4_scoring_documentation",
+    },
+    {
+        "doc_id": "g4_output_contract",
+        "title": "RadAgent Geant4 Output Contract",
+        "content": (
+            "Generated Geant4 code must write runtime artifacts to the directory named by "
+            "the G4_OUTPUT_DIR environment variable when it is set. OutputManager must write "
+            "fixed filenames output.csv, run_summary.json, and metadata.json. Do not prefix "
+            "these files with job ids such as job0_events.csv. output.csv must include the "
+            "header EventID,edep_MeV,dose_Gy so Geant4Runner can materialize event_table.csv, "
+            "edep_3d.csv, dose_3d.csv, g4_summary.json, and provenance.json."
+        ),
+        "source": "radagent_runtime_contract",
+    },
+    {
+        "doc_id": "g4_run_event_actions_output",
+        "title": "RunAction and EventAction — Runtime Output Hooks",
+        "content": (
+            "Output files are normally opened in BeginOfRunAction and closed in EndOfRunAction. "
+            "Per-event rows can be written from EventAction or from a manager invoked by event "
+            "callbacks. RadAgent's OutputManager contract requires output.csv, run_summary.json, "
+            "and metadata.json under G4_OUTPUT_DIR. The generated code must create the output "
+            "directory if needed or fail clearly; it must not silently write to the build "
+            "directory when G4_OUTPUT_DIR is configured."
+        ),
+        "source": "radagent_runtime_contract",
+    },
+    {
+        "doc_id": "g4_primary_generator_contract",
+        "title": "G4VUserPrimaryGeneratorAction — GeneratePrimaries Contract",
+        "content": (
+            "PrimaryGeneratorAction must override GeneratePrimaries(G4Event* event). If the "
+            "function body calls particleGun->GeneratePrimaryVertex(event), the parameter must "
+            "be named event, not commented out as /*event*/ and not omitted. Include "
+            "G4Event.hh, G4ParticleGun.hh, G4ParticleTable.hh, G4SystemOfUnits.hh, and "
+            "G4ThreeVector.hh as needed."
         ),
         "source": "geant4_reference",
     },

@@ -45,13 +45,21 @@ context_retrieval_policy 规定信息不足时如何使用 RAG 和 web 证据。
 17. 每个文件对象的完整文件内容字段固定为 new_content。
 18. JSON 顶层必须包含 generated_files 数组。
 19. generated_files 数组必须包含完整可写入文件，不是文件摘要、计划或说明。
-20. 必须遵守 module_code_example 的 owned_files 和 primary_symbols；示例只用于接口形状，
+20. 顶层 module_name 必须等于当前 ModuleContext.module_name。
+21. generated_files 中每个文件对象的 generated_by 必须等于
+    "{当前模块名}_module_agent"，module_name 必须等于当前模块名；不得使用别名。
+22. path 必须是相对 08_geant4 根目录的路径，例如 include/XXX.hh、src/XXX.cc、
+    main.cc、CMakeLists.txt、macros/run.mac；不得以 08_geant4/ 开头。
+23. 必须遵守 module_code_example 的 owned_files 和 primary_symbols；示例只用于接口形状，
     不能照抄成占位实现。
-21. 生成代码前先检查 interface_context 和 existing_generated_file_summaries；
+24. 生成代码前先检查 interface_context 和 existing_generated_file_summaries；
     调用上游模块时必须匹配其真实类名、构造函数和 public 方法。
-22. 如果 Geant4 API、宏命令、ownership、构造函数或 scoring 访问方式不确定，
+25. 如果 Geant4 API、宏命令、ownership、构造函数或 scoring 访问方式不确定，
     必须优先使用 rag_snippets；RAG 不足时使用 web_context 中的可信 Geant4/CERN 来源。
-23. 使用 RAG 或 web 得到的 API 事实必须写入 used_references；没有证据不得发明 API。
+26. 使用 RAG 或 web 得到的 API 事实必须写入 used_references；没有证据不得发明 API。
+27. 如果 ModuleContext.runtime_failure_context 非空，必须把其中 gate、build、ctest、
+    smoke simulation、artifact contract 报告当作当前实现约束；只输出满足这些约束的新代码，
+    不要复述旧失败过程。
 
 返回格式：
 {
@@ -59,7 +67,7 @@ context_retrieval_policy 规定信息不足时如何使用 RAG 和 web 证据。
   "status": "generated",
   "generated_files": [
     {
-      "path": "08_geant4/include/XXX.hh",
+      "path": "include/XXX.hh",
       "operation": "create_or_replace",
       "new_content": "完整文件内容",
       "generated_by": "xxx_module_agent",

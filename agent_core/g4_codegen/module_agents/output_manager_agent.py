@@ -47,6 +47,20 @@ OUTPUT_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 输出管理模块编码 Ag
 15. 不得出现 placeholder、TODO、dummy、stub、NotImplemented 等占位实现或占位注释
 16. OutputManager.hh 只要声明 G4String 成员或参数，必须 include "G4String.hh"，
     不要依赖 G4Types.hh 或其他头文件的隐式包含
+17. 运行时输出目录必须读取环境变量 G4_OUTPUT_DIR；如果环境变量不存在，才回退到
+    当前工作目录或 output 子目录。不要忽略 G4_OUTPUT_DIR。
+18. 为了让 Geant4Runner 物化验收 artifact，EndRun 后必须在输出目录写出以下固定文件名：
+    output.csv、run_summary.json、metadata.json。
+    不要写 job0_events.csv、<job_id>_events.csv、<job_id>_run_summary.json 或
+    <job_id>_metadata.json 作为唯一输出；job_id 应写入 JSON 内容或 CSV 行，不要拼进文件名。
+19. output.csv 的 header 必须包含 EventID,edep_MeV,dose_Gy；每个事件至少写一行。
+20. run_summary.json 至少包含 total_events 或 events_requested，以及 total_edep_MeV。
+21. metadata.json 至少包含 job_id；job_id 可来自 SetRunMetadata 或 G4_JOB_ID 环境变量。
+22. 不得自定义 EventData，不得 include 或继承 G4VUserEventInformation，不得假设
+    EventAction 会通过 G4Event::SetUserInformation 塞入自定义数据。
+23. RecordStep(const G4Step*) 必须从 step->GetTotalEnergyDeposit() 累积当前事件
+    edep_MeV；BeginEvent 清零当前事件缓存，WriteEvent(const G4Event*) 写出事件 ID、
+    当前事件 edep_MeV 和 dose_Gy。dose_Gy 没有可靠体素质量时可写 0.0，但不得伪造。
 """
 
 

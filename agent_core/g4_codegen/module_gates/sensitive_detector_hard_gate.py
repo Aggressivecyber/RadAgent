@@ -325,6 +325,18 @@ def run_sensitive_detector_hard_gate(
                 "not alloc/free"
             )
 
+        if re.search(r"(?<![A-Za-z0-9_])0\.(?![0-9])", hit_source.new_content):
+            checks.append(
+                {
+                    "check": "hit_zero_literal_standard_form",
+                    "status": "fail",
+                    "message": (
+                        "Use 0.0 instead of 0. in Hit constructors and numeric initialization"
+                    ),
+                }
+            )
+            errors.append("Hit.cc must use 0.0 instead of 0. numeric literals")
+
     for f in generated_files:
         if not f.path.endswith((".cc", ".hh")):
             continue

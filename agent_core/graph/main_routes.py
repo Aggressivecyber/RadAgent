@@ -6,6 +6,8 @@ in the main state — never on detailed domain content.
 
 from __future__ import annotations
 
+from typing import Any
+
 from agent_core.graph.main_state import RadAgentMainState
 
 
@@ -160,38 +162,62 @@ def route_after_gates(state: RadAgentMainState) -> str:
     return _route_by_failed_gates(failed_gates)
 
 
-def _route_by_failed_gates(failed_gates: list[str]) -> str:
+def _route_by_failed_gates(failed_gates: list[Any]) -> str:
     """Determine retry target based on which gates failed."""
     if not failed_gates:
         return "report_subgraph"
 
+    gate_ids = {_extract_gate_id(gate) for gate in failed_gates}
+    gate_ids.discard(None)
+    gate_names = {_extract_gate_name(gate) for gate in failed_gates}
+    gate_names.discard("")
+
     # Context gates → back to context
-    context_gates = {"Gate 0", "G4-E"}
-    if any(g in context_gates for g in failed_gates):
+    if 0 in gate_ids or "Context Sufficiency" in gate_names:
         return "context_subgraph"
 
     # Task spec gates → back to task planning
-    task_gates = {"Gate 1"}
-    if any(g in task_gates for g in failed_gates):
+    if 1 in gate_ids or "Task Spec Schema" in gate_names:
         return "task_planning_subgraph"
 
     # Modeling gates → back to G4 modeling
-    modeling_gates = {"Gate 2", "G4-A", "G4-B", "G4-C", "G4-D"}
-    if any(g in modeling_gates for g in failed_gates):
+    if gate_ids.intersection({2, 12, 13, 14, 15, 16}):
         return "g4_modeling_subgraph"
 
     # Codegen/build gates → back to G4 codegen
-    codegen_gates = {"Gate 5", "Gate 6", "Gate 7", "G4-F", "G4-G"}
-    if any(g in codegen_gates for g in failed_gates):
+    if gate_ids.intersection({5, 6, 7, 8, 9, 11, 17, 18}):
         return "g4_codegen_subgraph"
 
     # Patch gates → back to patch
-    patch_gates = {"Gate 3", "Gate 4"}
-    if any(g in patch_gates for g in failed_gates):
+    if gate_ids.intersection({3, 4}):
         return "patch_subgraph"
 
     # Default: back to gate subgraph for re-check
     return "report_subgraph"
+
+
+def _extract_gate_id(gate: Any) -> int | None:
+    if isinstance(gate, dict):
+        raw_id = gate.get("gate_id")
+    elif isinstance(gate, str) and gate.startswith("Gate "):
+        raw_id = gate.rsplit(" ", 1)[-1]
+    elif isinstance(gate, str) and gate.startswith("G4-") and len(gate) >= 4:
+        letter = gate[3].upper()
+        return 12 + ord(letter) - ord("A")
+    else:
+        return None
+    try:
+        return int(raw_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_gate_name(gate: Any) -> str:
+    if isinstance(gate, dict):
+        return str(gate.get("name", ""))
+    if isinstance(gate, str):
+        return gate
+    return ""
 
 
 def route_after_artifact(state: RadAgentMainState) -> str:

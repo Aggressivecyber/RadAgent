@@ -27,7 +27,7 @@ def test_main_cmake_hard_gate_rejects_glob_and_double_initialize() -> None:
             ),
             _file("main.cc", "int main() { runManager->Initialize(); }\n"),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )
@@ -58,12 +58,40 @@ def test_main_cmake_hard_gate_accepts_explicit_sources_and_single_initialize() -
                 "}\n",
             ),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )
 
     assert result.status == "pass"
+
+
+def test_main_cmake_hard_gate_rejects_run_macro_without_initialize() -> None:
+    result = run_main_cmake_hard_gate(
+        [
+            _file(
+                "CMakeLists.txt",
+                "cmake_minimum_required(VERSION 3.16)\n"
+                "project(RadAgentG4)\n"
+                "add_executable(RadAgentG4 main.cc src/DetectorConstruction.cc)\n",
+            ),
+            _file(
+                "main.cc",
+                '#include "ActionInitialization.hh"\n'
+                "int main() {\n"
+                "  auto* runManager = GetRunManager();\n"
+                "  runManager->SetUserInitialization(new ActionInitialization());\n"
+                "  return 0;\n"
+                "}\n",
+            ),
+            _file("macros/init.mac", "/run/initialize\n"),
+            _file("macros/run.mac", "/run/beamOn 1\n"),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "fail"
+    assert any("/run/initialize before /run/beamOn" in e for e in result.errors)
 
 
 def test_main_cmake_hard_gate_ignores_initialize_mentions_in_comments() -> None:
@@ -87,7 +115,7 @@ def test_main_cmake_hard_gate_ignores_initialize_mentions_in_comments() -> None:
                 "}\n",
             ),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )
@@ -106,7 +134,7 @@ def test_main_cmake_hard_gate_rejects_src_main_cc() -> None:
             ),
             _file("main.cc", "int main() { return 0; }\n"),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )
@@ -134,7 +162,7 @@ def test_main_cmake_hard_gate_rejects_wrapper_as_physics_list() -> None:
                 "}\n",
             ),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )
@@ -162,7 +190,7 @@ def test_main_cmake_hard_gate_rejects_output_manager_action_casts() -> None:
                 "}\n",
             ),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )
@@ -187,7 +215,7 @@ def test_main_cmake_hard_gate_rejects_inline_action_classes() -> None:
                 "int main() { return 0; }\n",
             ),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )
@@ -215,7 +243,7 @@ def test_main_cmake_hard_gate_rejects_direct_runtime_singleton_calls() -> None:
                 "}\n",
             ),
             _file("macros/init.mac", "/run/initialize\n"),
-            _file("macros/run.mac", "/run/beamOn 1\n"),
+            _file("macros/run.mac", "/run/initialize\n/run/beamOn 1\n"),
         ],
         module_status="generated",
     )

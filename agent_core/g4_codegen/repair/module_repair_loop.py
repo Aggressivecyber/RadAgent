@@ -39,6 +39,12 @@ REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块修复 Agent。
 9. 每个文件对象的完整文件内容字段固定为 new_content
 10. JSON 顶层必须包含 generated_files 数组
 11. generated_files 数组必须包含完整可写入文件，不是文件摘要、计划或说明
+12. 如果 repair_context.module_context.runtime_failure_context 非空，必须把其中
+    gate、build、ctest、smoke simulation、artifact contract 报告当作当前修复约束；
+    只输出满足这些约束的新代码，不要复述旧失败过程。
+13. 必须阅读 repair_context.retrieval_context 中的 RAG 和 web 证据；
+    使用其中 API 事实时必须写入 generated_files[].used_references。
+14. 如果 RAG/web 证据与硬门禁要求冲突，以硬门禁要求为准；不得使用无证据的 Geant4 API。
 
 输出格式：
 {
@@ -81,11 +87,12 @@ async def repair_module(
 
     attempts: list[dict[str, Any]] = []
     current_result = original_result
+    resolved_job_id = job_id or module_context.get("job_id")
 
     for attempt in range(max_attempts):
         logger.info("Repair attempt %d/%d for %s", attempt + 1, max_attempts, module_name)
         record_event(
-            job_id=job_id,
+            job_id=resolved_job_id,
             event_type="module_repair_attempt_start",
             status="running",
             phase="g4_codegen",
@@ -94,6 +101,15 @@ async def repair_module(
             metrics={"attempt": attempt + 1, "max_attempts": max_attempts},
             errors=list(gate_result.errors),
             warnings=list(gate_result.warnings),
+        )
+
+        evidence_context = await _collect_repair_evidence(
+            module_name=module_name,
+            gate_result=gate_result,
+            module_context=module_context,
+            current_result=current_result,
+            job_id=resolved_job_id,
+            attempt=attempt + 1,
         )
 
         # Build repair context
@@ -105,6 +121,7 @@ async def repair_module(
             ],
             "implementation_requirements": _module_repair_requirements(module_name),
             "gate_requirements": _format_gate_requirements(module_name, gate_result),
+            "retrieval_context": evidence_context,
             "attempt": attempt + 1,
             "max_attempts": max_attempts,
         }
@@ -123,14 +140,14 @@ async def repair_module(
             max_tokens=65536,
             metadata={
                 "module_name": module_name,
-                "job_id": job_id,
+                "job_id": resolved_job_id,
                 "repair_attempt": attempt + 1,
             },
         )
 
         if result.error:
             record_event(
-                job_id=job_id,
+                job_id=resolved_job_id,
                 event_type="module_repair_attempt_result",
                 status="failed",
                 phase="g4_codegen",
@@ -153,7 +170,7 @@ async def repair_module(
             data = result.parsed_json or json.loads(result.content.strip())
         except (json.JSONDecodeError, TypeError) as exc:
             record_event(
-                job_id=job_id,
+                job_id=resolved_job_id,
                 event_type="module_repair_attempt_result",
                 status="failed",
                 phase="g4_codegen",
@@ -206,7 +223,7 @@ async def repair_module(
 
         if not repaired_files:
             record_event(
-                job_id=job_id,
+                job_id=resolved_job_id,
                 event_type="module_repair_attempt_result",
                 status="failed",
                 phase="g4_codegen",
@@ -251,7 +268,7 @@ async def repair_module(
 
         gate = _get_hard_gate_function(module_name)(merged_files, module_status="repaired")
         record_event(
-            job_id=job_id,
+            job_id=resolved_job_id,
             event_type="module_repair_attempt_result",
             status="passed" if gate.status == "pass" else "failed",
             phase="g4_codegen",
@@ -293,6 +310,145 @@ async def repair_module(
         repair_attempts=attempts,
         errors=[f"Repair failed after {max_attempts} attempts"] + current_result.errors,
     )
+
+
+async def _collect_repair_evidence(
+    *,
+    module_name: str,
+    gate_result: ModuleGateResult,
+    module_context: dict[str, Any],
+    current_result: ModuleAgentResult,
+    job_id: str | None,
+    attempt: int,
+) -> dict[str, Any]:
+    """Retrieve RAG and web evidence for a concrete repair failure."""
+    query = _build_repair_evidence_query(module_name, gate_result, current_result)
+    evidence: dict[str, Any] = {
+        "query": query,
+        "rag": {"status": "not_run", "results": [], "errors": []},
+        "web": {"status": "not_run", "results": [], "errors": []},
+        "policy": {
+            "required_for_real_repair": bool(job_id),
+            "use": (
+                "Use these RAG/web entries as API evidence and repair constraints. "
+                "If evidence conflicts with module hard gates, the hard gate wins."
+            ),
+        },
+    }
+
+    # Unit tests often call repair_module without a job id; avoid unexpected
+    # external services there. Real graph/module tests provide a job id.
+    if not job_id:
+        evidence["rag"]["status"] = "skipped_no_job_id"
+        evidence["web"]["status"] = "skipped_no_job_id"
+        return evidence
+
+    try:
+        rag_results = await _search_repair_rag(query)
+        evidence["rag"] = {
+            "status": "pass" if rag_results else "empty",
+            "results": rag_results,
+            "errors": [],
+        }
+    except Exception as exc:
+        evidence["rag"] = {"status": "error", "results": [], "errors": [str(exc)]}
+
+    try:
+        web_results = await _search_repair_web(query)
+        evidence["web"] = {
+            "status": "pass" if web_results else "empty",
+            "results": web_results,
+            "errors": [],
+        }
+    except Exception as exc:
+        evidence["web"] = {"status": "error", "results": [], "errors": [str(exc)]}
+
+    _persist_repair_evidence(job_id, module_name, attempt, evidence)
+
+    # Keep prompt payload bounded while still useful.
+    evidence["rag"]["results"] = evidence["rag"]["results"][:5]
+    evidence["web"]["results"] = evidence["web"]["results"][:5]
+    return evidence
+
+
+def _build_repair_evidence_query(
+    module_name: str,
+    gate_result: ModuleGateResult,
+    current_result: ModuleAgentResult,
+) -> str:
+    """Build a focused Geant4 API query from concrete gate failures."""
+    messages = [*gate_result.errors, *gate_result.warnings, *current_result.errors]
+    filtered = [
+        msg.strip()
+        for msg in messages
+        if isinstance(msg, str) and msg.strip()
+    ][:8]
+    module_requirements = _module_repair_requirements(module_name)[:4]
+    return " ".join(
+        [
+            "Geant4",
+            module_name,
+            "repair",
+            *filtered,
+            *module_requirements,
+        ]
+    )[:1200]
+
+
+async def _search_repair_rag(query: str) -> list[dict[str, Any]]:
+    """Search local Geant4 RAG docs for repair evidence."""
+    from agent_core.context.nodes import _ensure_indexed, _get_rag_client
+
+    client = _get_rag_client()
+    if not await client.backend_available():
+        return []
+    if not await _ensure_indexed(client):
+        return []
+    results = await client.search(query, top_k=6, min_score=0.25)
+    return [
+        {
+            "doc_id": result.doc_id,
+            "title": result.title,
+            "content": result.content[:1200],
+            "source": result.source,
+            "score": round(result.score, 4),
+        }
+        for result in results
+    ]
+
+
+async def _search_repair_web(query: str) -> list[dict[str, Any]]:
+    """Search web for repair evidence using the configured web tool."""
+    from agent_core.tools.web_search_tool import WebSearchTool
+
+    tool = WebSearchTool()
+    if not tool.search_available:
+        return []
+    results = await tool.search(query, max_results=5)
+    return [
+        {
+            "title": result.title,
+            "url": result.url,
+            "snippet": result.snippet[:800],
+            "source_type": result.source_type,
+            "confidence": result.confidence,
+        }
+        for result in results
+    ]
+
+
+def _persist_repair_evidence(
+    job_id: str,
+    module_name: str,
+    attempt: int,
+    evidence: dict[str, Any],
+) -> None:
+    from agent_core.config.workspace import get_job_dir
+
+    repair_dir = get_job_dir(job_id) / "06_codegen" / "repair"
+    repair_dir.mkdir(parents=True, exist_ok=True)
+    path = repair_dir / f"{module_name}_repair_evidence_attempt_{attempt}.json"
+    path.write_text(json.dumps(evidence, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def save_repair_summary(
@@ -414,6 +570,23 @@ def _module_repair_requirements(module_name: str) -> list[str]:
                 "singleton; do not allocate G4ScoringManager with new."
             ),
         ]
+    if module_name == "physics":
+        return [
+            (
+                "physics_list.mac must contain only real Geant4 macro commands or "
+                "necessary comments; do not include PLACEHOLDER, TODO, stub, dummy, "
+                "NotImplemented, or sample-only text."
+            ),
+            (
+                "Use C++ SetCuts()/SetCutValue or valid /run/setCut and "
+                "/run/setCutForAGivenParticle macro commands for production cuts."
+            ),
+            (
+                "Create the reference physics list with G4PhysListFactory and keep "
+                "factory lifetime valid; do not return a physics list from a local "
+                "temporary factory."
+            ),
+        ]
     if module_name == "sensitive_detector":
         return [
             (
@@ -509,6 +682,17 @@ def _module_repair_requirements(module_name: str) -> list[str]:
             (
                 "Keep CSV/JSON writing in OutputManager only, and keep ScoringManager out "
                 "of OutputManager includes and calls."
+            ),
+            (
+                "Read G4_OUTPUT_DIR for runtime artifact output and write fixed filenames "
+                "output.csv, run_summary.json, and metadata.json. output.csv must include "
+                "the header EventID,edep_MeV,dose_Gy."
+            ),
+            (
+                "Do not define EventData and do not depend on G4VUserEventInformation or "
+                "G4Event::GetUserInformation. Accumulate event edep from "
+                "RecordStep(const G4Step*) using step->GetTotalEnergyDeposit(), reset it "
+                "in BeginEvent, and write it in WriteEvent(const G4Event*)."
             ),
         ]
     if module_name == "material":

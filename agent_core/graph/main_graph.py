@@ -22,6 +22,8 @@ Flow:
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -234,6 +236,7 @@ def _make_g4_codegen_subgraph_node() -> Any:
     subgraph = build_g4_codegen_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
+        runtime_failure_context = _load_runtime_failure_context(state)
         result = await subgraph.ainvoke(
             {
                 "job_id": state.get("job_id", ""),
@@ -245,6 +248,7 @@ def _make_g4_codegen_subgraph_node() -> Any:
                 "confirmation_record_path": state.get("confirmation_record_path", ""),
                 "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
                 "human_confirmation_status": state.get("human_confirmation_status", ""),
+                "runtime_failure_context": runtime_failure_context,
             }
         )
         return {
@@ -256,6 +260,86 @@ def _make_g4_codegen_subgraph_node() -> Any:
         }
 
     return _run
+
+
+def _load_runtime_failure_context(state: RadAgentMainState) -> dict[str, Any]:
+    """Collect real gate/build/smoke failures for a codegen retry."""
+    gate_results_path = state.get("gate_results_path", "")
+    if not gate_results_path or not Path(gate_results_path).is_file():
+        return {}
+
+    try:
+        gate_results = json.loads(Path(gate_results_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    failed = [
+        gate
+        for gate in gate_results
+        if isinstance(gate, dict) and gate.get("status") in {"fail", "block", "blocked"}
+    ]
+    if not failed:
+        return {}
+
+    artifact_paths: list[str] = []
+    for gate in failed:
+        for path in gate.get("file_paths", []) or []:
+            if isinstance(path, str) and path:
+                artifact_paths.append(path)
+
+    job_workspace = state.get("job_workspace", "")
+    if job_workspace:
+        output_dir = Path(job_workspace) / "08_gate_validation" / "g4_output_package"
+        for name in (
+            "unit_test_result.json",
+            "smoke_simulation_result.json",
+            "g4_summary.json",
+            "event_table.csv",
+            "edep_3d.csv",
+            "dose_3d.csv",
+            "provenance.json",
+        ):
+            artifact_paths.append(str(output_dir / name))
+
+    return {
+        "source": "gate_validation_retry",
+        "retry_count": state.get("retry_count", 0),
+        "failed_gates": [
+            {
+                "gate_id": gate.get("gate_id"),
+                "name": gate.get("name"),
+                "status": gate.get("status"),
+                "message": gate.get("message", ""),
+                "failed_items": gate.get("failed_items", []),
+                "warnings": gate.get("warnings", []),
+            }
+            for gate in failed
+        ],
+        "artifacts": _read_failure_artifact_tails(artifact_paths),
+    }
+
+
+def _read_failure_artifact_tails(
+    paths: list[str],
+    *,
+    max_chars: int = 4000,
+) -> list[dict[str, str]]:
+    """Read bounded text tails from failure artifacts for repair prompts."""
+    seen: set[str] = set()
+    artifacts: list[dict[str, str]] = []
+    for raw_path in paths:
+        if raw_path in seen:
+            continue
+        seen.add(raw_path)
+        path = Path(raw_path)
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        artifacts.append({"path": str(path), "tail": text[-max_chars:]})
+    return artifacts
 
 
 def _make_patch_subgraph_node() -> Any:

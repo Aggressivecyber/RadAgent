@@ -9,6 +9,7 @@ failed_items, warnings, evidence, file_paths, message.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from .base_gates import gate_name
@@ -150,6 +151,7 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # G4-F: Code Module Boundary
     code_modules = state.get("code_modules", [])
+    generated_modules = _load_generated_code_modules(state.get("generated_code_dir", ""))
     if code_modules:
         try:
             from agent_core.g4_modeling.schemas.code_module_plan import (
@@ -190,39 +192,70 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
                 checked_items=[{"item": "module boundary validation", "result": "fail"}],
                 evidence=[],
             )
+    elif generated_modules:
+        passed, errors, checked_items, evidence, file_paths = _validate_generated_boundaries(
+            generated_modules
+        )
+        _append_gate_detailed(
+            gate_results,
+            failed,
+            17,
+            "Code Module Boundary",
+            passed,
+            errors,
+            checked_items=checked_items,
+            evidence=evidence,
+            extra_fields={"file_paths": file_paths},
+        )
     else:
-        gate_results.append(
-            {
-                "gate_id": 17,
-                "name": "Code Module Boundary",
-                "status": "skipped",
-                "checked_items": [],
-                "passed_items": [],
-                "failed_items": [],
-                "warnings": ["No code modules generated yet"],
-                "evidence": [],
-                "file_paths": [],
-                "message": "Skipped: no code modules to validate",
-            }
+        _append_gate_detailed(
+            gate_results,
+            failed,
+            17,
+            "Code Module Boundary",
+            False,
+            ["No generated C++ modules available for boundary validation"],
+            checked_items=[{"item": "generated C++ modules available", "result": "fail"}],
+            evidence=[],
         )
 
     # G4-G: No Magic Number
-    gate_results.append(
-        {
-            "gate_id": 18,
-            "name": "No Magic Number",
-            "status": "skipped",
-            "checked_items": [
-                {"item": "C++ code magic number check", "result": "deferred"},
+    if generated_modules:
+        from agent_core.g4_codegen.validators.no_magic_number import validate_no_magic_numbers
+
+        passed, errors = validate_no_magic_numbers(generated_modules)
+        file_paths = [
+            str(m["file_path"])
+            for m in generated_modules
+            if isinstance(m.get("file_path"), Path)
+        ]
+        _append_gate_detailed(
+            gate_results,
+            failed,
+            18,
+            "No Magic Number",
+            passed,
+            errors,
+            checked_items=[
+                {
+                    "item": f"C++ code magic number check ({len(generated_modules)} files)",
+                    "result": "pass" if passed else "fail",
+                },
             ],
-            "passed_items": [],
-            "failed_items": [],
-            "warnings": ["Magic number check deferred to code review phase"],
-            "evidence": [],
-            "file_paths": [],
-            "message": "Deferred: magic number check runs after codegen",
-        }
-    )
+            evidence=[f"{len(generated_modules)} generated files scanned"],
+            extra_fields={"file_paths": file_paths},
+        )
+    else:
+        _append_gate_detailed(
+            gate_results,
+            failed,
+            18,
+            "No Magic Number",
+            False,
+            ["No generated C++ modules available for magic-number validation"],
+            checked_items=[{"item": "generated C++ modules available", "result": "fail"}],
+            evidence=[],
+        )
 
     # G4-H: Human Confirmation Completeness
     from agent_core.human_confirmation.validators import validate_human_confirmation_state
@@ -329,3 +362,98 @@ def _append_gate_detailed(
     gate_results.append(gate_entry)
     if not passed:
         failed.append(gate_name(gate_id))
+
+
+def _load_generated_code_modules(generated_code_dir: str) -> list[dict[str, Any]]:
+    """Load generated C++ files from 08_geant4 for post-codegen gates."""
+    if not generated_code_dir:
+        return []
+    root = Path(generated_code_dir)
+    if not root.is_dir():
+        return []
+
+    modules: list[dict[str, Any]] = []
+    for path in sorted([root / "main.cc", *root.glob("src/*.cc"), *root.glob("include/*.hh")]):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        stem = path.stem
+        modules.append(
+            {
+                "module_id": rel,
+                "code": path.read_text(encoding="utf-8", errors="replace"),
+                "header": f"include/{stem}.hh" if path.suffix == ".cc" else rel,
+                "path": rel,
+                "file_path": path,
+            }
+        )
+    return modules
+
+
+def _validate_generated_boundaries(
+    modules: list[dict[str, Any]],
+) -> tuple[bool, list[str], list[dict[str, str]], list[str], list[str]]:
+    """Run practical module-boundary checks on generated source files."""
+    errors: list[str] = []
+    checked_items: list[dict[str, str]] = []
+    evidence: list[str] = []
+    file_paths: list[str] = []
+
+    by_path = {m.get("path", ""): m for m in modules}
+    src_modules = [m for m in modules if str(m.get("path", "")).startswith("src/")]
+    header_modules = [m for m in modules if str(m.get("path", "")).startswith("include/")]
+    file_paths = [
+        str(m["file_path"])
+        for m in modules
+        if isinstance(m.get("file_path"), Path)
+    ]
+
+    if not src_modules:
+        errors.append("No src/*.cc files found in generated code")
+    if not header_modules:
+        errors.append("No include/*.hh files found in generated code")
+
+    for module in src_modules:
+        path = str(module.get("path", ""))
+        code = str(module.get("code", ""))
+        expected_header = f"include/{Path(path).stem}.hh"
+        if expected_header in by_path:
+            header_name = Path(expected_header).name
+            if f'#include "{header_name}"' not in code and f'#include <{header_name}>' not in code:
+                errors.append(f"{path}: does not include its own header {header_name}")
+        if "static " in code:
+            import re
+
+            mutable_static = re.findall(
+                r"static\s+(?!const|constexpr)[A-Za-z_:<>]+\s+\w+\s*=",
+                code,
+            )
+            if mutable_static:
+                errors.append(f"{path}: has global mutable state {mutable_static[:3]}")
+
+    checked_items.extend(
+        [
+            {
+                "item": "src/*.cc files present",
+                "result": "pass" if src_modules else "fail",
+            },
+            {
+                "item": "include/*.hh files present",
+                "result": "pass" if header_modules else "fail",
+            },
+            {
+                "item": "source files include matching owned headers when present",
+                "result": "pass"
+                if not any("does not include its own header" in e for e in errors)
+                else "fail",
+            },
+            {
+                "item": "no non-const static mutable globals",
+                "result": "pass"
+                if not any("global mutable state" in e for e in errors)
+                else "fail",
+            },
+        ]
+    )
+    evidence.append(f"{len(src_modules)} source files and {len(header_modules)} headers checked")
+    return not errors, errors, checked_items, evidence, file_paths

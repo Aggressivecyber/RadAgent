@@ -196,7 +196,7 @@ def _check_single_file(
     checks.append(
         {
             "check": "generated_by",
-            "status": "pass" if f.generated_by == f"{expected_module}_module_agent" else "warn",
+            "status": "pass" if f.generated_by == f"{expected_module}_module_agent" else "fail",
             "message": f"generated_by should be {expected_module}_module_agent",
         }
     )
@@ -205,7 +205,7 @@ def _check_single_file(
     checks.append(
         {
             "check": "module_name",
-            "status": "pass" if f.module_name == expected_module else "warn",
+            "status": "pass" if f.module_name == expected_module else "fail",
             "message": f"module_name should be {expected_module}",
         }
     )

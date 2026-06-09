@@ -59,7 +59,9 @@ SD_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 灵敏探测器模块编码 Age
     fAllocator.MallocSingle()，operator delete 必须调用
     fAllocator.FreeSingle(static_cast<Hit*>(ptr))；不要调用不存在的 alloc/free。
 22. G4BestUnit 函数来自 G4UnitsTable.hh；不要 include 不存在的 G4BestUnit.hh。
-23. 输出 JSON 格式
+23. Hit 构造函数和成员初始化使用 0.0、1.0 等标准 literal；不要写 0. 这种形式，
+    否则 no-magic-number gate 会失败。
+24. 输出 JSON 格式
 """
 
 
