@@ -22,7 +22,8 @@ GLOBAL_LLM_REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的全局 Geant4 代码修�
 
 必须遵守：
 1. 你必须返回 JSON，不得输出 Markdown fence。
-2. 你必须返回完整 proposed_patch，不能只返回 diff。
+2. 你应该返回完整 proposed_patch，不能返回 diff 格式；如果只返回被修改文件，
+   系统会按 path 覆盖回原始全量 patch，未返回文件必须视为保持不变。
 3. proposed_patch.changed_files 每个文件必须保留 path、operation、new_content、zone、
    generated_by、module_name、rationale。
 4. 不得引入 content 字段。
@@ -172,6 +173,20 @@ async def run_global_llm_repair(
     if not isinstance(repaired_patch, dict):
         report["status"] = "failed"
         report["errors"].append("Global LLM repair response missing proposed_patch object")
+        _persist_report(report, job_id)
+        return original_patch, report
+
+    validation_errors = _validate_patch_schema(repaired_patch)
+    if validation_errors:
+        report["status"] = "failed"
+        report["errors"].extend(validation_errors)
+        _persist_report(report, job_id)
+        return original_patch, report
+
+    repaired_patch, merge_errors = _merge_repaired_patch(original_patch, repaired_patch)
+    if merge_errors:
+        report["status"] = "failed"
+        report["errors"].extend(merge_errors)
         _persist_report(report, job_id)
         return original_patch, report
 
@@ -403,6 +418,71 @@ def _validate_patch_schema(patch: dict[str, Any]) -> list[str]:
         if "```" in str(entry.get("new_content", "")):
             errors.append(f"{path}: new_content must not contain markdown fences")
     return errors
+
+
+def _merge_repaired_patch(
+    original_patch: dict[str, Any],
+    repaired_patch: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Overlay LLM-edited files onto the original full patch without dropping modules."""
+    original_files = original_patch.get("changed_files")
+    repaired_files = repaired_patch.get("changed_files")
+    if not isinstance(original_files, list) or not original_files:
+        return original_patch, ["original proposed_patch.changed_files is empty"]
+    if not isinstance(repaired_files, list) or not repaired_files:
+        return original_patch, ["repaired proposed_patch.changed_files is empty"]
+
+    original_paths: list[str] = []
+    original_by_path: dict[str, tuple[int, dict[str, Any]]] = {}
+    for index, entry in enumerate(original_files):
+        if not isinstance(entry, dict):
+            return original_patch, [f"original changed_files[{index}] must be an object"]
+        path = str(entry.get("path", ""))
+        if not path:
+            return original_patch, [f"original changed_files[{index}] missing path"]
+        if path in original_by_path:
+            return original_patch, [f"original proposed_patch has duplicate path: {path}"]
+        original_paths.append(path)
+        original_by_path[path] = (index, deepcopy(entry))
+
+    merged_files = [deepcopy(entry) for entry in original_files]
+    seen_repaired_paths: set[str] = set()
+    for index, entry in enumerate(repaired_files):
+        if not isinstance(entry, dict):
+            return original_patch, [f"repaired changed_files[{index}] must be an object"]
+        path = str(entry.get("path", ""))
+        if not path:
+            return original_patch, [f"repaired changed_files[{index}] missing path"]
+        if path in seen_repaired_paths:
+            return original_patch, [f"repaired proposed_patch has duplicate path: {path}"]
+        seen_repaired_paths.add(path)
+        if path in original_by_path:
+            original_index = original_by_path[path][0]
+            merged_files[original_index] = deepcopy(entry)
+        else:
+            merged_files.append(deepcopy(entry))
+
+    merged_patch = deepcopy(original_patch)
+    merged_patch["changed_files"] = merged_files
+    if isinstance(repaired_patch.get("metadata"), dict):
+        merged_metadata = deepcopy(original_patch.get("metadata", {}))
+        if not isinstance(merged_metadata, dict):
+            merged_metadata = {}
+        merged_metadata.update(deepcopy(repaired_patch["metadata"]))
+        merged_patch["metadata"] = merged_metadata
+
+    merged_paths = {
+        str(entry.get("path"))
+        for entry in merged_patch.get("changed_files", [])
+        if isinstance(entry, dict)
+    }
+    missing_paths = [path for path in original_paths if path not in merged_paths]
+    if missing_paths:
+        return original_patch, [
+            "Global LLM repair dropped original patch files: "
+            + ", ".join(missing_paths[:20])
+        ]
+    return merged_patch, []
 
 
 def _changed_paths(before: dict[str, Any], after: dict[str, Any]) -> list[str]:

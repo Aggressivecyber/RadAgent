@@ -154,6 +154,65 @@ async def test_global_llm_repair_rejects_content_field(tmp_path, monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_global_llm_repair_merges_partial_patch_response(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    partial_patch = {
+        "changed_files": [
+            {
+                "path": "include/MaterialRegistry.hh",
+                "operation": "create_or_replace",
+                "new_content": "#pragma once\nclass MaterialRegistry { public: void Build(); };\n",
+                "zone": "green",
+                "generated_by": "material_module_agent",
+                "module_name": "material",
+                "rationale": "repair header interface",
+            }
+        ]
+    }
+    response = {
+        "status": "repaired",
+        "proposed_patch": partial_patch,
+        "issues_fixed": [{"target": "material", "message": "fixed header interface"}],
+        "errors": [],
+    }
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_llm_repair.get_model_gateway",
+        lambda: _Gateway(response),
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_llm_repair._search_global_repair_rag",
+        _rag_evidence,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_llm_repair._search_global_repair_web",
+        _empty_evidence,
+    )
+
+    original_patch = _patch()
+    repaired, report = await run_global_llm_repair(
+        original_patch,
+        job_id="global_repair_partial_patch",
+        runtime_failure_context={"build_errors": ["compile failed"]},
+    )
+
+    assert report["status"] == "passed"
+    assert report["changed_files"] == ["include/MaterialRegistry.hh"]
+    files_by_path = {entry["path"]: entry for entry in repaired["changed_files"]}
+    assert set(files_by_path) == {
+        "include/MaterialRegistry.hh",
+        "src/MaterialRegistry.cc",
+    }
+    assert "void Build()" in files_by_path["include/MaterialRegistry.hh"]["new_content"]
+    assert (
+        files_by_path["src/MaterialRegistry.cc"]["new_content"]
+        == original_patch["changed_files"][1]["new_content"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_global_llm_repair_requires_evidence_for_real_provider(
     tmp_path,
     monkeypatch,
