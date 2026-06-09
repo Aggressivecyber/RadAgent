@@ -248,6 +248,7 @@ def test_global_repair_normalizes_invalid_g4_exception_severity(
                 "path": "src/MaterialRegistry.cc",
                 "new_content": (
                     '#include "G4Exception.hh"\n'
+                    '#include "G4ExceptionDescription.hh"\n'
                     "void fail() { G4Exception(\"m\", \"c\", "
                     'FatalErrorInArguments, "bad"); }\n'
                 ),
@@ -264,6 +265,7 @@ def test_global_repair_normalizes_invalid_g4_exception_severity(
 
     assert "FatalException" in source
     assert "FatalErrorInArguments" not in source
+    assert "G4ExceptionDescription.hh" not in source
     assert report["issues_fixed"]
 
 

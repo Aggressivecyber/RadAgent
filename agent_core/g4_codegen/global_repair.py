@@ -219,11 +219,21 @@ def _repair_geant4_exception_severities(
             continue
         content = entry.get("new_content", "")
         updated = content.replace("FatalErrorInArguments", "FatalException")
+        updated = re.sub(
+            r'^\s*#include\s+["<]G4ExceptionDescription\.hh[">]\s*\n',
+            "",
+            updated,
+            flags=re.MULTILINE,
+        )
         if updated != content:
             entry["new_content"] = updated
             changed_paths.append(path)
     if changed_paths:
-        _fixed(report, "G4Exception severity", "normalized invalid FatalErrorInArguments")
+        _fixed(
+            report,
+            "G4Exception usage",
+            "normalized invalid severity and removed unavailable G4ExceptionDescription header",
+        )
 
 
 def _repair_placement_manager(by_path: dict[str, dict[str, Any]], report: dict[str, Any]) -> None:
@@ -827,17 +837,13 @@ def _repair_scoring_source_axis_and_buffers(content: str) -> str:
 
 
 def _normalize_g4threevector_decimal_literals(content: str) -> str:
-    updated = re.sub(
-        r"G4ThreeVector\s*\(\s*0\.\s*,\s*0\.\s*,\s*0\.\s*\)",
-        "G4ThreeVector(0.0, 0.0, 0.0)",
-        content,
-    )
-    updated = re.sub(
-        r"G4ThreeVector\s*\(\s*0\.\s*,\s*0\.\s*,\s*1\.\s*\)",
-        "G4ThreeVector(0.0, 0.0, 1.0)",
-        updated,
-    )
-    return updated
+    def normalize_match(match: re.Match[str]) -> str:
+        args = re.sub(r"(?<![\w.])0\.(?!\d)", "0.0", match.group(1))
+        args = re.sub(r"(?<![\w.])1\.(?!\d)", "1.0", args)
+        args = re.sub(r"(?<![\w.])2\.(?!\d)", "2.0", args)
+        return f"G4ThreeVector({args})"
+
+    return re.sub(r"G4ThreeVector\s*\(([^\)]*)\)", normalize_match, content)
 
 
 def _repair_output_manager_magic_numbers(content: str) -> str:

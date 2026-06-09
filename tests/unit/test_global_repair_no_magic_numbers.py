@@ -99,6 +99,9 @@ void PrimaryGeneratorAction::GeneratePrimaries() {
 
 G4VPhysicalVolume* DetectorConstruction::Construct() {
     new G4PVPlacement(0, G4ThreeVector(0.,0.,0.), targetLogical, "Target", worldLogical, false, 0);
+    new G4PVPlacement(
+        0, G4ThreeVector(0., 0., kPhantomOffsetZ),
+        phantomLogical, "Phantom", worldLogical, false, 0);
     return worldPhysical;
 }
 """,

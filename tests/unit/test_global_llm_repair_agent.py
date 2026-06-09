@@ -116,6 +116,8 @@ async def test_global_llm_repair_prompt_contains_project_files_and_failure_conte
     assert "src/MaterialRegistry.cc" in prompt
     assert "invalid operands to binary expression" in prompt
     assert "G4ExceptionDescription" in prompt
+    assert "G4Exception.hh" in prompt
+    assert "G4ExceptionDescription.hh" in prompt
 
 
 @pytest.mark.asyncio
