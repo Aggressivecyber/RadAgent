@@ -13,30 +13,19 @@ from agent_core.graph.main_state import RadAgentMainState
 
 def route_after_intent(state: RadAgentMainState) -> str:
     """Route after Intent Router based on classified intent."""
-    intent = state.get("intent", "unknown")
+    intent = state.get("intent", "chat")
+    intent_detail = state.get("intent_detail", "")
 
-    if intent == "smalltalk":
+    if intent == "chat":
         return "chat_response_node"
 
-    if intent == "help":
-        return "help_response_node"
-
-    if intent == "status_query":
-        return "status_response_node"
-
-    if intent == "capability_query":
-        return "capability_response_node"
-
-    if intent == "human_confirmation_response":
+    if intent == "simulation_work" and intent_detail == "human_confirmation_response":
         return "human_confirmation_subgraph"
 
-    if intent in {"simulation_request", "simulation_edit", "simulation_continue"}:
+    if intent == "simulation_work":
         return "prepare_workspace"
 
-    if intent == "artifact_query":
-        return "status_response_node"
-
-    return "clarification_node"
+    return "chat_response_node"
 
 
 def route_after_context(state: RadAgentMainState) -> str:

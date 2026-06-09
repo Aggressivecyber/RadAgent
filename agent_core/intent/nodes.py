@@ -16,6 +16,7 @@ async def intent_router_node(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "intent": intent.intent,
+        "intent_detail": intent.intent_detail,
         "intent_confidence": intent.confidence,
         "intent_routing_reason": intent.routing_reason,
         "normalized_user_query": intent.normalized_user_query,

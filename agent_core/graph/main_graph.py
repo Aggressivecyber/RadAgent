@@ -7,7 +7,7 @@ artifact content directly. All domain logic lives in subgraphs.
 Flow:
     initialize_request
       → intent_router
-      → [smalltalk/help/status/capability/clarification] → END
+      → [chat] → END
       → prepare_workspace
         → context_subgraph
         → task_planning_subgraph
@@ -573,34 +573,6 @@ def _make_chat_response_node() -> Any:
     return chat_response_node
 
 
-def _make_help_response_node() -> Any:
-    """Create the help response node wrapper."""
-    from agent_core.response.nodes import help_response_node
-
-    return help_response_node
-
-
-def _make_status_response_node() -> Any:
-    """Create the status response node wrapper."""
-    from agent_core.response.nodes import status_response_node
-
-    return status_response_node
-
-
-def _make_capability_response_node() -> Any:
-    """Create the capability response node wrapper."""
-    from agent_core.response.nodes import capability_response_node
-
-    return capability_response_node
-
-
-def _make_clarification_node() -> Any:
-    """Create the clarification node wrapper."""
-    from agent_core.response.nodes import clarification_node
-
-    return clarification_node
-
-
 # ─── Main graph builder ──────────────────────────────────────────────
 
 
@@ -608,7 +580,7 @@ def build_main_graph() -> StateGraph:
     """Build the main orchestration graph.
 
     The main graph routes through intent_router first, then either
-    responds directly (smalltalk/help/status) or enters the simulation pipeline.
+    responds directly for chat or enters the simulation pipeline.
     """
     graph = StateGraph(RadAgentMainState)
 
@@ -616,10 +588,6 @@ def build_main_graph() -> StateGraph:
     graph.add_node("initialize_request", initialize_request)
     graph.add_node("intent_router", _make_intent_router_node())
     graph.add_node("chat_response_node", _make_chat_response_node())
-    graph.add_node("help_response_node", _make_help_response_node())
-    graph.add_node("status_response_node", _make_status_response_node())
-    graph.add_node("capability_response_node", _make_capability_response_node())
-    graph.add_node("clarification_node", _make_clarification_node())
 
     # Add workspace preparation (not a subgraph — just directory setup)
     graph.add_node("prepare_workspace", prepare_workspace)
@@ -647,10 +615,6 @@ def build_main_graph() -> StateGraph:
         route_after_intent,
         {
             "chat_response_node": "chat_response_node",
-            "help_response_node": "help_response_node",
-            "status_response_node": "status_response_node",
-            "capability_response_node": "capability_response_node",
-            "clarification_node": "clarification_node",
             "human_confirmation_subgraph": "human_confirmation_subgraph",
             "prepare_workspace": "prepare_workspace",
         },
@@ -658,10 +622,6 @@ def build_main_graph() -> StateGraph:
 
     # Response nodes → END
     graph.add_edge("chat_response_node", END)
-    graph.add_edge("help_response_node", END)
-    graph.add_edge("status_response_node", END)
-    graph.add_edge("capability_response_node", END)
-    graph.add_edge("clarification_node", END)
 
     # Linear edges: workspace → context
     graph.add_edge("prepare_workspace", "context_subgraph")

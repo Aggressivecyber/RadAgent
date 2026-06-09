@@ -248,7 +248,7 @@ class RadAgentREPL:
         """Dispatch input: slash command or natural-language query.
 
         Natural language input goes through the LLM Intent Router first.
-        Only simulation_request intents are treated as /run.
+        Only simulation_work intents are treated as /run.
         """
         text = text.strip()
         if not text:
@@ -275,46 +275,32 @@ class RadAgentREPL:
             has_active_job=has_active_job,
         )
 
-        self.console.print(f"[dim]{intent_result.intent}[/dim]")
+        detail = f":{intent_result.intent_detail}" if intent_result.intent_detail else ""
+        self.console.print(f"[dim]{intent_result.intent}{detail}[/dim]")
 
-        if intent_result.intent == "smalltalk":
+        if intent_result.intent == "chat":
             await self._chat_reply(text)
             return
 
-        if intent_result.intent == "help":
-            await self.cmd_help()
-            return
-
-        if intent_result.intent == "status_query":
-            await self.cmd_status()
-            return
-
-        if intent_result.intent == "capability_query":
-            self.console.print(
-                "[green]当前主要支持 Geant4 辐照仿真建模，包括几何、材料、源项、"
-                "敏感探测器、scoring、代码生成和门禁检查。[/green]"
-            )
-            return
-
-        if intent_result.intent == "simulation_request":
-            # Only simulation requests are treated as /run
+        if intent_result.intent == "simulation_work":
+            if intent_result.intent_detail == "human_confirmation_response":
+                # Check if there's a pending confirmation
+                if self.state.get("confirmation_request_path"):
+                    await self.cmd_confirm()
+                else:
+                    self.console.print("[yellow]当前没有待确认的方案。[/yellow]")
+                return
             await self.cmd_run(text)
             return
 
-        if intent_result.intent == "human_confirmation_response":
-            # Check if there's a pending confirmation
+        if intent_result.intent_detail == "human_confirmation_response":
             if self.state.get("confirmation_request_path"):
                 await self.cmd_confirm()
             else:
                 self.console.print("[yellow]当前没有待确认的方案。[/yellow]")
             return
 
-        if intent_result.intent == "unknown":
-            await self._chat_reply(text)
-            return
-
-        # Default: treat as simulation request
-        await self.cmd_run(text)
+        await self._chat_reply(text)
 
     async def _chat_reply(self, text: str) -> None:
         """Send text to the chat agent and display the response."""

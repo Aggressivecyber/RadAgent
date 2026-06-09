@@ -1,4 +1,4 @@
-"""Tests for agent_core.intent — LLM Intent Router."""
+"""Tests for agent_core.intent — two-class LM intent router."""
 
 from __future__ import annotations
 
@@ -18,80 +18,50 @@ from agent_core.models.schemas import (
 
 @pytest.fixture(autouse=True)
 def reset_gateway() -> None:
-    """Reset gateway singleton before each test."""
-    reset_gateway_fn()
+    reset_model_gateway()
     yield
 
 
-def reset_gateway_fn() -> None:
-    """Reset gateway singleton."""
-    reset_model_gateway()
+def _mock_result(parsed_json: dict) -> ModelCallResult:
+    return ModelCallResult(
+        task=ModelTask.INTENT_ROUTING,
+        tier=ModelTier.LITE,
+        provider=ModelProvider.MOCK,
+        model_name="mock-lite",
+        content="{}",
+        parsed_json=parsed_json,
+    )
 
 
 class TestFallbackIntent:
-    """Verify fallback rule-based intent classification."""
+    """Fallback must not infer intent from keywords."""
 
-    def test_hello_is_smalltalk(self) -> None:
-        """'你好' should be classified as smalltalk."""
-        result = fallback_intent("你好")
-        assert result.intent == "smalltalk"
-
-    def test_hello_english_is_smalltalk(self) -> None:
-        """'hello' should be classified as smalltalk."""
-        result = fallback_intent("hello")
-        assert result.intent == "smalltalk"
-
-    def test_slash_command(self) -> None:
-        """/run should be classified as command."""
-        result = fallback_intent("/run test query")
-        assert result.intent == "command"
-
-    def test_geant4_keyword_simulation(self) -> None:
-        """Geant4 keyword should trigger simulation_request."""
+    def test_fallback_defaults_to_chat_for_any_text(self) -> None:
         result = fallback_intent("建立一个 Geant4 仿真")
-        assert result.intent == "simulation_request"
-        assert result.requires_job is True
-        assert result.requires_simulation_pipeline is True
+        assert result.intent == "chat"
+        assert result.intent_detail == "unknown"
+        assert result.requires_job is False
+        assert result.requires_simulation_pipeline is False
 
-    def test_unknown_input(self) -> None:
-        """Ambiguous input should be unknown."""
-        result = fallback_intent("今天天气怎么样")
-        assert result.intent == "unknown"
-        assert result.requires_clarification is True
-
-    def test_active_job_context(self) -> None:
-        """has_active_job should be passed through."""
+    def test_fallback_defaults_to_chat_with_active_job(self) -> None:
         result = fallback_intent("继续", has_active_job=True)
-        # "继续" doesn't match smalltalk or simulation keywords in fallback
-        assert result.intent == "unknown"
+        assert result.intent == "chat"
+        assert result.requires_simulation_pipeline is False
 
 
 class TestClassifyIntentWithLiteModel:
-    """Verify LLM-based intent classification."""
+    """Verify LM-based intent classification and contract normalization."""
 
     @pytest.mark.asyncio
-    async def test_slash_command_short_circuit(self) -> None:
-        """Slash commands should be short-circuited without LLM call."""
-        result = await classify_intent_with_lite_model("/run test")
-        assert result.intent == "command"
-        assert result.extracted_command == "/run"
-
-    @pytest.mark.asyncio
-    async def test_llm_classifies_smalltalk(self) -> None:
-        """LLM should classify '你好' as smalltalk."""
-        mock_result = ModelCallResult(
-            task=ModelTask.INTENT_ROUTING,
-            tier=ModelTier.LITE,
-            provider=ModelProvider.MOCK,
-            model_name="mock-lite",
-            content='{"intent": "smalltalk", "confidence": 0.99, '
-            '"routing_reason": "test", "normalized_user_query": "你好"}',
-            parsed_json={
-                "intent": "smalltalk",
+    async def test_llm_classifies_chat(self) -> None:
+        mock_result = _mock_result(
+            {
+                "intent": "chat",
+                "intent_detail": "smalltalk",
                 "confidence": 0.99,
                 "routing_reason": "test",
                 "normalized_user_query": "你好",
-            },
+            }
         )
 
         with patch.object(
@@ -99,12 +69,94 @@ class TestClassifyIntentWithLiteModel:
         ):
             result = await classify_intent_with_lite_model("你好")
 
-        assert result.intent == "smalltalk"
+        assert result.intent == "chat"
+        assert result.intent_detail == "smalltalk"
         assert result.confidence == 0.99
 
     @pytest.mark.asyncio
-    async def test_llm_failure_falls_back(self) -> None:
-        """LLM failure should trigger fallback rules."""
+    async def test_llm_classifies_simulation_work(self) -> None:
+        mock_result = _mock_result(
+            {
+                "intent": "simulation_work",
+                "intent_detail": "simulation_request",
+                "confidence": 0.94,
+                "routing_reason": "test",
+                "normalized_user_query": "建立 Geant4 仿真",
+            }
+        )
+
+        with patch.object(
+            get_model_gateway(), "call", new_callable=AsyncMock, return_value=mock_result
+        ):
+            result = await classify_intent_with_lite_model("建立 Geant4 仿真")
+
+        assert result.intent == "simulation_work"
+        assert result.intent_detail == "simulation_request"
+        assert result.requires_job is True
+        assert result.requires_simulation_pipeline is True
+
+    @pytest.mark.asyncio
+    async def test_legacy_lm_chat_label_is_normalized(self) -> None:
+        mock_result = _mock_result(
+            {
+                "intent": "help",
+                "confidence": 0.9,
+                "routing_reason": "legacy detail",
+                "normalized_user_query": "怎么用",
+            }
+        )
+
+        with patch.object(
+            get_model_gateway(), "call", new_callable=AsyncMock, return_value=mock_result
+        ):
+            result = await classify_intent_with_lite_model("怎么用")
+
+        assert result.intent == "chat"
+        assert result.intent_detail == "help"
+        assert result.requires_simulation_pipeline is False
+
+    @pytest.mark.asyncio
+    async def test_legacy_lm_simulation_label_is_normalized(self) -> None:
+        mock_result = _mock_result(
+            {
+                "intent": "simulation_request",
+                "confidence": 0.9,
+                "routing_reason": "legacy detail",
+                "normalized_user_query": "run a detector simulation",
+            }
+        )
+
+        with patch.object(
+            get_model_gateway(), "call", new_callable=AsyncMock, return_value=mock_result
+        ):
+            result = await classify_intent_with_lite_model("run a detector simulation")
+
+        assert result.intent == "simulation_work"
+        assert result.intent_detail == "simulation_request"
+        assert result.requires_simulation_pipeline is True
+
+    @pytest.mark.asyncio
+    async def test_slash_text_is_sent_to_lm_not_short_circuited(self) -> None:
+        mock_call = AsyncMock(
+            return_value=_mock_result(
+                {
+                    "intent": "chat",
+                    "intent_detail": "general_question",
+                    "confidence": 0.8,
+                    "routing_reason": "lm decided",
+                    "normalized_user_query": "/run test",
+                }
+            )
+        )
+
+        with patch.object(get_model_gateway(), "call", mock_call):
+            result = await classify_intent_with_lite_model("/run test")
+
+        assert result.intent == "chat"
+        mock_call.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_defaults_to_chat(self) -> None:
         mock_result = ModelCallResult(
             task=ModelTask.INTENT_ROUTING,
             tier=ModelTier.LITE,
@@ -117,52 +169,25 @@ class TestClassifyIntentWithLiteModel:
         with patch.object(
             get_model_gateway(), "call", new_callable=AsyncMock, return_value=mock_result
         ):
-            result = await classify_intent_with_lite_model("你好")
+            result = await classify_intent_with_lite_model("建立 Geant4 仿真")
 
-        # Should fall back to rule-based classification
-        assert result.intent == "smalltalk"
+        assert result.intent == "chat"
+        assert result.requires_simulation_pipeline is False
         assert "lite model failed" in result.routing_reason
 
     @pytest.mark.asyncio
-    async def test_invalid_json_falls_back(self) -> None:
-        """Invalid JSON from LLM should trigger fallback."""
-        mock_result = ModelCallResult(
-            task=ModelTask.INTENT_ROUTING,
-            tier=ModelTier.LITE,
-            provider=ModelProvider.MOCK,
-            model_name="mock-lite",
-            content="not valid json at all",
-            parsed_json=None,
-        )
-
-        with patch.object(
-            get_model_gateway(), "call", new_callable=AsyncMock, return_value=mock_result
-        ):
-            result = await classify_intent_with_lite_model("你好")
-
-        # Should fall back
-        assert result.intent == "smalltalk"
-
-    @pytest.mark.asyncio
     async def test_uses_lite_tier(self) -> None:
-        """Intent routing should use LITE tier."""
         calls = []
 
         async def mock_call(*args, **kwargs):
             calls.append(kwargs)
-            return ModelCallResult(
-                task=ModelTask.INTENT_ROUTING,
-                tier=ModelTier.LITE,
-                provider=ModelProvider.MOCK,
-                model_name="mock-lite",
-                content='{"intent": "smalltalk", "confidence": 0.9, '
-                '"routing_reason": "test", "normalized_user_query": "hi"}',
-                parsed_json={
-                    "intent": "smalltalk",
+            return _mock_result(
+                {
+                    "intent": "chat",
                     "confidence": 0.9,
                     "routing_reason": "test",
                     "normalized_user_query": "hi",
-                },
+                }
             )
 
         with patch.object(get_model_gateway(), "call", side_effect=mock_call):

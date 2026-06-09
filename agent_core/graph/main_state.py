@@ -33,6 +33,7 @@ class RadAgentMainState(TypedDict, total=False):
 
     # ── Intent Router outputs ──
     intent: str  # IntentType from intent/schemas.py
+    intent_detail: str  # Fine-grained routing detail under the two top-level intents
     intent_confidence: float
     intent_routing_reason: str
     normalized_user_query: str

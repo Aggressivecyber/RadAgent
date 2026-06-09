@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from agent_core.intent.fallback_rules import fallback_intent
 from agent_core.intent.prompts import INTENT_ROUTER_SYSTEM_PROMPT
 from agent_core.intent.schemas import IntentResult
@@ -12,16 +14,6 @@ async def classify_intent_with_lite_model(
     *,
     has_active_job: bool = False,
 ) -> IntentResult:
-    # Hard command short-circuit
-    if user_query.strip().startswith("/"):
-        return IntentResult(
-            intent="command",
-            confidence=1.0,
-            routing_reason="Slash command detected.",
-            normalized_user_query=user_query.strip(),
-            extracted_command=user_query.strip().split()[0],
-        )
-
     gateway = get_model_gateway()
 
     user_prompt = f"""用户输入：
@@ -50,10 +42,81 @@ async def classify_intent_with_lite_model(
         )
 
     try:
-        return IntentResult.model_validate(result.parsed_json)
+        normalized = _normalize_intent_payload(
+            result.parsed_json,
+            user_query=user_query,
+            has_active_job=has_active_job,
+        )
+        return IntentResult.model_validate(normalized)
     except Exception as exc:
         return fallback_intent(
             user_query,
             has_active_job=has_active_job,
             reason=f"invalid lite intent json: {exc}",
         )
+
+
+def _normalize_intent_payload(
+    payload: dict[str, Any],
+    *,
+    user_query: str,
+    has_active_job: bool,
+) -> dict[str, Any]:
+    data = dict(payload)
+    raw_intent = str(data.get("intent", "")).strip()
+    raw_detail = str(data.get("intent_detail") or data.get("subintent") or "").strip()
+
+    chat_details = {
+        "smalltalk",
+        "help",
+        "status_query",
+        "capability_query",
+        "artifact_query",
+        "command",
+        "unknown",
+        "general_question",
+    }
+    simulation_details = {
+        "simulation_request",
+        "simulation_edit",
+        "simulation_continue",
+        "human_confirmation_response",
+    }
+
+    if raw_intent in {"chat", "simulation_work"}:
+        top_level = raw_intent
+        detail = raw_detail or _default_detail_for_top_level(raw_intent)
+    elif raw_intent in chat_details:
+        top_level = "chat"
+        detail = raw_detail or raw_intent
+    elif raw_intent in simulation_details:
+        top_level = "simulation_work"
+        detail = raw_detail or raw_intent
+    else:
+        fallback = fallback_intent(
+            user_query,
+            has_active_job=has_active_job,
+            reason=f"unrecognized lite intent: {raw_intent}",
+        )
+        return fallback.model_dump()
+
+    data["intent"] = top_level
+    data["intent_detail"] = detail
+    data.setdefault("normalized_user_query", user_query.strip())
+    data.setdefault("routing_reason", "Normalized lite intent output.")
+    data.setdefault("confidence", 0.5)
+
+    if top_level == "chat":
+        data["requires_simulation_pipeline"] = False
+        data["requires_job"] = bool(data.get("requires_job", False))
+    else:
+        data["requires_job"] = True
+        data["requires_simulation_pipeline"] = True
+
+    return data
+
+
+def _default_detail_for_top_level(intent: str) -> str:
+    if intent == "simulation_work":
+        return "simulation_request"
+    return "general_question"

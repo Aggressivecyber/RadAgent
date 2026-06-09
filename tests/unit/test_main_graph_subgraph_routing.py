@@ -8,10 +8,33 @@ from agent_core.graph.main_routes import (
     route_after_g4_codegen,
     route_after_g4_modeling,
     route_after_gates,
+    route_after_intent,
     route_after_patch,
     route_after_task_planning,
 )
 from agent_core.graph.main_state import RadAgentMainState
+
+
+class TestRouteAfterIntent:
+    """Tests for two-class intent routing."""
+
+    def test_chat_routes_to_chat_response(self) -> None:
+        state: RadAgentMainState = {"intent": "chat"}
+        assert route_after_intent(state) == "chat_response_node"
+
+    def test_simulation_work_routes_to_workspace(self) -> None:
+        state: RadAgentMainState = {
+            "intent": "simulation_work",
+            "intent_detail": "simulation_request",
+        }
+        assert route_after_intent(state) == "prepare_workspace"
+
+    def test_confirmation_detail_routes_to_confirmation_subgraph(self) -> None:
+        state: RadAgentMainState = {
+            "intent": "simulation_work",
+            "intent_detail": "human_confirmation_response",
+        }
+        assert route_after_intent(state) == "human_confirmation_subgraph"
 
 
 class TestRouteAfterContext:

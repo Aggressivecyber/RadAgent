@@ -105,14 +105,15 @@ class TestHandleInput:
             mock.assert_called_once_with("/run", "1000")
 
     @pytest.mark.asyncio
-    async def test_natural_language_simulation_request_treated_as_run(
+    async def test_natural_language_simulation_work_treated_as_run(
         self, repl: RadAgentREPL
     ) -> None:
-        """Simulation request natural language should be treated as /run."""
+        """Simulation work natural language should be treated as /run."""
         from agent_core.intent.schemas import IntentResult
 
         mock_intent = IntentResult(
-            intent="simulation_request",
+            intent="simulation_work",
+            intent_detail="simulation_request",
             confidence=0.9,
             routing_reason="test",
             normalized_user_query="simulate proton beam",
@@ -129,6 +130,33 @@ class TestHandleInput:
         ):
             await repl.handle_input("simulate proton beam")
             mock.assert_called_once_with("simulate proton beam")
+
+    @pytest.mark.asyncio
+    async def test_natural_language_chat_replies_with_chat_agent(
+        self, repl: RadAgentREPL
+    ) -> None:
+        """Chat intent natural language should not be treated as /run."""
+        from agent_core.intent.schemas import IntentResult
+
+        mock_intent = IntentResult(
+            intent="chat",
+            intent_detail="general_question",
+            confidence=0.9,
+            routing_reason="test",
+            normalized_user_query="Geant4 物理列表怎么选？",
+        )
+        with (
+            patch(
+                "agent_core.intent.router.classify_intent_with_lite_model",
+                new_callable=AsyncMock,
+                return_value=mock_intent,
+            ),
+            patch.object(repl, "_chat_reply", new_callable=AsyncMock) as mock_chat,
+            patch.object(repl, "cmd_run", new_callable=AsyncMock) as mock_run,
+        ):
+            await repl.handle_input("Geant4 物理列表怎么选？")
+            mock_chat.assert_called_once_with("Geant4 物理列表怎么选？")
+            mock_run.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_empty_input_ignored(self, repl: RadAgentREPL) -> None:

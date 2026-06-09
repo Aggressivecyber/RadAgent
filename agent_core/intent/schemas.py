@@ -4,19 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-IntentType = Literal[
-    "smalltalk",
-    "help",
-    "status_query",
-    "capability_query",
-    "simulation_request",
-    "simulation_edit",
-    "simulation_continue",
-    "human_confirmation_response",
-    "command",
-    "artifact_query",
-    "unknown",
-]
+IntentType = Literal["chat", "simulation_work"]
 
 
 class IntentResult(BaseModel):
@@ -24,6 +12,7 @@ class IntentResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     routing_reason: str
     normalized_user_query: str
+    intent_detail: str | None = None
     requires_job: bool = False
     requires_simulation_pipeline: bool = False
     requires_clarification: bool = False
