@@ -169,10 +169,18 @@ def test_output_manager_hard_gate_accepts_unnamed_one_arg_write_event() -> None:
                 "void OutputManager::BeginEvent(const G4Event*){}\n"
                 "void OutputManager::EndEvent(const G4Event*){}\n"
                 "void OutputManager::RecordStep(const G4Step*){}\n"
-                "void OutputManager::WriteEvent(const G4Event*){}\n"
+                "void OutputManager::WriteEvent(const G4Event*){\n"
+                "  const char* out = std::getenv(\"G4_OUTPUT_DIR\");\n"
+                "  std::ofstream csv(\"output.csv\");\n"
+                "  csv << \"EventID,edep_MeV,dose_Gy\\n\";\n"
+                "}\n"
                 "void OutputManager::SetRunMetadata(const std::string&, const std::string&){}\n"
-                "void OutputManager::WriteRunSummary(){}\n"
-                "void OutputManager::WriteMetadata(){}\n",
+                "void OutputManager::WriteRunSummary(){\n"
+                "  std::ofstream summary(\"run_summary.json\");\n"
+                "}\n"
+                "void OutputManager::WriteMetadata(){\n"
+                "  std::ofstream metadata(\"metadata.json\");\n"
+                "}\n",
             ),
         ],
         module_status="generated",
@@ -206,10 +214,18 @@ def test_output_manager_hard_gate_accepts_comment_only_one_arg_write_event() -> 
                 "void OutputManager::BeginEvent(const G4Event*){}\n"
                 "void OutputManager::EndEvent(const G4Event*){}\n"
                 "void OutputManager::RecordStep(const G4Step*){}\n"
-                "void OutputManager::WriteEvent(const G4Event* /*event*/){}\n"
+                "void OutputManager::WriteEvent(const G4Event* /*event*/){\n"
+                "  const char* out = std::getenv(\"G4_OUTPUT_DIR\");\n"
+                "  std::ofstream csv(\"output.csv\");\n"
+                "  csv << \"EventID,edep_MeV,dose_Gy\\n\";\n"
+                "}\n"
                 "void OutputManager::SetRunMetadata(const std::string&, const std::string&){}\n"
-                "void OutputManager::WriteRunSummary(){}\n"
-                "void OutputManager::WriteMetadata(){}\n",
+                "void OutputManager::WriteRunSummary(){\n"
+                "  std::ofstream summary(\"run_summary.json\");\n"
+                "}\n"
+                "void OutputManager::WriteMetadata(){\n"
+                "  std::ofstream metadata(\"metadata.json\");\n"
+                "}\n",
             ),
         ],
         module_status="generated",
