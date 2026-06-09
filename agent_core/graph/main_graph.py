@@ -281,29 +281,18 @@ def _load_runtime_failure_context(state: RadAgentMainState) -> dict[str, Any]:
     if not failed:
         return {}
 
-    artifact_paths: list[str] = []
-    for gate in failed:
-        for path in gate.get("file_paths", []) or []:
-            if isinstance(path, str) and path:
-                artifact_paths.append(path)
-
     job_workspace = state.get("job_workspace", "")
-    if job_workspace:
-        output_dir = Path(job_workspace) / "08_gate_validation" / "g4_output_package"
-        for name in (
-            "unit_test_result.json",
-            "smoke_simulation_result.json",
-            "g4_summary.json",
-            "event_table.csv",
-            "edep_3d.csv",
-            "dose_3d.csv",
-            "provenance.json",
-        ):
-            artifact_paths.append(str(output_dir / name))
+    artifact_paths = _collect_failure_artifact_paths(
+        failed_gates=failed,
+        gate_results_path=gate_results_path,
+        job_workspace=job_workspace,
+    )
+    failure_bundle = _load_failure_bundle(job_workspace)
 
     return {
         "source": "gate_validation_retry",
         "retry_count": state.get("retry_count", 0),
+        "gate_results_path": gate_results_path,
         "failed_gates": [
             {
                 "gate_id": gate.get("gate_id"),
@@ -315,8 +304,94 @@ def _load_runtime_failure_context(state: RadAgentMainState) -> dict[str, Any]:
             }
             for gate in failed
         ],
+        "build_errors": _collect_gate_messages(failed, gate_ids={6}),
+        "runtime_errors": _collect_gate_messages(failed, gate_ids={9, 11}),
+        "artifact_errors": _collect_gate_messages(failed, gate_ids={7, 8}),
+        "failure_bundle": failure_bundle,
         "artifacts": _read_failure_artifact_tails(artifact_paths),
     }
+
+
+def _collect_failure_artifact_paths(
+    *,
+    failed_gates: list[dict[str, Any]],
+    gate_results_path: str,
+    job_workspace: str,
+) -> list[str]:
+    """Collect text/JSON artifacts that explain gate/build/runtime failures."""
+    artifact_paths: list[str] = [gate_results_path]
+    for gate in failed_gates:
+        for raw_path in gate.get("file_paths", []) or []:
+            if isinstance(raw_path, str) and _is_failure_artifact_path(raw_path):
+                artifact_paths.append(raw_path)
+
+    if job_workspace:
+        job_dir = Path(job_workspace)
+        output_dir = job_dir / "08_gate_validation" / "g4_output_package"
+        for name in (
+            "cmake_configure_result.json",
+            "build_result.json",
+            "unit_test_result.json",
+            "smoke_simulation_result.json",
+            "g4_summary.json",
+            "event_table.csv",
+            "edep_3d.csv",
+            "dose_3d.csv",
+            "provenance.json",
+        ):
+            artifact_paths.append(str(output_dir / name))
+        for path in (
+            job_dir / "logs" / "failure_bundle.json",
+            job_dir / "logs" / "events.jsonl",
+            job_dir / "logs" / "trace.json",
+            job_dir / "08_geant4" / "build" / "CMakeFiles" / "CMakeConfigureLog.yaml",
+        ):
+            artifact_paths.append(str(path))
+
+    return artifact_paths
+
+
+def _is_failure_artifact_path(raw_path: str) -> bool:
+    path = Path(raw_path)
+    if path.suffix.lower() in {".json", ".jsonl", ".log", ".txt", ".csv", ".yaml", ".yml"}:
+        return True
+    return path.name in {"stdout", "stderr"}
+
+
+def _load_failure_bundle(job_workspace: str) -> dict[str, Any]:
+    if not job_workspace:
+        return {}
+    path = Path(job_workspace) / "logs" / "failure_bundle.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {
+        "path": str(path),
+        "status": data.get("status"),
+        "phase": data.get("phase"),
+        "errors": data.get("errors", [])[:12],
+        "warnings": data.get("warnings", [])[:12],
+        "failed_gates": data.get("details", {}).get("failed_gates", [])[:12],
+    }
+
+
+def _collect_gate_messages(
+    gates: list[dict[str, Any]],
+    *,
+    gate_ids: set[int],
+) -> list[str]:
+    messages: list[str] = []
+    for gate in gates:
+        if gate.get("gate_id") not in gate_ids:
+            continue
+        message = str(gate.get("message", "")).strip()
+        if message:
+            messages.append(message)
+        messages.extend(str(item) for item in gate.get("failed_items", [])[:8])
+    return messages
 
 
 def _read_failure_artifact_tails(

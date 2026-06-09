@@ -135,20 +135,26 @@ class Geant4Runner:
 
         build_dir = str(Path(project_dir) / "build")
         cfg = await self.configure(project_dir, build_dir)
+        self._write_runner_result(_output_dir, "cmake_configure_result.json", cfg)
         if not cfg["success"]:
             return {
                 "success": False,
                 "has_geant4": True,
                 "output_summary": None,
+                "output_dir": _output_dir,
+                "cmake_configure_result": cfg,
                 "warnings": [cfg["errors"]],
             }
 
         bld = await self.build(build_dir)
+        self._write_runner_result(_output_dir, "build_result.json", bld)
         if not bld["success"] or not bld["executable_path"]:
             return {
                 "success": False,
                 "has_geant4": True,
                 "output_summary": None,
+                "output_dir": _output_dir,
+                "build_result": bld,
                 "warnings": [bld["errors"]],
             }
 
@@ -174,9 +180,27 @@ class Geant4Runner:
             "has_geant4": True,
             "output_dir": _output_dir,
             "output_summary": sim["log"][-500:] if sim["log"] else "",
+            "cmake_configure_result": cfg,
+            "build_result": bld,
             "unit_test_result": unit,
             "warnings": [msg for msg in (unit.get("errors"), sim["errors"]) if msg],
         }
+
+    def _write_runner_result(
+        self,
+        output_dir: str,
+        filename: str,
+        result: dict[str, Any],
+    ) -> None:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        bounded = dict(result)
+        for key in ("cmake_output", "build_output", "errors"):
+            if key in bounded:
+                bounded[key] = str(bounded[key])[-12000:]
+        (Path(output_dir) / filename).write_text(
+            json.dumps(bounded, indent=2),
+            encoding="utf-8",
+        )
 
     async def structure_check(self, project_dir: str) -> dict[str, Any]:
         """Check project structure without building.

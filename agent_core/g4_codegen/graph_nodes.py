@@ -796,6 +796,43 @@ async def global_code_repair_node(
     }
 
 
+async def global_llm_repair_node(
+    state: G4CodegenSubgraphState,
+) -> dict[str, Any]:
+    """Run global LLM repair before deterministic global normalization."""
+    from agent_core.g4_codegen.global_llm_repair import run_global_llm_repair
+
+    proposed_patch = state.get("proposed_patch", {})
+    job_id = state.get("job_id", "unknown")
+    repaired_patch, report = await run_global_llm_repair(
+        proposed_patch,
+        job_id=job_id,
+        runtime_failure_context=state.get("runtime_failure_context", {}),
+        module_gate_results=state.get("module_gate_results", {}),
+        static_semantic_scan=state.get("static_semantic_scan", {}),
+    )
+    record_event(
+        job_id=job_id,
+        event_type="global_llm_repair_result",
+        status="passed" if report.get("status") == "passed" else "failed",
+        phase="g4_codegen",
+        module_name="global_llm_repair",
+        summary="Global LLM repair completed",
+        metrics={
+            "issues_fixed": len(report.get("issues_fixed", [])),
+            "changed_file_count": len(report.get("changed_files", [])),
+        },
+        errors=report.get("errors", []),
+        details=report,
+    )
+    return {
+        "proposed_patch": repaired_patch,
+        "global_llm_repair_report": report,
+        "current_node": "global_llm_repair_agent",
+        "codegen_errors": list(state.get("codegen_errors", [])) + report.get("errors", []),
+    }
+
+
 async def static_semantic_scanner_node(
     state: G4CodegenSubgraphState,
 ) -> dict[str, Any]:
@@ -906,6 +943,7 @@ async def persist_codegen_output_node(
     has_code = bool(proposed_patch.get("changed_files"))
     cross_hard = state.get("cross_file_hard_gate", {})
     cross_llm = state.get("cross_file_llm_gate", {})
+    global_llm_repair = state.get("global_llm_repair_report", {})
     global_repair = state.get("global_code_repair_report", {})
 
     # Check static semantic scan status
@@ -939,6 +977,8 @@ async def persist_codegen_output_node(
         status = "failed"
     elif static_scan.get("status") == "fail":
         status = "failed"
+    elif global_llm_repair and global_llm_repair.get("status") != "passed":
+        status = "failed"
     elif global_repair and global_repair.get("status") != "passed":
         status = "failed"
     elif cross_hard.get("status") == "fail":
@@ -961,6 +1001,8 @@ async def persist_codegen_output_node(
         new_errors.append(f"Failed module gates: {sorted(failed_module_gates)}")
     if failed_layer_gates:
         new_errors.append(f"Failed layer gates: {sorted(failed_layer_gates)}")
+    if global_llm_repair and global_llm_repair.get("status") != "passed":
+        new_errors.append("Global LLM repair failed")
 
     updates: dict[str, Any] = {
         "proposed_patch_path": str(patch_path),

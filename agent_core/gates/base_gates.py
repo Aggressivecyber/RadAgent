@@ -294,6 +294,14 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             g6_message = "Geant4 environment required for build gate"
     except Exception as e:
         g6_message = f"Build check error: {e}"
+    build_artifact_paths = [
+        str(path)
+        for path in (
+            output_dir / "cmake_configure_result.json",
+            output_dir / "build_result.json",
+        )
+        if path.is_file()
+    ]
     gate_results.append(
         {
             "gate_id": 6,
@@ -305,8 +313,8 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "passed_items": ["build passed"] if g6_severity == "pass" else [],
             "failed_items": [g6_message] if g6_severity == "fail" else [],
             "warnings": [],
-            "evidence": [],
-            "file_paths": [],
+            "evidence": build_artifact_paths,
+            "file_paths": build_artifact_paths,
             "message": g6_message,
         }
     )

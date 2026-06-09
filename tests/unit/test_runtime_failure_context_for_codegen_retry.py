@@ -22,10 +22,43 @@ def test_codegen_retry_loads_gate_failure_artifacts(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+    build_path = output_dir / "build_result.json"
+    build_path.write_text(
+        json.dumps(
+            {
+                "success": False,
+                "errors": "MaterialRegistry.cc: invalid operands to binary expression",
+            }
+        ),
+        encoding="utf-8",
+    )
+    logs_dir = job_dir / "logs"
+    logs_dir.mkdir()
+    (logs_dir / "failure_bundle.json").write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "phase": "gate_validation",
+                "errors": ["Build failed"],
+                "warnings": [],
+                "details": {"failed_gates": [{"gate_id": 6, "message": "Build failed"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
     gate_results_path = gate_dir / "gate_results.json"
     gate_results_path.write_text(
         json.dumps(
             [
+                {
+                    "gate_id": 6,
+                    "name": "Build/Parse",
+                    "status": "fail",
+                    "message": "Build failed",
+                    "failed_items": ["Build failed"],
+                    "warnings": [],
+                    "file_paths": [str(build_path)],
+                },
                 {
                     "gate_id": 9,
                     "name": "Smoke Simulation",
@@ -50,6 +83,10 @@ def test_codegen_retry_loads_gate_failure_artifacts(tmp_path: Path) -> None:
     )
 
     assert context["source"] == "gate_validation_retry"
-    assert context["failed_gates"][0]["gate_id"] == 9
+    assert context["failed_gates"][0]["gate_id"] == 6
+    assert "Build failed" in context["build_errors"]
+    assert context["failure_bundle"]["status"] == "failed"
     assert context["artifacts"]
-    assert "BeamOn ignored" in context["artifacts"][0]["tail"]
+    artifact_text = "\n".join(item["tail"] for item in context["artifacts"])
+    assert "BeamOn ignored" in artifact_text
+    assert "invalid operands to binary expression" in artifact_text

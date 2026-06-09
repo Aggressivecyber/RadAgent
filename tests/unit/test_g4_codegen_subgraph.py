@@ -28,7 +28,11 @@ class TestG4CodegenSubgraphCompilation:
 
         graph = build_g4_codegen_subgraph()
         node_names = set(graph.nodes)
+        assert "global_llm_repair_agent" in node_names
         assert "global_code_repair_agent" in node_names
+        assert ("integration_assembler", "global_llm_repair_agent") in graph.edges
+        assert ("global_llm_repair_agent", "global_code_repair_agent") in graph.edges
+        assert ("global_code_repair_agent", "static_semantic_scanner") in graph.edges
         for layer_name, module_names in MODULE_LAYERS:
             assert f"run_{layer_name}" in node_names
             assert f"{layer_name}_gate" in node_names
