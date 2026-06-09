@@ -51,6 +51,9 @@ REPAIR_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 模块修复 Agent。
 16. 修复方式示例：std::array<T, kAxisCount>，char buf[kCommandBufferSize]，
     std::setprecision(kCsvPrecision)，mkdir(path, kOutputDirectoryMode)，
     G4ThreeVector(0.0, 0.0, 1.0)；不要写 G4ThreeVector(0., 0., 1.)。
+17. 只允许返回当前模块契约里的 owned/output files。不要新增 module_dependency.json、
+    metadata.json、notes.txt 或任何契约外文件。依赖关系必须写入每个
+    generated_files[].dependencies 字段，不得通过新增文件表达。
 
 输出格式：
 {
@@ -257,7 +260,7 @@ async def repair_module(
                     merged_files_by_path.pop(macro_name, None)
         _prune_files_outside_module_contract(module_name, module_context, merged_files_by_path)
         merged_files = list(merged_files_by_path.values())
-        _postprocess_repaired_module_files(module_name, merged_files)
+        _postprocess_repaired_module_files(module_name, module_context, merged_files)
 
         repaired_result = ModuleAgentResult(
             module_name=module_name,
@@ -321,8 +324,10 @@ async def repair_module(
 
 def _postprocess_repaired_module_files(
     module_name: str,
+    module_context: dict[str, Any],
     generated_files: list[GeneratedModuleFile],
 ) -> None:
+    _merge_contract_dependencies(module_context, generated_files)
     if module_name != "output_manager":
         return
     for file_entry in generated_files:
@@ -331,6 +336,31 @@ def _postprocess_repaired_module_files(
         file_entry.new_content = _normalize_output_manager_getenv_literals(
             file_entry.new_content
         )
+
+
+def _merge_contract_dependencies(
+    module_context: dict[str, Any],
+    generated_files: list[GeneratedModuleFile],
+) -> None:
+    contract = module_context.get("module_contract")
+    if not isinstance(contract, dict):
+        return
+    dependencies = contract.get("dependencies")
+    if not isinstance(dependencies, list):
+        return
+    required_dependencies = [
+        dependency
+        for dependency in dependencies
+        if isinstance(dependency, str) and dependency.strip()
+    ]
+    if not required_dependencies:
+        return
+    for file_entry in generated_files:
+        existing = list(file_entry.dependencies or [])
+        for dependency in required_dependencies:
+            if dependency not in existing:
+                existing.append(dependency)
+        file_entry.dependencies = existing
 
 
 def _normalize_output_manager_getenv_literals(content: str) -> str:
@@ -527,24 +557,35 @@ def _prune_files_outside_module_contract(
     merged_files_by_path: dict[str, GeneratedModuleFile],
 ) -> None:
     """Keep repaired module output inside the module contract file scope."""
-    contract = module_context.get("module_contract")
-    if not isinstance(contract, dict):
-        return
-    output_files = contract.get("output_files")
-    if not isinstance(output_files, list) or not output_files:
-        return
-
-    allowed_paths = {
-        _normalize_generated_path(module_name, path)
-        for path in output_files
-        if isinstance(path, str) and path.strip()
-    }
+    allowed_paths = _allowed_repair_paths(module_name, module_context)
     if not allowed_paths:
         return
 
     for path in list(merged_files_by_path):
         if path not in allowed_paths:
             merged_files_by_path.pop(path, None)
+
+
+def _allowed_repair_paths(
+    module_name: str,
+    module_context: dict[str, Any],
+) -> set[str]:
+    paths: list[str] = []
+    contract = module_context.get("module_contract")
+    if isinstance(contract, dict):
+        output_files = contract.get("output_files")
+        if isinstance(output_files, list):
+            paths.extend(path for path in output_files if isinstance(path, str))
+    example = module_context.get("module_code_example")
+    if isinstance(example, dict):
+        owned_files = example.get("owned_files")
+        if isinstance(owned_files, list):
+            paths.extend(path for path in owned_files if isinstance(path, str))
+    return {
+        _normalize_generated_path(module_name, path)
+        for path in paths
+        if isinstance(path, str) and path.strip()
+    }
 
 
 def _format_gate_requirements(
