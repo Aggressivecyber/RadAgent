@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -58,7 +59,10 @@ class ModelGateway:
                 parsed_json = mock_result.parsed_json
                 usage = {"mock": True}
             elif profile.provider == ModelProvider.OPENAI_COMPATIBLE:
-                content, usage = await call_openai_compatible_model(profile, req)
+                content, usage = await asyncio.wait_for(
+                    call_openai_compatible_model(profile, req),
+                    timeout=_provider_call_deadline_s(profile),
+                )
                 parsed_json = None
                 if response_format == "json":
                     parsed_json = _safe_parse_json(content)
@@ -74,6 +78,21 @@ class ModelGateway:
                 parsed_json=parsed_json,
                 usage=usage,
                 latency_ms=(time.time() - start) * 1000,
+            )
+        except TimeoutError:
+            result = ModelCallResult(
+                task=task,
+                tier=selected_tier,
+                provider=profile.provider,
+                model_name=profile.model_name,
+                content="",
+                parsed_json=None,
+                usage={},
+                latency_ms=(time.time() - start) * 1000,
+                error=(
+                    "Model call timed out after "
+                    f"{_provider_call_deadline_s(profile):.1f}s"
+                ),
             )
         except Exception as exc:
             result = ModelCallResult(
@@ -188,6 +207,12 @@ def _safe_parse_json(content: str) -> dict[str, Any] | None:
             except Exception:
                 return None
     return None
+
+
+def _provider_call_deadline_s(profile: Any) -> float:
+    timeout_s = float(getattr(profile, "timeout_s", 60.0) or 60.0)
+    max_retries = int(getattr(profile, "max_retries", 0) or 0)
+    return max(1.0, timeout_s * (max_retries + 1) + 5.0)
 
 
 _gateway: ModelGateway | None = None

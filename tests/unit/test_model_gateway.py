@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -104,6 +105,31 @@ class TestModelGateway:
         assert result.error == "API error"
         assert result.content == ""
         assert result.parsed_json is None
+
+    @pytest.mark.asyncio
+    async def test_call_times_out_stalled_provider(self) -> None:
+        """Gateway should fail stalled provider calls instead of hanging forever."""
+        gw = get_model_gateway()
+        gw.profiles[ModelTier.LITE].timeout_s = 0.01
+        gw.profiles[ModelTier.LITE].max_retries = 0
+
+        async def stalled_call(*args, **kwargs):
+            await asyncio.sleep(10.0)
+            return "unreachable", {}
+
+        with patch(
+            "agent_core.models.gateway.call_openai_compatible_model",
+            side_effect=stalled_call,
+        ):
+            result = await gw.call(
+                task=ModelTask.INTENT_ROUTING,
+                system_prompt="test",
+                user_prompt="hello",
+            )
+
+        assert result.error
+        assert "timed out" in result.error
+        assert result.content == ""
 
     @pytest.mark.asyncio
     async def test_call_json_parse(self) -> None:
