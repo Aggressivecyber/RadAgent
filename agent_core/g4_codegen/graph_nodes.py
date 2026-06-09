@@ -769,55 +769,34 @@ async def layer_consistency_gate_node(
     return updates
 
 
-async def global_code_repair_node(
+async def global_integration_agent_node(
     state: G4CodegenSubgraphState,
 ) -> dict[str, Any]:
-    """Run the global repair pass over the assembled multi-module patch."""
-    from agent_core.g4_codegen.global_repair import run_global_code_repair
-
-    proposed_patch = state.get("proposed_patch", {})
-    job_id = state.get("job_id", "unknown")
-    repaired_patch, report = run_global_code_repair(proposed_patch, job_id)
-    record_event(
-        job_id=job_id,
-        event_type="global_repair_result",
-        status="passed" if report.get("status") == "passed" else "failed",
-        phase="g4_codegen",
-        summary="Global code repair completed",
-        metrics={"issues_fixed": len(report.get("issues_fixed", []))},
-        errors=report.get("errors", []),
-        details=report,
+    """Run the high-privilege global integration agent."""
+    from agent_core.g4_codegen.global_integration_agent import (
+        run_global_integration_agent,
     )
-    return {
-        "proposed_patch": repaired_patch,
-        "global_code_repair_report": report,
-        "current_node": "global_code_repair_agent",
-        "codegen_errors": list(state.get("codegen_errors", [])) + report.get("errors", []),
-    }
 
-
-async def global_llm_repair_node(
-    state: G4CodegenSubgraphState,
-) -> dict[str, Any]:
-    """Run global LLM repair before deterministic global normalization."""
-    from agent_core.g4_codegen.global_llm_repair import run_global_llm_repair
-
-    proposed_patch = state.get("proposed_patch", {})
     job_id = state.get("job_id", "unknown")
-    repaired_patch, report = await run_global_llm_repair(
-        proposed_patch,
+    repaired_patch, report = await run_global_integration_agent(
+        state.get("proposed_patch", {}),
         job_id=job_id,
-        runtime_failure_context=state.get("runtime_failure_context", {}),
+        module_results=state.get("module_results", {}),
         module_gate_results=state.get("module_gate_results", {}),
+        module_contracts=state.get("module_contracts", {}),
+        module_contexts=state.get("module_contexts", {}),
+        interface_contracts=state.get("interface_contracts", {}),
+        runtime_failure_context=state.get("runtime_failure_context", {}),
         static_semantic_scan=state.get("static_semantic_scan", {}),
+        cross_file_hard_gate=state.get("cross_file_hard_gate", {}),
     )
     record_event(
         job_id=job_id,
-        event_type="global_llm_repair_result",
+        event_type="global_integration_agent_result",
         status="passed" if report.get("status") == "passed" else "failed",
         phase="g4_codegen",
-        module_name="global_llm_repair",
-        summary="Global LLM repair completed",
+        module_name="global_integration_agent",
+        summary="Global integration agent completed",
         metrics={
             "issues_fixed": len(report.get("issues_fixed", [])),
             "changed_file_count": len(report.get("changed_files", [])),
@@ -827,8 +806,8 @@ async def global_llm_repair_node(
     )
     return {
         "proposed_patch": repaired_patch,
-        "global_llm_repair_report": report,
-        "current_node": "global_llm_repair_agent",
+        "global_integration_agent_report": report,
+        "current_node": "global_integration_agent",
         "codegen_errors": list(state.get("codegen_errors", [])) + report.get("errors", []),
     }
 
@@ -943,8 +922,7 @@ async def persist_codegen_output_node(
     has_code = bool(proposed_patch.get("changed_files"))
     cross_hard = state.get("cross_file_hard_gate", {})
     cross_llm = state.get("cross_file_llm_gate", {})
-    global_llm_repair = state.get("global_llm_repair_report", {})
-    global_repair = state.get("global_code_repair_report", {})
+    global_integration = state.get("global_integration_agent_report", {})
 
     # Check static semantic scan status
     static_scan = state.get("static_semantic_scan", {})
@@ -977,9 +955,7 @@ async def persist_codegen_output_node(
         status = "failed"
     elif static_scan.get("status") == "fail":
         status = "failed"
-    elif global_llm_repair and global_llm_repair.get("status") != "passed":
-        status = "failed"
-    elif global_repair and global_repair.get("status") != "passed":
+    elif global_integration and global_integration.get("status") != "passed":
         status = "failed"
     elif cross_hard.get("status") == "fail":
         status = "failed"
@@ -1001,8 +977,8 @@ async def persist_codegen_output_node(
         new_errors.append(f"Failed module gates: {sorted(failed_module_gates)}")
     if failed_layer_gates:
         new_errors.append(f"Failed layer gates: {sorted(failed_layer_gates)}")
-    if global_llm_repair and global_llm_repair.get("status") != "passed":
-        new_errors.append("Global LLM repair failed")
+    if global_integration and global_integration.get("status") != "passed":
+        new_errors.append("Global integration agent failed")
 
     updates: dict[str, Any] = {
         "proposed_patch_path": str(patch_path),

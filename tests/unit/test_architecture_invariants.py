@@ -69,6 +69,30 @@ class TestNoOldNaming:
             assert "spicerag" not in content, f"spicerag found in {py_file}"
 
 
+class TestNoRetiredCrossModuleRepair:
+    """Retired cross-module repair files and graph nodes must not return."""
+
+    def test_no_retired_cross_module_files(self) -> None:
+        retired = [
+            "global_" + "repair.py",
+            "global_" + "llm_repair.py",
+        ]
+        for filename in retired:
+            assert not (AGENT_CORE / "g4_codegen" / filename).exists()
+
+    def test_no_retired_cross_module_symbols_in_agent_core(self) -> None:
+        retired_tokens = [
+            "global_" + "code_repair",
+            "global_" + "llm_repair",
+            "run_global_" + "code_repair",
+            "run_global_" + "llm_repair",
+        ]
+        for py_file in AGENT_CORE.rglob("*.py"):
+            content = py_file.read_text(errors="replace")
+            for token in retired_tokens:
+                assert token not in content, f"{token} found in {py_file}"
+
+
 class TestSubgraphDirectoryStructure:
     """Verify subgraph directory structure exists."""
 

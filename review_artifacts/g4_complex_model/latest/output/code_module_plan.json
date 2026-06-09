@@ -1,7 +1,1 @@
-{
-  "modules": [
-    "DetectorConstruction",
-    "PhysicsList",
-    "PrimaryGenerator"
-  ]
-}
+{"modules": ["DetectorConstruction"]}

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from agent_core.g4_codegen.global_repair import run_global_code_repair
 from agent_core.g4_codegen.integration.integration_assembler import assemble_proposed_patch
 from agent_core.validators.patch_validator import PatchValidator
 
@@ -216,91 +215,3 @@ class TestAssembleProposedPatchPatchValidatorContract:
         paths = [f["path"] for f in patch["changed_files"]]
         assert "src/Material.cc" in paths
         assert "src/Physics.cc" in paths
-
-    def test_global_repair_lists_all_cmake_sources(self, workspace: Path) -> None:
-        """Global repair should make CMakeLists.txt explicitly reference all src files."""
-        module_results = {
-            "main_cmake": _make_module_result(
-                "main_cmake",
-                [
-                    {
-                        "path": "CMakeLists.txt",
-                        "new_content": (
-                            "cmake_minimum_required(VERSION 3.16)\n"
-                            "project(RadAgentG4)\n"
-                            "find_package(Geant4 REQUIRED)\n"
-                            "file(GLOB SOURCES \"src/*.cc\" \"main.cc\")\n"
-                            "add_executable(RadAgentG4 ${SOURCES})\n"
-                            "target_link_libraries(RadAgentG4 ${Geant4_LIBRARIES})\n"
-                        ),
-                    },
-                    {"path": "main.cc", "new_content": "int main() { return 0; }\n"},
-                ],
-            ),
-            "material": _make_module_result(
-                "material",
-                [{"path": "src/MaterialRegistry.cc", "new_content": "// material\n"}],
-            ),
-            "geometry": _make_module_result(
-                "geometry",
-                [{"path": "src/DetectorConstruction.cc", "new_content": "// geometry\n"}],
-            ),
-        }
-        gate_results = _make_gate_results_pass(["main_cmake", "material", "geometry"])
-
-        patch = assemble_proposed_patch(module_results, gate_results, "test")
-        patch, report = run_global_code_repair(patch, "test")
-
-        cmake = next(f for f in patch["changed_files"] if f["path"] == "CMakeLists.txt")
-        assert "src/MaterialRegistry.cc" in cmake["new_content"]
-        assert "src/DetectorConstruction.cc" in cmake["new_content"]
-        assert "CMAKE_CXX_STANDARD 17" in cmake["new_content"]
-        assert report["status"] == "passed"
-        assert any(i["target"] == "CMakeLists.txt" for i in report["issues_fixed"])
-
-    def test_global_repair_adds_output_manager_write_event(self, workspace: Path) -> None:
-        """Global repair should add the OutputManager WriteEvent adapter."""
-        patch = {
-            "changed_files": [
-                {
-                    "path": "CMakeLists.txt",
-                    "new_content": (
-                        "cmake_minimum_required(VERSION 3.16)\n"
-                        "project(RadAgentG4)\n"
-                        "find_package(Geant4 REQUIRED)\n"
-                        "add_executable(RadAgentG4 main.cc)\n"
-                    ),
-                },
-                {"path": "main.cc", "new_content": "int main() { return 0; }\n"},
-                {
-                    "path": "src/OutputManager.cc",
-                    "new_content": (
-                        "void OutputManager::EndEvent(const G4Event*) {}\n"
-                        "void OutputManager::WriteEvent(const G4Event*, double, double) {}\n"
-                    ),
-                },
-                {
-                    "path": "include/OutputManager.hh",
-                    "new_content": (
-                        "class OutputManager {\n"
-                        "public:\n"
-                        "    void EndEvent(const G4Event* anEvent);\n"
-                        "    void WriteEvent(const G4Event* anEvent, double edep, double dose);\n"
-                        "};\n"
-                    ),
-                },
-            ]
-        }
-
-        repaired, report = run_global_code_repair(patch, "test")
-
-        header = next(
-            f for f in repaired["changed_files"] if f["path"] == "include/OutputManager.hh"
-        )
-        source = next(f for f in repaired["changed_files"] if f["path"] == "src/OutputManager.cc")
-        assert "WriteEvent(const G4Event* anEvent)" in header["new_content"]
-        assert "WriteEvent(const G4Event* anEvent, double edep, double dose)" in header[
-            "new_content"
-        ]
-        assert "OutputManager::WriteEvent(" in source["new_content"]
-        assert report["status"] == "passed"

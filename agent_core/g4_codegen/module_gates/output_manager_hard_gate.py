@@ -170,7 +170,7 @@ def _append_output_manager_interface_checks(
             }
         )
 
-    has_stable_event_header = "EventID,edep_MeV,dose_Gy" in source
+    has_stable_event_header = _has_output_csv_header_contract(source)
     artifact_checks.append(
         {
             "check": "output_manager_output_csv_header_contract",
@@ -201,3 +201,15 @@ def _append_output_manager_interface_checks(
         if check["status"] == "fail":
             result.status = "fail"
             result.errors.append(check["message"])
+
+
+def _has_output_csv_header_contract(source: str) -> bool:
+    if "EventID,edep_MeV,dose_Gy" in source:
+        return True
+    compact = re.sub(r"\s+", "", source)
+    return bool(
+        re.search(
+            r'"EventID".{0,120}"edep_MeV".{0,120}"dose_Gy"',
+            compact,
+        )
+    )

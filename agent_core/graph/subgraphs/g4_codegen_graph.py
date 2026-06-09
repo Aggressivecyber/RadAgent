@@ -10,11 +10,15 @@ Flow:
     → [layered parallel module groups: agent → hard_gate → llm_gate → repair_if_needed]
     → build_interface_contracts
     → integration_assembler
-    → global_code_repair_agent
+    → global_integration_agent
     → static_semantic_scanner
     → cross_file_hard_gate
     → cross_file_llm_gate
     → persist_codegen_output
+
+Per-module LM repair is intentionally scoped to a single failed module inside
+the layer. The global integration agent is the only cross-module writer in the
+codegen graph.
 """
 
 from __future__ import annotations
@@ -31,8 +35,7 @@ from agent_core.g4_codegen.graph_nodes import (
     build_module_contracts_node,
     cross_file_hard_gate_node,
     cross_file_llm_gate_node,
-    global_code_repair_node,
-    global_llm_repair_node,
+    global_integration_agent_node,
     integration_assembler_node,
     layer_consistency_gate_node,
     persist_codegen_output_node,
@@ -139,8 +142,7 @@ def build_g4_codegen_subgraph() -> StateGraph:
     # ── Integration nodes ─────────────────────────────────────────────
     graph.add_node("build_interface_contracts", build_interface_contracts_node)
     graph.add_node("integration_assembler", integration_assembler_node)
-    graph.add_node("global_llm_repair_agent", global_llm_repair_node)
-    graph.add_node("global_code_repair_agent", global_code_repair_node)
+    graph.add_node("global_integration_agent", global_integration_agent_node)
     graph.add_node("static_semantic_scanner", static_semantic_scanner_node)
     graph.add_node("cross_file_hard_gate", cross_file_hard_gate_node)
     graph.add_node("cross_file_llm_gate", cross_file_llm_gate_node)
@@ -178,9 +180,8 @@ def build_g4_codegen_subgraph() -> StateGraph:
 
     # ── Flow: Integration ─────────────────────────────────────────────
     graph.add_edge("build_interface_contracts", "integration_assembler")
-    graph.add_edge("integration_assembler", "global_llm_repair_agent")
-    graph.add_edge("global_llm_repair_agent", "global_code_repair_agent")
-    graph.add_edge("global_code_repair_agent", "static_semantic_scanner")
+    graph.add_edge("integration_assembler", "global_integration_agent")
+    graph.add_edge("global_integration_agent", "static_semantic_scanner")
     graph.add_edge("static_semantic_scanner", "cross_file_hard_gate")
     graph.add_edge("cross_file_hard_gate", "cross_file_llm_gate")
     graph.add_edge("cross_file_llm_gate", "persist_codegen_output")

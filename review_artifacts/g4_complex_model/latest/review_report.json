@@ -2,10 +2,10 @@
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
   "job_id": "hc_test",
-  "validation_status": "PARTIAL",
-  "generated_at": "2026-06-08T06:00:49.759281+00:00",
+  "validation_status": "failed",
+  "generated_at": "2026-06-09T09:39:47.166068+00:00",
   "is_stub": false,
-  "run_type": "dev",
+  "run_type": "strict",
   "artifacts_collected": 14,
   "has_model_ir": true,
   "has_gate_results": true,
@@ -14,9 +14,7 @@
   "has_human_confirmation": true,
   "file_count": 14,
   "skipped_gates": [],
-  "known_limitations": [
-    "Some gates skipped — not all validations ran"
-  ],
+  "known_limitations": [],
   "human_confirmation": {
     "required": false,
     "status": "not_required",

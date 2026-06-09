@@ -115,6 +115,45 @@ def test_output_manager_hard_gate_accepts_fixed_runtime_artifact_contract() -> N
     assert result.status == "pass"
 
 
+def test_output_manager_hard_gate_accepts_separator_streamed_header() -> None:
+    result = run_output_manager_hard_gate(
+        [
+            _file("include/OutputManager.hh", _header()),
+            _file(
+                "src/OutputManager.cc",
+                '#include "OutputManager.hh"\n'
+                "#include <cstdlib>\n"
+                "namespace { constexpr char kSeparator = ','; }\n"
+                "OutputManager* OutputManager::Instance() { return nullptr; }\n"
+                "void OutputManager::BeginRun(const G4Run*) {\n"
+                "  auto* dir = std::getenv(\"G4_OUTPUT_DIR\");\n"
+                "  std::ofstream f(std::string(dir ? dir : \".\") + \"/output.csv\");\n"
+                "  f << \"EventID\" << kSeparator << \"edep_MeV\"\n"
+                "    << kSeparator << \"dose_Gy\" << '\\n';\n"
+                "}\n"
+                "void OutputManager::EndRun(const G4Run*) { WriteRunSummary(); WriteMetadata(); }\n"
+                "void OutputManager::BeginEvent(const G4Event*) {}\n"
+                "void OutputManager::EndEvent(const G4Event*) {}\n"
+                "void OutputManager::RecordStep(const G4Step*) {}\n"
+                "void OutputManager::WriteEvent(const G4Event*) {}\n"
+                "void OutputManager::RecordEventData(const std::map<G4String, double>&) {}\n"
+                "void OutputManager::SetRunMetadata(const G4String&, const G4String&) {}\n"
+                "void OutputManager::WriteRunSummary() {\n"
+                "  std::ofstream f(\"run_summary.json\");\n"
+                "  f << \"{\\\"total_events\\\":0,\\\"total_edep_MeV\\\":0}\";\n"
+                "}\n"
+                "void OutputManager::WriteMetadata() {\n"
+                "  std::ofstream f(\"metadata.json\");\n"
+                "  f << \"{\\\"job_id\\\":\\\"test\\\"}\";\n"
+                "}\n",
+            ),
+        ],
+        module_status="generated",
+    )
+
+    assert result.status == "pass"
+
+
 def test_output_manager_hard_gate_rejects_event_user_information_bridge() -> None:
     result = run_output_manager_hard_gate(
         [

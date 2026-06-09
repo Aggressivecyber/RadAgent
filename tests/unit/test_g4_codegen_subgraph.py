@@ -19,8 +19,8 @@ class TestG4CodegenSubgraphCompilation:
         compiled = graph.compile()
         assert compiled is not None
 
-    def test_subgraph_has_parallel_layers_and_global_repair(self) -> None:
-        """Subgraph should expose layered module gates and global repair."""
+    def test_subgraph_has_parallel_layers_and_global_integration_agent(self) -> None:
+        """Subgraph should expose layered module gates and global integration."""
         from agent_core.graph.subgraphs.g4_codegen_graph import (
             MODULE_LAYERS,
             build_g4_codegen_subgraph,
@@ -28,11 +28,11 @@ class TestG4CodegenSubgraphCompilation:
 
         graph = build_g4_codegen_subgraph()
         node_names = set(graph.nodes)
-        assert "global_llm_repair_agent" in node_names
-        assert "global_code_repair_agent" in node_names
-        assert ("integration_assembler", "global_llm_repair_agent") in graph.edges
-        assert ("global_llm_repair_agent", "global_code_repair_agent") in graph.edges
-        assert ("global_code_repair_agent", "static_semantic_scanner") in graph.edges
+        assert "global_integration_agent" in node_names
+        retired_nodes = {"global_" + "llm_repair_agent", "global_" + "code_repair_agent"}
+        assert node_names.isdisjoint(retired_nodes)
+        assert ("integration_assembler", "global_integration_agent") in graph.edges
+        assert ("global_integration_agent", "static_semantic_scanner") in graph.edges
         for layer_name, module_names in MODULE_LAYERS:
             assert f"run_{layer_name}" in node_names
             assert f"{layer_name}_gate" in node_names

@@ -2,17 +2,17 @@
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
   "job_id": "hc_test",
-  "validation_status": "PARTIAL",
-  "generated_at": "2026-06-08T06:00:49.758970+00:00",
+  "validation_status": "failed",
+  "generated_at": "2026-06-09T09:39:47.165882+00:00",
   "is_stub": false,
-  "run_type": "dev",
-  "source_commit": "5adc488",
+  "run_type": "strict",
+  "source_commit": "2d1151e",
   "source_job_id": "hc_test",
   "files": [
     {
       "name": "code_module_plan.json",
-      "size_bytes": 92,
-      "sha256": "21b44d3a23bde5494a5f274b76fab313742fe275f2568a051d66b80e144cbb85"
+      "size_bytes": 37,
+      "sha256": "690b5cbe6d016f4903383211d63299bf4f8bce3b4db9e890d400fe4ac78a1257"
     },
     {
       "name": "component_specs_summary.json",
@@ -31,8 +31,8 @@
     },
     {
       "name": "construction_ledger.json",
-      "size_bytes": 39,
-      "sha256": "94425c646bd45ae6e069523bd89a062a38bf37094ffd4096535a5365f2a12092"
+      "size_bytes": 33,
+      "sha256": "68fa1756264016dc29910bc0fa7660ae0df8737c8243f54ec0a27a30a1ac0cbe"
     },
     {
       "name": "evidence_traceability_report.json",
@@ -61,8 +61,8 @@
     },
     {
       "name": "model_review_report.md",
-      "size_bytes": 44,
-      "sha256": "c60644fdad410f70521b534a9b8884bc4a5527303df174a0ad5a7010c496abc3"
+      "size_bytes": 41,
+      "sha256": "d400268a7992af90b990f4ad7b3f178df39316d9faebded27b663f32169061d6"
     },
     {
       "name": "no_simplification_report.json",
@@ -76,41 +76,41 @@
     },
     {
       "name": "proposed_patch_summary.json",
-      "size_bytes": 42,
-      "sha256": "5ee23450aa1c8e8372cdb3c02d635194d68c47b91a831f923da09a470a21bf26"
+      "size_bytes": 79,
+      "sha256": "2e7f2d0a0a41c84fe05eb530c8a28c1f6709471e1cc842ca4992ab6b016ec988"
     }
   ],
   "sha256": {
-    "output/code_module_plan.json": "21b44d3a23bde5494a5f274b76fab313742fe275f2568a051d66b80e144cbb85",
+    "output/code_module_plan.json": "690b5cbe6d016f4903383211d63299bf4f8bce3b4db9e890d400fe4ac78a1257",
     "output/component_specs_summary.json": "2dc38dc6155f1810ead8546d0107817a16c8522701a7388e7e2e456e3cf54d3a",
     "output/confirmation_record.json": "6b636c79fae34a6c562b78abf84ec57860eb52ee5997b462c8009061658b5eda",
     "output/confirmed_model_plan.json": "f7df84e45c4a974affe81eeebd76ceea0a58624a7a8db2064cba95979e338e60",
-    "output/construction_ledger.json": "94425c646bd45ae6e069523bd89a062a38bf37094ffd4096535a5365f2a12092",
+    "output/construction_ledger.json": "68fa1756264016dc29910bc0fa7660ae0df8737c8243f54ec0a27a30a1ac0cbe",
     "output/evidence_traceability_report.json": "07cf65e9d440e765920baeaa5969abdcb37fdc0920e84fe285cf764cda567b7e",
     "output/g4_model_ir.json": "d0352f637ede743882d0de574fa6b166b218c52672061d0cecb7a8b8519f8c19",
     "output/gate_results.json": "fd7408f07bb47d4725a071a99df8c03f4f4b1c1b1297986d83cf79344ba39aa0",
     "output/geometry_interface_report.json": "e20abd6958e83b2df55fff1dee67b9bdc8c827ddc627797ff58a3d100c860dd0",
     "output/human_confirmation_report.md": "497b7725a00101d6cf82489ef502fb0918962b10aaa7279962ab5ec3edc62533",
-    "output/model_review_report.md": "c60644fdad410f70521b534a9b8884bc4a5527303df174a0ad5a7010c496abc3",
+    "output/model_review_report.md": "d400268a7992af90b990f4ad7b3f178df39316d9faebded27b663f32169061d6",
     "output/no_simplification_report.json": "c5d671c9c31b350cf11a9adc6048645e97fbc54a1ee520cb42f39732d1717b7e",
     "output/output_manager_contract.json": "2a04b1255bf549abdef205ebcb3bad6c6e2ed043d1dc60bd8eb2ad9e8d67edaf",
-    "output/proposed_patch_summary.json": "5ee23450aa1c8e8372cdb3c02d635194d68c47b91a831f923da09a470a21bf26"
+    "output/proposed_patch_summary.json": "2e7f2d0a0a41c84fe05eb530c8a28c1f6709471e1cc842ca4992ab6b016ec988"
   },
   "size_bytes": {
-    "output/code_module_plan.json": 92,
+    "output/code_module_plan.json": 37,
     "output/component_specs_summary.json": 133,
     "output/confirmation_record.json": 64,
     "output/confirmed_model_plan.json": 35,
-    "output/construction_ledger.json": 39,
+    "output/construction_ledger.json": 33,
     "output/evidence_traceability_report.json": 92,
     "output/g4_model_ir.json": 90,
     "output/gate_results.json": 1110,
     "output/geometry_interface_report.json": 47,
     "output/human_confirmation_report.md": 9,
-    "output/model_review_report.md": 44,
+    "output/model_review_report.md": 41,
     "output/no_simplification_report.json": 102,
     "output/output_manager_contract.json": 2166,
-    "output/proposed_patch_summary.json": 42
+    "output/proposed_patch_summary.json": 79
   },
   "total_files": 14,
   "model_ir_summary": {
@@ -125,7 +125,5 @@
     "scoring_count": 0
   },
   "skipped_gates": [],
-  "known_limitations": [
-    "Some gates skipped — not all validations ran"
-  ]
+  "known_limitations": []
 }

@@ -49,8 +49,7 @@ class G4CodegenSubgraphState(TypedDict, total=False):
 
     # Interface contracts
     interface_contracts: dict[str, Any]
-    global_llm_repair_report: dict[str, Any]
-    global_code_repair_report: dict[str, Any]
+    global_integration_agent_report: dict[str, Any]
 
     # Output
     proposed_patch: dict[str, Any]

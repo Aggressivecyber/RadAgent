@@ -1,4 +1,6 @@
 {
-  "total_files": 0,
-  "file_paths": []
+  "total_files": 1,
+  "file_paths": [
+    "src/DetectorConstruction.cc"
+  ]
 }

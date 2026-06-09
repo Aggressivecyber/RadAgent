@@ -96,8 +96,8 @@ async def test_real_g4_codegen_full_graph(tmp_path: Path, monkeypatch: pytest.Mo
     assert result["static_semantic_scan"]["status"] == "pass"
     assert result["cross_file_hard_gate"]["status"] == "pass"
     assert result["cross_file_llm_gate"]["status"] == "pass"
-    assert result["global_code_repair_report"]["status"] == "passed"
-    assert result["global_code_repair_report"]["issues_fixed"]
+    assert result["global_integration_agent_report"]["status"] == "passed"
+    assert result["proposed_patch"]["metadata"]["final_runtime_gate"]["required"] is True
     assert result["generated_code_dir"].endswith("08_geant4")
 
     required_modules = {
