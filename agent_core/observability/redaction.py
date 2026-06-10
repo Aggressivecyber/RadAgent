@@ -9,6 +9,10 @@ from typing import Any
 SECRET_KEY_RE = re.compile(r"(api[_-]?key|authorization|token|secret|password)", re.I)
 BEARER_RE = re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]+")
 KEY_VALUE_RE = re.compile(r"([?&](?:key|api_key|token|access_token)=)[^&\s]+", re.I)
+SECRET_ASSIGNMENT_RE = re.compile(
+    r"\b((?:api[_-]?key|authorization|token|secret|password)\s*=\s*)[^\s,;]+",
+    re.I,
+)
 
 
 def sanitize(value: Any, *, max_string: int = 1000) -> Any:
@@ -28,6 +32,7 @@ def sanitize(value: Any, *, max_string: int = 1000) -> Any:
     if isinstance(value, str):
         text = BEARER_RE.sub("Bearer <redacted>", value)
         text = KEY_VALUE_RE.sub(r"\1<redacted>", text)
+        text = SECRET_ASSIGNMENT_RE.sub(r"\1<redacted>", text)
         if len(text) > max_string:
             digest = hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
             return {

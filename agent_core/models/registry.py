@@ -17,5 +17,24 @@ TASK_DEFAULT_TIER: dict[ModelTask, ModelTier] = {
 }
 
 
+THINKING_DEFAULT_BY_TASK: dict[ModelTask, bool] = {
+    ModelTask.INTENT_ROUTING: False,
+    ModelTask.SIMPLE_EXTRACTION: False,
+    ModelTask.CONTEXT_SUMMARY: False,
+    ModelTask.TASK_PLANNING: True,
+    ModelTask.MODEL_READINESS: True,
+    ModelTask.G4_MODELING: True,
+    ModelTask.HUMAN_CONFIRMATION: False,
+    ModelTask.CODEGEN: True,
+    ModelTask.GATE_EXPLANATION: True,
+    ModelTask.FINAL_REVIEW: True,
+    ModelTask.FAILURE_DIAGNOSIS: True,
+}
+
+
 def tier_for_task(task: ModelTask) -> ModelTier:
     return TASK_DEFAULT_TIER[task]
+
+
+def thinking_for_task(task: ModelTask) -> bool:
+    return THINKING_DEFAULT_BY_TASK[task]

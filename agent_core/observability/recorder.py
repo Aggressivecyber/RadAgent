@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,9 +12,11 @@ from uuid import uuid4
 
 from agent_core.observability.events import ObservabilityEvent
 
+logger = logging.getLogger(__name__)
+
 
 def _job_log_dir(job_id: str) -> Path:
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
     log_dir = get_job_dir(job_id) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -72,7 +75,8 @@ def record_event(
             handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
         _append_trace_event(log_dir, payload)
         return payload
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to record observability event for job %s: %s", job_id, exc)
         return None
 
 
@@ -215,7 +219,8 @@ def write_failure_bundle(
         path = log_dir / "failure_bundle.json"
         path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
         return path
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to write failure bundle for job %s: %s", job_id, exc)
         return None
 
 

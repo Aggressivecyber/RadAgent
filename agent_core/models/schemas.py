@@ -27,9 +27,7 @@ class ModelTask(StrEnum):
 
 
 class ModelProvider(StrEnum):
-    DEEPSEEK = "deepseek"
     OPENAI_COMPATIBLE = "openai_compatible"
-    OLLAMA = "ollama"
     MOCK = "mock"
 
 

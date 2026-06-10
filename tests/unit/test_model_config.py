@@ -5,17 +5,12 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-import pytest
 from agent_core.models.config import load_model_profiles
 from agent_core.models.schemas import ModelProvider, ModelTier
 
 
 class TestLoadModelProfiles:
     """Verify model profiles load correctly with defaults and env overrides."""
-
-    @pytest.fixture(autouse=True)
-    def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("RADAGENT_MODEL_PROVIDER", raising=False)
 
     def test_default_profiles_exist(self) -> None:
         """All three tiers should have profiles."""

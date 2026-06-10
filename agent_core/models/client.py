@@ -11,10 +11,35 @@ from agent_core.models.schemas import ModelCallRequest, ModelProfile
 
 def _httpx_client_kwargs(profile: ModelProfile) -> dict[str, Any]:
     env = load_environment()
-    kwargs: dict[str, Any] = {"timeout": profile.timeout_s, "trust_env": False}
+    kwargs: dict[str, Any] = {
+        "timeout": profile.timeout_s if _model_timeouts_enabled() else None,
+        "trust_env": False,
+    }
     if env.proxy:
         kwargs["proxy"] = env.proxy
     return kwargs
+
+
+def _model_timeouts_enabled() -> bool:
+    return os.getenv("RADAGENT_ENABLE_MODEL_TIMEOUTS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _auth_headers(profile: ModelProfile) -> dict[str, str]:
+    api_key = os.getenv(profile.api_key_env or "")
+    if not api_key:
+        raise RuntimeError(f"Missing API key env: {profile.api_key_env}")
+
+    headers = {"Content-Type": "application/json"}
+    if _is_mimo_model(profile):
+        headers["api-key"] = api_key
+    else:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
 
 
 async def call_openai_compatible_model(
@@ -24,10 +49,6 @@ async def call_openai_compatible_model(
     if not profile.base_url:
         raise RuntimeError(f"Missing base_url for model tier {profile.tier}")
 
-    api_key = os.getenv(profile.api_key_env or "")
-    if not api_key:
-        raise RuntimeError(f"Missing API key env: {profile.api_key_env}")
-
     payload = {
         "model": profile.model_name,
         "messages": [
@@ -35,16 +56,14 @@ async def call_openai_compatible_model(
             {"role": "user", "content": req.user_prompt},
         ],
         "temperature": req.temperature if req.temperature is not None else profile.temperature,
-        "max_tokens": req.max_tokens if req.max_tokens is not None else profile.max_tokens,
     }
+    _apply_token_limit(payload, profile, req.max_tokens)
+    _apply_mimo_thinking(payload, profile, req)
 
     if req.response_format == "json":
         payload["response_format"] = {"type": "json_object"}
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+    headers = _auth_headers(profile)
 
     url = profile.base_url.rstrip("/") + "/chat/completions"
 
@@ -55,8 +74,13 @@ async def call_openai_compatible_model(
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 data = resp.json()
-                content = data["choices"][0]["message"]["content"]
+                message = data["choices"][0]["message"]
+                content = message["content"]
                 usage = data.get("usage", {})
+                reasoning_content = message.get("reasoning_content")
+                if reasoning_content:
+                    usage = dict(usage)
+                    usage["reasoning_content"] = reasoning_content
                 return content, usage
         except Exception as exc:
             last_error = exc
@@ -87,21 +111,15 @@ async def call_multi_turn_chat(
     if not profile.base_url:
         raise RuntimeError(f"Missing base_url for model tier {profile.tier}")
 
-    api_key = os.getenv(profile.api_key_env or "")
-    if not api_key:
-        raise RuntimeError(f"Missing API key env: {profile.api_key_env}")
-
     payload: dict[str, Any] = {
         "model": profile.model_name,
         "messages": messages,
         "temperature": temperature if temperature is not None else profile.temperature,
-        "max_tokens": max_tokens if max_tokens is not None else profile.max_tokens,
     }
+    _apply_token_limit(payload, profile, max_tokens)
+    _apply_mimo_thinking(payload, profile, None)
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+    headers = _auth_headers(profile)
 
     url = profile.base_url.rstrip("/") + "/chat/completions"
 
@@ -117,3 +135,34 @@ async def call_multi_turn_chat(
             last_error = exc
 
     raise RuntimeError(f"Multi-turn chat failed after retries: {last_error}")
+
+
+def _apply_token_limit(
+    payload: dict[str, Any],
+    profile: ModelProfile,
+    max_tokens: int | None,
+) -> None:
+    token_limit = max_tokens if max_tokens is not None else profile.max_tokens
+    if _is_mimo_model(profile):
+        payload["max_completion_tokens"] = token_limit
+    else:
+        payload["max_tokens"] = token_limit
+
+
+def _apply_mimo_thinking(
+    payload: dict[str, Any],
+    profile: ModelProfile,
+    req: ModelCallRequest | None,
+) -> None:
+    if not _is_mimo_model(profile):
+        return
+    enabled = bool(req and req.metadata.get("enable_thinking"))
+    payload["thinking"] = {"type": "enabled" if enabled else "disabled"}
+    if enabled:
+        payload.pop("temperature", None)
+
+
+def _is_mimo_model(profile: ModelProfile) -> bool:
+    model_name = str(profile.model_name).lower()
+    base_url = str(profile.base_url or "").lower()
+    return model_name.startswith("mimo-") or "xiaomimimo.com" in base_url

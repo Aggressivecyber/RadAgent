@@ -1399,40 +1399,28 @@ _INIT_MAC = r"""# init.mac — Initialization macro for RadAgent simulation
 # ── Module file map ──────────────────────────────────────────────────
 
 MOCK_MODULE_FILES: dict[str, list[dict[str, str]]] = {
-    "material": [
+    "simulation_core": [
         {"path": "include/MaterialRegistry.hh", "new_content": _MATERIAL_HH},
         {"path": "src/MaterialRegistry.cc", "new_content": _MATERIAL_CC},
-    ],
-    "geometry": [
-        {"path": "include/DetectorConstruction.hh", "new_content": _GEOMETRY_HH},
-        {"path": "src/DetectorConstruction.cc", "new_content": _GEOMETRY_CC},
-    ],
-    "placement": [
         {"path": "include/PlacementManager.hh", "new_content": _PLACEMENT_HH},
         {"path": "src/PlacementManager.cc", "new_content": _PLACEMENT_CC},
+        {"path": "include/DetectorConstruction.hh", "new_content": _GEOMETRY_HH},
+        {"path": "src/DetectorConstruction.cc", "new_content": _GEOMETRY_CC},
+        {"path": "include/SensitiveDetector.hh", "new_content": _SD_HH},
+        {"path": "src/SensitiveDetector.cc", "new_content": _SD_CC},
+        {"path": "include/ScoringManager.hh", "new_content": _SCORING_HH},
+        {"path": "src/ScoringManager.cc", "new_content": _SCORING_CC},
     ],
-    "source": [
+    "beam_physics": [
         {"path": "include/PrimaryGeneratorAction.hh", "new_content": _SOURCE_HH},
         {"path": "src/PrimaryGeneratorAction.cc", "new_content": _SOURCE_CC},
-    ],
-    "physics": [
         {"path": "include/PhysicsListFactoryWrapper.hh", "new_content": _PHYSICS_HH},
         {"path": "src/PhysicsListFactoryWrapper.cc", "new_content": _PHYSICS_CC},
         {"path": "macros/physics_list.mac", "new_content": _PHYSICS_MAC},
     ],
-    "sensitive_detector": [
-        {"path": "include/SensitiveDetector.hh", "new_content": _SD_HH},
-        {"path": "src/SensitiveDetector.cc", "new_content": _SD_CC},
-    ],
-    "scoring": [
-        {"path": "include/ScoringManager.hh", "new_content": _SCORING_HH},
-        {"path": "src/ScoringManager.cc", "new_content": _SCORING_CC},
-    ],
-    "output_manager": [
+    "runtime_app": [
         {"path": "include/OutputManager.hh", "new_content": _OUTPUT_HH},
         {"path": "src/OutputManager.cc", "new_content": _OUTPUT_CC},
-    ],
-    "action_initialization": [
         {"path": "include/ActionInitialization.hh", "new_content": _ACTION_INIT_HH},
         {"path": "src/ActionInitialization.cc", "new_content": _ACTION_INIT_CC},
         {"path": "include/RunAction.hh", "new_content": _RUN_ACTION_HH},
@@ -1441,8 +1429,6 @@ MOCK_MODULE_FILES: dict[str, list[dict[str, str]]] = {
         {"path": "src/EventAction.cc", "new_content": _EVENT_ACTION_CC},
         {"path": "include/SteppingAction.hh", "new_content": _STEPPING_ACTION_HH},
         {"path": "src/SteppingAction.cc", "new_content": _STEPPING_ACTION_CC},
-    ],
-    "main_cmake": [
         {"path": "main.cc", "new_content": _MAIN_CC},
         {"path": "CMakeLists.txt", "new_content": _CMAKELISTS},
         {"path": "macros/run.mac", "new_content": _RUN_MAC},
@@ -1503,6 +1489,28 @@ def _build_diagnosis_result(module_name: str) -> dict[str, Any]:
     }
 
 
+def _build_final_review_result(module_name: str) -> dict[str, Any]:
+    if module_name == "physics_quality_reviewer":
+        return {
+            "status": "pass",
+            "overall_score": 90,
+            "physics_model_score": 90,
+            "source_fidelity_score": 90,
+            "geometry_fidelity_score": 90,
+            "transport_precision_score": 85,
+            "output_validity_score": 90,
+            "findings": [],
+            "required_fixes": [],
+            "reviewer_notes": "mock physics review pass",
+        }
+    return {
+        "status": "pass",
+        "overall_score": 90,
+        "findings": [],
+        "required_fixes": [],
+    }
+
+
 def call_mock_model(
     task: ModelTask,
     metadata: dict[str, Any],
@@ -1517,6 +1525,8 @@ def call_mock_model(
         parsed = _build_gate_result(module_name)
     elif task == ModelTask.FAILURE_DIAGNOSIS:
         parsed = _build_diagnosis_result(module_name)
+    elif task == ModelTask.FINAL_REVIEW:
+        parsed = _build_final_review_result(module_name)
     else:
         parsed = {
             "status": "success",

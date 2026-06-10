@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_core.storage import RadAgentStore
+from agent_core.workspace.paths import STAGE_REPORT
 
 
 def test_store_initializes_default_project(tmp_path: Path) -> None:
@@ -87,14 +88,14 @@ def test_state_snapshot_round_trip(tmp_path: Path) -> None:
 def test_record_artifact_indexes_file_metadata(tmp_path: Path) -> None:
     store = RadAgentStore(workspace_root=tmp_path)
     store.upsert_job(job_id="artifact-job", user_query="simulate")
-    artifact = tmp_path / "jobs" / "artifact-job" / "10_report" / "final_report.md"
+    artifact = tmp_path / "jobs" / "artifact-job" / STAGE_REPORT / "final_report.md"
     artifact.parent.mkdir(parents=True)
     artifact.write_text("report", encoding="utf-8")
 
     store.record_artifact(
         job_id="artifact-job",
         path=str(artifact),
-        stage="10_report",
+        stage=STAGE_REPORT,
         kind="final_report",
         mime_type="text/markdown",
     )

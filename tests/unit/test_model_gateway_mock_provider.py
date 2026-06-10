@@ -10,8 +10,7 @@ from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
 
 
 @pytest.fixture(autouse=True)
-def _reset(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RADAGENT_MODEL_PROVIDER", raising=False)
+def _reset() -> None:
     reset_model_gateway()
     yield
     reset_model_gateway()
@@ -20,15 +19,12 @@ def _reset(monkeypatch: pytest.MonkeyPatch) -> None:
 class TestModelGatewayMockProvider:
     """Verify gateway behavior with mock provider."""
 
-    def test_mock_provider_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Setting RADAGENT_MODEL_PROVIDER=mock should use MOCK provider."""
-        # The current config uses OPENAI_COMPATIBLE by default.
-        # To use MOCK, the config would need to check this env var.
-        # This test verifies the ModelProvider.MOCK enum exists.
+    def test_mock_provider_enum_remains_available_for_injected_profiles(self) -> None:
+        """Mock remains an internal test provider, not a user env setting."""
         assert ModelProvider.MOCK == "mock"
 
     @pytest.mark.asyncio
-    async def test_gateway_with_mock_call(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_gateway_with_mock_call(self) -> None:
         """Gateway should handle MOCK provider calls."""
         gw = get_model_gateway()
 
@@ -46,7 +42,6 @@ class TestModelGatewayMockProvider:
         }
 
         with patch.object(gw, "profiles", mock_profiles):
-            # Gateway currently raises NotImplementedError for non-OPENAI_COMPATIBLE
             result = await gw.call(
                 task=ModelTask.INTENT_ROUTING,
                 system_prompt="test",
@@ -54,10 +49,10 @@ class TestModelGatewayMockProvider:
                 response_format="json",
             )
 
-            # Should have an error since MOCK is not fully implemented
-            # but should not crash
             assert result is not None
             assert result.task == ModelTask.INTENT_ROUTING
+            assert result.provider == ModelProvider.MOCK
+            assert result.error is None
 
     @pytest.mark.asyncio
     async def test_mock_provider_returns_valid_result(self) -> None:

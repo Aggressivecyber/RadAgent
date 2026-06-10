@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_core.config.environment import load_environment, validate_acceptance_environment
+from agent_core.config.environment import (
+    DEFAULT_MODEL_BASE_URL,
+    DEFAULT_MODEL_LITE,
+    DEFAULT_MODEL_MAX,
+    DEFAULT_MODEL_PRO,
+    load_environment,
+    model_endpoint_requires_api_key,
+    validate_acceptance_environment,
+    write_project_env_values,
+)
 from agent_core.models.schemas import ModelTier
 from agent_core.tools.geant4_runner import Geant4Runner
 
@@ -14,7 +23,6 @@ def test_load_environment_reads_models_and_software(
     env_file.write_text(
         "\n".join(
             [
-                "RADAGENT_MODEL_PROVIDER=openai_compatible",
                 "RADAGENT_MODEL_BASE_URL=https://models.example/v1",
                 "RADAGENT_PRO_API_KEY_ENV=TEST_RADAGENT_KEY",
                 "TEST_RADAGENT_KEY=test-key",
@@ -32,6 +40,10 @@ def test_load_environment_reads_models_and_software(
     monkeypatch.delenv("RADAGENT_MODEL_PRO", raising=False)
     monkeypatch.delenv("RADAGENT_PRO_API_KEY_ENV", raising=False)
     monkeypatch.delenv("GEANT4_INSTALL_DIR", raising=False)
+    monkeypatch.delenv("GEANT4_CONFIG_BIN", raising=False)
+    monkeypatch.delenv("GEANT4_SETUP_SCRIPT", raising=False)
+    monkeypatch.delenv("TCAD_INSTALL_DIR", raising=False)
+    monkeypatch.delenv("TCAD_SDE_BIN", raising=False)
     env = load_environment(env_file)
 
     assert env.models[ModelTier.PRO].base_url == "https://models.example/v1"
@@ -54,6 +66,130 @@ def test_geant4_runner_uses_environment_paths(monkeypatch) -> None:
     assert runner.geant4_dir == "/tmp/custom-geant4"
     assert runner.geant4_config_bin == "/tmp/custom-geant4/bin/geant4-config"
     assert runner.geant4_setup_script == "/tmp/custom-geant4/bin/geant4.sh"
+
+
+def test_token_plan_model_endpoint_requires_access_key(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "RADAGENT_MODEL_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1",
+                "RADAGENT_MODEL_PRO=mimo-v2.5-pro",
+                "RADAGENT_PRO_API_KEY_ENV=RADAGENT_API_KEY",
+            ]
+        )
+    )
+    monkeypatch.delenv("RADAGENT_API_KEY", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_PRO", raising=False)
+    monkeypatch.delenv("RADAGENT_PRO_API_KEY_ENV", raising=False)
+
+    env = load_environment(env_file)
+
+    assert model_endpoint_requires_api_key(env.models[ModelTier.PRO].base_url) is True
+    assert env.models[ModelTier.PRO].api_key_configured is False
+
+
+def test_default_model_config_is_token_plan_mimo(monkeypatch) -> None:
+    for key in (
+        "RADAGENT_MODEL_BASE_URL",
+        "RADAGENT_LITE_BASE_URL",
+        "RADAGENT_PRO_BASE_URL",
+        "RADAGENT_MAX_BASE_URL",
+        "RADAGENT_MODEL_LITE",
+        "RADAGENT_MODEL_PRO",
+        "RADAGENT_MODEL_MAX",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    env = load_environment()
+
+    assert env.models[ModelTier.LITE].base_url == DEFAULT_MODEL_BASE_URL
+    assert env.models[ModelTier.PRO].base_url == DEFAULT_MODEL_BASE_URL
+    assert env.models[ModelTier.MAX].base_url == DEFAULT_MODEL_BASE_URL
+    assert env.models[ModelTier.LITE].model_name == DEFAULT_MODEL_LITE
+    assert env.models[ModelTier.PRO].model_name == DEFAULT_MODEL_PRO
+    assert env.models[ModelTier.MAX].model_name == DEFAULT_MODEL_MAX
+
+
+def test_regular_model_endpoint_requires_local_api_key() -> None:
+    assert model_endpoint_requires_api_key("https://models.example/v1") is True
+
+
+def test_token_plan_model_endpoint_uses_env_key_like_regular_api(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv(
+        "RADAGENT_MODEL_BASE_URL",
+        "https://token-plan-cn.xiaomimimo.com/v1",
+    )
+    monkeypatch.setenv("RADAGENT_LITE_API_KEY_ENV", "RADAGENT_API_KEY")
+    monkeypatch.setenv("RADAGENT_PRO_API_KEY_ENV", "RADAGENT_API_KEY")
+    monkeypatch.setenv("RADAGENT_MAX_API_KEY_ENV", "RADAGENT_API_KEY")
+    monkeypatch.setenv("RADAGENT_API_KEY", "plain-env-key")
+
+    ok, errors = validate_acceptance_environment(
+        require_model=True,
+        require_geant4=False,
+    )
+
+    assert ok is True
+    assert errors == []
+
+
+def test_max_tier_reads_frontend_max_tokens_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "RADAGENT_MODEL_BASE_URL=https://models.example/v1",
+                "RADAGENT_MAX_MAX_TOKENS=32000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("RADAGENT_MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("RADAGENT_MAX_MAX_TOKENS", raising=False)
+
+    env = load_environment(env_file)
+
+    assert env.models[ModelTier.MAX].max_tokens == 32000
+
+
+def test_write_project_env_values_upserts_without_exposing_other_lines(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# keep comment\nRADAGENT_MODEL_BASE_URL=https://old.example/v1\nOTHER=value\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("RADAGENT_MODEL_BASE_URL", raising=False)
+
+    write_project_env_values(
+        {
+            "RADAGENT_MODEL_BASE_URL": "https://token-plan-cn.xiaomimimo.com/v1",
+            "RADAGENT_MODEL_PRO": "mimo-v2.5-pro",
+        },
+        env_path=env_file,
+    )
+
+    text = env_file.read_text(encoding="utf-8")
+    assert "# keep comment" in text
+    assert "OTHER=value" in text
+    assert "RADAGENT_MODEL_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1" in text
+    assert "RADAGENT_MODEL_PRO=mimo-v2.5-pro" in text
+    assert (
+        load_environment(env_file).models[ModelTier.PRO].base_url
+        == "https://token-plan-cn.xiaomimimo.com/v1"
+    )
 
 
 def test_validate_acceptance_environment_reports_missing_tcad(monkeypatch) -> None:

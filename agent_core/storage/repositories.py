@@ -14,8 +14,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.storage.database import connect, database_path, initialize
 from agent_core.workspace.manager import WorkspaceManager
+from agent_core.workspace.paths import STAGE_INPUT, STAGE_REPORT
 
 DEFAULT_PROJECT_NAME = "Default Project"
 DEFAULT_PROJECT_SLUG = "default"
@@ -260,12 +262,12 @@ class RadAgentStore:
             if not job_dir.is_dir():
                 continue
             query = ""
-            query_file = job_dir / "00_input" / "user_query.md"
+            query_file = job_dir / STAGE_INPUT / "user_query.md"
             if query_file.exists():
                 raw = query_file.read_text(encoding="utf-8", errors="replace").strip()
                 lines = [line.strip() for line in raw.splitlines() if line.strip()]
                 query = lines[-1] if lines else raw[:200]
-            report_exists = (job_dir / "10_report" / "final_report.md").exists()
+            report_exists = (job_dir / STAGE_REPORT / "final_report.md").exists()
             status = "completed" if report_exists else "paused"
             self.upsert_job(
                 job_id=job_dir.name,
@@ -273,7 +275,7 @@ class RadAgentStore:
                 project_id=str(project["id"]),
                 status=status,
                 current_phase="report" if status == "completed" else "",
-                current_phase_idx=10 if status == "completed" else 0,
+                current_phase_idx=len(PIPELINE_PHASES) if status == "completed" else 0,
                 job_workspace=str(job_dir),
             )
             count += 1
