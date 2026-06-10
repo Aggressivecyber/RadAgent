@@ -20,9 +20,12 @@ SAVE_EVERY_N = 10  # Save progress every N articles
 
 # User agents (rotated)
 USER_AGENTS = [
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 ]
 
 # Paths
@@ -41,3 +44,9 @@ RAG_DATA_DIR = TCAD_RAG_DIR / "data"
 # Sogou search
 SOGOU_SEARCH_URL = "https://weixin.sogou.com/weixin"
 SOGOU_ACCOUNT_URL = "https://weixin.sogou.com/weixin?type=1&query={account}&ie=utf8"
+
+
+def setup_directories() -> None:
+    """Create scraper data directories."""
+    for directory in (DATA_DIR, ARTICLES_DIR, IMAGES_DIR):
+        directory.mkdir(parents=True, exist_ok=True)

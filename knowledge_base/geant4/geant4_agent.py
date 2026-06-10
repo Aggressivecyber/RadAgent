@@ -10,67 +10,22 @@ Geant4 ReAct Agent — 思维链推理 Agent
 import json
 import re
 import sys
-import time
-import urllib.request
-import urllib.error
+from pathlib import Path
 
-from geant4_rag_mcp import search_documents, keyword_search_func, get_document, list_sources
-from query_rewrite import rewrite_query, extract_keywords
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
-# 智谱 LLM API 配置
-LLM_API_URL = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
-LLM_API_KEY = "f5dc034a22df47ac8cf98c37710e0bc6.crvx5afiTuITC247"
-LLM_MODEL = "glm-5-turbo"
+from knowledge_base.geant4.geant4_rag_mcp import (
+    get_document,
+    keyword_search_func,
+    list_sources,
+    search_documents,
+)
+from knowledge_base.geant4.query_rewrite import extract_keywords, rewrite_query
+from knowledge_base.llm_client import call_llm
+
 MAX_ITERATIONS = 5
-
-
-# ============================================================================
-# LLM 调用
-# ============================================================================
-
-def call_llm(messages: list[dict], temperature: float = 0.3, max_tokens: int = 4096) -> str:
-    """调用智谱 LLM API"""
-    payload = json.dumps({
-        "model": LLM_MODEL,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }, ensure_ascii=False).encode('utf-8')
-
-    req = urllib.request.Request(
-        LLM_API_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {LLM_API_KEY}"
-        }
-    )
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                result = json.loads(resp.read().decode('utf-8'))
-                return result["choices"][0]["message"]["content"]
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                wait = 10 * (attempt + 1)
-                print(f"  [RATE LIMIT] 等待 {wait}s 后重试...", file=sys.stderr)
-                if attempt < max_retries - 1:
-                    time.sleep(wait)
-                else:
-                    raise RuntimeError(f"LLM 调用失败: 速率限制") from e
-            elif attempt < max_retries - 1:
-                print(f"  [RETRY] LLM 调用失败 (attempt {attempt+1}): {e}", file=sys.stderr)
-                time.sleep(3)
-            else:
-                raise RuntimeError(f"LLM 调用失败: {e}") from e
-        except (urllib.error.URLError, KeyError, json.JSONDecodeError, IndexError) as e:
-            if attempt < max_retries - 1:
-                print(f"  [RETRY] LLM 调用失败 (attempt {attempt+1}): {e}", file=sys.stderr)
-                time.sleep(3)
-            else:
-                raise RuntimeError(f"LLM 调用失败: {e}") from e
 
 
 # ============================================================================
@@ -300,7 +255,7 @@ def run_agent(query: str, verbose: bool = False) -> str:
         if tool_name is None:
             if len(response) > 50:
                 if verbose:
-                    print(f"\n[Agent 完成] 直接返回")
+                    print("\n[Agent 完成] 直接返回")
                 return response
             messages.append({"role": "assistant", "content": response})
             messages.append({

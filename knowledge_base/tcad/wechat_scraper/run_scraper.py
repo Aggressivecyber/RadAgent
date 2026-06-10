@@ -18,16 +18,11 @@ import signal
 import sys
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
-# Add parent to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from wechat_scraper import setup_directories
-from wechat_scraper.article_extractor import ArticleExtractor, _url_to_id
-from wechat_scraper.config import ACCOUNT_NAME
-from wechat_scraper.image_downloader import ImageDownloader
-from wechat_scraper.jsonl_writer import JSONLWriter, trigger_index_rebuild
-from wechat_scraper.url_collector import URLList, add_urls_from_file, collect_from_sogou
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,6 +47,12 @@ signal.signal(signal.SIGTERM, _signal_handler)
 
 def cmd_discover(args: argparse.Namespace) -> None:
     """Discover article URLs via Sogou search."""
+    from knowledge_base.tcad.wechat_scraper.config import ACCOUNT_NAME
+    from knowledge_base.tcad.wechat_scraper.url_collector import (
+        URLList,
+        collect_from_sogou,
+    )
+
     url_list = URLList()
     logger.info("Searching Sogou for account: %s", ACCOUNT_NAME)
     urls = collect_from_sogou(ACCOUNT_NAME, max_pages=args.pages)
@@ -61,6 +62,8 @@ def cmd_discover(args: argparse.Namespace) -> None:
 
 def cmd_add_urls(args: argparse.Namespace) -> None:
     """Add URLs from a text file."""
+    from knowledge_base.tcad.wechat_scraper.url_collector import URLList, add_urls_from_file
+
     url_list = URLList()
     added = add_urls_from_file(args.file, url_list, source="manual")
     logger.info("Added %d new URLs from %s", added, args.file)
@@ -69,6 +72,13 @@ def cmd_add_urls(args: argparse.Namespace) -> None:
 
 def cmd_extract(args: argparse.Namespace) -> None:
     """Extract articles from pending URLs."""
+    from knowledge_base.tcad.wechat_scraper.article_extractor import (
+        ArticleExtractor,
+        _url_to_id,
+    )
+    from knowledge_base.tcad.wechat_scraper.image_downloader import ImageDownloader
+    from knowledge_base.tcad.wechat_scraper.url_collector import URLList
+
     url_list = URLList()
     stats = url_list.get_stats()
     logger.info("Pending: %d articles to extract", stats["pending"])
@@ -122,6 +132,8 @@ def cmd_extract(args: argparse.Namespace) -> None:
 
 def cmd_status(args: argparse.Namespace) -> None:
     """Show URL list statistics."""
+    from knowledge_base.tcad.wechat_scraper.url_collector import URLList
+
     url_list = URLList()
     _print_stats(url_list)
 
@@ -132,7 +144,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     jsonl_count = 0
     if jsonl_path.exists():
         with open(jsonl_path) as f:
-            jsonl_count = sum(1 for l in f if l.strip())
+            jsonl_count = sum(1 for line in f if line.strip())
 
     print(f"\n  Articles on disk: {len(json_files)}")
     print(f"  JSONL records:    {jsonl_count}")
@@ -140,6 +152,8 @@ def cmd_status(args: argparse.Namespace) -> None:
 
 def cmd_export(args: argparse.Namespace) -> None:
     """Export scraped articles to JSONL for RAG ingestion."""
+    from knowledge_base.tcad.wechat_scraper.jsonl_writer import JSONLWriter
+
     articles_dir = Path(__file__).parent / "data" / "articles"
     json_files = sorted(articles_dir.glob("*.json"))
 
@@ -150,7 +164,7 @@ def cmd_export(args: argparse.Namespace) -> None:
     writer = JSONLWriter()
     count = 0
     for jf in json_files:
-        with open(jf, "r", encoding="utf-8") as f:
+        with open(jf, encoding="utf-8") as f:
             article = json.load(f)
         if writer.write_article(article):
             count += 1
@@ -165,6 +179,8 @@ def cmd_export(args: argparse.Namespace) -> None:
 
 def cmd_ingest(args: argparse.Namespace) -> None:
     """Build RAG index from exported JSONL."""
+    from knowledge_base.tcad.wechat_scraper.jsonl_writer import trigger_index_rebuild
+
     jsonl_path = Path(__file__).parent / "data" / "wechat_articles.jsonl"
     if not jsonl_path.exists():
         logger.error("No JSONL file found. Run 'export' first.")
@@ -200,9 +216,9 @@ def cmd_full_run(args: argparse.Namespace) -> None:
         cmd_ingest(args)
 
 
-def _print_stats(url_list: URLList) -> None:
+def _print_stats(url_list: Any) -> None:
     stats = url_list.get_stats()
-    print(f"\n  URL List Status:")
+    print("\n  URL List Status:")
     print(f"    Total:   {stats['total']}")
     print(f"    Pending: {stats['pending']}")
     print(f"    Scraped: {stats['scraped']}")
@@ -210,6 +226,8 @@ def _print_stats(url_list: URLList) -> None:
 
 
 def main() -> None:
+    from knowledge_base.tcad.wechat_scraper.config import setup_directories
+
     parser = argparse.ArgumentParser(
         description="WeChat article scraper for TCAD RAG"
     )

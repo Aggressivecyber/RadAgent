@@ -8,69 +8,24 @@ TCAD ReAct Agent — 思维链推理 Agent
 """
 
 import json
+import re
 import sys
-import time
-import urllib.request
-import urllib.error
+from pathlib import Path
 
-# 导入基础搜索工具和查询改写
-from tcad_rag_mcp import search_documents, keyword_search, get_document, list_sources
-from query_rewrite import rewrite_query, extract_keywords
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
-# 智谱 LLM API 配置
-LLM_API_URL = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
-LLM_API_KEY = "f5dc034a22df47ac8cf98c37710e0bc6.crvx5afiTuITC247"
-LLM_MODEL = "glm-5-turbo"
+from knowledge_base.llm_client import call_llm
+from knowledge_base.tcad.query_rewrite import extract_keywords, rewrite_query
+from knowledge_base.tcad.tcad_rag_mcp import (
+    get_document,
+    keyword_search,
+    list_sources,
+    search_documents,
+)
+
 MAX_ITERATIONS = 5
-
-
-# ============================================================================
-# LLM 调用
-# ============================================================================
-
-def call_llm(messages: list[dict], temperature: float = 0.3, max_tokens: int = 4096) -> str:
-    """调用智谱 LLM API"""
-    payload = json.dumps({
-        "model": LLM_MODEL,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }, ensure_ascii=False).encode('utf-8')
-
-    req = urllib.request.Request(
-        LLM_API_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {LLM_API_KEY}"
-        }
-    )
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                result = json.loads(resp.read().decode('utf-8'))
-                return result["choices"][0]["message"]["content"]
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                wait = 10 * (attempt + 1)
-                print(f"  [RATE LIMIT] 等待 {wait}s 后重试...", file=sys.stderr)
-                if attempt < max_retries - 1:
-                    time.sleep(wait)
-                else:
-                    raise RuntimeError(f"LLM 调用失败: 速率限制") from e
-            elif attempt < max_retries - 1:
-                print(f"  [RETRY] LLM 调用失败 (attempt {attempt+1}): {e}", file=sys.stderr)
-                time.sleep(3)
-            else:
-                raise RuntimeError(f"LLM 调用失败: {e}") from e
-        except (urllib.error.URLError, KeyError, json.JSONDecodeError, IndexError) as e:
-            if attempt < max_retries - 1:
-                print(f"  [RETRY] LLM 调用失败 (attempt {attempt+1}): {e}", file=sys.stderr)
-                time.sleep(3)
-            else:
-                raise RuntimeError(f"LLM 调用失败: {e}") from e
 
 
 # ============================================================================
@@ -175,12 +130,6 @@ def execute_tool(action_name: str, params: dict) -> str:
     except Exception as e:
         return f"工具执行错误: {e}"
 
-
-# ============================================================================
-# 解析 Agent 输出中的 Action
-# ============================================================================
-
-import re
 
 def parse_action(text: str) -> tuple[str | None, dict | None]:
     """从 Agent 输出中解析 Action 行，返回 (工具名, 参数dict)"""
@@ -324,7 +273,7 @@ def run_agent(query: str, verbose: bool = False) -> str:
             # 没有找到 Action 也没有 Answer，尝试把整个回复作为最终回答
             if len(response) > 50:
                 if verbose:
-                    print(f"\n[Agent 完成] 直接返回（无明确 Action/Answer 标记）")
+                    print("\n[Agent 完成] 直接返回（无明确 Action/Answer 标记）")
                 return response
             # LLM 输出异常，追加引导
             messages.append({"role": "assistant", "content": response})

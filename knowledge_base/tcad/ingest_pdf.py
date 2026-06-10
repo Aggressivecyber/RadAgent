@@ -7,13 +7,12 @@ TCAD RAG 增量导入 PDF
 """
 
 import json
-import os
 import pickle
 import sqlite3
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 import numpy as np

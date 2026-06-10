@@ -1,6 +1,6 @@
 {
   "logical_name": "geant4",
-  "source_path": "/home/rylan/.openclaw/workspace/skills/geant4-rag",
+  "source_path": "knowledge_base/geant4",
   "copied_to": "knowledge_base/geant4",
   "detected_type": "mixed",
   "confidence": 0.9,
@@ -23,6 +23,6 @@
   "copied_at": "2026-06-06T13:55:32.371456+00:00",
   "file_count": 433,
   "notes": [
-    "Detected mixed source with 433 files"
+    "Repository-local Geant4 knowledge-base tools and indexed data"
   ]
 }

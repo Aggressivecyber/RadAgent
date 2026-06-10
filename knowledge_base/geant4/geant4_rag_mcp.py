@@ -6,7 +6,6 @@ Geant4 RAG MCP Server (stdio)
 """
 
 import json
-import os
 import pickle
 import sqlite3
 import sys
@@ -15,13 +14,12 @@ from pathlib import Path
 import numpy as np
 
 DB_PATH = Path(__file__).parent / "data" / "geant4_index.db"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
 EMBED_MODEL = "bge-m3"
 
-# 智谱 LLM API 配置
-LLM_API_URL = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
-LLM_API_KEY = "f5dc034a22df47ac8cf98c37710e0bc6.crvx5afiTuITC247"
-LLM_MODEL = "glm-5-turbo"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 # ============================================================================
@@ -230,7 +228,7 @@ def handle_request(request: dict):
         }, req_id)
 
     elif method == "notifications/initialized":
-        pass
+        return
 
     elif method == "tools/list":
         send_response({
@@ -407,7 +405,7 @@ def handle_request(request: dict):
                     send_response({"error": {"code": -32602, "message": "缺少 query 参数"}}, req_id)
                     return
                 try:
-                    from geant4_agent import run_agent
+                    from knowledge_base.geant4.geant4_agent import run_agent
                     answer = run_agent(query, verbose=False)
                     send_response({
                         "content": [{"type": "text", "text": answer}]
@@ -421,7 +419,7 @@ def handle_request(request: dict):
                     send_response({"error": {"code": -32602, "message": "缺少 requirements 参数"}}, req_id)
                     return
                 try:
-                    from geant4_generator import generate_geant4_code
+                    from knowledge_base.geant4.geant4_generator import generate_geant4_code
                     code = generate_geant4_code(requirements)
                     send_response({
                         "content": [{"type": "text", "text": code}]

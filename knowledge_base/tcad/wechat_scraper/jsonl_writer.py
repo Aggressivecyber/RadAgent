@@ -9,7 +9,6 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from . import config
 
@@ -22,7 +21,7 @@ JSONL_FIELDS = ("source", "file_path", "title", "content", "metadata")
 class JSONLWriter:
     """Write articles to JSONL compatible with TCAD RAG pipeline."""
 
-    def __init__(self, output_path: Optional[Path] = None) -> None:
+    def __init__(self, output_path: Path | None = None) -> None:
         self.output_path = output_path or config.JSONL_OUTPUT_PATH
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         self._existing_urls: set[str] = self._load_existing_urls()
@@ -32,7 +31,7 @@ class JSONLWriter:
         urls: set[str] = set()
         if not self.output_path.exists():
             return urls
-        with open(self.output_path, "r", encoding="utf-8") as f:
+        with open(self.output_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -95,7 +94,7 @@ class JSONLWriter:
         seen_urls: set[str] = set()
         kept: list[str] = []
 
-        with open(self.output_path, "r", encoding="utf-8") as f:
+        with open(self.output_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -112,7 +111,9 @@ class JSONLWriter:
                     seen_urls.add(url)
                     kept.append(line)
 
-        removed = sum(1 for l in open(self.output_path) if l.strip()) - len(kept)
+        with open(self.output_path, encoding="utf-8") as f:
+            original_count = sum(1 for line in f if line.strip())
+        removed = original_count - len(kept)
         if removed > 0:
             with open(self.output_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(kept) + "\n")
@@ -132,7 +133,12 @@ def trigger_index_rebuild(skip_preprocess: bool = True) -> bool:
         cmd.append("--skip-preprocess")
 
     logger.info("Running index build: %s", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(config.TCAD_RAG_DIR))
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=str(config.TCAD_RAG_DIR),
+    )
 
     if result.returncode == 0:
         logger.info("Index build completed successfully")

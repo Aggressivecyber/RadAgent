@@ -1,6 +1,6 @@
 {
   "logical_name": "tcad",
-  "source_path": "/home/rylan/.openclaw/workspace/skills/tcad-rag",
+  "source_path": "knowledge_base/tcad",
   "copied_to": "knowledge_base/tcad",
   "detected_type": "mixed",
   "confidence": 0.9,
@@ -13,7 +13,6 @@
     "ocr_pdf.sh",
     "SKILL.md",
     "ingest_pdf.py",
-    "PLAN.md",
     "build_index.py"
   ],
   "keywords_matched": [
@@ -25,8 +24,8 @@
     "TID"
   ],
   "copied_at": "2026-06-06T13:55:32.371834+00:00",
-  "file_count": 27,
+  "file_count": 26,
   "notes": [
-    "Detected mixed source with 27 files"
+    "Repository-local TCAD knowledge-base tools and indexed data"
   ]
 }

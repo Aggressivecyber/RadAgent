@@ -13,9 +13,14 @@ import re
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from knowledge_base.geant4.paths import geant4_example_root  # noqa: E402
+
 BASE_DIR = Path(__file__).parent
 RAW_DIR = BASE_DIR / "data" / "raw"
-EXAMPLES_DIR = Path("/usr/local/geant4/share/Geant4/examples")
 OUTPUT_DIR = BASE_DIR / "data"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -128,11 +133,6 @@ class HTMLToMarkdown(html.parser.HTMLParser):
                     self.result.append(f"\n{indent}{self.list_counters[-1]}. ")
         elif tag in ("td", "th"):
             self.result.append(" | ")
-        elif tag == "a":
-            href = attrs_dict.get("href", "")
-            if href and not href.startswith("#"):
-                pass  # 保留链接文本
-
     def handle_endtag(self, tag):
         tag = tag.lower()
 
@@ -244,7 +244,7 @@ def extract_html_title(html_content: str) -> str:
 def process_html_file(filepath: str, source_type: str) -> dict | None:
     """处理单个 HTML 文件"""
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, encoding='utf-8', errors='ignore') as f:
             content = f.read()
     except Exception as e:
         print(f"  [WARN] 读取失败 {filepath}: {e}", file=sys.stderr)
@@ -308,7 +308,7 @@ def process_all_html() -> int:
 def extract_cc_description(filepath: str) -> str:
     """从 .cc 文件提取头部注释描述"""
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
     except Exception:
         return ""
@@ -350,11 +350,12 @@ def process_example(example_dir: str, category: str, subcategory: str = "") -> l
     # 查找 main .cc 文件（example*.cc 或项目同名 .cc）
     main_cc = None
     include_dir = os.path.join(example_dir, "include")
-    src_dir = os.path.join(example_dir, "src")
 
     # 优先查找 example*.cc
     for fname in sorted(os.listdir(example_dir)):
-        if fname.endswith('.cc') and (fname.startswith('example') or fname.startswith(example_name)):
+        if fname.endswith('.cc') and (
+            fname.startswith('example') or fname.startswith(example_name)
+        ):
             main_cc = os.path.join(example_dir, fname)
             break
 
@@ -384,7 +385,7 @@ def _make_code_doc(filepath: str, title_prefix: str, category: str,
                    subcategory: str, example_name: str, role: str) -> dict | None:
     """生成单个代码文件的文档"""
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, encoding='utf-8', errors='ignore') as f:
             content = f.read()
     except Exception:
         return None
@@ -393,7 +394,6 @@ def _make_code_doc(filepath: str, title_prefix: str, category: str,
         return None
 
     # 截断超长文件
-    original_len = len(content)
     if len(content) > 8000:
         content = content[:8000]
 
@@ -475,17 +475,21 @@ def _make_code_doc(filepath: str, title_prefix: str, category: str,
     }
 
 
-def process_all_examples() -> int:
+def process_all_examples():
     """处理所有代码示例"""
     count = 0
-    if not EXAMPLES_DIR.exists():
-        print(f"[SKIP] 示例目录不存在: {EXAMPLES_DIR}", file=sys.stderr)
-        return 0
+    examples_dir = geant4_example_root()
+    if examples_dir is None:
+        print(
+            "[SKIP] 示例目录不存在。设置 RADAGENT_GEANT4_EXAMPLES_ROOT 指向 Geant4 examples。",
+            file=sys.stderr,
+        )
+        return
 
-    print(f"\n[EXAMPLES] 处理示例目录: {EXAMPLES_DIR}")
+    print(f"\n[EXAMPLES] 处理示例目录: {examples_dir}")
 
     # basic/ 目录：每个子目录是一个示例
-    basic_dir = EXAMPLES_DIR / "basic"
+    basic_dir = examples_dir / "basic"
     if basic_dir.exists():
         for example_dir in sorted(basic_dir.iterdir()):
             if not example_dir.is_dir():
@@ -495,7 +499,7 @@ def process_all_examples() -> int:
                 count += 1
 
     # extended/ 目录：两级子目录 category/subcategory/example
-    extended_dir = EXAMPLES_DIR / "extended"
+    extended_dir = examples_dir / "extended"
     if extended_dir.exists():
         for cat_dir in sorted(extended_dir.iterdir()):
             if not cat_dir.is_dir():
@@ -530,7 +534,7 @@ def process_all_examples() -> int:
                         count += 1
 
     # advanced/ 目录
-    advanced_dir = EXAMPLES_DIR / "advanced"
+    advanced_dir = examples_dir / "advanced"
     if advanced_dir.exists():
         for example_dir in sorted(advanced_dir.iterdir()):
             if not example_dir.is_dir():
@@ -569,8 +573,11 @@ def main():
             example_count += 1
 
     print(f"\n{'='*60}")
-    print(f"总计: {html_count} HTML 文档 + {example_count} 代码示例 = {html_count + example_count} 文档")
-    print(f"输出:")
+    print(
+        f"总计: {html_count} HTML 文档 + {example_count} 代码示例 = "
+        f"{html_count + example_count} 文档"
+    )
+    print("输出:")
     print(f"  - {manuals_output} ({html_count} docs)")
     print(f"  - {examples_output} ({example_count} docs)")
     print(f"{'='*60}")

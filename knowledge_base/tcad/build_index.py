@@ -22,8 +22,8 @@ import sqlite3
 import subprocess
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -38,7 +38,7 @@ CHUNK_SIZE = 512  # 目标 token 数（近似用字符数 / 4）
 CHUNK_OVERLAP = 50  # 重叠 token 数
 CODE_MAX_CHARS = 8000  # 代码文件最大字符数（超过截断）
 PREPROCESS_SCRIPT = Path(__file__).parent / "preprocess.py"
-TCAD_ROOT = "/home/rylan/synopsys-data/sentaurus/X-2025.06/tcad/X-2025.06"
+TCAD_ROOT = os.environ.get("RADAGENT_TCAD_ROOT") or os.environ.get("TCAD_ROOT", "")
 
 
 def estimate_tokens(text: str) -> int:
@@ -62,7 +62,12 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 
         # 单段超过 chunk_size，按句子拆分
         if para_tokens > chunk_size:
-            sentences = para.replace('. ', '.\n').replace('! ', '!\n').replace('? ', '?\n').split('\n')
+            sentences = (
+                para.replace('. ', '.\n')
+                .replace('! ', '!\n')
+                .replace('? ', '?\n')
+                .split('\n')
+            )
             for sent in sentences:
                 sent_tokens = estimate_tokens(sent)
                 if current_tokens + sent_tokens > chunk_size and current_chunk:
@@ -135,17 +140,19 @@ def embed_texts_batch(texts: list[str]) -> list[list[float]]:
 def _scan_source_files() -> dict[str, tuple[float, int]]:
     """扫描 TCAD 所有源文件"""
     sources = {}
-    # HTML 手册
-    manuals_dir = Path(TCAD_ROOT) / "manuals" / "olh_sentaurus"
-    if manuals_dir.exists():
-        for f in manuals_dir.rglob("*.html"):
-            sources[str(f)] = (f.stat().st_mtime, f.stat().st_size)
-    # Applications Library 代码
-    apps_dir = Path(TCAD_ROOT) / "Applications_Library"
-    if apps_dir.exists():
-        for ext in ('*.cmd', '*.tcl', '*.lua'):
-            for f in apps_dir.rglob(ext):
+    if TCAD_ROOT:
+        tcad_root = Path(TCAD_ROOT).expanduser()
+        # HTML 手册
+        manuals_dir = tcad_root / "manuals" / "olh_sentaurus"
+        if manuals_dir.exists():
+            for f in manuals_dir.rglob("*.html"):
                 sources[str(f)] = (f.stat().st_mtime, f.stat().st_size)
+        # Applications Library 代码
+        apps_dir = tcad_root / "Applications_Library"
+        if apps_dir.exists():
+            for ext in ('*.cmd', '*.tcl', '*.lua'):
+                for f in apps_dir.rglob(ext):
+                    sources[str(f)] = (f.stat().st_mtime, f.stat().st_size)
     # OCR'd PDFs (data/raw/ 下的 markdown 文件)
     raw_dir = Path(__file__).parent / "data" / "raw"
     if raw_dir.exists():
@@ -157,9 +164,9 @@ def _scan_source_files() -> dict[str, tuple[float, int]]:
 def _load_source_cache() -> dict[str, tuple[float, int]]:
     if CACHE_PATH.exists():
         try:
-            with open(CACHE_PATH, 'r') as f:
+            with open(CACHE_PATH) as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return {}
     return {}
 
@@ -193,7 +200,7 @@ def run_preprocess() -> bool:
         print(f"[增量预处理] 源文件无变化（{len(new_sources)} 个文件），跳过预处理")
         return False
 
-    print(f"[增量预处理] 检测到变化，运行 preprocess.py ...")
+    print("[增量预处理] 检测到变化，运行 preprocess.py ...")
     print(f"  文件总数: {len(new_sources)}, 旧缓存: {len(old_cache)}, 删除: {len(deleted)}")
 
     result = subprocess.run(
@@ -224,7 +231,7 @@ def prune_orphaned_docs(conn: sqlite3.Connection):
 
     current_keys = set()
     for jsonl_file in jsonl_files:
-        with open(jsonl_file, 'r', encoding='utf-8') as f:
+        with open(jsonl_file, encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -264,15 +271,15 @@ def prune_orphaned_docs(conn: sqlite3.Connection):
 def migrate_database(conn: sqlite3.Connection):
     """迁移旧数据库：添加 content_hash 列并回填"""
     c = conn.cursor()
-    
+
     # 检查 content_hash 列是否存在
     c.execute("PRAGMA table_info(documents)")
     columns = [row[1] for row in c.fetchall()]
-    
+
     if "content_hash" not in columns:
         print("  [迁移] 添加 content_hash 列...")
         c.execute("ALTER TABLE documents ADD COLUMN content_hash TEXT")
-        
+
         # 回填已有记录的 content_hash
         c.execute("SELECT id, source, title, content FROM documents")
         rows = c.fetchall()
@@ -316,7 +323,7 @@ def create_database():
 
 def process_jsonl_files(conn: sqlite3.Connection, incremental: bool = True):
     """读取所有 JSONL 文件，分块并嵌入
-    
+
     Args:
         conn: 数据库连接
         incremental: True=增量模式（跳过未变化文档），False=重建模式（删除旧库）
@@ -344,7 +351,7 @@ def process_jsonl_files(conn: sqlite3.Connection, incremental: bool = True):
 
         source_counts = {}
 
-        with open(jsonl_file, 'r', encoding='utf-8') as f:
+        with open(jsonl_file, encoding='utf-8') as f:
             docs = [json.loads(line) for line in f if line.strip()]
 
         print(f"  读取 {len(docs)} 个文档")
@@ -434,7 +441,7 @@ def process_jsonl_files(conn: sqlite3.Connection, incremental: bool = True):
                 emb_blob = pickle.dumps(np.array(emb, dtype=np.float32))
 
                 c.execute("""
-                    INSERT OR IGNORE INTO documents 
+                    INSERT OR IGNORE INTO documents
                     (source, title, content, content_hash, embedding, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (
@@ -451,7 +458,11 @@ def process_jsonl_files(conn: sqlite3.Connection, incremental: bool = True):
 
             done = min(batch_start + batch_write_size, len(all_chunks))
             if incremental:
-                print(f"  进度: {done}/{len(all_chunks)} 块 (新增: {total_chunks}, 跳过: {total_skipped})", file=sys.stderr)
+                print(
+                    f"  进度: {done}/{len(all_chunks)} 块 "
+                    f"(新增: {total_chunks}, 跳过: {total_skipped})",
+                    file=sys.stderr,
+                )
             else:
                 print(f"  进度: {done}/{len(all_chunks)} 块已嵌入并存储", file=sys.stderr)
 
@@ -466,7 +477,7 @@ def process_jsonl_files(conn: sqlite3.Connection, incremental: bool = True):
         conn.commit()
 
     print(f"\n{'='*50}")
-    print(f"构建完成!")
+    print("构建完成!")
     print(f"  总文档数: {total_docs}")
     print(f"  新增块数: {total_chunks}")
     if incremental:
@@ -510,6 +521,13 @@ def main():
 
     # 1. 预处理
     if not args.skip_preprocess:
+        if not TCAD_ROOT:
+            print(
+                "[ERROR] 请设置 RADAGENT_TCAD_ROOT 或 TCAD_ROOT；"
+                "如只索引已有 JSONL，请使用 --skip-preprocess",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         if args.rebuild:
             print("[预处理] 重建模式，运行完整 preprocess.py ...")
             result = subprocess.run(

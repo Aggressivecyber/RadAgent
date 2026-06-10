@@ -8,20 +8,17 @@ import json
 import logging
 import re
 import time
-from dataclasses import asdict, dataclass, field
-from enum import Enum
+from dataclasses import asdict, dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Optional
-
-import requests
-from bs4 import BeautifulSoup
+from typing import Any
 
 from . import config
 
 logger = logging.getLogger(__name__)
 
 
-class URLStatus(str, Enum):
+class URLStatus(StrEnum):
     PENDING = "pending"
     SCRAPED = "scraped"
     FAILED = "failed"
@@ -44,14 +41,14 @@ class URLEntry:
 class URLList:
     """Persistent URL list with dedup and status tracking."""
 
-    def __init__(self, path: Optional[Path] = None) -> None:
+    def __init__(self, path: Path | None = None) -> None:
         self.path = path or config.URL_LIST_PATH
         self._entries: dict[str, URLEntry] = {}
         self._load()
 
     def _load(self) -> None:
         if self.path.exists():
-            with open(self.path, "r", encoding="utf-8") as f:
+            with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
             for item in data:
                 entry = URLEntry(**item)
@@ -132,6 +129,15 @@ def collect_from_sogou(account_name: str, max_pages: int = 5) -> list[str]:
     WARNING: Sogou aggressively blocks bots. This is a best-effort
     supplementary discovery method.
     """
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+    except ImportError as exc:
+        raise RuntimeError(
+            "WeChat discovery requires optional dependencies. "
+            'Install them with: python -m pip install -e ".[wechat-scraper]"'
+        ) from exc
+
     urls: list[str] = []
     headers = {"User-Agent": config.USER_AGENTS[0]}
 
@@ -158,7 +164,7 @@ def collect_from_sogou(account_name: str, max_pages: int = 5) -> list[str]:
             logger.warning("Sogou anti-bot detected on page %d. Stopping.", page)
             break
 
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.text, "html.parser")
         page_urls = _extract_urls_from_sogou(soup)
         if not page_urls:
             logger.info("No more results on Sogou page %d", page)
@@ -170,7 +176,7 @@ def collect_from_sogou(account_name: str, max_pages: int = 5) -> list[str]:
     return list(set(urls))
 
 
-def _extract_urls_from_sogou(soup: BeautifulSoup) -> list[str]:
+def _extract_urls_from_sogou(soup: Any) -> list[str]:
     """Extract WeChat article URLs from Sogou search results page."""
     urls: list[str] = []
     for a_tag in soup.find_all("a", href=True):
@@ -192,7 +198,7 @@ def add_urls_from_file(file_path: str, url_list: URLList, source: str = "manual"
         logger.error("File not found: %s", file_path)
         return 0
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         lines = f.readlines()
 
     urls = [line.strip() for line in lines if line.strip()]

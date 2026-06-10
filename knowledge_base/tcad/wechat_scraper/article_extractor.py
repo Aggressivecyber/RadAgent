@@ -8,12 +8,8 @@ import hashlib
 import json
 import logging
 import random
-import re
 import time
 from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Optional
-from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -51,7 +47,7 @@ class Article:
 class ArticleExtractor:
     """Extract full article content from WeChat article URLs."""
 
-    def __init__(self, url_list: Optional[URLList] = None) -> None:
+    def __init__(self, url_list: URLList | None = None) -> None:
         self.url_list = url_list or URLList()
         self.session = requests.Session()
         self._rotate_ua()
@@ -65,7 +61,7 @@ class ArticleExtractor:
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         })
 
-    def extract_article(self, url: str) -> Optional[Article]:
+    def extract_article(self, url: str) -> Article | None:
         """Extract full content from a single article URL."""
         article = Article(url=url)
 
@@ -83,7 +79,7 @@ class ArticleExtractor:
                     return None
                 time.sleep(2 ** (attempt + 1))
 
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.text, "html.parser")
 
         # Extract metadata
         article.title = _get_text(soup, "h1", id="activity-name") or \
@@ -137,7 +133,7 @@ class ArticleExtractor:
 
     def extract_batch(
         self,
-        urls: Optional[list[str]] = None,
+        urls: list[str] | None = None,
         max_count: int = 0,
     ) -> list[Article]:
         """Extract multiple articles with rate limiting and progress saving.
@@ -182,7 +178,7 @@ class ArticleExtractor:
             json.dump(asdict(article), f, ensure_ascii=False, indent=2)
 
 
-def _get_text(soup: BeautifulSoup, tag: str, **kwargs) -> Optional[str]:
+def _get_text(soup: BeautifulSoup, tag: str, **kwargs) -> str | None:
     """Safely extract text from a tag."""
     el = soup.find(tag, **kwargs)
     if isinstance(el, Tag):
@@ -190,7 +186,7 @@ def _get_text(soup: BeautifulSoup, tag: str, **kwargs) -> Optional[str]:
     return None
 
 
-def _get_meta(soup: BeautifulSoup, prop: str) -> Optional[str]:
+def _get_meta(soup: BeautifulSoup, prop: str) -> str | None:
     """Extract content from a meta tag by property name."""
     tag = soup.find("meta", attrs={"property": prop}) or \
           soup.find("meta", attrs={"name": prop})
@@ -216,7 +212,7 @@ def _clean_html(content_div: Tag) -> str:
     html = str(content_div)
 
     # Remove scripts, styles, tracking pixels
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, "html.parser")
     for tag in soup.find_all(["script", "style", "iframe", "noscript"]):
         tag.decompose()
 

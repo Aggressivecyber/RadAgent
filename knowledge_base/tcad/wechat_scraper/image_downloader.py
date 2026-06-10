@@ -8,7 +8,6 @@ import hashlib
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse
 
 import requests
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ImageDownloader:
     """Download and store article images locally."""
 
-    def __init__(self, output_dir: Optional[Path] = None) -> None:
+    def __init__(self, output_dir: Path | None = None) -> None:
         self.output_dir = output_dir or config.IMAGES_DIR
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
@@ -31,7 +30,7 @@ class ImageDownloader:
         })
         self._hash_cache: set[str] = set()
 
-    def download_image(self, url: str, article_id: str, index: int) -> Optional[str]:
+    def download_image(self, url: str, article_id: str, index: int) -> str | None:
         """Download a single image. Returns local path or None on failure."""
         try:
             resp = self.session.get(url, timeout=30)

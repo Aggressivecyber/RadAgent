@@ -21,6 +21,12 @@ Semantic search over Synopsys TCAD Sentaurus documentation and code examples.
 2. Run `python3 build_index.py` to build the vector index (requires Ollama with bge-m3 running)
 3. MCP server runs automatically via stdio transport
 
+Optional WeChat article collection under `wechat_scraper/` requires:
+
+```bash
+python -m pip install -e ".[wechat-scraper]"
+```
+
 ## Query examples
 
 - "FinFET mesh refinement settings"

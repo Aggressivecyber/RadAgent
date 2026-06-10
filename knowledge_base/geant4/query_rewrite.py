@@ -7,17 +7,15 @@ Geant4 查询改写模块
 - 多查询生成（一个用户问题 → 3个不同角度的检索查询）
 """
 
-import json
 import re
 import sys
-import time
-import urllib.request
-import urllib.error
+from pathlib import Path
 
-# 智谱 LLM API 配置
-LLM_API_URL = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
-LLM_API_KEY = "f5dc034a22df47ac8cf98c37710e0bc6.crvx5afiTuITC247"
-LLM_MODEL = "glm-5-turbo"
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from knowledge_base.llm_client import call_llm
 
 # ============================================================================
 # Geant4 同义词和术语映射
@@ -66,38 +64,6 @@ GEANT4_SYNONYMS = {
     "microelectronics": ["SEE", "SEL", "SEU", "SET", "single event", "TID"],
     "radiation damage": ["displacement damage", "NIEL", "TID", "radiation effect"],
 }
-
-
-def call_llm(messages: list, temperature: float = 0.7, max_tokens: int = 2048) -> str:
-    """调用智谱 LLM API"""
-    payload = json.dumps({
-        "model": LLM_MODEL,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }).encode('utf-8')
-
-    req = urllib.request.Request(
-        LLM_API_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {LLM_API_KEY}"
-        }
-    )
-
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                result = json.loads(resp.read().decode('utf-8'))
-                return result["choices"][0]["message"]["content"]
-        except (urllib.error.URLError, KeyError, json.JSONDecodeError, IndexError) as e:
-            if attempt < max_retries - 1:
-                print(f"  [RETRY] LLM 调用失败 (attempt {attempt+1}): {e}", file=sys.stderr)
-                time.sleep(2)
-            else:
-                raise RuntimeError(f"LLM 调用失败: {e}") from e
 
 
 # ============================================================================

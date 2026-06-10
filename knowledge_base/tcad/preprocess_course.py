@@ -10,7 +10,9 @@ import os
 import sys
 from pathlib import Path
 
-COURSE_ROOT = "/home/rylan/workspace/code_files/代码文件"
+COURSE_ROOT = os.environ.get("RADAGENT_TCAD_COURSE_ROOT") or os.environ.get(
+    "TCAD_COURSE_ROOT", ""
+)
 OUTPUT_FILE = Path(__file__).parent / "data" / "course_materials.jsonl"
 
 # 需要处理的代码文件扩展名
@@ -20,7 +22,7 @@ CODE_EXTS = {'.cmd', '.tcl', '.sde', '.par', '.prf', '.c', '.gds', '.tdb'}
 def process_course_file(filepath: str) -> dict | None:
     """处理课程代码文件，生成带上下文描述的文档"""
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
     except Exception as e:
         print(f"  [WARN] 读取失败 {filepath}: {e}", file=sys.stderr)
@@ -43,17 +45,17 @@ def process_course_file(filepath: str) -> dict | None:
     # 从路径推断上下文
     rel_path = os.path.relpath(filepath, COURSE_ROOT)
     parts = rel_path.split(os.sep)
-    
+
     # 章节信息
     chapter = parts[0] if len(parts) > 0 else ""
     # 项目/日期名
     project_name = parts[-2] if len(parts) >= 2 else ""
-    
+
     # 推断工具类型
     basename = os.path.basename(filepath)
     name_no_ext = os.path.splitext(basename)[0]
     ext = os.path.splitext(basename)[1].lower()
-    
+
     tool_hints = []
     if 'fps' in name_no_ext.lower() or 'process' in name_no_ext.lower():
         tool_hints.append("Sentaurus Process")
@@ -170,32 +172,38 @@ def process_course_file(filepath: str) -> dict | None:
 
 
 def main():
+    if not COURSE_ROOT:
+        print(
+            "[ERROR] 请设置 RADAGENT_TCAD_COURSE_ROOT 或 TCAD_COURSE_ROOT",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     if not os.path.exists(COURSE_ROOT):
         print(f"[ERROR] 目录不存在: {COURSE_ROOT}", file=sys.stderr)
         sys.exit(1)
 
     OUTPUT_FILE.parent.mkdir(exist_ok=True)
-    
+
     count = 0
     skipped = 0
-    
+
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as out:
         for root, dirs, files in os.walk(COURSE_ROOT):
             # 跳过压缩文件和备份文件
             dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('__pycache__',)]
-            
+
             for fname in sorted(files):
                 ext = os.path.splitext(fname)[1].lower()
                 if ext not in CODE_EXTS:
                     continue
-                
+
                 # 跳过备份文件
                 if fname.endswith('~') or fname.endswith('.backup'):
                     skipped += 1
                     continue
-                
+
                 filepath = os.path.join(root, fname)
-                
+
                 # 跳过太大的文件 (>50KB)
                 fsize = os.path.getsize(filepath)
                 rel_path = os.path.relpath(filepath, COURSE_ROOT)
@@ -203,15 +211,15 @@ def main():
                     print(f"  [SKIP] 文件过大 ({fsize//1024}KB): {rel_path}", file=sys.stderr)
                     skipped += 1
                     continue
-                
+
                 doc = process_course_file(filepath)
                 if doc and doc["content"]:
                     out.write(json.dumps(doc, ensure_ascii=False) + '\n')
                     count += 1
-                    
+
                     if count % 100 == 0:
                         print(f"  已处理 {count} 个文件...", file=sys.stderr)
-    
+
     print(f"\n[完成] 处理了 {count} 个文件, 跳过 {skipped} 个", file=sys.stderr)
     print(f"输出: {OUTPUT_FILE}", file=sys.stderr)
 

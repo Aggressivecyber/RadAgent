@@ -5,7 +5,6 @@
 
 import hashlib
 import json
-import os
 import sqlite3
 import sys
 import time
@@ -23,7 +22,7 @@ BATCH_SIZE = 5  # 小批量避免 OOM
 def get_embedding(text: str) -> list | None:
     """调用 Ollama bge-m3 获取嵌入向量"""
     payload = json.dumps({"model": EMBED_MODEL, "prompt": text}).encode()
-    req = urllib.request.Request(OLLAMA_EMBED_URL, data=payload, 
+    req = urllib.request.Request(OLLAMA_EMBED_URL, data=payload,
                                  headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -40,7 +39,7 @@ def main():
         sys.exit(1)
 
     # 读取 JSONL
-    with open(JSONL_FILE, 'r', encoding='utf-8') as f:
+    with open(JSONL_FILE, encoding='utf-8') as f:
         docs = [json.loads(line) for line in f if line.strip()]
     print(f"读取 {len(docs)} 个文档", file=sys.stderr)
 
@@ -60,13 +59,13 @@ def main():
             "file_path": doc.get("file_path", ""),
             "content_hash": hashlib.md5(content.encode()).hexdigest()
         })
-    
+
     print(f"分块后: {len(all_chunks)} 个块", file=sys.stderr)
 
     # 连接数据库
     conn = sqlite3.connect(str(DB_PATH))
     c = conn.cursor()
-    
+
     # 确保表存在
     c.execute('''CREATE TABLE IF NOT EXISTS documents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,10 +100,10 @@ def main():
     success = 0
     fail = 0
     total = len(new_chunks)
-    
+
     for i in range(0, total, BATCH_SIZE):
         batch = new_chunks[i:i + BATCH_SIZE]
-        
+
         for chunk in batch:
             emb = get_embedding(chunk["content"])
             if emb:
@@ -117,7 +116,7 @@ def main():
                 success += 1
             else:
                 fail += 1
-        
+
         conn.commit()
         done = min(i + BATCH_SIZE, total)
         print(f"进度: {done}/{total} (成功: {success}, 失败: {fail})", file=sys.stderr)

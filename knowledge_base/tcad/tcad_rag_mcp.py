@@ -8,7 +8,6 @@ TCAD RAG MCP Server (stdio)
 """
 
 import json
-import os
 import pickle
 import sqlite3
 import sys
@@ -18,13 +17,12 @@ import numpy as np
 
 # 数据库路径
 DB_PATH = Path(__file__).parent / "data" / "tcad_index.db"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
 EMBED_MODEL = "bge-m3"
 
-# 智谱 LLM API 配置
-LLM_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-LLM_API_KEY = "f5dc034a22df47ac8cf98c37710e0bc6.crvx5afiTuITC247"
-LLM_MODEL = "glm-5-turbo"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 # ============================================================================
@@ -244,7 +242,7 @@ def handle_request(request: dict):
 
     elif method == "notifications/initialized":
         # 客户端确认初始化完成
-        pass
+        return
 
     elif method == "tools/list":
         # 列出可用工具
@@ -422,7 +420,7 @@ def handle_request(request: dict):
                     send_response({"error": {"code": -32602, "message": "缺少 query 参数"}}, req_id)
                     return
                 try:
-                    from tcad_agent import run_agent
+                    from knowledge_base.tcad.tcad_agent import run_agent
                     answer = run_agent(query, verbose=False)
                     send_response({
                         "content": [{"type": "text", "text": answer}]
@@ -437,7 +435,7 @@ def handle_request(request: dict):
                     send_response({"error": {"code": -32602, "message": "缺少 requirements 参数"}}, req_id)
                     return
                 try:
-                    from code_generator import generate_tcad_code
+                    from knowledge_base.tcad.code_generator import generate_tcad_code
                     code = generate_tcad_code(requirements)
                     send_response({
                         "content": [{"type": "text", "text": code}]

@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-TCAD_ROOT = "/home/rylan/synopsys-data/sentaurus/X-2025.06/tcad/X-2025.06"
+TCAD_ROOT = os.environ.get("RADAGENT_TCAD_ROOT") or os.environ.get("TCAD_ROOT", "")
 OUTPUT_DIR = Path(__file__).parent / "data"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -108,10 +108,6 @@ class HTMLToMarkdown(html.parser.HTMLParser):
                 else:
                     self.list_counters[-1] += 1
                     self.result.append(f"\n{indent}{self.list_counters[-1]}. ")
-        elif tag == "a":
-            href = attrs_dict.get("href", "")
-            if href and not href.startswith("#"):
-                pass  # 链接文本后续处理
         elif tag == "table":
             self.result.append("\n")
         elif tag == "td" or tag == "th":
@@ -203,7 +199,7 @@ def html_to_markdown(html_content: str) -> str:
     try:
         parser.feed(html_content)
         return parser.get_markdown()
-    except Exception as e:
+    except Exception:
         # 解析失败时简单去除标签
         text = re.sub(r'<[^>]+>', ' ', html_content)
         text = re.sub(r'\s+', ' ', text)
@@ -229,7 +225,7 @@ def extract_html_title(html_content: str) -> str:
 def process_html_file(filepath: str, source_type: str) -> dict | None:
     """处理单个 HTML 文件，返回文档记录"""
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, encoding='utf-8', errors='ignore') as f:
             content = f.read()
     except Exception as e:
         print(f"  [WARN] 读取失败 {filepath}: {e}", file=sys.stderr)
@@ -258,7 +254,7 @@ def process_html_file(filepath: str, source_type: str) -> dict | None:
 def process_code_file(filepath: str, category: str) -> dict | None:
     """处理 .cmd/.tcl 代码文件，生成上下文描述"""
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
     except Exception as e:
         print(f"  [WARN] 读取失败 {filepath}: {e}", file=sys.stderr)
@@ -415,6 +411,12 @@ def main():
     print("=" * 60)
     print("TCAD 文档预处理")
     print("=" * 60)
+    if not TCAD_ROOT:
+        print(
+            "[ERROR] 请设置 RADAGENT_TCAD_ROOT 或 TCAD_ROOT 指向 Sentaurus TCAD 根目录",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # 1. 处理 olh_sentaurus 手册
     html_output = str(OUTPUT_DIR / "manuals.jsonl")
