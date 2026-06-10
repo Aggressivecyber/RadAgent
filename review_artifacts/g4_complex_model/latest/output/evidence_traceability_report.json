@@ -1,5 +1,30 @@
 {
-  "decision": "unknown",
-  "geometry_evidence_count": 0,
-  "materials_evidence_count": 0
+  "total_evidence_sources": 8,
+  "sources": {
+    "NIST": [
+      "G4_AIR",
+      "G4_Al",
+      "G4_Si",
+      "SiO2 density"
+    ],
+    "user_specification": [
+      "housing geometry",
+      "pcb geometry",
+      "sensor_stack layout",
+      "electrode dimensions",
+      "oxide specification",
+      "silicon bulk",
+      "sensitive region",
+      "10 MeV proton source",
+      "scoring requirements"
+    ],
+    "PDG_material_table": [
+      "FR4 composition"
+    ],
+    "geant4_physics_guide": [
+      "QGSP_BIC_HP selection"
+    ]
+  },
+  "components_without_evidence": [],
+  "materials_without_evidence": []
 }

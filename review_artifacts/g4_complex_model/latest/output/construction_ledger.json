@@ -1,1 +1,39 @@
-{"entries": [], "version": "1.0"}
+{
+  "schema_version": "construction_ledger_v1",
+  "steps": [
+    {
+      "timestamp": "2026-06-07T16:30:00Z",
+      "node_name": "fixture_generator",
+      "action": "create",
+      "target_id": "rad_hard_detector_v1",
+      "description": "Created canonical 9-component detector model fixture.",
+      "evidence_refs": [
+        "user_specification",
+        "NIST",
+        "geant4_physics_guide"
+      ],
+      "modified_fields": [
+        "components",
+        "materials",
+        "sources",
+        "scoring"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-07T16:30:00Z",
+      "node_name": "fixture_generator",
+      "action": "validate",
+      "target_id": "rad_hard_detector_v1",
+      "description": "Verified no simplification and complete geometry nesting.",
+      "evidence_refs": [
+        "no_simplification_report.json",
+        "geometry_interface_report.json"
+      ],
+      "modified_fields": [],
+      "warnings": [
+        "Fixture does not execute Geant4."
+      ]
+    }
+  ]
+}

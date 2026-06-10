@@ -1,1 +1,87 @@
-{"modules": ["DetectorConstruction"]}
+{
+  "plan_id": "rad_detector_complex_codegen_plan",
+  "job_id": "rad_detector_complex",
+  "modules": [
+    {
+      "module_name": "simulation_core",
+      "module_type": "simulation_core",
+      "source_files": [
+        "src/DetectorConstruction.cc",
+        "src/MaterialRegistry.cc",
+        "src/GeometryContext.cc"
+      ],
+      "header_files": [
+        "include/DetectorConstruction.hh",
+        "include/MaterialRegistry.hh",
+        "include/GeometryContext.hh"
+      ],
+      "depends_on": [],
+      "linked_component_ids": [
+        "world",
+        "housing",
+        "pcb",
+        "sensor_stack",
+        "top_electrode",
+        "oxide_layer",
+        "silicon_bulk",
+        "sensitive_region",
+        "bottom_electrode"
+      ],
+      "linked_material_ids": [
+        "G4_AIR",
+        "G4_Al",
+        "FR4",
+        "G4_Si",
+        "SiO2"
+      ]
+    },
+    {
+      "module_name": "beam_physics",
+      "module_type": "beam_physics",
+      "source_files": [
+        "src/PrimaryGeneratorAction.cc"
+      ],
+      "header_files": [
+        "include/PrimaryGeneratorAction.hh"
+      ],
+      "config_files": [
+        "macros/run.mac"
+      ],
+      "depends_on": [
+        "simulation_core"
+      ],
+      "linked_component_ids": [],
+      "linked_material_ids": []
+    },
+    {
+      "module_name": "runtime_app",
+      "module_type": "runtime_app",
+      "source_files": [
+        "src/main.cc",
+        "src/RunAction.cc",
+        "src/OutputManager.cc"
+      ],
+      "header_files": [
+        "include/RunAction.hh",
+        "include/OutputManager.hh"
+      ],
+      "depends_on": [
+        "simulation_core",
+        "beam_physics"
+      ],
+      "linked_component_ids": [
+        "sensitive_region",
+        "oxide_layer",
+        "silicon_bulk"
+      ],
+      "linked_material_ids": []
+    }
+  ],
+  "assembly_order": [
+    "simulation_core",
+    "beam_physics",
+    "runtime_app"
+  ],
+  "total_source_files": 7,
+  "total_header_files": 6
+}

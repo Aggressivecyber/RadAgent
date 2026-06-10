@@ -1,4 +1,34 @@
 {
-  "total_interfaces": 0,
-  "interfaces": []
+  "total_interfaces": 8,
+  "root_volume": "world",
+  "max_depth": 4,
+  "interface_tree": {
+    "world": [
+      "housing"
+    ],
+    "housing": [
+      "pcb"
+    ],
+    "pcb": [
+      "sensor_stack"
+    ],
+    "sensor_stack": [
+      "top_electrode",
+      "oxide_layer",
+      "silicon_bulk",
+      "bottom_electrode"
+    ],
+    "silicon_bulk": [
+      "sensitive_region"
+    ]
+  },
+  "orphan_volumes": [],
+  "circular_dependencies": [],
+  "issues": [
+    {
+      "component": "oxide_layer",
+      "issue": "Thickness 1 μm at step limit boundary",
+      "recommendation": "Add SetMaxStepSize(0.5*um) to oxide region"
+    }
+  ]
 }

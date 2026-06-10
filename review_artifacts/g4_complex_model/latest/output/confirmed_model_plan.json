@@ -1,1 +1,8 @@
-{"confirmation_status": "approved"}
+{
+  "schema_version": "confirmed_model_plan_v1",
+  "job_id": "rad_detector_complex",
+  "confirmation_status": "approved",
+  "requires_human_confirmation": false,
+  "remaining_unconfirmed_fields": [],
+  "model_ir_path": "output/g4_model_ir.json"
+}

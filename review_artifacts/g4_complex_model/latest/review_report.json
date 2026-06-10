@@ -1,25 +1,79 @@
 {
-  "schema_version": "v3",
-  "artifact_type": "g4_complex_model",
-  "job_id": "hc_test",
-  "validation_status": "failed",
-  "generated_at": "2026-06-09T09:39:47.166068+00:00",
+  "artifact_kind": "g4_complex_model",
+  "validation_scope": "fixture_model_review",
+  "run_type": "test",
   "is_stub": false,
-  "run_type": "strict",
-  "artifacts_collected": 14,
-  "has_model_ir": true,
-  "has_gate_results": true,
-  "has_model_review": true,
-  "has_manifest": false,
-  "has_human_confirmation": true,
-  "file_count": 14,
-  "skipped_gates": [],
-  "known_limitations": [],
-  "human_confirmation": {
-    "required": false,
-    "status": "not_required",
-    "rounds": 0,
-    "edited_fields": [],
-    "remaining_unconfirmed_fields": []
-  }
+  "verified": true,
+  "job_id": "rad_detector_complex",
+  "source_query": "Build a radiation-hard silicon pixel detector with aluminum housing, FR4 PCB carrier, multi-layer sensor stack (top electrode, SiO2 oxide, silicon bulk with sensitive region, bottom electrode). Simulate 10 MeV proton vertical incidence. Score: sensitive region edep, oxide dose, silicon bulk 3D dose map, event table.",
+  "validation_status": "passed",
+  "model_summary": {
+    "total_components": 9,
+    "total_materials": 5,
+    "total_scoring": 4,
+    "total_interfaces": 8,
+    "custom_materials": [
+      "FR4",
+      "SiO2"
+    ],
+    "required_components_present": true,
+    "simplification_policy": "NO_SIMPLIFICATION"
+  },
+  "known_limitations": [
+    "Fixture artifact: no actual Geant4 simulation executed",
+    "Runtime job gates are skipped because this fixture stores review inputs only",
+    "Oxide layer 1 μm may need step limit control in production run",
+    "3D dose map mesh resolution limited by voxel size (5 mm)",
+    "OutputManager generates planned outputs, not actual simulation data"
+  ],
+  "skipped_gates": [
+    {
+      "gate_id": 3,
+      "name": "Patch Format"
+    },
+    {
+      "gate_id": 4,
+      "name": "File Permission"
+    },
+    {
+      "gate_id": 5,
+      "name": "Static Check"
+    },
+    {
+      "gate_id": 6,
+      "name": "Build/Parse"
+    },
+    {
+      "gate_id": 7,
+      "name": "Unit Test"
+    },
+    {
+      "gate_id": 8,
+      "name": "Data Contract"
+    },
+    {
+      "gate_id": 9,
+      "name": "Smoke Simulation"
+    },
+    {
+      "gate_id": 10,
+      "name": "Benchmark Regression"
+    },
+    {
+      "gate_id": 11,
+      "name": "Physics Sanity"
+    },
+    {
+      "gate_id": 18,
+      "name": "G4-G No Magic Number"
+    }
+  ],
+  "gate_summary": {
+    "total_gates": 20,
+    "passed": 10,
+    "skipped": 10,
+    "failed": 0,
+    "warnings": 1
+  },
+  "has_human_confirmation": true
 }

@@ -1,1 +1,26 @@
-{"final_status": "approved", "remaining_unconfirmed_fields": []}
+{
+  "schema_version": "confirmation_record_v1",
+  "job_id": "rad_detector_complex",
+  "total_rounds": 1,
+  "final_status": "approved",
+  "confirmed_fields": [
+    "geometry",
+    "materials",
+    "source",
+    "physics",
+    "scoring"
+  ],
+  "edited_fields": [],
+  "rejected_fields": [],
+  "remaining_unconfirmed_fields": [],
+  "unconfirmed_assumptions_count": 0,
+  "confirmation_history": [
+    {
+      "round_id": 1,
+      "user_decision": "approve",
+      "timestamp": "2026-06-10T06:19:41+00:00",
+      "notes": "Fixture record for the canonical complex detector model."
+    }
+  ],
+  "confirmed_model_plan_path": "output/confirmed_model_plan.json"
+}

@@ -1,1 +1,484 @@
-{"components": [{"component_id": "world"}], "materials": [], "sources": [], "scoring": []}
+{
+  "model_ir_id": "rad_hard_detector_v1",
+  "job_id": "rad_detector_complex",
+  "modeling_mode": "realistic",
+  "target_system": "Radiation-Hard Silicon Pixel Detector — Full sensor stack with housing, PCB, electrodes, oxide, and sensitive silicon",
+  "simplification_policy": {
+    "allow_simplification": false,
+    "requires_user_approval": true,
+    "approved_simplifications": []
+  },
+  "components": [
+    {
+      "component_id": "world",
+      "display_name": "World Volume",
+      "component_type": "world",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 2000,
+        "dy": 2000,
+        "dz": 2000
+      },
+      "material_id": "G4_AIR",
+      "roles": [],
+      "open_issues": [],
+      "source_evidence": [
+        "default_world"
+      ]
+    },
+    {
+      "component_id": "housing",
+      "display_name": "Aluminum Housing Shell",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 120,
+        "dy": 120,
+        "dz": 100
+      },
+      "material_id": "G4_Al",
+      "mother_volume": "world",
+      "roles": [
+        "housing",
+        "shielding"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification:housing"
+      ]
+    },
+    {
+      "component_id": "pcb",
+      "display_name": "FR4 PCB Carrier Board",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 100,
+        "dy": 100,
+        "dz": 15
+      },
+      "material_id": "FR4",
+      "mother_volume": "housing",
+      "roles": [
+        "mechanical_support"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification:pcb"
+      ]
+    },
+    {
+      "component_id": "sensor_stack",
+      "display_name": "Sensor Stack Assembly",
+      "component_type": "assembly",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 80,
+        "dy": 80,
+        "dz": 35
+      },
+      "material_id": "G4_AIR",
+      "mother_volume": "pcb",
+      "roles": [
+        "assembly"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification:sensor_stack"
+      ]
+    },
+    {
+      "component_id": "top_electrode",
+      "display_name": "Top Aluminum Electrode",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 70,
+        "dy": 70,
+        "dz": 0.5
+      },
+      "material_id": "G4_Al",
+      "mother_volume": "sensor_stack",
+      "roles": [
+        "electrode"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification:electrode"
+      ]
+    },
+    {
+      "component_id": "oxide_layer",
+      "display_name": "Gate Oxide (SiO2)",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 70,
+        "dy": 70,
+        "dz": 0.001
+      },
+      "material_id": "SiO2",
+      "mother_volume": "sensor_stack",
+      "roles": [
+        "oxide",
+        "dose_critical"
+      ],
+      "open_issues": [
+        "Oxide thickness 1 μm is at Geant4 step limit — may need special step control"
+      ],
+      "source_evidence": [
+        "user_specification:oxide"
+      ]
+    },
+    {
+      "component_id": "silicon_bulk",
+      "display_name": "Silicon Bulk Substrate",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 70,
+        "dy": 70,
+        "dz": 30
+      },
+      "material_id": "G4_Si",
+      "mother_volume": "sensor_stack",
+      "roles": [
+        "substrate"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification:silicon_bulk"
+      ]
+    },
+    {
+      "component_id": "sensitive_region",
+      "display_name": "Sensitive Silicon Active Region",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 68,
+        "dy": 68,
+        "dz": 25
+      },
+      "material_id": "G4_Si",
+      "mother_volume": "silicon_bulk",
+      "roles": [
+        "edep_region",
+        "sensitive_detector"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification:sensitive_region"
+      ]
+    },
+    {
+      "component_id": "bottom_electrode",
+      "display_name": "Bottom Aluminum Electrode",
+      "component_type": "volume",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 70,
+        "dy": 70,
+        "dz": 0.5
+      },
+      "material_id": "G4_Al",
+      "mother_volume": "sensor_stack",
+      "roles": [
+        "electrode"
+      ],
+      "open_issues": [],
+      "source_evidence": [
+        "user_specification:electrode"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "material_id": "G4_AIR",
+      "name": "G4_AIR",
+      "classification": "nist",
+      "nist_name": "G4_AIR",
+      "density_g_cm3": 0.001214,
+      "custom": false,
+      "source_evidence": [
+        "NIST"
+      ]
+    },
+    {
+      "material_id": "G4_Al",
+      "name": "G4_Al",
+      "classification": "nist",
+      "nist_name": "G4_Al",
+      "density_g_cm3": 2.699,
+      "custom": false,
+      "source_evidence": [
+        "NIST"
+      ]
+    },
+    {
+      "material_id": "G4_Si",
+      "name": "G4_Si",
+      "classification": "nist",
+      "nist_name": "G4_Si",
+      "density_g_cm3": 2.329,
+      "custom": false,
+      "source_evidence": [
+        "NIST"
+      ]
+    },
+    {
+      "material_id": "FR4",
+      "name": "FR4_Epoxy",
+      "classification": "custom",
+      "nist_name": "",
+      "density_g_cm3": 1.85,
+      "custom": true,
+      "custom_composition": {
+        "elements": {
+          "Si": 0.282,
+          "O": 0.205,
+          "C": 0.254,
+          "H": 0.119
+        },
+        "method": "fraction_by_weight"
+      },
+      "source_evidence": [
+        "user_specification:fr4",
+        "PDG_material_table"
+      ]
+    },
+    {
+      "material_id": "SiO2",
+      "name": "SiliconDioxide",
+      "classification": "custom",
+      "nist_name": "",
+      "density_g_cm3": 2.2,
+      "custom": true,
+      "custom_composition": {
+        "elements": {
+          "Si": 1,
+          "O": 2
+        },
+        "method": "stoichiometric"
+      },
+      "source_evidence": [
+        "user_specification:sio2",
+        "NIST"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "proton_10mev",
+      "particle_type": "proton",
+      "energy": {
+        "value": 10.0,
+        "unit": "MeV",
+        "distribution": "mono"
+      },
+      "beam": {
+        "position": [
+          0,
+          0,
+          1500
+        ],
+        "direction": [
+          0,
+          0,
+          -1
+        ],
+        "sigma_position_um": 0.0,
+        "surface_shape": "point",
+        "surface_size": []
+      },
+      "generator_type": "gps",
+      "source_evidence": [
+        "user_specification:10mev_proton"
+      ]
+    }
+  ],
+  "physics": {
+    "physics_list": "QGSP_BIC_HP",
+    "selection_reasoning": "QGSP_BIC_HP chosen for 10 MeV proton in silicon detector: binary cascade for low-energy proton interactions, high-precision neutron model, standard EM for electron/photon tracking. Critical for accurate oxide dose and silicon bulk energy deposition.",
+    "source_evidence": [
+      "geant4_physics_guide:QGSP_BIC_HP"
+    ]
+  },
+  "scoring": [
+    {
+      "scoring_id": "sensitive_edep",
+      "scoring_type": "region",
+      "quantities": [
+        "edep_MeV",
+        "n_entries"
+      ],
+      "target_component_id": "sensitive_region",
+      "output_format": "csv",
+      "source_evidence": [
+        "user_specification:sensitive_edep"
+      ]
+    },
+    {
+      "scoring_id": "oxide_dose",
+      "scoring_type": "region",
+      "quantities": [
+        "dose_Gy",
+        "edep_MeV"
+      ],
+      "target_component_id": "oxide_layer",
+      "output_format": "csv",
+      "source_evidence": [
+        "user_specification:oxide_dose"
+      ]
+    },
+    {
+      "scoring_id": "bulk_dose_3d",
+      "scoring_type": "mesh",
+      "quantities": [
+        "dose_Gy",
+        "edep_MeV"
+      ],
+      "target_component_id": "silicon_bulk",
+      "output_format": "csv",
+      "mesh_definition": {
+        "voxel_size": {
+          "dx": 5.0,
+          "dy": 5.0,
+          "dz": 5.0
+        },
+        "unit": "mm"
+      },
+      "source_evidence": [
+        "user_specification:3d_dose_map"
+      ]
+    },
+    {
+      "scoring_id": "event_table",
+      "scoring_type": "region",
+      "quantities": [
+        "event_id",
+        "edep_MeV",
+        "x_mm",
+        "y_mm",
+        "z_mm"
+      ],
+      "target_component_id": "sensitive_region",
+      "output_format": "csv",
+      "source_evidence": [
+        "user_specification:event_table"
+      ]
+    }
+  ],
+  "interfaces": [
+    {
+      "parent_component": "world",
+      "child_component": "housing",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "housing",
+      "child_component": "pcb",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "pcb",
+      "child_component": "sensor_stack",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "sensor_stack",
+      "child_component": "top_electrode",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "sensor_stack",
+      "child_component": "oxide_layer",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "sensor_stack",
+      "child_component": "silicon_bulk",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "silicon_bulk",
+      "child_component": "sensitive_region",
+      "interface_type": "daughter"
+    },
+    {
+      "parent_component": "sensor_stack",
+      "child_component": "bottom_electrode",
+      "interface_type": "daughter"
+    }
+  ],
+  "open_issues": [
+    "Oxide layer 1 μm thickness requires step limit control (SetMaxStepSize)"
+  ],
+  "evidence": {
+    "evidence_decision": "allow_rag",
+    "geometry": [
+      {
+        "source": "user_specification",
+        "desc": "detector stack layout: housing → pcb → sensor_stack → electrodes/oxide/silicon"
+      }
+    ],
+    "materials": [
+      {
+        "source": "NIST",
+        "desc": "G4_AIR, G4_Al, G4_Si standard definitions"
+      },
+      {
+        "source": "user_specification",
+        "desc": "FR4 custom composition from PDG material table"
+      },
+      {
+        "source": "NIST",
+        "desc": "SiO2 stoichiometric composition, density 2.200 g/cm³"
+      }
+    ],
+    "source": [
+      {
+        "source": "user_specification",
+        "desc": "10 MeV mono-energetic proton, vertical incidence"
+      }
+    ],
+    "physics": [
+      {
+        "source": "geant4_physics_guide",
+        "desc": "QGSP_BIC_HP for low-energy proton detector simulation"
+      }
+    ],
+    "scoring": [
+      {
+        "source": "user_specification",
+        "desc": "sensitive region edep, oxide dose, bulk 3D dose map, event table"
+      }
+    ]
+  },
+  "ledger": {
+    "entries": [
+      {
+        "node": "complex_model_builder",
+        "action": "create",
+        "target": "rad_hard_detector_v1",
+        "description": "Initial complex detector model IR created from user specification",
+        "timestamp": "2026-06-07T16:30:00Z"
+      }
+    ],
+    "version": "1.0"
+  },
+  "human_confirmation": {
+    "status": "approved",
+    "source": "fixture",
+    "record_path": "output/confirmation_record.json"
+  },
+  "confirmed_fields": [
+    "geometry",
+    "materials",
+    "source",
+    "physics",
+    "scoring"
+  ],
+  "unconfirmed_fields": [],
+  "assumptions_confirmed": true
+}

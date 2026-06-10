@@ -9,8 +9,6 @@
         "beam_particle",
         "beam_energy_MeV",
         "physics_list",
-        "model_ir_id",
-        "job_id",
         "run_timestamp"
       ]
     },
@@ -22,8 +20,7 @@
         "edep_MeV",
         "n_entries"
       ],
-      "target_region": "sensitive_region",
-      "scoring_type": "region"
+      "target_region": "sensitive_region"
     },
     {
       "filename": "oxide_dose.csv",
@@ -33,8 +30,7 @@
         "dose_Gy",
         "edep_MeV"
       ],
-      "target_region": "oxide_layer",
-      "scoring_type": "region"
+      "target_region": "oxide_layer"
     },
     {
       "filename": "bulk_dose_3d.csv",
@@ -48,12 +44,8 @@
         "edep_MeV"
       ],
       "target_region": "silicon_bulk",
-      "scoring_type": "mesh",
       "mesh": {
-        "nx": 10,
-        "ny": 10,
-        "nz": 10,
-        "voxel_size_mm": 5.0
+        "voxel_size": "5×5×5 mm³"
       }
     },
     {
@@ -66,8 +58,7 @@
         "y_mm",
         "z_mm"
       ],
-      "target_region": "sensitive_region",
-      "scoring_type": "region"
+      "target_region": "sensitive_region"
     },
     {
       "filename": "provenance.json",
@@ -84,24 +75,10 @@
       "filename": "run_log.txt",
       "source": "RunAction",
       "fields": [
-        "job_id",
-        "n_events",
-        "physics_list",
-        "model_ir_id"
+        "stdout/stderr capture"
       ]
     }
   ],
   "fields_from_model_ir": true,
-  "no_invented_fields": true,
-  "scoring_ids_in_model_ir": [
-    "sensitive_edep",
-    "oxide_dose",
-    "bulk_dose_3d",
-    "event_table"
-  ],
-  "regions_in_model_ir": [
-    "sensitive_region",
-    "oxide_layer",
-    "silicon_bulk"
-  ]
+  "no_invented_fields": true
 }

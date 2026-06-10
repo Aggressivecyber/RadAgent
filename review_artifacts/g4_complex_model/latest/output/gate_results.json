@@ -1,1 +1,551 @@
-[{"gate_id": 0, "status": "pass", "checked_items": []}, {"gate_id": 1, "status": "pass", "checked_items": []}, {"gate_id": 2, "status": "pass", "checked_items": []}, {"gate_id": 3, "status": "pass", "checked_items": []}, {"gate_id": 4, "status": "pass", "checked_items": []}, {"gate_id": 5, "status": "pass", "checked_items": []}, {"gate_id": 6, "status": "pass", "checked_items": []}, {"gate_id": 7, "status": "pass", "checked_items": []}, {"gate_id": 8, "status": "pass", "checked_items": []}, {"gate_id": 9, "status": "pass", "checked_items": []}, {"gate_id": 10, "status": "pass", "checked_items": []}, {"gate_id": 11, "status": "pass", "checked_items": []}, {"gate_id": 12, "status": "pass", "checked_items": []}, {"gate_id": 13, "status": "pass", "checked_items": []}, {"gate_id": 14, "status": "pass", "checked_items": []}, {"gate_id": 15, "status": "pass", "checked_items": []}, {"gate_id": 16, "status": "pass", "checked_items": []}, {"gate_id": 17, "status": "pass", "checked_items": []}, {"gate_id": 18, "status": "pass", "checked_items": []}, {"gate_id": 19, "status": "pass", "checked_items": []}]
+[
+  {
+    "gate_id": 0,
+    "name": "Context Sufficiency",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "context_decision == allow_rag",
+        "result": "pass"
+      },
+      {
+        "item": "sufficient context retrieved",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "context_decision == allow_rag",
+      "sufficient context retrieved"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "context_decision: allow_rag"
+    ],
+    "file_paths": [],
+    "message": "Context sufficient via RAG for the fixture model."
+  },
+  {
+    "gate_id": 1,
+    "name": "Task Spec Schema",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "task_spec schema validation",
+        "result": "pass"
+      },
+      {
+        "item": "simulation_scope == ['geant4']",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "task_spec schema validation",
+      "simulation_scope == ['geant4']"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "scope: geant4 only"
+    ],
+    "file_paths": [],
+    "message": "Task spec schema valid for Geant4-only scope."
+  },
+  {
+    "gate_id": 2,
+    "name": "Simulation IR Schema",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "required components (9)",
+        "result": "pass"
+      },
+      {
+        "item": "required materials (5)",
+        "result": "pass"
+      },
+      {
+        "item": "Model IR schema valid",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "required components (9)",
+      "required materials (5)",
+      "Model IR schema valid"
+    ],
+    "failed_items": [],
+    "warnings": [
+      "oxide_layer 1 um thickness may need step limit control"
+    ],
+    "evidence": [
+      "components: world, housing, pcb, sensor_stack, top_electrode, oxide_layer, silicon_bulk, sensitive_region, bottom_electrode",
+      "materials: G4_AIR, G4_Al, G4_Si, FR4, SiO2"
+    ],
+    "file_paths": [
+      "output/g4_model_ir.json"
+    ],
+    "message": "Model IR complete: 9 components, 5 materials, 4 scoring specs."
+  },
+  {
+    "gate_id": 3,
+    "name": "Patch Format",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Patch Format is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 4,
+    "name": "File Permission",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "File Permission is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 5,
+    "name": "Static Check",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Static Check is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 6,
+    "name": "Build/Parse",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Build/Parse is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 7,
+    "name": "Unit Test",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Unit Test is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 8,
+    "name": "Data Contract",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Data Contract is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 9,
+    "name": "Smoke Simulation",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Smoke Simulation is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 10,
+    "name": "Benchmark Regression",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Benchmark Regression is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 11,
+    "name": "Physics Sanity",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Physics Sanity is a runtime job gate; this tracked fixture does not execute Geant4.",
+    "critical": false
+  },
+  {
+    "gate_id": 12,
+    "name": "G4-A Model Completeness",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "components >= 8 (actual: 9)",
+        "result": "pass"
+      },
+      {
+        "item": "housing present",
+        "result": "pass"
+      },
+      {
+        "item": "pcb present",
+        "result": "pass"
+      },
+      {
+        "item": "sensor_stack present",
+        "result": "pass"
+      },
+      {
+        "item": "oxide_layer present",
+        "result": "pass"
+      },
+      {
+        "item": "sensitive_region present",
+        "result": "pass"
+      },
+      {
+        "item": "scoring >= 3 (actual: 4)",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "components >= 8 (actual: 9)",
+      "housing present",
+      "pcb present",
+      "sensor_stack present",
+      "oxide_layer present",
+      "sensitive_region present",
+      "scoring >= 3 (actual: 4)"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "all 9 required components present"
+    ],
+    "file_paths": [
+      "output/g4_model_ir.json"
+    ],
+    "message": "Model complete: all 9 required components present."
+  },
+  {
+    "gate_id": 13,
+    "name": "G4-B No Unapproved Simplification",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "housing not simplified away",
+        "result": "pass"
+      },
+      {
+        "item": "pcb not simplified away",
+        "result": "pass"
+      },
+      {
+        "item": "oxide_layer not simplified away",
+        "result": "pass"
+      },
+      {
+        "item": "top_electrode not simplified away",
+        "result": "pass"
+      },
+      {
+        "item": "bottom_electrode not simplified away",
+        "result": "pass"
+      },
+      {
+        "item": "sensitive_region not simplified away",
+        "result": "pass"
+      },
+      {
+        "item": "multi-layer stack not merged into single silicon box",
+        "result": "pass"
+      },
+      {
+        "item": "all user-requested scoring regions exist",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "housing not simplified away",
+      "pcb not simplified away",
+      "oxide_layer not simplified away",
+      "top_electrode not simplified away",
+      "bottom_electrode not simplified away",
+      "sensitive_region not simplified away",
+      "multi-layer stack not merged into single silicon box",
+      "all user-requested scoring regions exist"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "component count: 9 (required: 9)",
+      "simplification_policy.allow_simplification == false"
+    ],
+    "file_paths": [
+      "output/g4_model_ir.json",
+      "output/no_simplification_report.json"
+    ],
+    "message": "No unapproved simplifications detected.",
+    "missing_components": [],
+    "unapproved_simplifications": []
+  },
+  {
+    "gate_id": 14,
+    "name": "G4-C Geometry Interface",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "all interfaces have valid parent and child",
+        "result": "pass"
+      },
+      {
+        "item": "world has no parent",
+        "result": "pass"
+      },
+      {
+        "item": "sensitive_region nested in silicon_bulk",
+        "result": "pass"
+      },
+      {
+        "item": "electrodes/oxide in sensor_stack",
+        "result": "pass"
+      },
+      {
+        "item": "no orphan volumes",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "all interfaces have valid parent and child",
+      "world has no parent",
+      "sensitive_region nested in silicon_bulk",
+      "electrodes/oxide in sensor_stack",
+      "no orphan volumes"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "interface chain verified"
+    ],
+    "file_paths": [
+      "output/geometry_interface_report.json"
+    ],
+    "message": "All geometry interfaces consistent. Nesting hierarchy valid."
+  },
+  {
+    "gate_id": 15,
+    "name": "G4-D Overlap Policy",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "overlap checks enabled for model interfaces",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "overlap checks enabled for model interfaces"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "geometry_interface_report.json"
+    ],
+    "file_paths": [
+      "output/geometry_interface_report.json"
+    ],
+    "message": "Overlap policy is explicit for the fixture geometry hierarchy."
+  },
+  {
+    "gate_id": 16,
+    "name": "G4-E Evidence Traceability",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "all components have source_evidence",
+        "result": "pass"
+      },
+      {
+        "item": "all materials have source_evidence",
+        "result": "pass"
+      },
+      {
+        "item": "physics has source_evidence",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "all components have source_evidence",
+      "all materials have source_evidence",
+      "physics has source_evidence"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "evidence_traceability_report.json"
+    ],
+    "file_paths": [
+      "output/evidence_traceability_report.json"
+    ],
+    "message": "All model elements have traceable evidence sources."
+  },
+  {
+    "gate_id": 17,
+    "name": "G4-F Code Module Boundary",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "code module plan exists",
+        "result": "pass"
+      },
+      {
+        "item": "modules have explicit dependencies",
+        "result": "pass"
+      },
+      {
+        "item": "model components mapped to modules",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "code module plan exists",
+      "modules have explicit dependencies",
+      "model components mapped to modules"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "code_module_plan.json"
+    ],
+    "file_paths": [
+      "output/code_module_plan.json"
+    ],
+    "message": "Code module boundaries are explicit in the fixture plan."
+  },
+  {
+    "gate_id": 18,
+    "name": "G4-G No Magic Number",
+    "status": "skipped",
+    "checked_items": [
+      {
+        "item": "fixture scope",
+        "result": "skipped"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "G4-G scans generated C++ files; this fixture stores a code plan only.",
+    "critical": false
+  },
+  {
+    "gate_id": 19,
+    "name": "G4-H Human Confirmation",
+    "status": "pass",
+    "checked_items": [
+      {
+        "item": "confirmation_required=True",
+        "result": "pass"
+      },
+      {
+        "item": "confirmation_status=approved",
+        "result": "pass"
+      },
+      {
+        "item": "remaining_unconfirmed_fields=0",
+        "result": "pass"
+      }
+    ],
+    "passed_items": [
+      "confirmation_required=True",
+      "confirmation_status=approved",
+      "remaining_unconfirmed_fields=0"
+    ],
+    "failed_items": [],
+    "warnings": [],
+    "evidence": [
+      "output/confirmation_record.json"
+    ],
+    "file_paths": [
+      "output/confirmation_record.json",
+      "output/confirmed_model_plan.json"
+    ],
+    "message": "Human confirmation complete for the fixture model."
+  }
+]

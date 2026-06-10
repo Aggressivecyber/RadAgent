@@ -1,5 +1,18 @@
 {
-  "allow_simplification": false,
-  "approved_simplifications": [],
-  "status": "NO_SIMPLIFICATION"
+  "status": "NO_SIMPLIFICATION",
+  "simplification_policy": "allow_simplification: false",
+  "checked_components": [
+    "housing",
+    "pcb",
+    "sensor_stack",
+    "top_electrode",
+    "oxide_layer",
+    "silicon_bulk",
+    "sensitive_region",
+    "bottom_electrode"
+  ],
+  "missing_components": [],
+  "unapproved_simplifications": [],
+  "merged_layers": [],
+  "message": "No simplifications detected. Full complex structure preserved."
 }
