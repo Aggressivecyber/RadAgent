@@ -35,10 +35,10 @@ class JobStatus(BaseModel):
     state: dict[str, Any] = Field(default_factory=dict)
 
 
-class ChatResponse(BaseModel):
+class CopilotResponse(BaseModel):
     message: str
-    intent: str = ""
-    intent_detail: str = ""
+    commands: list[dict[str, Any]] = Field(default_factory=list)
+    context: dict[str, Any] = Field(default_factory=dict)
     events: list[RadAgentEvent] = Field(default_factory=list)
 
 

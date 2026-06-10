@@ -94,13 +94,16 @@ async def test_chat_emits_events_without_ui_dependency(tmp_path, monkeypatch) ->
 
     assert response.message == long_answer
     assert [event.event_type for event in response.events] == [
-        "chat_started",
-        "chat_finished",
+        "copilot_started",
+        "copilot_finished",
     ]
     assert response.events[0].payload["message"] == "question"
     assert len(response.events[1].summary) == 120
     assert response.events[1].payload["message"] == long_answer
-    agent.chat.assert_awaited_once_with("question")
+    agent.chat.assert_awaited_once()
+    args, kwargs = agent.chat.await_args
+    assert args == ("question",)
+    assert kwargs["workflow_context"]["status"] == "idle"
 
 
 def test_service_exposes_frontend_safe_model_config(tmp_path, monkeypatch) -> None:

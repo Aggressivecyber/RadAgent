@@ -1,18 +1,19 @@
-"""Chat agent — conversational AI with RAG, web search, and job history.
+"""Workflow-aware RadAgent copilot with RAG, web search, and job history.
 
-Provides a stateful chat experience for the REPL's smalltalk/unknown intents.
 Each turn:
-  1. Searches Geant4 RAG for relevant context
-  2. Optionally searches the web
-  3. Gathers recent job summaries
-  4. Builds an enriched system prompt with all context
-  5. Calls the LLM with full conversation history
-  6. Returns the response and updates history
+  1. Injects workflow context when available
+  2. Searches Geant4 RAG for relevant context
+  3. Optionally searches the web
+  4. Gathers recent job summaries
+  5. Builds an enriched system prompt with all context
+  6. Calls the LLM with full conversation history
+  7. Returns the response and updates history
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any
 
@@ -26,7 +27,7 @@ _MAX_HISTORY_TURNS = 20
 
 
 class ChatAgent:
-    """Stateful conversational agent with tool access.
+    """Stateful workflow copilot with read-only context tools.
 
     Lifecycle:
       - Created once per REPL session
@@ -43,8 +44,13 @@ class ChatAgent:
 
     # ── Public API ──────────────────────────────────────────────────
 
-    async def chat(self, user_message: str) -> str:
-        """Process a user message and return a response string.
+    async def chat(
+        self,
+        user_message: str,
+        *,
+        workflow_context: dict[str, Any] | None = None,
+    ) -> str:
+        """Process a user message and return a workflow-aware response string.
 
         Searches RAG + web for context, gathers job history,
         then calls the LLM with full conversation history.
@@ -64,7 +70,12 @@ class ChatAgent:
         )
 
         # Build messages array
-        system_prompt = self._build_system_prompt(rag_results, web_results, jobs)
+        system_prompt = self._build_system_prompt(
+            rag_results,
+            web_results,
+            jobs,
+            workflow_context=workflow_context,
+        )
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
         # Add conversation history (trim to avoid context overflow)
@@ -308,9 +319,14 @@ class ChatAgent:
         rag_results: list[dict[str, Any]],
         web_results: list[dict[str, Any]],
         jobs: list[dict[str, Any]],
+        *,
+        workflow_context: dict[str, Any] | None = None,
     ) -> str:
         """Assemble system prompt with retrieved context."""
         parts = [CHAT_SYSTEM_PROMPT]
+
+        if workflow_context:
+            parts.append("### 当前工作流状态\n" + _format_workflow_context(workflow_context))
 
         if rag_results:
             lines = []
@@ -334,3 +350,39 @@ class ChatAgent:
             parts.append("### 历史项目\n（暂无历史项目）")
 
         return "\n\n".join(parts)
+
+
+def _format_workflow_context(context: dict[str, Any]) -> str:
+    """Format workflow context compactly for model prompts."""
+    lines = [
+        f"job_id: {context.get('job_id', '')}",
+        f"status: {context.get('status', '')}",
+        f"current_phase: {context.get('current_phase', '')}",
+        f"current_phase_idx: {context.get('current_phase_idx', '')}",
+        f"needs_confirmation: {context.get('needs_confirmation', False)}",
+    ]
+    user_query = context.get("user_query")
+    if user_query:
+        lines.append(f"user_query: {user_query}")
+    key_statuses = context.get("key_statuses")
+    if key_statuses:
+        lines.append("key_statuses: " + json.dumps(key_statuses, ensure_ascii=False))
+    state = context.get("state")
+    if isinstance(state, dict):
+        if "unconfirmed_assumptions_count" in state:
+            lines.append(
+                "unconfirmed_assumptions_count: "
+                f"{state.get('unconfirmed_assumptions_count')}"
+            )
+        if state.get("human_confirmation_required") is not None:
+            lines.append(
+                "human_confirmation_required: "
+                f"{state.get('human_confirmation_required')}"
+            )
+    gate_results = context.get("gate_results")
+    if gate_results:
+        lines.append("gate_results: " + json.dumps(gate_results[:8], ensure_ascii=False))
+    evidence = context.get("evidence")
+    if evidence:
+        lines.append("evidence: " + json.dumps(evidence, ensure_ascii=False))
+    return "\n".join(lines)

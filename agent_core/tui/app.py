@@ -368,6 +368,12 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     self._show_artifact(command.args)
                 case "gates":
                     self._show_gates()
+                case "memory":
+                    self._show_memory()
+                case "confirm":
+                    self._show_confirmation()
+                case "credibility":
+                    self._show_credibility()
                 case "model":
                     if command.args:
                         self._update_model_config(command.args)
@@ -507,12 +513,53 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                 return
             lines = [
                 (
-                    f"{'OK' if gate.get('passed') else 'FAIL'} "
-                    f"{gate.get('name', gate.get('gate', 'gate'))}"
+                    f"{gate.get('status', 'unknown'):8} "
+                    f"{gate.get('gate_id', '?'):>2} "
+                    f"{gate.get('name', gate.get('gate', 'gate'))}: "
+                    f"{gate.get('message', '')}"
                 )
                 for gate in gates[:40]
             ]
             self._show_panel("Gates", lines)
+
+        def _show_memory(self) -> None:
+            context = self.service.get_workflow_context()
+            lines = [
+                f"{item.source:8} {item.key}: {item.summary}"
+                for item in context.memory[:30]
+            ]
+            self._show_panel("Memory", lines or ["No workflow memory for the active job."])
+
+        def _show_confirmation(self) -> None:
+            review = self.service.get_confirmation_review()
+            if not review.get("report_path"):
+                self._show_panel("Confirmation", ["No confirmation report for the active job."])
+                return
+            preview = str(review.get("preview", ""))
+            lines = [
+                f"status: {review.get('status', '') or 'unknown'}",
+                f"unconfirmed: {review.get('unconfirmed_assumptions_count', 0)}",
+                f"report: {review.get('report_path', '')}",
+                "",
+                *preview.splitlines()[:180],
+            ]
+            self._show_panel("Confirmation", lines)
+
+        def _show_credibility(self) -> None:
+            report = self.service.get_credibility_report()
+            if not report:
+                self._show_panel("Credibility", ["No credibility gate result yet."])
+                return
+            lines = [
+                f"status: {report.get('status', 'unknown')}",
+                f"level: {report.get('credibility_level', 'unknown')}",
+                f"confidence: {report.get('confidence', '')}",
+                f"message: {report.get('message', '')}",
+            ]
+            warnings = report.get("warnings", [])
+            if warnings:
+                lines.extend(["", "Warnings:", *[f"- {item}" for item in warnings[:8]]])
+            self._show_panel("Credibility", lines)
 
         def _show_model_config(self) -> None:
             config = self.service.get_model_config()
@@ -602,6 +649,9 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     "/artifacts",
                     "/artifact <path>",
                     "/gates",
+                    "/memory",
+                    "/confirm",
+                    "/credibility",
                     "/model [url=... key=... lite=... pro=... max=...]",
                     "/logs",
                     "/build",

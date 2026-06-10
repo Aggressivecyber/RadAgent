@@ -15,9 +15,9 @@ _EVENT_TITLES = {
     "phase_failed": "Phase failed",
     "human_confirmation_required": "Needs confirmation",
     "human_confirmation_submitted": "Confirmation submitted",
-    "chat_started": "User",
-    "chat_finished": "Agent",
-    "chat_failed": "Chat failed",
+    "copilot_started": "User",
+    "copilot_finished": "Copilot",
+    "copilot_failed": "Copilot failed",
     "build_started": "Build started",
     "build_finished": "Build finished",
     "simulation_started": "Simulation started",
@@ -140,9 +140,9 @@ def render_header(header: HeaderState) -> str:
 
 
 def _kind_for_event(event_type: str) -> str:
-    if event_type == "chat_started":
+    if event_type == "copilot_started":
         return "user_message"
-    if event_type == "chat_finished":
+    if event_type == "copilot_finished":
         return "assistant_message"
     if event_type.startswith("phase_") or event_type.startswith("job_"):
         return "phase"
@@ -168,7 +168,7 @@ def _title_for_event(event: RadAgentEvent) -> str:
 
 
 def _summary_for_event(event: RadAgentEvent) -> str:
-    if event.event_type in {"chat_started", "chat_finished"}:
+    if event.event_type in {"copilot_started", "copilot_finished"}:
         message = event.payload.get("message", "")
         if isinstance(message, str) and message:
             return message
