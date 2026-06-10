@@ -10,30 +10,28 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agent_core.config.workspace import get_job_dir, get_workspace_root
+from agent_core.pipeline import PIPELINE_PHASES
+from agent_core.workspace.io import get_job_dir, get_workspace_root
+from agent_core.workspace.paths import (
+    STAGE_CONTEXT,
+    STAGE_GATE_VALIDATION,
+    STAGE_INPUT,
+    STAGE_MODEL_IR,
+    STAGE_REPORT,
+    STAGE_TASK_PLAN,
+)
+
+logger = logging.getLogger(__name__)
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-_PIPELINE_PHASES = [
-    "prepare_workspace",
-    "context",
-    "task_planning",
-    "g4_modeling",
-    "human_confirmation",
-    "g4_codegen",
-    "patch",
-    "gate",
-    "artifact",
-    "report",
-]
-
 
 async def run_agent(
     query: str,
@@ -89,11 +87,11 @@ def _persist_run_result(result: dict[str, object]) -> None:
         status = "completed" if result.get("final_report_path") else "failed"
         if result.get("errors"):
             status = "failed"
-        phase_idx = len(_PIPELINE_PHASES) if status == "completed" else 0
+        phase_idx = len(PIPELINE_PHASES) if status == "completed" else 0
         store.save_state_snapshot(
             job_id=job_id,
             state=dict(result),
-            completed_phases=_PIPELINE_PHASES[:phase_idx],
+            completed_phases=list(PIPELINE_PHASES[:phase_idx]),
             phase=current_node,
             current_phase_idx=phase_idx,
             status=status,
@@ -107,8 +105,8 @@ def _persist_run_result(result: dict[str, object]) -> None:
             if path.exists():
                 stage = path.parent.name if path.is_file() else path.name
                 store.record_artifact(job_id=job_id, path=str(path), stage=stage, kind=key)
-    except Exception:
-        return
+    except Exception as exc:
+        logger.warning("Failed to persist CLI run result for job %s: %s", job_id, exc)
 
 
 async def check_status(job_id: str) -> dict:
@@ -121,12 +119,12 @@ async def check_status(job_id: str) -> dict:
     artifacts: dict[str, dict[str, object]] = {}
 
     checks = {
-        "request": "00_request/user_query.md",
-        "context": "01_context/evidence_map.json",
-        "task_spec": "02_task_spec/task_spec.json",
-        "model_ir": "03_model_ir/g4_model_ir.json",
-        "gate_results": "09_validation/gate_results.json",
-        "report": "10_report/final_report.md",
+        "request": f"{STAGE_INPUT}/user_query.md",
+        "context": f"{STAGE_CONTEXT}/evidence_map.json",
+        "task_spec": f"{STAGE_TASK_PLAN}/task_spec.json",
+        "model_ir": f"{STAGE_MODEL_IR}/g4_model_ir.json",
+        "gate_results": f"{STAGE_GATE_VALIDATION}/gate_results.json",
+        "report": f"{STAGE_REPORT}/final_report.md",
     }
 
     for name, rel_path in checks.items():
@@ -137,10 +135,10 @@ async def check_status(job_id: str) -> dict:
         }
     status["artifacts"] = artifacts
 
-    gate_file = job_dir / "09_validation" / "gate_results.json"
+    gate_file = job_dir / STAGE_GATE_VALIDATION / "gate_results.json"
     if gate_file.exists():
         gates = json.loads(gate_file.read_text())
-        passed = sum(1 for g in gates if g.get("passed"))
+        passed = sum(1 for g in gates if g.get("status") == "pass" or g.get("passed") is True)
         status["gates_summary"] = f"{passed}/{len(gates)} passed"
 
     return status

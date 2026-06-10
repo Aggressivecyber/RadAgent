@@ -1,1 +1,1 @@
-# Chat agent — conversational AI with RAG, web, and job history.
+"""Conversational assistant with RAG, web search, and job history."""

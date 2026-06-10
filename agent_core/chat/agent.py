@@ -17,6 +17,7 @@ import logging
 from typing import Any
 
 from agent_core.chat.prompts import CHAT_SYSTEM_PROMPT
+from agent_core.workspace.paths import STAGE_INPUT, STAGE_REPORT
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +283,7 @@ class ChatAgent:
             for job_dir in sorted(jobs_dir.iterdir(), reverse=True):
                 if not job_dir.is_dir() or len(jobs) >= 5:
                     continue
-                query_file = job_dir / "00_input" / "user_query.md"
+                query_file = job_dir / STAGE_INPUT / "user_query.md"
                 query = ""
                 if query_file.exists():
                     raw = query_file.read_text(encoding="utf-8").strip()
@@ -292,7 +293,7 @@ class ChatAgent:
                     {
                         "id": job_dir.name,
                         "query": query[:100],
-                        "done": (job_dir / "10_report" / "final_report.md").exists(),
+                        "done": (job_dir / STAGE_REPORT / "final_report.md").exists(),
                     }
                 )
             return jobs

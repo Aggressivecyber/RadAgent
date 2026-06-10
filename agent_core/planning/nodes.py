@@ -11,13 +11,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_job_dir
+from agent_core.workspace.io import get_stage_dir
+from agent_core.workspace.paths import STAGE_TASK_PLAN
 
 from .schemas import TaskPlanningState
 
 
 def _get_task_dir(job_id: str) -> Path:
-    return get_job_dir(job_id) / "02_task_spec"
+    return get_stage_dir(job_id, STAGE_TASK_PLAN)
 
 
 # Reserved scopes that are not yet implemented
@@ -99,7 +100,7 @@ def validate_supported_scope(scope: list[str]) -> dict[str, Any]:
         return {
             "task_planning_status": "reserved",
             "reserved_scopes": reserved,
-            "termination_reason": ("TCAD/SPICE/full-chain simulation is reserved for later MVPs."),
+            "termination_reason": ("TCAD/SPICE/full-chain simulation is reserved."),
         }
 
     if scope == ["geant4"]:

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from agent_core.reports.nodes import generate_final_report
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION, STAGE_MODEL_IR
 
 
 @pytest.fixture
@@ -78,7 +79,7 @@ class TestGenerateFinalReport:
     async def test_report_with_model_ir(self, temp_workspace: Path) -> None:
         """Report with model IR should list components and materials."""
         # Create a mock model IR file
-        ir_dir = temp_workspace / "jobs" / "test_job" / "03_model_ir"
+        ir_dir = temp_workspace / "jobs" / "test_job" / STAGE_MODEL_IR
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
         ir_path.write_text(
@@ -157,7 +158,7 @@ class TestGenerateFinalReport:
     async def test_report_reads_gate_schema_correctly(self, temp_workspace: Path) -> None:
         """Report must read 'name' and 'status' fields from gate results."""
         # Create gate results with correct schema
-        val_dir = temp_workspace / "jobs" / "test_job" / "09_validation"
+        val_dir = temp_workspace / "jobs" / "test_job" / STAGE_GATE_VALIDATION
         val_dir.mkdir(parents=True)
         gate_path = val_dir / "gate_results.json"
         gate_path.write_text(

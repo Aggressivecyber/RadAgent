@@ -7,14 +7,13 @@ Import these instead of hardcoding directory names.
 STAGE_INPUT = "00_input"
 STAGE_CONTEXT = "01_context"
 STAGE_TASK_PLAN = "02_task_plan"
-STAGE_MODELING = "03_modeling"
+STAGE_MODEL_IR = "03_model_ir"
 STAGE_HUMAN_CONFIRMATION = "04_human_confirmation"
-STAGE_MODEL_IR = "05_model_ir"
-STAGE_CODEGEN = "06_codegen"
-STAGE_PATCH = "07_patch"
-STAGE_GATE_VALIDATION = "08_gate_validation"
-STAGE_ARTIFACTS = "09_artifacts"
-STAGE_REPORT = "10_report"
+STAGE_CODEGEN = "05_codegen"
+STAGE_PATCH = "06_patch"
+STAGE_GATE_VALIDATION = "07_gate_validation"
+STAGE_ARTIFACTS = "08_artifacts"
+STAGE_REPORT = "09_report"
 STAGE_LOGS = "logs"
 
 # ── Ordered list for directory creation ───────────────────────────────────
@@ -22,9 +21,8 @@ ALL_STAGES: tuple[str, ...] = (
     STAGE_INPUT,
     STAGE_CONTEXT,
     STAGE_TASK_PLAN,
-    STAGE_MODELING,
-    STAGE_HUMAN_CONFIRMATION,
     STAGE_MODEL_IR,
+    STAGE_HUMAN_CONFIRMATION,
     STAGE_CODEGEN,
     STAGE_PATCH,
     STAGE_GATE_VALIDATION,
@@ -33,7 +31,9 @@ ALL_STAGES: tuple[str, ...] = (
     STAGE_LOGS,
 )
 
-# ── Geant4 project subdirectories (under STAGE_PATCH) ────────────────────
+GEANT4_PROJECT_DIRNAME = "geant4_project"
+
+# ── Geant4 project subdirectories (under STAGE_PATCH/GEANT4_PROJECT_DIRNAME)
 GEANT4_SUBDIRS: tuple[str, ...] = (
     "src",
     "include",

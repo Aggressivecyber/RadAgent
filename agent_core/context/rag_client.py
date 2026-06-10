@@ -158,7 +158,8 @@ class OllamaEmbedder:
             async with httpx.AsyncClient(timeout=3.0) as client:
                 resp = await client.get(f"{self._base_url}/api/tags")
                 return resp.status_code == 200
-        except Exception:
+        except Exception as exc:
+            logger.debug("Ollama availability check failed: %s", exc)
             return False
 
 

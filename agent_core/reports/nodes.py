@@ -17,7 +17,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_job_dir
+from agent_core.workspace.io import get_job_dir
+from agent_core.workspace.paths import STAGE_REPORT
 
 from .schemas import ReportSubgraphState
 
@@ -34,7 +35,7 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     errors = state.get("errors", [])
 
     job_dir = get_job_dir(job_id)
-    report_dir = job_dir / "10_report"
+    report_dir = job_dir / STAGE_REPORT
     report_dir.mkdir(parents=True, exist_ok=True)
 
     # Load model IR info

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from agent_core.patching.nodes import apply_patch, load_proposed_patch, review_patch
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION
 
 
 @pytest.fixture
@@ -37,7 +38,7 @@ class TestLoadProposedPatch:
 
 class TestReviewPatch:
     async def test_valid_patch_passes(self, temp_workspace: Path) -> None:
-        job_dir = temp_workspace / "jobs" / "test" / "09_validation"
+        job_dir = temp_workspace / "jobs" / "test" / STAGE_GATE_VALIDATION
         job_dir.mkdir(parents=True)
 
         from agent_core.validators.file_permission_validator import FilePermissionValidator
@@ -69,7 +70,7 @@ class TestReviewPatch:
         assert result["patch_review_result"]["format_valid"] is True
 
     async def test_rejects_path_traversal(self, temp_workspace: Path) -> None:
-        job_dir = temp_workspace / "jobs" / "test" / "09_validation"
+        job_dir = temp_workspace / "jobs" / "test" / STAGE_GATE_VALIDATION
         job_dir.mkdir(parents=True)
 
         from agent_core.validators.file_permission_validator import FilePermissionValidator
@@ -105,7 +106,7 @@ class TestApplyPatch:
     async def test_applies_files(self, temp_workspace: Path) -> None:
         code_dir = temp_workspace / "code"
         code_dir.mkdir()
-        val_dir = temp_workspace / "jobs" / "test" / "09_validation"
+        val_dir = temp_workspace / "jobs" / "test" / STAGE_GATE_VALIDATION
         val_dir.mkdir(parents=True)
 
         state = {

@@ -59,10 +59,32 @@ def build_human_confirmation_subgraph() -> StateGraph:
 
     # interrupt → only proceed to parse if status is "received" (user responded)
     # if pending, subgraph ends (main graph handles re-entry)
-    graph.add_conditional_edges("human_interrupt_node", _route_after_interrupt)
+    graph.add_conditional_edges(
+        "human_interrupt_node",
+        _route_after_interrupt,
+        {
+            "parse_confirmation_response": "parse_confirmation_response",
+            END: END,
+        },
+    )
     graph.add_edge("parse_confirmation_response", "merge_user_confirmation")
 
-    graph.add_conditional_edges("merge_user_confirmation", route_after_merge)
-    graph.add_conditional_edges("validate_confirmation_completeness", route_after_validate)
+    graph.add_conditional_edges(
+        "merge_user_confirmation",
+        route_after_merge,
+        {
+            "generate_confirmation_request": "generate_confirmation_request",
+            "validate_confirmation_completeness": "validate_confirmation_completeness",
+            END: END,
+        },
+    )
+    graph.add_conditional_edges(
+        "validate_confirmation_completeness",
+        route_after_validate,
+        {
+            "generate_confirmation_request": "generate_confirmation_request",
+            END: END,
+        },
+    )
 
     return graph.compile()

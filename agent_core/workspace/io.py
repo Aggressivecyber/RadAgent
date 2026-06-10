@@ -1,8 +1,4 @@
-"""Convenience I/O helpers that delegate to WorkspaceManager.
-
-These module-level functions provide backward-compatible access for
-code that has not yet been migrated to use WorkspaceManager directly.
-"""
+"""Module-level workspace I/O helpers that delegate to WorkspaceManager."""
 
 from __future__ import annotations
 
@@ -27,27 +23,27 @@ def _default_manager() -> WorkspaceManager:
 
 
 def get_workspace_root() -> Path:
-    """Return the workspace root directory (backward compat)."""
+    """Return the workspace root directory."""
     return _default_manager().root
 
 
 def get_job_dir(job_id: str) -> Path:
-    """Return the job directory (backward compat)."""
+    """Return the job directory."""
     return _default_manager().job_dir(job_id)
 
 
 def get_stage_dir(job_id: str, stage: str) -> Path:
-    """Return a stage directory inside a job (backward compat)."""
+    """Return a stage directory inside a job."""
     return _default_manager().get_job(job_id).stage_dir(stage)
 
 
 def get_output_dir(job_id: str) -> Path:
-    """Return the G4 output package directory (backward compat)."""
+    """Return the G4 output package directory."""
     return _default_manager().get_job(job_id).output_dir()
 
 
 def ensure_job_dirs(job_id: str) -> Path:
-    """Create standard job directories and return the job dir (backward compat)."""
+    """Create standard job directories and return the job directory."""
     _default_manager().create_job(job_id)
     return _default_manager().job_dir(job_id)
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import types
+
 
 def test_context_subgraph_compiles() -> None:
     """Context subgraph should compile without errors."""
@@ -81,6 +83,59 @@ def test_main_graph_compiles() -> None:
 
     graph = compile_main_graph()
     assert graph is not None
+
+
+def test_human_confirmation_compiled_graph_exposes_all_registered_nodes() -> None:
+    """Human-confirmation conditional routes should render as reachable graph edges."""
+    from agent_core.graph.subgraphs.human_confirmation_graph import (
+        build_human_confirmation_subgraph,
+    )
+
+    mermaid = build_human_confirmation_subgraph().get_graph().draw_mermaid()
+
+    for node_id in (
+        "build_proposed_model_completion",
+        "generate_confirmation_request",
+        "human_interrupt_node",
+        "parse_confirmation_response",
+        "merge_user_confirmation",
+        "validate_confirmation_completeness",
+    ):
+        assert node_id in mermaid
+
+    assert "human_interrupt_node -.-> parse_confirmation_response" in mermaid
+    assert "merge_user_confirmation -.-> validate_confirmation_completeness" in mermaid
+    assert "validate_confirmation_completeness -.-> generate_confirmation_request" in mermaid
+
+
+async def test_human_confirmation_wrapper_preserves_unconfirmed_count(monkeypatch) -> None:
+    """Main graph wrapper must keep the subgraph's exact unconfirmed count."""
+    from agent_core.graph.main_graph import build_subgraph_nodes
+
+    class _FakeCompiled:
+        async def ainvoke(self, state):
+            return {
+                "confirmation_status": "approved",
+                "confirmation_request_path": "request.json",
+                "confirmation_response_path": "response.json",
+                "confirmation_record_path": "record.json",
+                "confirmed_model_plan_path": "plan.json",
+                "unconfirmed_assumptions_count": 3,
+                "requires_human_confirmation": True,
+            }
+
+    fake_module = types.SimpleNamespace(
+        build_human_confirmation_subgraph=lambda: _FakeCompiled()
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agent_core.graph.subgraphs.human_confirmation_graph",
+        fake_module,
+    )
+
+    result = await build_subgraph_nodes()["human_confirmation"]({"job_id": "job"})
+
+    assert result["unconfirmed_assumptions_count"] == 3
 
 
 def test_main_state_has_path_fields() -> None:

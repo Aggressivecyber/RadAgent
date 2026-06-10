@@ -6,8 +6,8 @@ Usage::
 
     ws = WorkspaceManager()
     job = ws.create_job("my-job-123")
-    job.write_json("04_human_confirmation", "confirmation_record.json", record)
-    data = job.read_json("04_human_confirmation", "confirmation_record.json")
+    job.write_json(STAGE_HUMAN_CONFIRMATION, "confirmation_record.json", record)
+    data = job.read_json(STAGE_HUMAN_CONFIRMATION, "confirmation_record.json")
 """
 
 from __future__ import annotations
@@ -19,8 +19,12 @@ from typing import Any
 
 from agent_core.workspace.paths import (
     ALL_STAGES,
+    GEANT4_PROJECT_DIRNAME,
     GEANT4_SUBDIRS,
     MODEL_IR_SUBDIRS,
+    STAGE_GATE_VALIDATION,
+    STAGE_MODEL_IR,
+    STAGE_PATCH,
 )
 
 
@@ -53,25 +57,22 @@ class JobWorkspace:
         return self.stage_dir(stage) / filename
 
     def geant4_dir(self) -> Path:
-        """Return the Geant4 project root (under 07_patch/geant4_project)."""
-        base = self.stage_dir("07_patch") / "geant4_project"
+        """Return the Geant4 project root under the patch stage."""
+        base = self.stage_dir(STAGE_PATCH) / GEANT4_PROJECT_DIRNAME
         for sub in GEANT4_SUBDIRS:
             (base / sub).mkdir(parents=True, exist_ok=True)
         return base
 
     def model_ir_dir(self) -> Path:
         """Return the model IR directory with component_specs sub-dir."""
-        base = self.stage_dir("05_model_ir")
+        base = self.stage_dir(STAGE_MODEL_IR)
         for sub in MODEL_IR_SUBDIRS:
             (base / sub).mkdir(parents=True, exist_ok=True)
         return base
 
     def output_dir(self) -> Path:
-        """Return the G4 output package directory.
-
-        ``jobs/<job_id>/08_gate_validation/g4_output_package``
-        """
-        p = self.stage_dir("08_gate_validation") / "g4_output_package"
+        """Return the G4 output package directory under the gate validation stage."""
+        p = self.stage_dir(STAGE_GATE_VALIDATION) / "g4_output_package"
         p.mkdir(parents=True, exist_ok=True)
         return p
 

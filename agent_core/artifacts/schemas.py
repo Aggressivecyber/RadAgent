@@ -17,6 +17,7 @@ class ArtifactSubgraphState(TypedDict, total=False):
     code_module_plan_path: str
     proposed_patch_path: str
     validation_status: str
+    review_artifact_dir: str
 
     # Runtime context
     execution_mode: str  # "strict", "test", "acceptance", or "production"
@@ -24,7 +25,6 @@ class ArtifactSubgraphState(TypedDict, total=False):
     g4_model_ir: dict[str, Any]  # Direct Model IR data (alternative to path)
 
     # Output
-    review_artifact_dir: str
     artifact_manifest_path: str
     artifact_status: str
 

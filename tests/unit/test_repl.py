@@ -79,6 +79,19 @@ class TestRadAgentREPLInit:
         assert repl.current_phase_idx == 0
         assert repl._completed_phases == []
 
+    def test_tool_logger_uses_workspace_logs(self, tmp_path: Path, monkeypatch) -> None:
+        from agent_core.models.tool_logger import get_tool_logger, reset_tool_logger
+
+        reset_tool_logger()
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+
+        RadAgentREPL()
+
+        logger = get_tool_logger()
+        assert logger._log_file == tmp_path / "logs" / "tool_calls.jsonl"
+        assert logger._log_file.relative_to(tmp_path) == Path("logs") / "tool_calls.jsonl"
+        reset_tool_logger()
+
     def test_invalid_execution_mode_raises(self) -> None:
         with pytest.raises(ValueError, match="Invalid execution_mode"):
             RadAgentREPL(execution_mode="invalid_mode")
@@ -587,6 +600,46 @@ class TestCmdConfirm:
 
         response = repl_with_state.state["raw_human_response"]
         assert response["user_decision"] == "approve"
+
+    @pytest.mark.asyncio
+    async def test_confirm_displays_current_confirmation_schema(
+        self, repl_with_state: RadAgentREPL, tmp_path: Path
+    ) -> None:
+        """Confirmation prompts should display current request schema fields."""
+        request_path = tmp_path / "confirmation_request.json"
+        request_data = {
+            "round_id": 1,
+            "questions": [
+                {
+                    "field_path": "sources.primary.energy",
+                    "question": "Confirm beam energy?",
+                    "proposed_value": 150,
+                    "unit": "MeV",
+                    "options": [100, 150, 200],
+                    "reason": "Derived from task context",
+                },
+            ],
+        }
+        request_path.write_text(json.dumps(request_data), encoding="utf-8")
+        repl_with_state.state["confirmation_request_path"] = str(request_path)
+
+        with (
+            patch.object(repl_with_state, "_prompt_choice", return_value="a"),
+            patch.object(repl_with_state, "_run_phase", new_callable=AsyncMock, return_value=True),
+            patch.object(repl_with_state, "_auto_remaining", new_callable=AsyncMock),
+        ):
+            await repl_with_state.cmd_confirm()
+
+        printed = "\n".join(
+            str(getattr(call.args[0], "renderable", call.args[0]))
+            for call in repl_with_state.console.print.call_args_list
+            if call.args
+        )
+        assert "Question: Confirm beam energy?" in printed
+        assert "Proposed: [bold]150 MeV[/bold]" in printed
+        assert "Options: 100, 150, 200" in printed
+        assert "Current:" not in printed
+        assert "Confidence:" not in printed
 
     @pytest.mark.asyncio
     async def test_confirm_with_edit(self, repl_with_state: RadAgentREPL, tmp_path: Path) -> None:

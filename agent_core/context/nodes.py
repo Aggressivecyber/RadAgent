@@ -19,7 +19,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_job_dir, get_workspace_root
+from agent_core.workspace.io import get_job_dir, get_workspace_root
+from agent_core.workspace.paths import STAGE_CONTEXT
 
 from .doc_store import Geant4DocStore
 from .rag_client import (
@@ -180,7 +181,7 @@ def _rag_index_cache_path(docs: list[Any]) -> Path:
 
 def _get_context_dir(job_id: str) -> Path:
     """Return the context directory for a job."""
-    return get_job_dir(job_id) / "01_context"
+    return get_job_dir(job_id) / STAGE_CONTEXT
 
 
 async def route_sources(state: ContextSubgraphState) -> dict[str, Any]:

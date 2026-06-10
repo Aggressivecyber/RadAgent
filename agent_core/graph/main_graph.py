@@ -41,6 +41,12 @@ from agent_core.graph.main_routes import (
     route_after_task_planning,
 )
 from agent_core.graph.main_state import RadAgentMainState
+from agent_core.workspace.paths import (
+    GEANT4_PROJECT_DIRNAME,
+    STAGE_GATE_VALIDATION,
+    STAGE_INPUT,
+    STAGE_PATCH,
+)
 
 # ─── Initialize request node ─────────────────────────────────────────
 
@@ -62,7 +68,8 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
     Generates a job_id with a human-readable title suffix via dsv4lite
     when no explicit job_id is provided by the user.
 
-    Sets workspace paths and maps run_mode to execution_mode for backward compatibility.
+    Sets workspace paths and persists execution_mode alongside run_mode for
+    storage and UI status contracts.
     """
     from agent_core.naming import build_job_id
     from agent_core.storage import RadAgentStore
@@ -78,7 +85,7 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
     job = ws.create_job(job_id)
 
     # Write user query to request stage
-    request_dir = job.stage_dir("00_input")
+    request_dir = job.stage_dir(STAGE_INPUT)
     (request_dir / "user_query.md").write_text(f"# User Query\n\n{state.get('user_query', '')}\n")
 
     # Determine execution_mode from run_mode (no dev mode)
@@ -118,7 +125,7 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
     }
 
 
-# ─── Subgraph placeholder creators ───────────────────────────────────
+# ─── Subgraph wrapper creators ───────────────────────────────────────
 # Each subgraph is compiled independently and wrapped as a main-graph node.
 # The wrapper reads paths from main state, invokes the subgraph, and
 # writes subgraph output paths back to main state.
@@ -126,7 +133,7 @@ async def prepare_workspace(state: RadAgentMainState) -> dict[str, Any]:
 
 def _make_context_subgraph_node() -> Any:
     """Create the context subgraph node."""
-    from agent_core.graph.subgraphs.context_graph import build_context_subgraph
+    from agent_core.context import build_context_subgraph
 
     subgraph = build_context_subgraph().compile()
 
@@ -150,9 +157,7 @@ def _make_context_subgraph_node() -> Any:
 
 def _make_task_planning_subgraph_node() -> Any:
     """Create the task planning subgraph node."""
-    from agent_core.graph.subgraphs.task_planning_graph import (
-        build_task_planning_subgraph,
-    )
+    from agent_core.planning import build_task_planning_subgraph
 
     subgraph = build_task_planning_subgraph().compile()
 
@@ -197,6 +202,7 @@ def _make_g4_modeling_subgraph_node() -> Any:
             "construction_ledger_path": result.get("construction_ledger_path", ""),
             "model_review_report_path": result.get("model_review_report_path", ""),
             "g4_modeling_status": result.get("g4_modeling_status", "failed"),
+            "human_confirmation_required": result.get("human_confirmation_required", False),
             "current_node": "g4_modeling_subgraph",
         }
 
@@ -232,7 +238,7 @@ def _make_human_confirmation_subgraph_node() -> Any:
             "confirmation_response_path": result.get("confirmation_response_path", ""),
             "confirmation_record_path": result.get("confirmation_record_path", ""),
             "confirmed_model_plan_path": result.get("confirmed_model_plan_path", ""),
-            "unconfirmed_assumptions_count": result.get("unconfirmed_count", 0),
+            "unconfirmed_assumptions_count": result.get("unconfirmed_assumptions_count", 0),
             "human_confirmation_required": result.get("requires_human_confirmation", False),
             "human_confirmation_round": state.get("human_confirmation_round", 1)
             + (1 if result.get("confirmation_status") == "pending" else 0),
@@ -342,7 +348,7 @@ def _collect_failure_artifact_paths(
 
     if job_workspace:
         job_dir = Path(job_workspace)
-        output_dir = job_dir / "08_gate_validation" / "g4_output_package"
+        output_dir = job_dir / STAGE_GATE_VALIDATION / "g4_output_package"
         for name in (
             "cmake_configure_result.json",
             "build_result.json",
@@ -359,7 +365,12 @@ def _collect_failure_artifact_paths(
             job_dir / "logs" / "failure_bundle.json",
             job_dir / "logs" / "events.jsonl",
             job_dir / "logs" / "trace.json",
-            job_dir / "08_geant4" / "build" / "CMakeFiles" / "CMakeConfigureLog.yaml",
+            job_dir
+            / STAGE_PATCH
+            / GEANT4_PROJECT_DIRNAME
+            / "build"
+            / "CMakeFiles"
+            / "CMakeConfigureLog.yaml",
         ):
             artifact_paths.append(str(path))
 
@@ -434,7 +445,7 @@ def _read_failure_artifact_tails(
 
 def _make_patch_subgraph_node() -> Any:
     """Create the patch subgraph node."""
-    from agent_core.graph.subgraphs.patch_graph import build_patch_subgraph
+    from agent_core.patching import build_patch_subgraph
 
     subgraph = build_patch_subgraph().compile()
 
@@ -459,9 +470,7 @@ def _make_patch_subgraph_node() -> Any:
 
 def _make_gate_subgraph_node() -> Any:
     """Create the gate validation subgraph node."""
-    from agent_core.graph.subgraphs.gate_validation_graph import (
-        build_gate_validation_subgraph,
-    )
+    from agent_core.gates import build_gate_validation_subgraph
 
     subgraph = build_gate_validation_subgraph().compile()
 
@@ -497,7 +506,7 @@ def _make_gate_subgraph_node() -> Any:
 
 def _make_artifact_subgraph_node() -> Any:
     """Create the artifact collection subgraph node."""
-    from agent_core.graph.subgraphs.artifact_graph import build_artifact_subgraph
+    from agent_core.artifacts import build_artifact_subgraph
 
     subgraph = build_artifact_subgraph().compile()
 
@@ -526,7 +535,7 @@ def _make_artifact_subgraph_node() -> Any:
 
 def _make_report_subgraph_node() -> Any:
     """Create the report generation subgraph node."""
-    from agent_core.graph.subgraphs.report_graph import build_report_subgraph
+    from agent_core.reports import build_report_subgraph
 
     subgraph = build_report_subgraph().compile()
 
@@ -697,6 +706,7 @@ def build_main_graph() -> StateGraph:
             "context_subgraph": "context_subgraph",
             "task_planning_subgraph": "task_planning_subgraph",
             "g4_modeling_subgraph": "g4_modeling_subgraph",
+            "human_confirmation_subgraph": "human_confirmation_subgraph",
             "g4_codegen_subgraph": "g4_codegen_subgraph",
             "patch_subgraph": "patch_subgraph",
             "report_subgraph": "report_subgraph",

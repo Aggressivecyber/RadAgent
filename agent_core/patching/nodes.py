@@ -12,9 +12,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_job_dir
 from agent_core.validators.file_permission_validator import FilePermissionValidator
 from agent_core.validators.patch_validator import PatchValidator
+from agent_core.workspace.io import get_job_dir
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION
 
 from .schemas import PatchSubgraphState
 
@@ -36,7 +37,7 @@ async def review_patch(state: PatchSubgraphState) -> dict[str, Any]:
     patch = state.get("proposed_patch", {})
     job_id = state.get("job_id", "unknown")
     job_dir = get_job_dir(job_id)
-    val_dir = job_dir / "09_validation"
+    val_dir = job_dir / STAGE_GATE_VALIDATION
     val_dir.mkdir(parents=True, exist_ok=True)
 
     errors: list[str] = []
@@ -139,7 +140,7 @@ async def apply_patch(state: PatchSubgraphState) -> dict[str, Any]:
         "files_applied": applied_files,
         "files_count": len(applied_files),
     }
-    applied_path = job_dir / "09_validation" / "applied_patch.json"
+    applied_path = job_dir / STAGE_GATE_VALIDATION / "applied_patch.json"
     applied_path.parent.mkdir(parents=True, exist_ok=True)
     applied_path.write_text(json.dumps(applied_record, indent=2, ensure_ascii=False))
 

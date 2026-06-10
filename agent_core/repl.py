@@ -33,6 +33,7 @@ Slash commands
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from pathlib import Path
@@ -42,38 +43,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from agent_core.pipeline import AUTO_PHASES, INTERACTIVE_PHASES, PIPELINE_PHASES
+from agent_core.workspace.paths import STAGE_INPUT
+
 logger = logging.getLogger(__name__)
 
-# ── Pipeline phases in execution order ──────────────────────────────────
-
-_PIPELINE_PHASES: list[str] = [
-    "prepare_workspace",
-    "context",
-    "task_planning",
-    "g4_modeling",
-    "human_confirmation",
-    "g4_codegen",
-    "patch",
-    "gate",
-    "artifact",
-    "report",
-]
-
-# Phases that run automatically (no human interaction needed)
-_AUTO_PHASES: set[str] = {
-    "prepare_workspace",
-    "context",
-    "task_planning",
-    "g4_modeling",
-    "g4_codegen",
-    "patch",
-    "gate",
-    "artifact",
-    "report",
-}
-
-# Phases that block for human input
-_INTERACTIVE_PHASES: set[str] = {"human_confirmation"}
+_PIPELINE_PHASES: list[str] = list(PIPELINE_PHASES)
+_AUTO_PHASES: set[str] = set(AUTO_PHASES)
+_INTERACTIVE_PHASES: set[str] = set(INTERACTIVE_PHASES)
 
 
 class _QuitREPLError(Exception):
@@ -114,12 +91,10 @@ class RadAgentREPL:
         self._store: Any = None  # lazy-initialized RadAgentStore
         # Persistent command history across inputs
         self._history: Any = None
-        try:
+        with contextlib.suppress(ImportError):
             from prompt_toolkit.history import InMemoryHistory
 
             self._history = InMemoryHistory()
-        except ImportError:
-            pass
 
         # Tool call logging — track calls per phase
         self._phase_start_time: float = 0.0
@@ -133,8 +108,10 @@ class RadAgentREPL:
 
         tool_logger = get_tool_logger()
 
-        # Set up log file in workspace
-        log_dir = Path("repair_logs")
+        from agent_core.workspace.io import get_workspace_root
+
+        # Store REPL-wide tool logs under the configured workspace root.
+        log_dir = get_workspace_root() / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         tool_logger.set_log_file(log_dir / "tool_calls.jsonl")
 
@@ -542,16 +519,28 @@ class RadAgentREPL:
             # Interactive Q&A
             for i, q in enumerate(questions, 1):
                 field = q.get("field_path", q.get("field", "unknown"))
-                current = q.get("current_value", q.get("value", "?"))
+                proposed = q.get("proposed_value", q.get("current_value", q.get("value", "?")))
+                unit = q.get("unit")
+                value_text = f"{proposed} {unit}".strip() if unit else str(proposed)
+                question = q.get("question", "")
+                options = q.get("options") or []
                 reason = q.get("reason", "")
-                confidence = q.get("confidence", 0)
+                confidence = q.get("confidence")
+
+                detail_lines = [f"Field: [cyan]{field}[/cyan]"]
+                if question:
+                    detail_lines.append(f"Question: {question}")
+                detail_lines.append(f"Proposed: [bold]{value_text}[/bold]")
+                if options:
+                    detail_lines.append("Options: " + ", ".join(str(o) for o in options))
+                if reason:
+                    detail_lines.append(f"Reason: {reason}")
+                if isinstance(confidence, (int, float)):
+                    detail_lines.append(f"Confidence: {confidence:.0%}")
 
                 self.console.print(
                     Panel(
-                        f"Field: [cyan]{field}[/cyan]\n"
-                        f"Current: [bold]{current}[/bold]\n"
-                        f"Reason: {reason}\n"
-                        f"Confidence: {confidence:.0%}",
+                        "\n".join(detail_lines),
                         title=f"Assumption {i}/{len(questions)}",
                         border_style="yellow",
                     )
@@ -661,17 +650,15 @@ class RadAgentREPL:
             self.console.print("[red]Geant4 not available.[/red] Check /etc/profile.d/geant4.sh")
             return
 
-        source_dir = str(Path(code_dir) / "05_geant4")
-        if not (Path(code_dir) / "05_geant4" / "CMakeLists.txt").exists():
-            source_dir = code_dir if (Path(code_dir) / "CMakeLists.txt").exists() else ""
-            if not source_dir:
-                self.console.print(f"[yellow]No CMakeLists.txt found in {code_dir}[/yellow]")
-                return
+        source_dir = Path(code_dir)
+        if not (source_dir / "CMakeLists.txt").exists():
+            self.console.print(f"[yellow]No CMakeLists.txt found in {code_dir}[/yellow]")
+            return
 
-        build_dir = str(Path(code_dir) / "build")
+        build_dir = str(source_dir / "build")
 
         self.console.print("  [dim]Running cmake configure...[/dim]")
-        cfg = await runner.configure(source_dir, build_dir)
+        cfg = await runner.configure(str(source_dir), build_dir)
         if not cfg["success"]:
             self.console.print(f"[red]cmake failed:[/red]\n{cfg['errors']}")
             return
@@ -1111,7 +1098,7 @@ class RadAgentREPL:
 
         # Write user query to input stage
         job.write_text(
-            "00_input",
+            STAGE_INPUT,
             "user_query.md",
             f"# User Query\n\n{self.state.get('user_query', '')}\n",
         )

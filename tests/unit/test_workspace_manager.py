@@ -6,11 +6,13 @@ import pytest
 from agent_core.workspace.manager import JobWorkspace, WorkspaceManager
 from agent_core.workspace.paths import (
     ALL_STAGES,
+    GEANT4_PROJECT_DIRNAME,
     GEANT4_SUBDIRS,
     HC_CONFIRMATION_RECORD,
     STAGE_CODEGEN,
     STAGE_HUMAN_CONFIRMATION,
     STAGE_INPUT,
+    STAGE_PATCH,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -76,11 +78,11 @@ class TestJobWorkspace:
     def test_stage_dir_creates(self, job: JobWorkspace) -> None:
         p = job.stage_dir(STAGE_CODEGEN)
         assert p.is_dir()
-        assert p.name == "06_codegen"
+        assert p.name == STAGE_CODEGEN
 
     def test_path_resolves(self, job: JobWorkspace) -> None:
         p = job.path(STAGE_INPUT, "query.txt")
-        assert p == job.dir / "00_input" / "query.txt"
+        assert p == job.dir / STAGE_INPUT / "query.txt"
 
     def test_write_and_read_json(self, job: JobWorkspace) -> None:
         data = {"key": "value", "num": 42}
@@ -116,6 +118,7 @@ class TestJobWorkspace:
     def test_geant4_dir_structure(self, job: JobWorkspace) -> None:
         g4 = job.geant4_dir()
         assert g4.exists()
+        assert g4 == job.dir / STAGE_PATCH / GEANT4_PROJECT_DIRNAME
         for sub in GEANT4_SUBDIRS:
             assert (g4 / sub).is_dir(), f"missing geant4/{sub}"
 
@@ -141,11 +144,13 @@ class TestJobWorkspace:
 
 class TestPathsConstants:
     def test_all_stages_count(self) -> None:
-        assert len(ALL_STAGES) == 12  # 00-10 + logs
+        assert len(ALL_STAGES) == 11  # 00-09 + logs
 
     def test_stage_ordering(self) -> None:
-        prefixes = [s.split("_")[0] for s in ALL_STAGES]
-        assert prefixes == sorted(prefixes)
+        numbered = [stage for stage in ALL_STAGES if stage[:2].isdigit()]
+        prefixes = [int(stage.split("_")[0]) for stage in numbered]
+        assert prefixes == list(range(10))
+        assert ALL_STAGES[-1] == "logs"
 
     def test_geant4_subdirs(self) -> None:
         assert "src" in GEANT4_SUBDIRS
@@ -155,15 +160,15 @@ class TestPathsConstants:
         assert HC_CONFIRMATION_RECORD == "confirmation_record.json"
 
 
-# ── Backward compatibility tests ──────────────────────────────────────────
+# ── Module-level workspace I/O helper tests ───────────────────────────────
 
 
-class TestBackwardCompat:
-    def test_config_workspace_reexports(
+class TestWorkspaceIOHelpers:
+    def test_workspace_io_helpers(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        from agent_core.config.workspace import (
+        from agent_core.workspace.io import (
             ensure_job_dirs,
             get_job_dir,
             get_output_dir,
@@ -174,26 +179,27 @@ class TestBackwardCompat:
         root = get_workspace_root()
         assert root == tmp_path
 
-        job_dir = ensure_job_dirs("compat-test")
+        job_id = "workspace-io-test"
+        job_dir = ensure_job_dirs(job_id)
         assert job_dir.exists()
-        assert get_job_dir("compat-test") == job_dir
+        assert get_job_dir(job_id) == job_dir
 
-        stage = get_stage_dir("compat-test", STAGE_CODEGEN)
+        stage = get_stage_dir(job_id, STAGE_CODEGEN)
         assert stage.is_dir()
 
-        out = get_output_dir("compat-test")
+        out = get_output_dir(job_id)
         assert out.exists()
 
-    def test_old_imports_still_work(self) -> None:
-        """Verify existing code that imports from config.workspace still works."""
-        from agent_core.config.workspace import (
-            ensure_job_dirs,
-            get_job_dir,
-            get_output_dir,
-            get_workspace_root,
+    def test_workspace_io_json_helpers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        from agent_core.workspace.io import (
+            read_stage_json,
+            write_stage_json,
         )
 
-        assert callable(ensure_job_dirs)
-        assert callable(get_job_dir)
-        assert callable(get_output_dir)
-        assert callable(get_workspace_root)
+        path = write_stage_json("io-test", STAGE_CODEGEN, "payload.json", {"ok": True})
+
+        assert path.exists()
+        assert read_stage_json("io-test", STAGE_CODEGEN, "payload.json") == {"ok": True}

@@ -14,6 +14,7 @@ from agent_core.context.nodes import (
     save_evidence_map,
     score_rag_context,
 )
+from agent_core.workspace.paths import STAGE_CONTEXT
 
 
 @pytest.fixture
@@ -34,7 +35,7 @@ class TestRouteSources:
 
 class TestRetrieveRagContext:
     async def test_creates_context_files(self, temp_workspace: Path) -> None:
-        job_dir = temp_workspace / "jobs" / "test_job" / "01_context"
+        job_dir = temp_workspace / "jobs" / "test_job" / STAGE_CONTEXT
         job_dir.mkdir(parents=True)
 
         state = {
@@ -72,7 +73,7 @@ class TestScoreRagContext:
 
 class TestRetrieveWebContext:
     async def test_no_web_tool(self, temp_workspace: Path) -> None:
-        job_dir = temp_workspace / "jobs" / "test_job" / "01_context"
+        job_dir = temp_workspace / "jobs" / "test_job" / STAGE_CONTEXT
         job_dir.mkdir(parents=True)
 
         state = {
@@ -89,7 +90,7 @@ class TestRetrieveWebContext:
 
 class TestSaveEvidenceMap:
     async def test_saves_evidence_map(self, temp_workspace: Path) -> None:
-        job_dir = temp_workspace / "jobs" / "test_job" / "01_context"
+        job_dir = temp_workspace / "jobs" / "test_job" / STAGE_CONTEXT
         job_dir.mkdir(parents=True)
 
         state = {

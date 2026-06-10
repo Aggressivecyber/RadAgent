@@ -150,6 +150,14 @@ class TestRouteAfterGates:
         }
         assert route_after_gates(state) == "g4_modeling_subgraph"
 
+    def test_failed_with_retry_task_planning(self) -> None:
+        state: RadAgentMainState = {
+            "validation_status": "failed",
+            "retry_count": 0,
+            "failed_gates": ["Task Spec Schema"],
+        }
+        assert route_after_gates(state) == "task_planning_subgraph"
+
     def test_failed_with_retry_codegen(self) -> None:
         state: RadAgentMainState = {
             "validation_status": "failed",
@@ -168,6 +176,14 @@ class TestRouteAfterGates:
             ],
         }
         assert route_after_gates(state) == "g4_codegen_subgraph"
+
+    def test_failed_human_confirmation_gate_routes_to_confirmation(self) -> None:
+        state: RadAgentMainState = {
+            "validation_status": "failed",
+            "retry_count": 0,
+            "failed_gates": [{"gate_id": 19, "name": "G4-H Human Confirmation"}],
+        }
+        assert route_after_gates(state) == "human_confirmation_subgraph"
 
     def test_failed_max_retries_reports(self) -> None:
         state: RadAgentMainState = {

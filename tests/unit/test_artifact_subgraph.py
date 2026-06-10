@@ -10,13 +10,24 @@ Verifies:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from agent_core.artifacts.nodes import (
     collect_artifacts,
     generate_artifact_manifest,
 )
+from agent_core.workspace.paths import STAGE_MODEL_IR
+
+
+@pytest.fixture(autouse=True)
+def isolated_review_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "RADAGENT_REVIEW_ARTIFACT_DIR",
+        str(tmp_path / "review_artifacts" / "g4_complex_model" / "latest"),
+    )
 
 
 class TestGeometryInterfaceReportFields:
@@ -30,7 +41,7 @@ class TestGeometryInterfaceReportFields:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
         # Create model IR with interfaces using correct schema
-        ir_dir = tmp_path / "jobs" / "test" / "03_model_ir"
+        ir_dir = tmp_path / "jobs" / "test" / STAGE_MODEL_IR
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
         ir_path.write_text(
@@ -77,7 +88,7 @@ class TestGeometryInterfaceReportFields:
         """Must NOT contain old wrong field names."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
-        ir_dir = tmp_path / "jobs" / "test2" / "03_model_ir"
+        ir_dir = tmp_path / "jobs" / "test2" / STAGE_MODEL_IR
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
         ir_path.write_text(
@@ -122,7 +133,7 @@ class TestRichManifest:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
         # Create model IR so collect_artifacts produces some output files
-        ir_dir = tmp_path / "jobs" / "test3" / "03_model_ir"
+        ir_dir = tmp_path / "jobs" / "test3" / STAGE_MODEL_IR
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
         ir_path.write_text(
@@ -177,7 +188,7 @@ class TestRichManifest:
     ) -> None:
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
-        ir_dir = tmp_path / "jobs" / "test4" / "03_model_ir"
+        ir_dir = tmp_path / "jobs" / "test4" / STAGE_MODEL_IR
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
         ir_path.write_text(
@@ -243,6 +254,31 @@ class TestRichManifest:
         assert "files" in manifest
         assert isinstance(manifest["files"], list)
 
+    async def test_git_commit_lookup_failure_is_diagnostic_not_blocking(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+
+        state = {
+            "job_id": "git_missing",
+            "validation_status": "UNKNOWN",
+            "errors": [],
+        }
+        collect_result = await collect_artifacts(state)
+
+        with (
+            patch("subprocess.run", side_effect=OSError("git unavailable")),
+            caplog.at_level(logging.DEBUG, logger="agent_core.artifacts.nodes"),
+        ):
+            manifest_result = await generate_artifact_manifest({**state, **collect_result})
+
+        manifest = json.loads(Path(manifest_result["artifact_manifest_path"]).read_text())
+        assert manifest["source_commit"] == ""
+        assert "Unable to resolve source git commit: git unavailable" in caplog.text
+
 
 class TestStrictValidationStatus:
     """Verify strict/acceptance artifact manifests preserve explicit final status."""
@@ -255,7 +291,7 @@ class TestStrictValidationStatus:
         """Acceptance mode should preserve passed status."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
-        ir_dir = tmp_path / "jobs" / "acc_test" / "03_model_ir"
+        ir_dir = tmp_path / "jobs" / "acc_test" / STAGE_MODEL_IR
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
         ir_path.write_text(
@@ -344,7 +380,7 @@ class TestModelIRSummaryExtraction:
             {"component_id": "housing", "component_type": "volume", "geometry_type": "box"},
         ]
 
-        ir_dir = tmp_path / "jobs" / "complex_test" / "03_model_ir"
+        ir_dir = tmp_path / "jobs" / "complex_test" / STAGE_MODEL_IR
         ir_dir.mkdir(parents=True)
         ir_path = ir_dir / "g4_model_ir.json"
         ir_path.write_text(
