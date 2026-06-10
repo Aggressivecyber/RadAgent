@@ -17,15 +17,15 @@ def module_results():
                 {
                     "path": "include/MaterialRegistry.hh",
                     "new_content": "#pragma once\n#include <string>\n",
-                    "generated_by": "material_module_agent",
-                    "module_name": "material",
+                    "generated_by": "simulation_core_module_agent",
+                    "module_name": "simulation_core",
                     "rationale": "test",
                 },
                 {
                     "path": "src/MaterialRegistry.cc",
                     "new_content": '#include "MaterialRegistry.hh"\n',
-                    "generated_by": "material_module_agent",
-                    "module_name": "material",
+                    "generated_by": "simulation_core_module_agent",
+                    "module_name": "simulation_core",
                     "rationale": "test",
                 },
             ],
@@ -34,23 +34,20 @@ def module_results():
 
 
 def test_all_files_have_zone(module_results):
-    gate = {"material": {"hard": {"status": "pass"}, "llm": {"status": "pass"}}}
-    patch = assemble_proposed_patch(module_results, gate, "job_001")
+    patch = assemble_proposed_patch(module_results, "job_001")
     for f in patch["changed_files"]:
         assert "zone" in f, f"Missing zone in {f.get('path')}"
         assert f["zone"] == "green"
 
 
 def test_all_files_have_new_content(module_results):
-    gate = {"material": {"hard": {"status": "pass"}, "llm": {"status": "pass"}}}
-    patch = assemble_proposed_patch(module_results, gate, "job_001")
+    patch = assemble_proposed_patch(module_results, "job_001")
     for f in patch["changed_files"]:
         assert "new_content" in f, f"Missing new_content in {f.get('path')}"
         assert f["new_content"], f"Empty new_content in {f.get('path')}"
 
 
 def test_no_content_field(module_results):
-    gate = {"material": {"hard": {"status": "pass"}, "llm": {"status": "pass"}}}
-    patch = assemble_proposed_patch(module_results, gate, "job_001")
+    patch = assemble_proposed_patch(module_results, "job_001")
     for f in patch["changed_files"]:
         assert "content" not in f, f"Deprecated 'content' in {f.get('path')}"

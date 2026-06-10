@@ -38,18 +38,14 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     module_contracts: dict[str, Any]
     module_contexts: dict[str, Any]
     module_results: dict[str, Any]
-    module_gate_results: dict[str, Any]
-    module_repair_results: dict[str, Any]
     layer_gate_results: dict[str, Any]
-
-    # Integration
-    static_semantic_scan: dict[str, Any]
-    cross_file_hard_gate: dict[str, Any]
-    cross_file_llm_gate: dict[str, Any]
+    context_coordination: dict[str, Any]
 
     # Interface contracts
     interface_contracts: dict[str, Any]
     global_integration_agent_report: dict[str, Any]
+    runtime_execution_audit: dict[str, Any]
+    physics_quality_review: dict[str, Any]
 
     # Output
     proposed_patch: dict[str, Any]
@@ -80,8 +76,6 @@ class ModuleContract(BaseModel):
     required_symbols: list[str]
     dependencies: list[str]
     forbidden_patterns: list[str]
-    hard_gate_names: list[str]
-    llm_gate_names: list[str]
     production_required: bool = True
 
 
@@ -139,22 +133,6 @@ class ModuleAgentResult(BaseModel):
     repair_attempts: list[dict[str, Any]] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
-
-
-# ── Module Gate Result ───────────────────────────────────────────────
-
-
-class ModuleGateResult(BaseModel):
-    """Result from a module gate check (hard or LLM)."""
-
-    module_name: str
-    gate_type: Literal["hard", "llm"]
-    status: Literal["pass", "fail", "skipped"]
-    checks: list[dict[str, Any]] = Field(default_factory=list)
-    errors: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    reviewer_notes: str | None = None
-    scorecard: dict[str, Any] = Field(default_factory=dict)
 
 
 # ── Codegen Plan ─────────────────────────────────────────────────────

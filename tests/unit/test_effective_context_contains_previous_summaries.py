@@ -17,14 +17,14 @@ def test_extract_file_summary_structure():
             "  G4Material* GetMaterial(const G4String& name);\n"
             "};\n"
         ),
-        "generated_by": "material_module_agent",
-        "module_name": "material",
+        "generated_by": "simulation_core_module_agent",
+        "module_name": "simulation_core",
     }
-    summary = _extract_file_summary("material", file_data)
+    summary = _extract_file_summary("simulation_core", file_data)
 
-    assert summary["module_name"] == "material"
+    assert summary["module_name"] == "simulation_core"
     assert summary["path"] == "include/MaterialRegistry.hh"
-    assert summary["generated_by"] == "material_module_agent"
+    assert summary["generated_by"] == "simulation_core_module_agent"
     assert "MaterialRegistry" in summary["classes"]
     assert "G4Material.hh" in summary["includes"]
     assert isinstance(summary["public_methods"], list)
@@ -63,11 +63,11 @@ def test_extract_file_summary_lists_all_public_methods():
             "  int count_ = 0;\n"
             "};\n"
         ),
-        "generated_by": "output_manager_module_agent",
-        "module_name": "output_manager",
+        "generated_by": "runtime_app_module_agent",
+        "module_name": "runtime_app",
     }
 
-    summary = _extract_file_summary("output_manager", file_data)
+    summary = _extract_file_summary("runtime_app", file_data)
     methods = set(summary["public_methods"])
 
     assert {

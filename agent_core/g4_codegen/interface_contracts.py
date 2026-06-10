@@ -1,9 +1,11 @@
-"""Interface contracts — CAD/GDML, G4→TCAD, TCAD→SPICE placeholders."""
+"""Interface contracts for codegen-visible external boundaries."""
 
 from __future__ import annotations
 
 import json
 from typing import Any
+
+from agent_core.workspace.paths import STAGE_CODEGEN
 
 
 def build_interface_contracts(
@@ -11,18 +13,13 @@ def build_interface_contracts(
     geometry_strategy_plan: dict[str, Any],
     job_id: str,
 ) -> dict[str, Any]:
-    """Build interface contracts for cross-system interfaces.
+    """Build interface contracts from current model requirements.
 
-    Creates placeholder contracts for:
-    1. CAD/GDML geometry input
-    2. G4→TCAD data transfer
-    3. TCAD→SPICE data transfer
-
-    Does NOT perform any real conversion.
+    The codegen graph should only pass contracts that correspond to actual
+    model inputs or explicitly requested downstream boundaries. It does not
+    create speculative TCAD/SPICE handoff contracts.
     """
     cad_gdml: list[dict[str, Any]] = []
-    g4_to_tcad: list[dict[str, Any]] = []
-    tcad_to_spice: list[dict[str, Any]] = []
 
     # CAD/GDML contracts from geometry strategy
     external_files = geometry_strategy_plan.get("requires_external_files", [])
@@ -38,51 +35,22 @@ def build_interface_contracts(
             }
         )
 
-    # If no CAD/GDML files, still add a placeholder
-    if not cad_gdml:
-        cad_gdml.append(
-            {
-                "contract_id": "cad_or_gdml_geometry_placeholder",
-                "source_path": "",
-                "source_type": "none",
-                "conversion_required": False,
-                "conversion_status": "not_applicable",
-                "action": "no_cad_gdml_input_detected",
-            }
-        )
-
-    # G4→TCAD placeholder
-    g4_to_tcad.append(
-        {
-            "contract_id": "g4_to_tcad_damage_v1",
-            "source_artifact": "10_data_packages/g4_output_package/dose_3d.csv",
-            "target_parameter": "tcad.defects.trap_density",
-            "conversion_required": True,
-            "conversion_status": "future_stage_pending_confirmation",
-        }
-    )
-
-    # TCAD→SPICE placeholder
-    tcad_to_spice.append(
-        {
-            "contract_id": "tcad_to_spice_iv_v1",
-            "source_artifact": "tcad/output/iv_curve.csv",
-            "target_parameter": "spice.device.sensor.leakage_current",
-            "conversion_required": True,
-            "conversion_status": "future_stage",
-        }
-    )
-
     contracts = {
         "cad_gdml": cad_gdml,
-        "g4_to_tcad": g4_to_tcad,
-        "tcad_to_spice": tcad_to_spice,
+        "downstream_handoffs": [],
+        "metadata": {
+            "source": "g4_model_ir_and_geometry_strategy",
+            "note": (
+                "No TCAD/SPICE handoff contract is emitted unless a future "
+                "modeling stage adds explicit IR fields for that boundary."
+            ),
+        },
     }
 
     # Persist
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
-    codegen_dir = get_job_dir(job_id) / "06_codegen"
+    codegen_dir = get_job_dir(job_id) / STAGE_CODEGEN
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     contracts_path = codegen_dir / "interface_contracts.json"

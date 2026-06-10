@@ -7,32 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from agent_core.g4_codegen.schemas import CodegenPlan
+from agent_core.workspace.paths import STAGE_CODEGEN
 
 CORE_MODULES = [
-    "material",
-    "placement",
-    "geometry",
-    "source",
-    "physics",
-    "sensitive_detector",
-    "scoring",
-    "output_manager",
-    "action_initialization",
-    "main_cmake",
+    "simulation_core",
+    "beam_physics",
+    "runtime_app",
 ]
 
-MODULE_ORDER = [
-    "material",
-    "physics",
-    "source",
-    "output_manager",
-    "placement",
-    "geometry",
-    "sensitive_detector",
-    "scoring",
-    "action_initialization",
-    "main_cmake",
-]
+MODULE_ORDER = list(CORE_MODULES)
 
 
 def detect_scenario_type(g4_model_ir: dict[str, Any]) -> str:
@@ -80,11 +63,11 @@ def build_codegen_plan(
     )
 
     # Persist
-    codegen_dir = Path(job_id) / "06_codegen" if "/" in job_id else Path(job_id)
+    codegen_dir = Path(job_id) / STAGE_CODEGEN if "/" in job_id else Path(job_id)
     if not codegen_dir.is_absolute():
-        from agent_core.config.workspace import get_job_dir
+        from agent_core.workspace.io import get_job_dir
 
-        codegen_dir = get_job_dir(job_id) / "06_codegen"
+        codegen_dir = get_job_dir(job_id) / STAGE_CODEGEN
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     plan_path = codegen_dir / "codegen_plan.json"

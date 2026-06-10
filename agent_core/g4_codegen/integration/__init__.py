@@ -1,1 +1,1 @@
-"""G4 Codegen integration — assembler and cross-file gates."""
+"""G4 Codegen integration — assembler for coarse module outputs."""

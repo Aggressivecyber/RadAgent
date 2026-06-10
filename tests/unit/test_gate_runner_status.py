@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 from agent_core.gates.base_gates import run_base_gates
 from agent_core.gates.gate_runner import compute_validation_status, finalize_gate_results
+from agent_core.workspace.paths import STAGE_CODEGEN, STAGE_GATE_VALIDATION
 
 
 class TestFinalizeStatusStrategy:
@@ -29,8 +30,8 @@ class TestFinalizeStatusStrategy:
     ) -> None:
         """passed only when 0 failed AND 0 skipped."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        job_dir = tmp_path / "jobs" / "test_job" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "test_job" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
 
         state = {
             "job_id": "test_job",
@@ -50,8 +51,8 @@ class TestFinalizeStatusStrategy:
     ) -> None:
         """failed when any gate is skipped (no dev mode partial pass)."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        job_dir = tmp_path / "jobs" / "test_job2" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "test_job2" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
 
         state = {
             "job_id": "test_job2",
@@ -72,8 +73,8 @@ class TestFinalizeStatusStrategy:
     ) -> None:
         """failed when any gate fails, regardless of count."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        job_dir = tmp_path / "jobs" / "test_job3" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "test_job3" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
 
         state = {
             "job_id": "test_job3",
@@ -93,8 +94,8 @@ class TestFinalizeStatusStrategy:
     ) -> None:
         """failed when multiple gates fail."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        job_dir = tmp_path / "jobs" / "test_job4" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "test_job4" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
 
         state = {
             "job_id": "test_job4",
@@ -131,8 +132,8 @@ class TestFinalizeStatusStrategy:
 
         base_result = await run_base_gates(state)
 
-        job_dir = tmp_path / "jobs" / "strict_test" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "strict_test" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
         finalize_state = {
             "job_id": "strict_test",
             **base_result,
@@ -156,8 +157,8 @@ class TestGate4NoAutoPass:
     ) -> None:
         """Gate 4 must not auto-pass when no patch data is available."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        job_dir = tmp_path / "jobs" / "g4test" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "g4test" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
 
         state = {
             "job_id": "g4test",
@@ -188,8 +189,8 @@ class TestGate4NoAutoPass:
     ) -> None:
         """Gate 4 must validate zones when patch data has changed_files."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        job_dir = tmp_path / "jobs" / "g4test2" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "g4test2" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
 
         # Create an applied_patch.json with green zone files
         patch_data = {
@@ -227,11 +228,11 @@ class TestGate4NoAutoPass:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Gate 4 should read 06_codegen/proposed_patch.json when applied summary lacks zones."""
+        """Gate 4 should read proposed_patch.json from the current codegen stage."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
         job_root = tmp_path / "jobs" / "g4test2b"
-        validation_dir = job_root / "09_validation"
-        codegen_dir = job_root / "06_codegen"
+        validation_dir = job_root / STAGE_GATE_VALIDATION
+        codegen_dir = job_root / STAGE_CODEGEN
         validation_dir.mkdir(parents=True)
         codegen_dir.mkdir(parents=True)
 
@@ -267,6 +268,39 @@ class TestGate4NoAutoPass:
         assert gate4["status"] == "pass"
         assert gate4["evidence"] == ["checked 1 files"]
 
+    async def test_gate4_reports_invalid_patch_json(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Gate 4 should report unreadable patch data instead of silently losing context."""
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        job_dir = tmp_path / "jobs" / "g4test2c" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
+
+        applied_patch = job_dir / "applied_patch.json"
+        applied_patch.write_text('{"changed_files": ', encoding="utf-8")
+
+        state = {
+            "job_id": "g4test2c",
+            "execution_mode": "strict",
+            "context_decision": "allow_rag",
+            "task_spec": {"simulation_scope": ["geant4"]},
+            "g4_model_ir": {},
+            "generated_code_dir": str(tmp_path / "noexist"),
+            "applied_patch_path": str(applied_patch),
+            "proposed_patch_path": "",
+            "gate_results": [],
+            "skipped_gates": [],
+            "failed_gates": [],
+        }
+
+        result = await run_base_gates(state)
+        gate4 = [g for g in result["gate_results"] if g["gate_id"] == 4][0]
+
+        assert gate4["status"] == "fail"
+        assert any("Could not parse applied patch JSON" in item for item in gate4["failed_items"])
+
     async def test_gate4_fails_on_red_zone(
         self,
         tmp_path: Path,
@@ -274,8 +308,8 @@ class TestGate4NoAutoPass:
     ) -> None:
         """Gate 4 must fail when patch contains red zone files."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-        job_dir = tmp_path / "jobs" / "g4test3" / "09_validation"
-        job_dir.mkdir(parents=True)
+        job_dir = tmp_path / "jobs" / "g4test3" / STAGE_GATE_VALIDATION
+        job_dir.mkdir(parents=True, exist_ok=True)
 
         # Create patch with red zone file
         patch_data = {

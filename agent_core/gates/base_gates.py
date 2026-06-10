@@ -8,9 +8,11 @@ import math
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_job_dir, get_output_dir
+from agent_core.gates.output_quality import REQUIRED_G4_OUTPUTS, inspect_g4_output_quality
 from agent_core.validators.code_structure_validator import CodeStructureValidator
 from agent_core.validators.schema_validator import SchemaValidator
+from agent_core.workspace.io import get_job_dir, get_output_dir
+from agent_core.workspace.paths import STAGE_CODEGEN
 
 from .gate_runner import normalize_run_mode
 from .schemas import GateSubgraphState
@@ -165,24 +167,35 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # Try to read patch data from applied_patch.json or proposed_patch
     patch_data: dict[str, Any] = {}
+    patch_read_errors: list[str] = []
     if applied_path and Path(applied_path).exists():
         try:
-            patch_data = json.loads(Path(applied_path).read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
+            patch_data = json.loads(Path(applied_path).read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            patch_read_errors.append(
+                f"Could not parse applied patch JSON {applied_path}: "
+                f"{exc.msg} at line {exc.lineno}, column {exc.colno}"
+            )
+        except OSError as exc:
+            patch_read_errors.append(f"Could not read applied patch {applied_path}: {exc}")
 
     changed_files = patch_data.get("changed_files", [])
     if not changed_files:
         # Try loading from the proposed patch if available
         proposed_path = state.get("proposed_patch_path", "")
         if not proposed_path:
-            proposed_path = str(get_job_dir(job_id) / "06_codegen" / "proposed_patch.json")
+            proposed_path = str(get_job_dir(job_id) / STAGE_CODEGEN / "proposed_patch.json")
         if proposed_path and Path(str(proposed_path)).exists():
             try:
-                proposed_data = json.loads(Path(str(proposed_path)).read_text())
+                proposed_data = json.loads(Path(str(proposed_path)).read_text(encoding="utf-8"))
                 changed_files = proposed_data.get("changed_files", [])
-            except (json.JSONDecodeError, OSError):
-                pass
+            except json.JSONDecodeError as exc:
+                patch_read_errors.append(
+                    f"Could not parse proposed patch JSON {proposed_path}: "
+                    f"{exc.msg} at line {exc.lineno}, column {exc.colno}"
+                )
+            except OSError as exc:
+                patch_read_errors.append(f"Could not read proposed patch {proposed_path}: {exc}")
 
     if changed_files:
         perm_valid, perm_errors = fpv.validate_patch_permissions(changed_files)
@@ -196,7 +209,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     else:
         # No patch data available — cannot validate.
         perm_valid = False
-        perm_errors = ["No patch data available for permission check"]
+        perm_errors = patch_read_errors or ["No patch data available for permission check"]
         g4_status = "fail"
         g4_checked = [{"item": "patch file zones", "result": g4_status}]
 
@@ -345,34 +358,42 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         }
     )
 
+    smoke_result_path = output_dir / "smoke_simulation_result.json"
+    smoke_result: dict[str, Any] = {}
+    if smoke_result_path.is_file():
+        try:
+            data = json.loads(smoke_result_path.read_text(encoding="utf-8"))
+            smoke_result = data if isinstance(data, dict) else {}
+        except json.JSONDecodeError:
+            smoke_result = {}
+    output_quality = inspect_g4_output_quality(output_dir, smoke_result=smoke_result)
+
     # Gate 8: Data Contract
     if output_dir.is_dir():
-        required_files = (
-            "g4_summary.json",
-            "edep_3d.csv",
-            "dose_3d.csv",
-            "event_table.csv",
-            "provenance.json",
-        )
-        missing = [f for f in required_files if not (output_dir / f).is_file()]
+        required_files = REQUIRED_G4_OUTPUTS
         present = [f for f in required_files if (output_dir / f).is_file()]
+        contract_errors = [
+            error
+            for error in output_quality.errors
+            if not error.startswith("Smoke simulation stderr contains:")
+        ]
         gate_results.append(
             {
                 "gate_id": 8,
                 "name": gate_name(8),
-                "status": "pass" if not missing else "fail",
+                "status": "pass" if not contract_errors else "fail",
                 "checked_items": [
                     {"item": f, "result": "pass" if f in present else "fail"}
                     for f in required_files
                 ],
                 "passed_items": present,
-                "failed_items": missing,
-                "warnings": [],
+                "failed_items": contract_errors,
+                "warnings": output_quality.warnings,
                 "evidence": [f"output_dir: {output_dir}"],
                 "file_paths": [str(output_dir / f) for f in present],
-                "message": f"Missing: {', '.join(missing)}"
-                if missing
-                else "All output files present",
+                "message": "; ".join(contract_errors[:5])
+                if contract_errors
+                else "All output files present and populated",
             }
         )
     else:
@@ -392,11 +413,20 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         )
 
     # Gate 9: Smoke Simulation — uses the real smoke artifact from Geant4Runner.
-    smoke_result_path = output_dir / "smoke_simulation_result.json"
     if smoke_result_path.is_file():
-        smoke_result = json.loads(smoke_result_path.read_text(encoding="utf-8"))
-        g9_severity = "pass" if smoke_result.get("success") is True else "fail"
-        g9_message = "Smoke simulation passed" if g9_severity == "pass" else "Smoke failed"
+        smoke_errors = [
+            error
+            for error in output_quality.errors
+            if error.startswith("Smoke simulation stderr contains:")
+        ]
+        g9_severity = (
+            "pass" if smoke_result.get("success") is True and not smoke_errors else "fail"
+        )
+        g9_message = (
+            "Smoke simulation passed"
+            if g9_severity == "pass"
+            else "; ".join(smoke_errors) or "Smoke failed"
+        )
     else:
         g9_severity = "fail"
         g9_message = "Smoke simulation required; no smoke simulation result artifact found"
@@ -435,7 +465,16 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     )
 
     # Gate 11: Physics Sanity
-    physics_errors: list[str] = []
+    physics_errors: list[str] = [
+        error
+        for error in output_quality.errors
+        if (
+            "edep_3d.csv" in error
+            or "dose_3d.csv" in error
+            or "event_table.csv" in error
+            or "Smoke simulation stderr" in error
+        )
+    ]
     if output_dir.is_dir():
         for csv_name, field_names in [
             ("edep_3d.csv", ("edep_MeV", "edep")),
@@ -457,7 +496,9 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
                                         elif v < 0:
                                             physics_errors.append(f"{csv_name} row {i}: negative")
                                     except (ValueError, TypeError):
-                                        pass
+                                        physics_errors.append(
+                                            f"{csv_name} row {i}: non-numeric {field}"
+                                        )
                                     break
                 except Exception as e:
                     physics_errors.append(f"Error reading {csv_name}: {e}")

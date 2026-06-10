@@ -1,4 +1,4 @@
-"""G4 Modeling Gates (G4-A to G4-G) — complex model validation.
+"""G4 Modeling Gates (G4-A to G4-H) — complex model validation.
 
 These gates check the Geant4 Model IR for completeness, consistency,
 and compliance with modeling policies.
@@ -17,7 +17,7 @@ from .schemas import GateSubgraphState
 
 
 async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
-    """Run G4-A through G4-G (complex model gates)."""
+    """Run G4-A through G4-H (complex model gates)."""
     gate_results: list[dict[str, Any]] = list(state.get("gate_results", []))
     failed: list[str] = list(state.get("failed_gates", []))
     model_ir_dict = state.get("g4_model_ir", {})
@@ -30,7 +30,7 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
     try:
         model_ir = G4ModelIR.model_validate(model_ir_dict)
     except Exception as exc:
-        for gid in range(12, 19):
+        for gid in range(12, 20):
             gate_results.append(
                 {
                     "gate_id": gid,
@@ -347,7 +347,7 @@ def _append_gate_detailed(
 
     gate_entry: dict[str, Any] = {
         "gate_id": gate_id,
-        "name": gate_display_name,
+        "name": gate_name(gate_id),
         "status": "pass" if passed else "fail",
         "checked_items": final_items,
         "passed_items": [i["item"] for i in final_items if i["result"] == "pass"],
@@ -365,7 +365,7 @@ def _append_gate_detailed(
 
 
 def _load_generated_code_modules(generated_code_dir: str) -> list[dict[str, Any]]:
-    """Load generated C++ files from 08_geant4 for post-codegen gates."""
+    """Load generated C++ files from geant4_project for post-codegen gates."""
     if not generated_code_dir:
         return []
     root = Path(generated_code_dir)

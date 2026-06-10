@@ -5,6 +5,11 @@ from pathlib import Path
 
 import pytest
 from agent_core.artifacts.nodes import collect_artifacts, generate_artifact_manifest
+from agent_core.workspace.paths import (
+    STAGE_GATE_VALIDATION,
+    STAGE_HUMAN_CONFIRMATION,
+    STAGE_MODEL_IR,
+)
 
 
 @pytest.fixture
@@ -13,20 +18,24 @@ def artifact_state_with_confirmation(tmp_path, monkeypatch):
     workspace = tmp_path / "ws"
     workspace.mkdir()
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv(
+        "RADAGENT_REVIEW_ARTIFACT_DIR",
+        str(tmp_path / "review_artifacts" / "g4_complex_model" / "latest"),
+    )
 
     job_id = "hc_test"
-    from agent_core.config.workspace import ensure_job_dirs
+    from agent_core.workspace.io import ensure_job_dirs
 
     job_dir = ensure_job_dirs(job_id)
 
     # Create model IR
-    ir_dir = job_dir / "03_model_ir"
+    ir_dir = job_dir / STAGE_MODEL_IR
     ir_dir.mkdir(parents=True, exist_ok=True)
     ir = {"components": [{"component_id": "world"}], "materials": [], "sources": [], "scoring": []}
     (ir_dir / "g4_model_ir.json").write_text(json.dumps(ir))
 
     # Create human confirmation files
-    hc_dir = job_dir / "04_human_confirmation"
+    hc_dir = job_dir / STAGE_HUMAN_CONFIRMATION
     hc_dir.mkdir(parents=True, exist_ok=True)
     (hc_dir / "confirmation_record.json").write_text(
         json.dumps(
@@ -46,7 +55,7 @@ def artifact_state_with_confirmation(tmp_path, monkeypatch):
     (hc_dir / "human_confirmation_report.md").write_text("# Report\n")
 
     # Create gate results
-    val_dir = job_dir / "09_validation"
+    val_dir = job_dir / STAGE_GATE_VALIDATION
     val_dir.mkdir(parents=True, exist_ok=True)
     gates = [{"gate_id": i, "status": "pass", "checked_items": []} for i in range(20)]
     (val_dir / "gate_results.json").write_text(json.dumps(gates))

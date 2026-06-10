@@ -8,26 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 from typing import Any
 
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 from agent_core.observability import record_event, write_failure_bundle
-
-logger = logging.getLogger(__name__)
+from agent_core.workspace.paths import GEANT4_PROJECT_DIRNAME, STAGE_CODEGEN, STAGE_PATCH
 
 REQUIRED_MODULES = {
-    "material",
-    "geometry",
-    "placement",
-    "source",
-    "physics",
-    "sensitive_detector",
-    "scoring",
-    "output_manager",
-    "action_initialization",
-    "main_cmake",
+    "simulation_core",
+    "beam_physics",
+    "runtime_app",
 }
 
 
@@ -143,6 +134,40 @@ async def build_module_contexts_node(
     return {"module_contexts": contexts, "current_node": "build_module_contexts"}
 
 
+async def context_coordinator_node(
+    state: G4CodegenSubgraphState,
+    coordinator_name: str,
+    target_modules: list[str],
+) -> dict[str, Any]:
+    """Summarize generated code for later agents and expose code lookup manifest."""
+    from agent_core.g4_codegen.context_coordinator import coordinate_generated_context
+
+    job_id = state.get("job_id", "unknown")
+    coordination = await coordinate_generated_context(
+        job_id=job_id,
+        module_results=state.get("module_results", {}),
+        module_contracts=state.get("module_contracts", {}),
+        target_modules=target_modules,
+        coordinator_name=coordinator_name,
+    )
+    module_contexts = dict(state.get("module_contexts", {}))
+    for module_name in target_modules:
+        ctx = dict(module_contexts.get(module_name, {}))
+        if not ctx:
+            continue
+        ctx["context_coordination"] = coordination
+        ctx["generated_code_lookup_manifest"] = coordination.get(
+            "generated_code_lookup_manifest", {}
+        )
+        ctx["existing_generated_file_summaries"] = coordination.get("file_summaries", [])
+        module_contexts[module_name] = ctx
+    return {
+        "context_coordination": {coordinator_name: coordination},
+        "module_contexts": module_contexts,
+        "current_node": coordinator_name,
+    }
+
+
 # ── Module agent runner ──────────────────────────────────────────────
 
 
@@ -172,7 +197,17 @@ async def run_module_agent_node(
 
     # Inject summaries into the context dict
     ctx = dict(ctx)
-    ctx["existing_generated_file_summaries"] = summaries
+    latest_coordination = _latest_context_coordination(state.get("context_coordination", {}))
+    if latest_coordination:
+        ctx["context_coordination"] = latest_coordination
+        ctx["generated_code_lookup_manifest"] = latest_coordination.get(
+            "generated_code_lookup_manifest", {}
+        )
+        ctx["existing_generated_file_summaries"] = latest_coordination.get(
+            "file_summaries", summaries
+        )
+    else:
+        ctx["existing_generated_file_summaries"] = summaries
     ctx["actual_context_used_by_agent"] = True
 
     # Import and run the appropriate agent
@@ -204,6 +239,16 @@ async def run_module_agent_node(
     }
 
 
+def _latest_context_coordination(coordination_by_node: dict[str, Any]) -> dict[str, Any]:
+    """Return the most recent context coordination payload from graph state."""
+    if not isinstance(coordination_by_node, dict) or not coordination_by_node:
+        return {}
+    for value in reversed(list(coordination_by_node.values())):
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
 # ── File summary extraction ──────────────────────────────────────────
 
 
@@ -216,6 +261,7 @@ def _extract_file_summary(module_name: str, file_data: dict[str, Any]) -> dict[s
         "generated_by": file_data.get("generated_by", f"{module_name}_module_agent"),
         "classes": _extract_classes(content),
         "public_methods": _extract_public_methods(content),
+        "constructor_signatures": _extract_constructor_signatures(content),
         "includes": _extract_includes(content),
         "provided_symbols": _extract_classes(content),  # symbols ≈ class names
     }
@@ -257,284 +303,46 @@ def _extract_public_methods(content: str) -> list[str]:
     return sorted(set(methods))
 
 
+def _extract_constructor_signatures(content: str) -> list[str]:
+    """Extract public constructor declaration signatures from C++ headers."""
+    import re
+
+    classes = _extract_classes(content)
+    if not classes:
+        return []
+    public_blocks = re.findall(
+        r"\bpublic:\s*(.*?)(?=\bprivate:|\bprotected:|\n};|$)",
+        content,
+        re.DOTALL,
+    )
+    signatures: list[str] = []
+    for class_name in classes:
+        pattern = (
+            rf"(?:explicit\s+)?{re.escape(class_name)}\s*"
+            r"\([^;{}]*\)\s*(?:=\s*default)?\s*;"
+        )
+        for block in public_blocks:
+            for match in re.finditer(pattern, block, re.DOTALL):
+                signatures.append(re.sub(r"\s+", " ", match.group(0)).strip().rstrip(";"))
+    return sorted(set(signatures))
+
+
 def _get_agent_function(module_name: str):  # type: ignore[no-untyped-def]
     """Get the agent function for a module."""
-    from agent_core.g4_codegen.module_agents.action_initialization_agent import (
-        run_action_initialization_agent,
+    from agent_core.g4_codegen.module_agents.beam_physics_agent import (
+        run_beam_physics_agent,
     )
-    from agent_core.g4_codegen.module_agents.geometry_agent import run_geometry_agent
-    from agent_core.g4_codegen.module_agents.main_cmake_agent import run_main_cmake_agent
-    from agent_core.g4_codegen.module_agents.material_agent import run_material_agent
-    from agent_core.g4_codegen.module_agents.output_manager_agent import (
-        run_output_manager_agent,
+    from agent_core.g4_codegen.module_agents.runtime_app_agent import run_runtime_app_agent
+    from agent_core.g4_codegen.module_agents.simulation_core_agent import (
+        run_simulation_core_agent,
     )
-    from agent_core.g4_codegen.module_agents.physics_agent import run_physics_agent
-    from agent_core.g4_codegen.module_agents.placement_agent import run_placement_agent
-    from agent_core.g4_codegen.module_agents.scoring_agent import run_scoring_agent
-    from agent_core.g4_codegen.module_agents.sensitive_detector_agent import (
-        run_sensitive_detector_agent,
-    )
-    from agent_core.g4_codegen.module_agents.source_agent import run_source_agent
 
     agents = {
-        "material": run_material_agent,
-        "geometry": run_geometry_agent,
-        "placement": run_placement_agent,
-        "source": run_source_agent,
-        "physics": run_physics_agent,
-        "sensitive_detector": run_sensitive_detector_agent,
-        "scoring": run_scoring_agent,
-        "output_manager": run_output_manager_agent,
-        "action_initialization": run_action_initialization_agent,
-        "main_cmake": run_main_cmake_agent,
+        "simulation_core": run_simulation_core_agent,
+        "beam_physics": run_beam_physics_agent,
+        "runtime_app": run_runtime_app_agent,
     }
     return agents[module_name]
-
-
-# ── Module gate runners ──────────────────────────────────────────────
-
-
-async def run_module_hard_gate_node(
-    state: G4CodegenSubgraphState,
-    module_name: str,
-) -> dict[str, Any]:
-    """Run hard gate for a specific module.
-
-    Passes module_status to hard gate so it can reject
-    failed ModuleAgentResult.
-    """
-    module_results = state.get("module_results", {})
-    result = module_results.get(module_name, {})
-    generated_files_data = result.get("generated_files", [])
-    module_status = result.get("status", "unknown")
-
-    from agent_core.g4_codegen.schemas import GeneratedModuleFile
-
-    files = [GeneratedModuleFile(**f) for f in generated_files_data]
-
-    gate_fn = _get_hard_gate_function(module_name)
-    gate_result = gate_fn(files, module_status=module_status)
-
-    # Persist
-    from agent_core.config.workspace import get_job_dir
-
-    job_id = state.get("job_id", "unknown")
-    gate_dir = get_job_dir(job_id) / "06_codegen" / "module_gates"
-    gate_dir.mkdir(parents=True, exist_ok=True)
-    gate_path = gate_dir / f"{module_name}_hard_gate.json"
-    gate_path.write_text(json.dumps(gate_result.model_dump(), indent=2))
-    record_event(
-        job_id=job_id,
-        event_type="module_gate_result",
-        status="passed" if gate_result.status == "pass" else "failed",
-        phase="g4_codegen",
-        module_name=module_name,
-        gate_name=f"{module_name}_hard_gate",
-        summary=f"{module_name} hard gate {gate_result.status}",
-        metrics={
-            "check_count": len(gate_result.checks),
-            "error_count": len(gate_result.errors),
-        },
-        artifacts=[{"path": str(gate_path)}],
-        errors=list(gate_result.errors),
-        warnings=list(gate_result.warnings),
-    )
-
-    return {
-        "module_gate_results": {module_name: {"hard": gate_result.model_dump()}},
-        "current_node": f"{module_name}_hard_gate",
-    }
-
-
-def _get_hard_gate_function(module_name: str):  # type: ignore[no-untyped-def]
-    """Get the hard gate function for a module."""
-    from agent_core.g4_codegen.module_gates.action_hard_gate import run_action_hard_gate
-    from agent_core.g4_codegen.module_gates.geometry_hard_gate import run_geometry_hard_gate
-    from agent_core.g4_codegen.module_gates.main_cmake_hard_gate import run_main_cmake_hard_gate
-    from agent_core.g4_codegen.module_gates.material_hard_gate import run_material_hard_gate
-    from agent_core.g4_codegen.module_gates.output_manager_hard_gate import (
-        run_output_manager_hard_gate,
-    )
-    from agent_core.g4_codegen.module_gates.physics_hard_gate import run_physics_hard_gate
-    from agent_core.g4_codegen.module_gates.placement_hard_gate import run_placement_hard_gate
-    from agent_core.g4_codegen.module_gates.scoring_hard_gate import run_scoring_hard_gate
-    from agent_core.g4_codegen.module_gates.sensitive_detector_hard_gate import (
-        run_sensitive_detector_hard_gate,
-    )
-    from agent_core.g4_codegen.module_gates.source_hard_gate import run_source_hard_gate
-
-    gates = {
-        "material": run_material_hard_gate,
-        "geometry": run_geometry_hard_gate,
-        "placement": run_placement_hard_gate,
-        "source": run_source_hard_gate,
-        "physics": run_physics_hard_gate,
-        "sensitive_detector": run_sensitive_detector_hard_gate,
-        "scoring": run_scoring_hard_gate,
-        "output_manager": run_output_manager_hard_gate,
-        "action_initialization": run_action_hard_gate,
-        "main_cmake": run_main_cmake_hard_gate,
-    }
-    return gates[module_name]
-
-
-async def run_module_llm_gate_node(
-    state: G4CodegenSubgraphState,
-    module_name: str,
-) -> dict[str, Any]:
-    """Run LLM gate for a specific module.
-
-    Only runs if hard gate passed.
-    """
-    gate_results = state.get("module_gate_results", {})
-    module_gate = gate_results.get(module_name, {})
-    hard_gate = module_gate.get("hard", {})
-
-    if hard_gate.get("status") != "pass":
-        # Hard gate failed — skip LLM gate
-        skipped_gate = {
-            "module_name": module_name,
-            "gate_type": "llm",
-            "status": "skipped",
-            "errors": ["Hard gate failed — LLM gate skipped"],
-        }
-        return {
-            "module_gate_results": {module_name: {"llm": skipped_gate}},
-            "current_node": f"{module_name}_llm_gate",
-        }
-
-    from agent_core.g4_codegen.module_gates.llm_gate_base import run_llm_gate
-
-    module_contexts = state.get("module_contexts", {})
-    module_results = state.get("module_results", {})
-    result = module_results.get(module_name, {})
-    ctx = module_contexts.get(module_name, {})
-    generated_files = result.get("generated_files", [])
-
-    gate_result = await run_llm_gate(
-        module_name=module_name,
-        module_context=ctx,
-        generated_files_content=generated_files,
-        hard_gate_result=hard_gate,
-    )
-
-    # Persist
-    from agent_core.config.workspace import get_job_dir
-
-    job_id = state.get("job_id", "unknown")
-    gate_dir = get_job_dir(job_id) / "06_codegen" / "module_gates"
-    gate_dir.mkdir(parents=True, exist_ok=True)
-    gate_path = gate_dir / f"{module_name}_llm_gate.json"
-    gate_path.write_text(json.dumps(gate_result.model_dump(), indent=2))
-    record_event(
-        job_id=job_id,
-        event_type="module_gate_result",
-        status="passed" if gate_result.status == "pass" else "failed",
-        phase="g4_codegen",
-        module_name=module_name,
-        gate_name=f"{module_name}_llm_gate",
-        summary=f"{module_name} LLM gate {gate_result.status}",
-        metrics={
-            "check_count": len(gate_result.checks),
-            "error_count": len(gate_result.errors),
-            "overall_score": gate_result.scorecard.get("overall_score"),
-        },
-        artifacts=[{"path": str(gate_path)}],
-        errors=list(gate_result.errors),
-        warnings=list(gate_result.warnings),
-        details={"scorecard": gate_result.scorecard},
-    )
-
-    return {
-        "module_gate_results": {module_name: {"llm": gate_result.model_dump()}},
-        "current_node": f"{module_name}_llm_gate",
-    }
-
-
-# ── Module repair node ───────────────────────────────────────────────
-
-
-async def repair_module_node(
-    state: G4CodegenSubgraphState,
-    module_name: str,
-) -> dict[str, Any]:
-    """Repair a failed module if needed.
-
-    P0-14/P0-15: When repair reaches max attempts and still fails:
-    - module status → "failed"
-    - g4_codegen_status → "failed"
-    - codegen_errors updated
-    - Graph routes to persist (not back to hard gate)
-    """
-    gate_results = state.get("module_gate_results", {})
-    module_gate = gate_results.get(module_name, {})
-    hard_gate = module_gate.get("hard", {})
-    llm_gate = module_gate.get("llm", {})
-
-    # Check if repair is needed
-    needs_repair = hard_gate.get("status") == "fail" or llm_gate.get("status") == "fail"
-
-    if not needs_repair:
-        return {"current_node": f"repair_{module_name}"}
-
-    from agent_core.g4_codegen.repair.module_repair_loop import (
-        repair_module,
-        save_repair_summary,
-    )
-    from agent_core.g4_codegen.schemas import ModuleAgentResult, ModuleGateResult
-
-    module_results = state.get("module_results", {})
-    module_contexts = state.get("module_contexts", {})
-
-    original_result = ModuleAgentResult(**module_results.get(module_name, {}))
-    if hard_gate.get("status") == "fail":
-        gate = ModuleGateResult(**hard_gate)
-    else:
-        gate = ModuleGateResult(**llm_gate)
-    ctx = module_contexts.get(module_name, {})
-
-    job_id = state.get("job_id", "unknown")
-    repaired = await repair_module(module_name, ctx, original_result, gate, job_id=job_id)
-    save_repair_summary(module_name, repaired, job_id)
-    record_event(
-        job_id=job_id,
-        event_type="module_repair_result",
-        status="passed" if repaired.status in {"generated", "repaired"} else "failed",
-        phase="g4_codegen",
-        module_name=module_name,
-        summary=f"{module_name} repair returned {repaired.status}",
-        metrics={
-            "attempt_count": len(repaired.repair_attempts),
-            "generated_file_count": len(repaired.generated_files),
-        },
-        errors=list(repaired.errors),
-        warnings=list(repaired.warnings),
-    )
-
-    # P0-14/P0-15: If repair failed, mark codegen as failed
-    updates: dict[str, Any] = {
-        "module_results": {module_name: repaired.model_dump()},
-        "module_repair_results": {
-            module_name: {
-                "status": repaired.status,
-                "attempts": len(repaired.repair_attempts),
-            }
-        },
-        "current_node": f"repair_{module_name}",
-    }
-
-    if repaired.status == "failed":
-        updates["g4_codegen_status"] = "failed"
-        updates["codegen_errors"] = list(state.get("codegen_errors", [])) + [
-            f"Module '{module_name}' repair failed after "
-            f"{len(repaired.repair_attempts)} attempts: " + "; ".join(repaired.errors[:3])
-        ]
-        logger.warning(
-            "Module %s repair failed — terminating codegen for this module",
-            module_name,
-        )
-
-    return updates
 
 
 async def run_module_layer_node(
@@ -567,48 +375,14 @@ async def run_module_layer_node(
     async def _run_one(module_name: str) -> dict[str, Any]:
         async with semaphore:
             local_state: dict[str, Any] = dict(state)
-            result: dict[str, Any] = {}
-
             agent_update = await run_module_agent_node(local_state, module_name)
-            _merge_update(local_state, agent_update)
-            _merge_update(result, agent_update)
-
-            for _attempt in range(4):
-                hard_update = await run_module_hard_gate_node(local_state, module_name)
-                _merge_update(local_state, hard_update)
-                _merge_update(result, hard_update)
-                hard = (
-                    local_state.get("module_gate_results", {}).get(module_name, {}).get("hard", {})
-                )
-
-                if hard.get("status") == "pass":
-                    llm_update = await run_module_llm_gate_node(local_state, module_name)
-                    _merge_update(local_state, llm_update)
-                    _merge_update(result, llm_update)
-                    llm = (
-                        local_state.get("module_gate_results", {})
-                        .get(module_name, {})
-                        .get("llm", {})
-                    )
-                    if llm.get("status") == "pass":
-                        break
-
-                repair_update = await repair_module_node(local_state, module_name)
-                _merge_update(local_state, repair_update)
-                _merge_update(result, repair_update)
-                repair = local_state.get("module_repair_results", {}).get(module_name, {})
-                if repair.get("status") == "failed":
-                    break
-
-            result["current_node"] = f"run_{layer_name}"
-            return result
+            agent_update["current_node"] = f"run_{layer_name}"
+            return agent_update
 
     module_updates = await asyncio.gather(*[_run_one(module_name) for module_name in module_names])
     combined: dict[str, Any] = {
         "current_node": f"run_{layer_name}",
         "module_results": dict(state.get("module_results", {})),
-        "module_gate_results": dict(state.get("module_gate_results", {})),
-        "module_repair_results": dict(state.get("module_repair_results", {})),
         "codegen_errors": list(state.get("codegen_errors", [])),
         "codegen_warnings": list(state.get("codegen_warnings", [])),
     }
@@ -684,10 +458,9 @@ async def integration_assembler_node(
     )
 
     module_results = state.get("module_results", {})
-    module_gate_results = state.get("module_gate_results", {})
     job_id = state.get("job_id", "unknown")
 
-    patch = assemble_proposed_patch(module_results, module_gate_results, job_id)
+    patch = assemble_proposed_patch(module_results, job_id)
     return {
         "proposed_patch": patch,
         "current_node": "integration_assembler",
@@ -699,37 +472,33 @@ async def layer_consistency_gate_node(
     layer_name: str,
     module_names: list[str],
 ) -> dict[str, Any]:
-    """Check that every module in a parallel layer passed before the next layer."""
-    from agent_core.config.workspace import get_job_dir
+    """Check that every coarse module in a layer produced files."""
+    from agent_core.workspace.io import get_job_dir
 
     module_results = state.get("module_results", {})
-    module_gate_results = state.get("module_gate_results", {})
     errors: list[str] = []
     checks: list[dict[str, Any]] = []
 
     for module_name in module_names:
         result = module_results.get(module_name, {})
-        hard = module_gate_results.get(module_name, {}).get("hard", {})
-        llm = module_gate_results.get(module_name, {}).get("llm", {})
         module_ok = result.get("status") in {"generated", "repaired"}
-        hard_ok = hard.get("status") == "pass"
-        llm_ok = llm.get("status") == "pass"
-        status = "pass" if module_ok and hard_ok and llm_ok else "fail"
+        has_files = bool(result.get("generated_files"))
+        status = "pass" if module_ok and has_files else "fail"
         checks.append(
             {
                 "check": f"{module_name}_layer_completion",
                 "status": status,
                 "message": (
                     f"module_status={result.get('status')}; "
-                    f"hard={hard.get('status')}; llm={llm.get('status')}"
+                    f"generated_files={len(result.get('generated_files', []))}"
                 ),
             }
         )
         if status != "pass":
             errors.append(
                 f"{module_name} did not pass layer gate "
-                f"(module={result.get('status')}, hard={hard.get('status')}, "
-                f"llm={llm.get('status')})"
+                f"(module={result.get('status')}, "
+                f"generated_files={len(result.get('generated_files', []))})"
             )
 
     gate = {
@@ -740,7 +509,7 @@ async def layer_consistency_gate_node(
         "errors": errors,
     }
 
-    gate_dir = get_job_dir(state.get("job_id", "unknown")) / "06_codegen" / "layer_gates"
+    gate_dir = get_job_dir(state.get("job_id", "unknown")) / STAGE_CODEGEN / "layer_gates"
     gate_dir.mkdir(parents=True, exist_ok=True)
     (gate_dir / f"{layer_name}.json").write_text(json.dumps(gate, indent=2, ensure_ascii=False))
     record_event(
@@ -782,13 +551,11 @@ async def global_integration_agent_node(
         state.get("proposed_patch", {}),
         job_id=job_id,
         module_results=state.get("module_results", {}),
-        module_gate_results=state.get("module_gate_results", {}),
         module_contracts=state.get("module_contracts", {}),
         module_contexts=state.get("module_contexts", {}),
         interface_contracts=state.get("interface_contracts", {}),
         runtime_failure_context=state.get("runtime_failure_context", {}),
-        static_semantic_scan=state.get("static_semantic_scan", {}),
-        cross_file_hard_gate=state.get("cross_file_hard_gate", {}),
+        runtime_repair_rounds=5,
     )
     record_event(
         job_id=job_id,
@@ -812,93 +579,169 @@ async def global_integration_agent_node(
     }
 
 
-async def static_semantic_scanner_node(
+async def runtime_execution_audit_node(
     state: G4CodegenSubgraphState,
 ) -> dict[str, Any]:
-    """Run static semantic scan on proposed_patch."""
-    from agent_core.g4_codegen.scanners.static_semantic_scanner import scan_generated_code
+    """Audit whether the latest runtime gate actually produced trustworthy artifacts."""
+    from agent_core.g4_codegen.global_integration_agent import (
+        run_global_integration_agent,
+    )
+    from agent_core.g4_codegen.runtime_execution_auditor import (
+        run_runtime_execution_auditor,
+        runtime_audit_to_runtime_observation,
+    )
 
-    proposed_patch = state.get("proposed_patch", {})
     job_id = state.get("job_id", "unknown")
-
-    scan = scan_generated_code(proposed_patch, job_id)
-    record_event(
+    global_report = state.get("global_integration_agent_report", {})
+    audit = await run_runtime_execution_auditor(
         job_id=job_id,
-        event_type="static_semantic_scan_result",
-        status="passed" if scan.get("status") == "pass" else "failed",
-        phase="g4_codegen",
-        gate_name="static_semantic_scanner",
-        summary=f"Static semantic scan {scan.get('status')}",
-        metrics={"finding_count": len(scan.get("findings", []))},
-        errors=[str(f) for f in scan.get("findings", []) if isinstance(f, str)],
-        details={"status": scan.get("status")},
-    )
-    return {"static_semantic_scan": scan, "current_node": "static_semantic_scanner"}
-
-
-async def cross_file_hard_gate_node(
-    state: G4CodegenSubgraphState,
-) -> dict[str, Any]:
-    """Run cross-file hard gate."""
-    from agent_core.g4_codegen.integration.cross_file_hard_gate import (
-        run_cross_file_hard_gate,
-    )
-
-    proposed_patch = state.get("proposed_patch", {})
-    code_architecture = state.get("code_architecture_plan", {})
-    job_id = state.get("job_id", "unknown")
-
-    gate = run_cross_file_hard_gate(proposed_patch, code_architecture, job_id)
-    record_event(
-        job_id=job_id,
-        event_type="cross_file_gate_result",
-        status="passed" if gate.get("status") == "pass" else "failed",
-        phase="g4_codegen",
-        gate_name="cross_file_hard_gate",
-        summary=f"Cross-file hard gate {gate.get('status')}",
-        metrics={"error_count": len(gate.get("errors", []))},
-        errors=list(gate.get("errors", [])),
-        warnings=list(gate.get("warnings", [])),
-    )
-    return {"cross_file_hard_gate": gate, "current_node": "cross_file_hard_gate"}
-
-
-async def cross_file_llm_gate_node(
-    state: G4CodegenSubgraphState,
-) -> dict[str, Any]:
-    """Run cross-file LLM gate."""
-    from agent_core.g4_codegen.integration.cross_file_llm_gate import (
-        run_cross_file_llm_gate,
-    )
-
-    proposed_patch = state.get("proposed_patch", {})
-    module_gate_results = state.get("module_gate_results", {})
-    job_id = state.get("job_id", "unknown")
-
-    gate = await run_cross_file_llm_gate(
-        proposed_patch,
-        module_gate_results,
-        job_id,
-        static_semantic_scan=state.get("static_semantic_scan", {}),
-        cross_file_hard_gate=state.get("cross_file_hard_gate", {}),
-        interface_contracts=state.get("interface_contracts", {}),
+        global_integration_report=global_report,
     )
     record_event(
         job_id=job_id,
-        event_type="cross_file_gate_result",
-        status="passed" if gate.get("status") == "pass" else "failed",
+        event_type="runtime_execution_audit",
+        status="passed" if audit.get("status") == "pass" else "failed",
         phase="g4_codegen",
-        gate_name="cross_file_llm_gate",
-        summary=f"Cross-file LLM gate {gate.get('status')}",
+        module_name="runtime_execution_auditor",
+        summary=f"Runtime execution audit {audit.get('status')}",
         metrics={
-            "error_count": len(gate.get("errors", [])),
-            "overall_score": gate.get("scorecard", {}).get("overall_score"),
+            "actually_ran": audit.get("actually_ran"),
+            "artifact_contract_passed": audit.get("artifact_contract_passed"),
+            "data_trustworthy": audit.get("data_trustworthy"),
+            "blocking_error_count": len(audit.get("blocking_errors", [])),
         },
-        errors=list(gate.get("errors", [])),
-        warnings=list(gate.get("warnings", [])),
-        details={"scorecard": gate.get("scorecard", {})},
+        errors=list(audit.get("blocking_errors", [])),
+        warnings=list(audit.get("warnings", [])),
+        details=audit,
     )
-    return {"cross_file_llm_gate": gate, "current_node": "cross_file_llm_gate"}
+
+    updates: dict[str, Any] = {
+        "runtime_execution_audit": audit,
+        "current_node": "runtime_execution_audit",
+    }
+    if audit.get("status") == "pass":
+        return updates
+
+    observation = runtime_audit_to_runtime_observation(audit)
+    repair_patch, repair_report = await run_global_integration_agent(
+        state.get("proposed_patch", {}),
+        job_id=job_id,
+        module_results=state.get("module_results", {}),
+        module_contracts=state.get("module_contracts", {}),
+        module_contexts=state.get("module_contexts", {}),
+        interface_contracts=state.get("interface_contracts", {}),
+        runtime_failure_context=observation,
+        runtime_repair_rounds=2,
+        runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
+    )
+    second_audit = await run_runtime_execution_auditor(
+        job_id=job_id,
+        global_integration_report=repair_report,
+    )
+    second_audit["previous_audit"] = audit
+    updates.update(
+        {
+            "proposed_patch": repair_patch,
+            "global_integration_agent_report": repair_report,
+            "runtime_execution_audit": second_audit,
+            "codegen_errors": (
+                list(state.get("codegen_errors", []))
+                + repair_report.get("errors", [])
+                + list(second_audit.get("blocking_errors", []))
+            ),
+        }
+    )
+    return updates
+
+
+async def physics_quality_review_node(
+    state: G4CodegenSubgraphState,
+) -> dict[str, Any]:
+    """Run an LLM physics fidelity review and optionally return fixes to integration."""
+    from agent_core.g4_codegen.global_integration_agent import (
+        run_global_integration_agent,
+    )
+    from agent_core.g4_codegen.physics_quality_reviewer import (
+        physics_review_to_runtime_observation,
+        run_physics_quality_reviewer,
+    )
+
+    job_id = state.get("job_id", "unknown")
+    proposed_patch = state.get("proposed_patch", {})
+    global_report = state.get("global_integration_agent_report", {})
+
+    review = await run_physics_quality_reviewer(
+        proposed_patch=proposed_patch,
+        g4_model_ir=state.get("g4_model_ir", {}),
+        module_contracts=state.get("module_contracts", {}),
+        module_contexts=state.get("module_contexts", {}),
+        global_integration_report=global_report,
+        job_id=job_id,
+    )
+    record_event(
+        job_id=job_id,
+        event_type="physics_quality_review",
+        status="passed" if review.get("status") == "pass" else "failed",
+        phase="g4_codegen",
+        module_name="physics_quality_reviewer",
+        summary=f"Physics quality review {review.get('status')}",
+        metrics={
+            "overall_score": review.get("overall_score"),
+            "required_fix_count": len(review.get("required_fixes", [])),
+        },
+        errors=[
+            f"{fix.get('target', 'physics_review')}: {fix.get('message', '')}"
+            for fix in review.get("required_fixes", [])
+            if isinstance(fix, dict)
+        ],
+        details=review,
+    )
+
+    updates: dict[str, Any] = {
+        "physics_quality_review": review,
+        "current_node": "physics_quality_review",
+    }
+    if review.get("status") == "pass":
+        return updates
+
+    observation = physics_review_to_runtime_observation(review)
+    repair_patch, repair_report = await run_global_integration_agent(
+        proposed_patch,
+        job_id=job_id,
+        module_results=state.get("module_results", {}),
+        module_contracts=state.get("module_contracts", {}),
+        module_contexts=state.get("module_contexts", {}),
+        interface_contracts=state.get("interface_contracts", {}),
+        runtime_failure_context=observation,
+        runtime_repair_rounds=2,
+        runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
+    )
+    second_review = await run_physics_quality_reviewer(
+        proposed_patch=repair_patch,
+        g4_model_ir=state.get("g4_model_ir", {}),
+        module_contracts=state.get("module_contracts", {}),
+        module_contexts=state.get("module_contexts", {}),
+        global_integration_report=repair_report,
+        job_id=job_id,
+    )
+    second_review["previous_review"] = review
+    updates.update(
+        {
+            "proposed_patch": repair_patch,
+            "global_integration_agent_report": repair_report,
+            "physics_quality_review": second_review,
+            "codegen_errors": (
+                list(state.get("codegen_errors", []))
+                + repair_report.get("errors", [])
+                + [
+                    f"{fix.get('target', 'physics_review')}: {fix.get('message', '')}"
+                    for fix in second_review.get("required_fixes", [])
+                    if isinstance(fix, dict)
+                ]
+            ),
+        }
+    )
+    return updates
 
 
 async def persist_codegen_output_node(
@@ -908,10 +751,10 @@ async def persist_codegen_output_node(
     job_id = state.get("job_id", "unknown")
     proposed_patch = state.get("proposed_patch", {})
 
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
     job_dir = get_job_dir(job_id)
-    codegen_dir = job_dir / "06_codegen"
+    codegen_dir = job_dir / STAGE_CODEGEN
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     # Save proposed patch to standard location
@@ -920,52 +763,41 @@ async def persist_codegen_output_node(
 
     # Determine status
     has_code = bool(proposed_patch.get("changed_files"))
-    cross_hard = state.get("cross_file_hard_gate", {})
-    cross_llm = state.get("cross_file_llm_gate", {})
     global_integration = state.get("global_integration_agent_report", {})
-
-    # Check static semantic scan status
-    static_scan = state.get("static_semantic_scan", {})
+    runtime_audit = state.get("runtime_execution_audit", {})
+    physics_review = state.get("physics_quality_review", {})
 
     module_results = state.get("module_results", {})
-    module_gate_results = state.get("module_gate_results", {})
-    layer_gate_results = state.get("layer_gate_results", {})
     modules_in_patch = {
         f.get("module_name") for f in proposed_patch.get("changed_files", []) if isinstance(f, dict)
     }
     missing_modules = REQUIRED_MODULES - set(module_results.keys())
     missing_from_patch = REQUIRED_MODULES - modules_in_patch
-    failed_module_gates = [
+    failed_modules = [
         module_name
         for module_name in REQUIRED_MODULES
-        if module_gate_results.get(module_name, {}).get("hard", {}).get("status") != "pass"
-        or module_gate_results.get(module_name, {}).get("llm", {}).get("status") != "pass"
-    ]
-    failed_layer_gates = [
-        layer_name
-        for layer_name, layer_gate in layer_gate_results.items()
-        if layer_gate.get("status") != "pass"
+        if module_results.get(module_name, {}).get("status") not in {"generated", "repaired"}
     ]
 
     new_errors: list[str] = []
 
     if not has_code:
         status = "failed"
-    elif missing_modules or missing_from_patch or failed_module_gates or failed_layer_gates:
-        status = "failed"
-    elif static_scan.get("status") == "fail":
+    elif missing_modules or missing_from_patch or failed_modules:
         status = "failed"
     elif global_integration and global_integration.get("status") != "passed":
         status = "failed"
-    elif cross_hard.get("status") == "fail":
+    elif global_integration and global_integration.get("status") == "passed" and not runtime_audit:
         status = "failed"
-    elif cross_llm.get("status") != "pass":
+    elif runtime_audit and runtime_audit.get("status") != "pass":
+        status = "failed"
+    elif physics_review and physics_review.get("status") != "pass":
         status = "failed"
     else:
         status = "passed"
 
-    # Target directory for generated Geant4 files is 08_geant4
-    geant4_dir = job_dir / "08_geant4"
+    # Target directory for generated Geant4 files.
+    geant4_dir = job_dir / STAGE_PATCH / GEANT4_PROJECT_DIRNAME
     geant4_dir.mkdir(parents=True, exist_ok=True)
     generated_code_dir = str(geant4_dir)
 
@@ -973,12 +805,16 @@ async def persist_codegen_output_node(
         new_errors.append(f"Missing module results: {sorted(missing_modules)}")
     if missing_from_patch:
         new_errors.append(f"Missing modules from patch: {sorted(missing_from_patch)}")
-    if failed_module_gates:
-        new_errors.append(f"Failed module gates: {sorted(failed_module_gates)}")
-    if failed_layer_gates:
-        new_errors.append(f"Failed layer gates: {sorted(failed_layer_gates)}")
+    if failed_modules:
+        new_errors.append(f"Failed module generation: {sorted(failed_modules)}")
     if global_integration and global_integration.get("status") != "passed":
         new_errors.append("Global integration agent failed")
+    if global_integration and global_integration.get("status") == "passed" and not runtime_audit:
+        new_errors.append("Runtime execution audit missing")
+    if runtime_audit and runtime_audit.get("status") != "pass":
+        new_errors.append("Runtime execution auditor rejected the simulation artifacts")
+    if physics_review and physics_review.get("status") != "pass":
+        new_errors.append("Physics quality reviewer requested revision or failed")
 
     updates: dict[str, Any] = {
         "proposed_patch_path": str(patch_path),
@@ -997,7 +833,8 @@ async def persist_codegen_output_node(
         metrics={
             "changed_file_count": len(proposed_patch.get("changed_files", [])),
             "missing_module_count": len(missing_modules),
-            "failed_module_gate_count": len(failed_module_gates),
+            "failed_module_count": len(failed_modules),
+            "physics_review_score": physics_review.get("overall_score"),
         },
         artifacts=[{"path": str(patch_path)}, {"path": generated_code_dir}],
         errors=list(state.get("codegen_errors", [])) + new_errors,
@@ -1012,8 +849,9 @@ async def persist_codegen_output_node(
             details={
                 "missing_modules": sorted(missing_modules),
                 "missing_from_patch": sorted(missing_from_patch),
-                "failed_module_gates": sorted(failed_module_gates),
-                "failed_layer_gates": sorted(failed_layer_gates),
+                "failed_modules": sorted(failed_modules),
+                "runtime_execution_audit": runtime_audit,
+                "physics_quality_review": physics_review,
             },
         )
     return updates

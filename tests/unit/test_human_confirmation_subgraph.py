@@ -16,6 +16,13 @@ from agent_core.human_confirmation.nodes import (
     parse_confirmation_response,
     validate_confirmation_completeness,
 )
+from agent_core.human_confirmation.schemas import (
+    ConfirmationRecord,
+    ConfirmationRequest,
+    ConfirmationResponse,
+    ProposedModelCompletion,
+)
+from agent_core.workspace.paths import STAGE_HUMAN_CONFIRMATION, STAGE_MODEL_IR
 
 
 @pytest.fixture
@@ -29,7 +36,7 @@ def temp_job_dir(tmp_path):
 @pytest.fixture
 def sample_model_ir(temp_job_dir):
     """Create sample model IR for testing."""
-    ir_path = temp_job_dir / "03_g4_modeling" / "g4_model_ir.json"
+    ir_path = temp_job_dir / STAGE_MODEL_IR / "g4_model_ir.json"
     ir_path.parent.mkdir(parents=True, exist_ok=True)
     ir_data = {
         "components": [
@@ -62,7 +69,7 @@ def sample_model_ir(temp_job_dir):
 @pytest.fixture
 def sample_evidence_map(temp_job_dir):
     """Create sample evidence map for testing."""
-    ev_path = temp_job_dir / "03_g4_modeling" / "evidence_map.json"
+    ev_path = temp_job_dir / STAGE_MODEL_IR / "evidence_map.json"
     ev_path.parent.mkdir(parents=True, exist_ok=True)
     ev_data = {
         "user_provided_fields": ["components.water_tank.material_id"],
@@ -130,7 +137,7 @@ class TestGetConfirmationDir:
 
         conf_dir = _get_confirmation_dir("test-job-123")
         assert conf_dir.exists()
-        assert conf_dir.name == "04_human_confirmation"
+        assert conf_dir.name == STAGE_HUMAN_CONFIRMATION
 
 
 class TestBuildProposedModelCompletion:
@@ -150,6 +157,7 @@ class TestBuildProposedModelCompletion:
 
         # Load and verify content
         proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+        ProposedModelCompletion.model_validate(proposal)
         assert proposal["job_id"] == "test-job-123"
         assert "proposed_components" in proposal
         assert proposal["schema_version"] == "proposed_model_completion_v1"
@@ -175,6 +183,7 @@ class TestGenerateConfirmationRequest:
 
         # Load and verify content
         request = json.loads(request_path.read_text(encoding="utf-8"))
+        ConfirmationRequest.model_validate(request)
         assert request["job_id"] == "test-job-123"
         assert request["round_id"] == 1
         assert "questions" in request
@@ -234,6 +243,7 @@ class TestParseConfirmationResponse:
         # Check output file exists
         response_path = Path(result["confirmation_response_path"])
         assert response_path.exists()
+        ConfirmationResponse.model_validate_json(response_path.read_text(encoding="utf-8"))
 
     @pytest.mark.asyncio
     async def test_parse_confirmation_response_edit(self, base_state, temp_job_dir):
@@ -300,6 +310,9 @@ class TestMergeUserConfirmation:
         # Check files exist
         assert Path(result["confirmation_record_path"]).exists()
         assert Path(result["confirmed_model_plan_path"]).exists()
+        ConfirmationRecord.model_validate_json(
+            Path(result["confirmation_record_path"]).read_text(encoding="utf-8")
+        )
 
     @pytest.mark.asyncio
     async def test_merge_user_confirmation_edit(self, base_state, temp_job_dir):

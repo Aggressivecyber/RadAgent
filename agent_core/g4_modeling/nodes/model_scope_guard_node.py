@@ -10,8 +10,9 @@ import json
 import logging
 from typing import Any
 
-from agent_core.config.workspace import get_stage_dir
 from agent_core.g4_modeling.subgraph_state import G4ModelingSubgraphState as RadiationAgentState
+from agent_core.workspace.io import get_stage_dir
+from agent_core.workspace.paths import STAGE_MODEL_IR
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ async def model_scope_guard_node(state: RadiationAgentState) -> dict[str, Any]:
 
     Reads: g4_model_ir (with evidence and target_system)
     Writes: model_scope_guard_result
-    Persists: 03_model_ir/scope_guard.json
+    Persists: model IR stage scope_guard.json
     """
     model_ir_dict = state.get("g4_model_ir", {})
     job_id = state.get("job_id", "")
@@ -89,7 +90,7 @@ async def model_scope_guard_node(state: RadiationAgentState) -> dict[str, Any]:
 
     # Persist
     if job_id:
-        model_ir_dir = get_stage_dir(job_id, "03_model_ir")
+        model_ir_dir = get_stage_dir(job_id, STAGE_MODEL_IR)
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         guard_file = model_ir_dir / "scope_guard.json"
         guard_file.write_text(json.dumps(guard_result, indent=2, ensure_ascii=False))

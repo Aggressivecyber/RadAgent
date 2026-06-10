@@ -35,14 +35,15 @@ def test_graph_does_not_import_legacy_nodes():
                 )
 
 
-def test_graph_uses_module_agent_nodes():
-    """g4_codegen_graph must use module agent nodes."""
+def test_graph_uses_module_layer_nodes():
+    """g4_codegen_graph must use module layer nodes."""
     graph_file = Path("agent_core/graph/subgraphs/g4_codegen_graph.py")
     source = graph_file.read_text()
 
     # Must import from graph_nodes (module agent system)
     assert "from agent_core.g4_codegen.graph_nodes import" in source
-    # Must have module agent nodes
-    assert "run_module_agent_node" in source
-    assert "run_module_hard_gate_node" in source
-    assert "run_module_llm_gate_node" in source
+    # Must have module layer nodes; individual agents are called inside the layer node.
+    assert "run_module_layer_node" in source
+    assert "runtime_execution_audit_node" in source
+    assert "run_module_hard_gate_node" not in source
+    assert "run_module_llm_gate_node" not in source

@@ -43,6 +43,7 @@ class G4ModelingSubgraphState(TypedDict, total=False):
     construction_ledger_path: str
     model_review_report_path: str
     g4_modeling_status: str
+    human_confirmation_required: bool
 
     # Control
     current_node: str

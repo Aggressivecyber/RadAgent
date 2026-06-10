@@ -1,4 +1,4 @@
-"""Test that old nodes/integration_assembler is deprecated and not imported."""
+"""Test that the deleted nodes/integration_assembler is not imported."""
 
 from __future__ import annotations
 

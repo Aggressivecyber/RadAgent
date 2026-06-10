@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from agent_core.g4_codegen.schemas import GeometryStrategyPlan
+from agent_core.workspace.paths import STAGE_CODEGEN
 
 EXTERNAL_EXTENSIONS = {".step", ".stp", ".stl", ".ply", ".gdml"}
 
@@ -30,7 +31,7 @@ def plan_geometry_strategy(
         geo_type = geo.get("type", "primitive")
 
         if geo_type in ("cad", "gdml", "step", "stl", "ply"):
-            strategies[cid] = "cad_placeholder"
+            strategies[cid] = "external_cad_required"
             file_path = geo.get("file_path", "")
             file_exists = False
             if file_path:
@@ -68,9 +69,9 @@ def plan_geometry_strategy(
     )
 
     # Persist
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
-    codegen_dir = get_job_dir(job_id) / "06_codegen"
+    codegen_dir = get_job_dir(job_id) / STAGE_CODEGEN
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     plan_path = codegen_dir / "geometry_strategy_plan.json"

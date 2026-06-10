@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from agent_core.g4_modeling.schemas.component_spec import ComponentSpec
@@ -149,20 +151,13 @@ class TestGeometryTreeCompleteness:
             material_id="air",
             source_evidence=["user_spec"],
         )
-        # Pydantic validator catches this at model level
-        try:
-            ir = G4ModelIR(
+        with pytest.raises(Exception):
+            G4ModelIR(
                 model_ir_id="test",
                 job_id="job",
                 components=[w1, w2],
                 materials=[_mat("air")],
             )
-            # If construction succeeded, the validator should catch it
-            validator = GeometryInterfaceValidator()
-            passed, errors = validator.validate(ir)
-            assert not passed
-        except Exception:
-            pass  # Expected — Pydantic rejects at construction
 
     def test_deep_tree_passes(self):
         """Multi-level tree should pass."""

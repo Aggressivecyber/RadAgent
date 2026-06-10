@@ -10,8 +10,9 @@ import json
 import logging
 from typing import Any, Literal, cast
 
-from agent_core.config.workspace import get_stage_dir
 from agent_core.g4_modeling.subgraph_state import G4ModelingSubgraphState as RadiationAgentState
+from agent_core.workspace.io import get_stage_dir
+from agent_core.workspace.paths import STAGE_MODEL_IR
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
 
     Reads: g4_model_ir, g4_context, web_context, context_decision
     Writes: g4_model_ir.evidence (updated)
-    Persists: 03_model_ir/evidence_context.json
+    Persists: model IR stage evidence_context.json
     """
     model_ir_dict = state.get("g4_model_ir", {})
     g4_context: list[dict[str, Any]] = state.get("g4_context", [])  # type: ignore[assignment]
@@ -116,7 +117,7 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
 
     # Persist
     if job_id:
-        model_ir_dir = get_stage_dir(job_id, "03_model_ir")
+        model_ir_dir = get_stage_dir(job_id, STAGE_MODEL_IR)
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         ev_file = model_ir_dir / "evidence_context.json"
         ev_file.write_text(

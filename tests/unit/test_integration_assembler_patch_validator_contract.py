@@ -49,25 +49,14 @@ def _make_module_result(
     }
 
 
-def _make_gate_results_pass(module_names: list[str]) -> dict[str, dict[str, Any]]:
-    """Build gate results where all modules pass both gates."""
-    results = {}
-    for name in module_names:
-        results[name] = {
-            "hard": {"status": "pass", "checks": [], "errors": []},
-            "llm": {"status": "pass", "checks": [], "errors": []},
-        }
-    return results
-
-
 class TestAssembleProposedPatchPatchValidatorContract:
     """Verify that assemble_proposed_patch output passes PatchValidator."""
 
     def test_patch_satisfies_validator(self, workspace: Path) -> None:
         """assemble_proposed_patch output must satisfy PatchValidator."""
         module_results = {
-            "material": _make_module_result(
-                "material",
+            "simulation_core": _make_module_result(
+                "simulation_core",
                 [
                     {
                         "path": "src/MaterialRegistry.cc",
@@ -75,20 +64,18 @@ class TestAssembleProposedPatchPatchValidatorContract:
                     },
                 ],
             ),
-            "geometry": _make_module_result(
-                "geometry",
+            "beam_physics": _make_module_result(
+                "beam_physics",
                 [
                     {
-                        "path": "src/DetectorConstruction.cc",
-                        "new_content": '#include "DetectorConstruction.hh"\nG4VPhysicalVolume* DetectorConstruction::Construct() { return nullptr; }',  # noqa: E501
+                        "path": "src/PrimaryGeneratorAction.cc",
+                        "new_content": '#include "PrimaryGeneratorAction.hh"\nvoid PrimaryGeneratorAction::GeneratePrimaries(G4Event*) {}',  # noqa: E501
                     },
                 ],
             ),
         }
 
-        gate_results = _make_gate_results_pass(["material", "geometry"])
-
-        patch = assemble_proposed_patch(module_results, gate_results, "test_job")
+        patch = assemble_proposed_patch(module_results, "test_job")
 
         # Validate against PatchValidator
         pv = PatchValidator()
@@ -98,8 +85,8 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_patch_has_required_top_level_fields(self, workspace: Path) -> None:
         """Patch must contain all required top-level fields."""
         module_results = {
-            "material": _make_module_result(  # noqa: E501  # noqa: E501
-                "material",
+            "simulation_core": _make_module_result(
+                "simulation_core",
                 [
                     {
                         "path": "src/MaterialRegistry.cc",
@@ -108,9 +95,8 @@ class TestAssembleProposedPatchPatchValidatorContract:
                 ],
             ),
         }
-        gate_results = _make_gate_results_pass(["material"])
 
-        patch = assemble_proposed_patch(module_results, gate_results, "test_job")
+        patch = assemble_proposed_patch(module_results, "test_job")
 
         required_fields = [
             "patch_id",
@@ -128,16 +114,15 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_patch_id_includes_job_id(self, workspace: Path) -> None:
         """patch_id should contain the job_id."""
         module_results = {
-            "material": _make_module_result(
-                "material",
+            "simulation_core": _make_module_result(
+                "simulation_core",
                 [
                     {"path": "src/test.cc", "new_content": "// test"},
                 ],
             ),
         }
-        gate_results = _make_gate_results_pass(["material"])
 
-        patch = assemble_proposed_patch(module_results, gate_results, "my_job_42")
+        patch = assemble_proposed_patch(module_results, "my_job_42")
 
         assert "my_job_42" in patch["patch_id"]
         assert patch["job_id"] == "my_job_42"
@@ -145,16 +130,15 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_change_type_is_valid(self, workspace: Path) -> None:
         """change_type should be a recognized value."""
         module_results = {
-            "material": _make_module_result(
-                "material",
+            "simulation_core": _make_module_result(
+                "simulation_core",
                 [
                     {"path": "src/test.cc", "new_content": "// test"},
                 ],
             ),
         }
-        gate_results = _make_gate_results_pass(["material"])
 
-        patch = assemble_proposed_patch(module_results, gate_results, "test")
+        patch = assemble_proposed_patch(module_results, "test")
 
         valid_types = {"create", "modify", "create_or_replace"}
         assert patch["change_type"] in valid_types
@@ -162,16 +146,15 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_risk_level_is_valid(self, workspace: Path) -> None:
         """risk_level should be a recognized value."""
         module_results = {
-            "material": _make_module_result(
-                "material",
+            "simulation_core": _make_module_result(
+                "simulation_core",
                 [
                     {"path": "src/test.cc", "new_content": "// test"},
                 ],
             ),
         }
-        gate_results = _make_gate_results_pass(["material"])
 
-        patch = assemble_proposed_patch(module_results, gate_results, "test")
+        patch = assemble_proposed_patch(module_results, "test")
 
         valid_levels = {"low", "medium", "high", "critical"}
         assert patch["risk_level"] in valid_levels
@@ -179,38 +162,36 @@ class TestAssembleProposedPatchPatchValidatorContract:
     def test_changed_files_not_empty_when_modules_pass(self, workspace: Path) -> None:
         """changed_files should not be empty when at least one module passes."""
         module_results = {
-            "material": _make_module_result(
-                "material",
+            "simulation_core": _make_module_result(
+                "simulation_core",
                 [
                     {"path": "src/test.cc", "new_content": "// test"},
                 ],
             ),
         }
-        gate_results = _make_gate_results_pass(["material"])
 
-        patch = assemble_proposed_patch(module_results, gate_results, "test")
+        patch = assemble_proposed_patch(module_results, "test")
 
         assert len(patch["changed_files"]) > 0
 
     def test_two_modules_both_pass(self, workspace: Path) -> None:
-        """Both modules pass both gates — all files should be in patch."""
+        """Generated/repaired modules should forward all files into the patch."""
         module_results = {
-            "material": _make_module_result(
-                "material",
+            "simulation_core": _make_module_result(
+                "simulation_core",
                 [
                     {"path": "src/Material.cc", "new_content": "// material"},
                 ],
             ),
-            "physics": _make_module_result(
-                "physics",
+            "beam_physics": _make_module_result(
+                "beam_physics",
                 [
                     {"path": "src/Physics.cc", "new_content": "// physics"},
                 ],
             ),
         }
-        gate_results = _make_gate_results_pass(["material", "physics"])
 
-        patch = assemble_proposed_patch(module_results, gate_results, "test")
+        patch = assemble_proposed_patch(module_results, "test")
 
         paths = [f["path"] for f in patch["changed_files"]]
         assert "src/Material.cc" in paths

@@ -1,8 +1,8 @@
 """Tests for Codegen → Patch contract consistency.
 
 Verifies:
-- integration_assembler_node outputs changed_files with new_content
-- patching apply_patch reads new_content (with deprecated content fallback)
+- assemble_proposed_patch outputs changed_files with new_content
+- patching apply_patch rejects deprecated content and reads new_content
 - PatchValidator validates the new format
 """
 
@@ -75,33 +75,32 @@ class TestCodegenPatchContract:
     async def test_assembler_outputs_changed_files_with_new_content(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """integration_assembler_node must output changed_files[].new_content."""
+        """assemble_proposed_patch must output changed_files[].new_content."""
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
 
-        from agent_core.g4_modeling.nodes.integration_assembler_node import (
-            integration_assembler_node,
+        from agent_core.g4_codegen.integration.integration_assembler import (
+            assemble_proposed_patch,
         )
 
-        state = {
-            "code_modules": [
-                {
-                    "module_name": "TestModule",
-                    "module_type": "detector",
-                    "source_files": ["TestModule.cc"],
-                    "header_files": ["TestModule.hh"],
-                    "config_files": [],
-                    "generated_content": {
-                        "TestModule::TestModule.cc": "// C++ source",
-                        "TestModule::TestModule.hh": "// C++ header",
+        module_results = {
+            "runtime_app": {
+                "status": "generated",
+                "generated_files": [
+                    {
+                        "path": "src/TestModule.cc",
+                        "operation": "create_or_replace",
+                        "new_content": "// C++ source",
                     },
-                }
-            ],
-            "g4_model_ir": _make_minimal_model_ir_dict(),
-            "job_id": "test_job",
+                    {
+                        "path": "include/TestModule.hh",
+                        "operation": "create_or_replace",
+                        "new_content": "// C++ header",
+                    },
+                ],
+            }
         }
 
-        result = await integration_assembler_node(state)
-        patch = result["code_patch"]
+        patch = assemble_proposed_patch(module_results, "test_job")
 
         # Must use new schema
         assert patch["patch_type"] == "json_file_replacement"

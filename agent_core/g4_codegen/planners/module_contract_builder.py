@@ -6,199 +6,97 @@ import json
 from typing import Any
 
 from agent_core.g4_codegen.schemas import ModuleContract
+from agent_core.workspace.paths import STAGE_CODEGEN
 
-# P0-2: All paths are relative to 08_geant4 (no 08_geant4/ prefix).
+# P0-2: All paths are relative to geant4_project (no geant4_project/ prefix).
 # file_access_policy allows: include/*.hh, src/*.cc, macros/*.mac,
-# CMakeLists.txt, main.cc — all relative to generated_code_dir (08_geant4).
+# CMakeLists.txt, main.cc — all relative to generated_code_dir (geant4_project).
 MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
-    "material": {
-        "module_type": "material",
+    "simulation_core": {
+        "module_type": "simulation_core",
         "responsibilities": [
-            "Define NIST materials via G4NistManager",
-            "Define custom materials",
-            "Provide material lookup by name",
-            "Material name mapping",
+            "Define materials and material lookup used by the whole Geant4 project",
+            "Build the full detector/world geometry from G4ModelIR without "
+            "unauthorized simplification",
+            "Create placements, rotations, overlap policy, and logical volume accessors coherently",
+            "Implement hit, sensitive detector, and scoring data structures as one aligned model",
+            "Attach sensitive detectors and scoring paths consistently with the generated geometry",
+            "Represent dose/edep scoring with explicit transport precision choices "
+            "such as range cuts, step limits, or production cuts when required by "
+            "the scenario",
         ],
         "output_files": [
             "include/MaterialRegistry.hh",
             "src/MaterialRegistry.cc",
-        ],
-        "required_symbols": ["MaterialRegistry"],
-        "dependencies": [],
-        "forbidden_patterns": [
-            "G4PVPlacement",
-            "G4ParticleGun",
-            "G4VSensitiveDetector",
-        ],
-    },
-    "geometry": {
-        "module_type": "geometry",
-        "responsibilities": [
-            "Define world volume",
-            "Create solids (G4Box, G4Tubs, etc.)",
-            "Create logical volumes",
-            "Build component hierarchy",
-            "Use MaterialRegistry for all material lookup",
-            "Use PlacementManager for all non-world physical volume placement",
-            "World physical volume may be constructed directly with null mother",
-            "Expose logical volumes needed by sensitive_detector without creating detectors",
-            "Do not include, instantiate, register, or attach SensitiveDetector",
-        ],
-        "output_files": [
-            "include/DetectorConstruction.hh",
-            "src/DetectorConstruction.cc",
-        ],
-        "required_symbols": ["DetectorConstruction"],
-        "dependencies": ["material", "placement"],
-        "forbidden_patterns": [
-            "G4ParticleGun",
-            "G4VSensitiveDetector",
-            "SensitiveDetector",
-            "SetSensitiveDetector",
-        ],
-    },
-    "placement": {
-        "module_type": "placement",
-        "responsibilities": [
-            "Manage G4PVPlacement instances",
-            (
-                "Expose PlacementManager::PlaceVolume(logical, name, mother, position, "
-                "rotation, copy_no, check_overlaps)"
-            ),
-            "Handle mother-child relationships",
-            "Apply translations and rotations",
-            "checkOverlaps configuration",
-        ],
-        "output_files": [
             "include/PlacementManager.hh",
             "src/PlacementManager.cc",
-        ],
-        "required_symbols": ["PlacementManager"],
-        "dependencies": ["material"],
-        "forbidden_patterns": [
-            "G4ParticleGun",
-            "G4VSensitiveDetector",
-        ],
-    },
-    "source": {
-        "module_type": "source",
-        "responsibilities": [
-            "Configure particle gun or GPS",
-            "Set particle type, energy, direction",
-            "Handle multi-source if needed",
-        ],
-        "output_files": [
-            "include/PrimaryGeneratorAction.hh",
-            "src/PrimaryGeneratorAction.cc",
-        ],
-        "required_symbols": ["PrimaryGeneratorAction"],
-        "dependencies": [],
-        "forbidden_patterns": [
-            "G4PVPlacement",
-            "G4VSensitiveDetector",
-        ],
-    },
-    "physics": {
-        "module_type": "physics",
-        "responsibilities": [
-            "Register physics list",
-            "Configure EM/hadronic processes",
-            "Set production cuts",
-        ],
-        "output_files": [
-            "include/PhysicsListFactoryWrapper.hh",
-            "src/PhysicsListFactoryWrapper.cc",
-            "macros/physics_list.mac",
-        ],
-        "required_symbols": ["PhysicsListFactoryWrapper"],
-        "dependencies": [],
-        "forbidden_patterns": [
-            "G4PVPlacement",
-            "G4ParticleGun",
-        ],
-    },
-    "sensitive_detector": {
-        "module_type": "sensitive_detector",
-        "responsibilities": [
-            "Implement ProcessHits",
-            "Define Hit class with energy, position, and trackID accessors",
-            "Register with G4SDManager",
-            "Attach to logical volumes without static methods that use instance state",
-            "Use GetName() or explicit detector names, never hallucinated SensitiveDetectorName",
-        ],
-        "output_files": [
+            "include/DetectorConstruction.hh",
+            "src/DetectorConstruction.cc",
             "include/Hit.hh",
             "src/Hit.cc",
             "include/SensitiveDetector.hh",
             "src/SensitiveDetector.cc",
-        ],
-        "required_symbols": ["SensitiveDetector", "Hit", "HitsCollection"],
-        "dependencies": [],
-        "forbidden_patterns": [
-            "G4ParticleGun",
-        ],
-    },
-    "scoring": {
-        "module_type": "scoring",
-        "responsibilities": [
-            "Manage scoring IDs and edep/dose data interfaces",
-            (
-                "Expose dose_Gy helper using detector mass from logical volume "
-                "or explicit interface input"
-            ),
-            "Provide scoring records for output_manager",
-            "Do not write CSV/JSON files; output_manager owns file output",
-            (
-                "Do not set or replace sensitive detector ownership; "
-                "sensitive_detector owns SD attachment"
-            ),
-            "Do not create geometry or materials; geometry owns placements and volumes",
-            "Do not use placeholder scorers; use G4PSDoseDeposit only for dose/edep",
-        ],
-        "output_files": [
             "include/ScoringManager.hh",
             "src/ScoringManager.cc",
         ],
-        "required_symbols": ["ScoringManager"],
-        "dependencies": ["sensitive_detector"],
-        "forbidden_patterns": [
-            "G4ParticleGun",
-            "G4PVPlacement",
-            "G4Box",
-            "G4NistManager",
+        "required_symbols": [
+            "MaterialRegistry",
+            "PlacementManager",
+            "DetectorConstruction",
+            "Hit",
+            "SensitiveDetector",
+            "ScoringManager",
         ],
+        "dependencies": [],
+        "forbidden_patterns": [],
     },
-    "output_manager": {
-        "module_type": "output_manager",
+    "beam_physics": {
+        "module_type": "beam_physics",
         "responsibilities": [
-            "Handle CSV/JSON output",
-            "Manage output package",
-            "Run/event summary",
-            "Metadata management",
-            "Write CSV rows in the exact same order as the CSV header",
-            "For edep scoring output, use stable columns EventID,edep_MeV,dose_Gy",
-            "Never write fixed CSV columns by directly iterating std::map key order",
+            "Generate the primary particle source from G4ModelIR source requirements",
+            "Select and configure an appropriate Geant4 physics list from the "
+            "requested physics model",
+            "Set production cuts and transport controls needed for the requested scoring fidelity",
+            "Keep source units, direction, spatial distribution, and particle "
+            "identity faithful to the requirement",
+        ],
+        "output_files": [
+            "include/PrimaryGeneratorAction.hh",
+            "src/PrimaryGeneratorAction.cc",
+            "include/PhysicsListFactoryWrapper.hh",
+            "src/PhysicsListFactoryWrapper.cc",
+            "macros/physics_list.mac",
+        ],
+        "required_symbols": [
+            "PrimaryGeneratorAction",
+            "PhysicsListFactoryWrapper",
+        ],
+        "dependencies": [],
+        "forbidden_patterns": [],
+    },
+    "runtime_app": {
+        "module_type": "runtime_app",
+        "responsibilities": [
+            "Wire detector construction, physics, source, actions, scoring, and "
+            "output into a runnable application",
+            "Generate run/event/stepping actions and output manager with real event "
+            "rows and scoring artifacts",
+            "Generate main.cc, CMakeLists.txt, run.mac, and init.mac from the "
+            "actual generated interfaces",
+            "Configure CMake for Geant4 UI/Vis/Qt support so the executable can "
+            "open the Geant4 interactive UI",
+            "Follow the Geant4 B1-style launch contract: no script argument opens "
+            "interactive UI; a macro script argument runs batch mode",
+            "Write runtime artifacts to G4_OUTPUT_DIR when set, falling back only "
+            "when the environment variable is absent",
+            "Preserve the smoke artifact contract with g4_summary.json, "
+            "provenance.json, event_table.csv, edep_3d.csv, and dose_3d.csv",
+            "Ensure event_table.csv has EventID,edep_MeV,dose_Gy rows and "
+            "edep/dose mesh CSVs contain non-zero physical quantities",
         ],
         "output_files": [
             "include/OutputManager.hh",
             "src/OutputManager.cc",
-        ],
-        "required_symbols": ["OutputManager"],
-        "dependencies": [],
-        "forbidden_patterns": [
-            "G4PVPlacement",
-            "G4ParticleGun",
-        ],
-    },
-    "action_initialization": {
-        "module_type": "action_initialization",
-        "responsibilities": [
-            "Initialize all user actions",
-            "Wire RunAction, EventAction, SteppingAction",
-            "Connect PrimaryGeneratorAction",
-            "Connect OutputManager",
-        ],
-        "output_files": [
             "include/ActionInitialization.hh",
             "src/ActionInitialization.cc",
             "include/RunAction.hh",
@@ -207,45 +105,20 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "src/EventAction.cc",
             "include/SteppingAction.hh",
             "src/SteppingAction.cc",
-        ],
-        "required_symbols": [
-            "ActionInitialization",
-            "RunAction",
-            "EventAction",
-            "SteppingAction",
-        ],
-        "dependencies": ["output_manager", "source"],
-        "forbidden_patterns": [],
-    },
-    "main_cmake": {
-        "module_type": "main_cmake",
-        "responsibilities": [
-            "Generate main.cc",
-            "Generate CMakeLists.txt",
-            "Generate run.mac and init.mac",
-            "Directory structure",
-            "Use the actual generated physics module class/header in main.cc",
-            "List main.cc and generated src/*.cc explicitly in CMakeLists.txt",
-            "Avoid double initialization between main.cc and init.mac",
-        ],
-        "output_files": [
             "main.cc",
             "CMakeLists.txt",
             "macros/run.mac",
             "macros/init.mac",
         ],
-        "required_symbols": ["main"],
-        "dependencies": [
-            "material",
-            "geometry",
-            "placement",
-            "source",
-            "physics",
-            "sensitive_detector",
-            "scoring",
-            "output_manager",
-            "action_initialization",
+        "required_symbols": [
+            "OutputManager",
+            "ActionInitialization",
+            "RunAction",
+            "EventAction",
+            "SteppingAction",
+            "main",
         ],
+        "dependencies": ["simulation_core", "beam_physics"],
         "forbidden_patterns": [],
     },
 }
@@ -263,9 +136,9 @@ def build_module_contracts(
     required = codegen_plan.get("required_modules", list(MODULE_DEFINITIONS.keys()))
     contracts: dict[str, dict[str, Any]] = {}
 
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
-    contracts_dir = get_job_dir(job_id) / "06_codegen" / "module_contracts"
+    contracts_dir = get_job_dir(job_id) / STAGE_CODEGEN / "module_contracts"
     contracts_dir.mkdir(parents=True, exist_ok=True)
 
     for module_name in required:
@@ -282,8 +155,6 @@ def build_module_contracts(
             required_symbols=defn["required_symbols"],
             dependencies=defn["dependencies"],
             forbidden_patterns=defn["forbidden_patterns"],
-            hard_gate_names=[f"{module_name}_hard_gate"],
-            llm_gate_names=[f"{module_name}_llm_gate"],
         )
 
         contracts[module_name] = contract.model_dump()

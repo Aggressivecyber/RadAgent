@@ -53,8 +53,8 @@ class CodeModulePlan(BaseModel):
 class CodeGenerationPlan(BaseModel):
     """Complete code generation plan derived from G4ModelIR.
 
-    Produced by geometry_builder_plan_node and consumed by the
-    codegen nodes to generate structured C++ code.
+    Describes structured module boundaries for Geant4 code generation
+    and gate validation.
     """
 
     plan_id: str = Field(

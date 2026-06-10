@@ -1,4 +1,4 @@
-"""Test interface_contracts produces correct JSON format with all three sections."""
+"""Test interface_contracts reflects actual codegen-visible boundaries."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from agent_core.g4_codegen.interface_contracts import build_interface_contracts
 from agent_core.models.gateway import reset_model_gateway
+from agent_core.workspace.paths import STAGE_CODEGEN
 
 
 @pytest.fixture(autouse=True)
@@ -28,8 +29,8 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 class TestInterfaceContractsFormat:
     """Verify interface_contracts outputs correct JSON format."""
 
-    def test_contains_all_three_sections(self, workspace: Path) -> None:
-        """Output must contain cad_gdml, g4_to_tcad, tcad_to_spice sections."""
+    def test_contains_current_boundary_sections(self, workspace: Path) -> None:
+        """Output must contain current CAD/GDML and metadata sections."""
         contracts = build_interface_contracts(
             {"model_ir_id": "test"},
             {"requires_external_files": []},
@@ -37,8 +38,8 @@ class TestInterfaceContractsFormat:
         )
 
         assert "cad_gdml" in contracts
-        assert "g4_to_tcad" in contracts
-        assert "tcad_to_spice" in contracts
+        assert "downstream_handoffs" in contracts
+        assert "metadata" in contracts
 
     def test_cad_gdml_is_list(self, workspace: Path) -> None:
         """cad_gdml should be a list."""
@@ -50,53 +51,25 @@ class TestInterfaceContractsFormat:
 
         assert isinstance(contracts["cad_gdml"], list)
 
-    def test_g4_to_tcad_is_list(self, workspace: Path) -> None:
-        """g4_to_tcad should be a list."""
+    def test_no_external_files_does_not_create_placeholder_contract(self, workspace: Path) -> None:
+        """No CAD/GDML input should produce no CAD/GDML contract."""
         contracts = build_interface_contracts(
             {"model_ir_id": "test"},
             {"requires_external_files": []},
-            "ic_g4tcad_test",
+            "ic_no_external_test",
         )
 
-        assert isinstance(contracts["g4_to_tcad"], list)
-        assert len(contracts["g4_to_tcad"]) > 0
+        assert contracts["cad_gdml"] == []
 
-    def test_tcad_to_spice_is_list(self, workspace: Path) -> None:
-        """tcad_to_spice should be a list."""
+    def test_downstream_handoffs_are_not_speculative(self, workspace: Path) -> None:
+        """TCAD/SPICE handoffs should not be invented without explicit IR support."""
         contracts = build_interface_contracts(
             {"model_ir_id": "test"},
             {"requires_external_files": []},
-            "ic_tcadspice_test",
+            "ic_downstream_test",
         )
 
-        assert isinstance(contracts["tcad_to_spice"], list)
-        assert len(contracts["tcad_to_spice"]) > 0
-
-    def test_g4_to_tcad_has_required_fields(self, workspace: Path) -> None:
-        """G4→TCAD contract should have required fields."""
-        contracts = build_interface_contracts(
-            {"model_ir_id": "test"},
-            {"requires_external_files": []},
-            "ic_fields_test",
-        )
-
-        g4_tcad = contracts["g4_to_tcad"][0]
-        assert "contract_id" in g4_tcad
-        assert "conversion_required" in g4_tcad
-        assert "conversion_status" in g4_tcad
-
-    def test_tcad_to_spice_has_required_fields(self, workspace: Path) -> None:
-        """TCAD→SPICE contract should have required fields."""
-        contracts = build_interface_contracts(
-            {"model_ir_id": "test"},
-            {"requires_external_files": []},
-            "ic_spice_test",
-        )
-
-        tcad_spice = contracts["tcad_to_spice"][0]
-        assert "contract_id" in tcad_spice
-        assert "conversion_required" in tcad_spice
-        assert "conversion_status" in tcad_spice
+        assert contracts["downstream_handoffs"] == []
 
     def test_persists_to_file(self, workspace: Path) -> None:
         """interface_contracts.json should be persisted to disk."""
@@ -106,15 +79,15 @@ class TestInterfaceContractsFormat:
             "ic_persist_test",
         )
 
-        from agent_core.config.workspace import get_job_dir
+        from agent_core.workspace.io import get_job_dir
 
-        contracts_path = get_job_dir("ic_persist_test") / "06_codegen" / "interface_contracts.json"
+        contracts_path = get_job_dir("ic_persist_test") / STAGE_CODEGEN / "interface_contracts.json"
         assert contracts_path.exists()
 
         saved = json.loads(contracts_path.read_text())
         assert "cad_gdml" in saved
-        assert "g4_to_tcad" in saved
-        assert "tcad_to_spice" in saved
+        assert "downstream_handoffs" in saved
+        assert "metadata" in saved
 
     def test_with_cad_files(self, workspace: Path) -> None:
         """With CAD files, cad_gdml should reflect them."""

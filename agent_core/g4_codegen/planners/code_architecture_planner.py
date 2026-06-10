@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from agent_core.g4_codegen.schemas import CodeArchitecturePlan
+from agent_core.workspace.paths import STAGE_CODEGEN
 
 DEFAULT_CLASSES = [
     {
@@ -156,9 +157,9 @@ def plan_code_architecture(
     )
 
     # Persist
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
-    codegen_dir = get_job_dir(job_id) / "06_codegen"
+    codegen_dir = get_job_dir(job_id) / STAGE_CODEGEN
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     plan_path = codegen_dir / "code_architecture_plan.json"

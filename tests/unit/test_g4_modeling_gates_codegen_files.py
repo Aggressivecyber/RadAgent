@@ -4,11 +4,11 @@ from pathlib import Path
 
 from agent_core.gates.g4_modeling_gates import run_g4_modeling_gates
 
-from tests.real_g4_modules.common import build_real_g4_model_ir
+from tests.fixtures.real_g4_case import build_real_g4_model_ir
 
 
 async def test_g4_codegen_file_gates_run_without_skipping(tmp_path: Path) -> None:
-    g4_dir = tmp_path / "08_geant4"
+    g4_dir = tmp_path / "geant4_project"
     (g4_dir / "include").mkdir(parents=True)
     (g4_dir / "src").mkdir()
     (g4_dir / "include" / "Example.hh").write_text(

@@ -85,6 +85,8 @@ Create a JSON array of component specifications. Each component must have:
 - sensitive: true if this is a scoring region
 - roles: list of functional roles
 - source_evidence: list of evidence references for these dimensions
+- open_issues: list of unresolved missing dimensions/material details
+- requires_confirmation: true when any required field is missing evidence
 
 RULES:
 1. Exactly ONE world volume (component_type="world") — must be first
@@ -92,7 +94,11 @@ RULES:
 3. Use half-lengths for box (dx=half_width), consistent with Geant4 convention
 4. Layer stacking: use z-axis for beam direction, place layers contiguously
 5. Do NOT merge or skip any layer the user specified
-6. If a dimension is unknown, put a TODO in open_issues and use 0.0 as placeholder
+6. Keep dimensions present, but include only evidence-backed numeric keys
+7. If a dimension is unknown, leave that key out, add a precise open_issues entry,
+   and set requires_confirmation=true
+8. Never use 0.0, 1.0, TODO, "unknown", "default", or other placeholder values
+   to satisfy missing dimensions
 """
 
 PHYSICS_SELECTION_PROMPT = """You are a Geant4 physics list selection specialist.

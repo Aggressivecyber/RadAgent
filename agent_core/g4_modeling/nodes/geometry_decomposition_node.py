@@ -10,7 +10,6 @@ import json
 import logging
 from typing import Any
 
-from agent_core.config.workspace import get_stage_dir
 from agent_core.g4_modeling.prompts.requirement_capture_prompt import (
     GEOMETRY_DECOMPOSITION_PROMPT,
 )
@@ -20,6 +19,8 @@ from agent_core.g4_modeling.schemas.geometry_interface_spec import (
     GeometryInterfaceSpec,
 )
 from agent_core.g4_modeling.subgraph_state import G4ModelingSubgraphState as RadiationAgentState
+from agent_core.workspace.io import get_stage_dir
+from agent_core.workspace.paths import STAGE_MODEL_IR
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ async def geometry_decomposition_node(
 
     Reads: g4_model_ir (requirements, evidence, coordinate_system)
     Writes: g4_model_ir.components, g4_model_ir.interfaces
-    Persists: 03_model_ir/component_specs/*.json
+    Persists: model IR stage component_specs/*.json
     """
     model_ir_dict = state.get("g4_model_ir", {})
     job_id = state.get("job_id", "")
@@ -53,7 +54,7 @@ async def geometry_decomposition_node(
         # Load requirements from file if available
         req_text = "{}"
         if job_id:
-            req_file = get_stage_dir(job_id, "03_model_ir") / "requirements.json"
+            req_file = get_stage_dir(job_id, STAGE_MODEL_IR) / "requirements.json"
             if req_file.is_file():
                 req_text = req_file.read_text()
 
@@ -113,7 +114,7 @@ async def geometry_decomposition_node(
 
     # Persist component specs
     if job_id:
-        model_ir_dir = get_stage_dir(job_id, "03_model_ir")
+        model_ir_dir = get_stage_dir(job_id, STAGE_MODEL_IR)
         specs_dir = model_ir_dir / "component_specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
         for comp in components:

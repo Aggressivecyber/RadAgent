@@ -4,11 +4,12 @@ import json
 from pathlib import Path
 
 from agent_core.graph.main_graph import _load_runtime_failure_context
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION
 
 
 def test_codegen_retry_loads_gate_failure_artifacts(tmp_path: Path) -> None:
     job_dir = tmp_path / "jobs" / "retry_job"
-    gate_dir = job_dir / "08_gate_validation"
+    gate_dir = job_dir / STAGE_GATE_VALIDATION
     output_dir = gate_dir / "g4_output_package"
     output_dir.mkdir(parents=True)
 

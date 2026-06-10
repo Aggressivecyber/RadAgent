@@ -1,6 +1,6 @@
 """Patch format and content validator.
 
-MVP-1 enforces ``json_file_replacement`` mode: every changed file must have
+Current patches use ``json_file_replacement`` mode: every changed file must have
 non-empty ``new_content``.  Empty ``diff_content`` is allowed (it simply
 means no unified diff is provided), but ``new_content`` must always be
 present.

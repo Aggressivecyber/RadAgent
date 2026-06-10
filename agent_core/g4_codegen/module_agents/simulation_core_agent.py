@@ -1,0 +1,165 @@
+"""Simulation core agent — generates geometry, materials, SD, and scoring."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+from agent_core.g4_codegen.module_agents.base import run_module_agent
+from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult
+
+SIMULATION_CORE_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 simulation_core 编码 Agent。
+
+你负责生成材料、放置、几何、Hit、SensitiveDetector 和 ScoringManager 相关文件。
+目标是让这些强耦合物理/几何/计分接口在同一个模块内自洽，不再由多个小模块互相猜接口。
+
+必须生成当前 module_contract.output_files 中列出的完整文件内容。不要生成当前文件组之外的文件。
+
+质量要求：
+1. 不得把需求中的几何、材料、敏感体或 scoring 简化成占位实现。
+2. 材料定义必须来自 G4ModelIR materials，并使用 Geant4/NIST 或明确的自定义材料建模路径。
+3. DetectorConstruction 必须根据 G4ModelIR components 建模 world 和子体层级，保持尺寸、母子关系、
+   材料、位置和旋转一致。
+4. SensitiveDetector 必须注册到 G4SDManager，并 attach 到真实 logical volume。
+5. Hit/ScoringManager 必须承载真实 edep/dose 数据路径，不能只生成表头或固定零值。
+6. 如 scoring 精度依赖步长、range cut、production cut 或用户 limits，必须暴露接口或写入与
+   beam_physics/runtime_app 可连接的配置，不得忽略。
+7. 只返回 JSON，不得输出 Markdown fence。
+"""
+
+SIMULATION_CORE_FILE_GROUPS = [
+    (
+        "materials_and_placement",
+        [
+            "include/MaterialRegistry.hh",
+            "src/MaterialRegistry.cc",
+            "include/PlacementManager.hh",
+            "src/PlacementManager.cc",
+        ],
+        "先生成材料注册和放置工具接口，供后续 DetectorConstruction 使用。",
+    ),
+    (
+        "detector_geometry",
+        [
+            "include/DetectorConstruction.hh",
+            "src/DetectorConstruction.cc",
+        ],
+        "生成 detector/world 几何、logical volume accessors、SD attachment hook。",
+    ),
+    (
+        "sensitive_detector_and_scoring",
+        [
+            "include/Hit.hh",
+            "src/Hit.cc",
+            "include/SensitiveDetector.hh",
+            "src/SensitiveDetector.cc",
+            "include/ScoringManager.hh",
+            "src/ScoringManager.cc",
+        ],
+        "生成 hit、sensitive detector 和 scoring record/dose/edep 数据路径。",
+    ),
+]
+
+
+async def run_simulation_core_agent(
+    module_context: dict[str, Any],
+) -> ModuleAgentResult:
+    """Run the coarse simulation core module agent in bounded file groups."""
+    generated_by_path: dict[str, GeneratedModuleFile] = {}
+    warnings: list[str] = []
+    errors: list[str] = []
+    statuses: list[str] = []
+    prior_files: list[dict[str, Any]] = []
+
+    for group_name, output_files, group_goal in SIMULATION_CORE_FILE_GROUPS:
+        group_context = _group_context(
+            module_context,
+            group_name=group_name,
+            output_files=output_files,
+            group_goal=group_goal,
+            prior_files=prior_files,
+        )
+        group_prompt = (
+            f"{SIMULATION_CORE_SYSTEM_PROMPT}\n\n"
+            f"当前文件组：{group_name}\n"
+            f"当前目标：{group_goal}\n"
+            f"只生成这些文件：{', '.join(output_files)}\n"
+            "不要生成当前文件组之外的 simulation_core 文件；后续文件组会读取你已经生成的接口摘要。"
+        )
+        result = await run_module_agent(
+            module_name="simulation_core",
+            module_context=group_context,
+            system_prompt=group_prompt,
+        )
+        statuses.append(result.status)
+        warnings.extend(result.warnings)
+        errors.extend(result.errors)
+        for file_entry in result.generated_files:
+            generated_by_path[file_entry.path] = file_entry
+        prior_files.extend(_prior_file_summaries(result.generated_files))
+
+    expected_paths = [path for _, paths, _ in SIMULATION_CORE_FILE_GROUPS for path in paths]
+    missing = [path for path in expected_paths if path not in generated_by_path]
+    if missing:
+        errors.append(f"simulation_core missing generated files: {missing}")
+    status = (
+        "generated"
+        if not missing and all(s in {"generated", "repaired"} for s in statuses)
+        else "failed"
+    )
+
+    return ModuleAgentResult(
+        module_name="simulation_core",
+        status=status,
+        generated_files=[
+            generated_by_path[path]
+            for path in expected_paths
+            if path in generated_by_path
+        ],
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def _group_context(
+    module_context: dict[str, Any],
+    *,
+    group_name: str,
+    output_files: list[str],
+    group_goal: str,
+    prior_files: list[dict[str, Any]],
+) -> dict[str, Any]:
+    ctx = deepcopy(module_context)
+    contract = dict(ctx.get("module_contract", {}))
+    contract["output_files"] = output_files
+    contract["responsibilities"] = list(contract.get("responsibilities", [])) + [
+        f"Current simulation_core file group: {group_name}",
+        group_goal,
+    ]
+    ctx["module_contract"] = contract
+    ctx["simulation_core_file_group"] = {
+        "name": group_name,
+        "goal": group_goal,
+        "output_files": output_files,
+        "prior_files": prior_files,
+    }
+    return ctx
+
+
+def _prior_file_summaries(files: list[GeneratedModuleFile]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for file_entry in files:
+        content = file_entry.new_content
+        summaries.append(
+            {
+                "path": file_entry.path,
+                "module_name": file_entry.module_name,
+                "generated_by": file_entry.generated_by,
+                "header_or_interface_content": (
+                    content[:5000]
+                    if file_entry.path.startswith("include/") or file_entry.path == "main.cc"
+                    else ""
+                ),
+            }
+        )
+    return summaries

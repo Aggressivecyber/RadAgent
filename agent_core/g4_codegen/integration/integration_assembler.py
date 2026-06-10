@@ -5,49 +5,42 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agent_core.workspace.paths import STAGE_CODEGEN
+
 
 def assemble_proposed_patch(
     module_results: dict[str, dict[str, Any]],
-    module_gate_results: dict[str, dict[str, Any]],
     job_id: str,
 ) -> dict[str, Any]:
-    """Assemble proposed_patch from passed module results.
+    """Assemble proposed_patch from generated module results.
 
-    Only includes files from modules that passed both hard and LLM gates.
+    The final integration agent owns compile/runtime repair from real
+    observations, so the assembler forwards every file produced by a
+    generated/repaired coarse module.
     Output uses new_content field (never 'content').
     """
     changed_files: list[dict[str, Any]] = []
-    module_gate_summary: dict[str, str] = {}
-    passed_count = 0
+    included_count = 0
     failed_count = 0
     agent_file_count = 0
 
     for module_name, result in module_results.items():
-        # Check gate status
-        gate_result = module_gate_results.get(module_name, {})
-        hard_status = gate_result.get("hard", {}).get("status", "fail")
-        llm_status = gate_result.get("llm", {}).get("status", "fail")
-
-        if hard_status == "pass" and llm_status == "pass":
-            module_gate_summary[module_name] = "pass"
-            passed_count += 1
-        else:
-            module_gate_summary[module_name] = "fail"
+        if result.get("status") not in {"generated", "repaired"}:
             failed_count += 1
             continue
+        included_count += 1
 
-        # Include files from passed modules
         for f in result.get("generated_files", []):
             raw_path = f["path"]
             # Security: reject path traversal
             if ".." in raw_path or raw_path.startswith("/"):
                 continue
-            # Strip any leading directory prefix so path is relative to 08_geant4
+            # Strip any leading directory prefix so path is relative to geant4_project
             clean_path = raw_path.lstrip("/")
-            if clean_path.startswith("08_geant4/"):
-                clean_path = clean_path[len("08_geant4/") :]
-            elif clean_path.startswith("08_geant4"):
-                clean_path = clean_path[len("08_geant4") :].lstrip("/")
+            if clean_path.startswith("geant4_project/"):
+                clean_path = clean_path[len("geant4_project/") :]
+            elif clean_path.startswith("geant4_project"):
+                clean_path = clean_path[len("geant4_project") :].lstrip("/")
 
             changed_files.append(
                 {
@@ -79,23 +72,23 @@ def assemble_proposed_patch(
             "Run dry-run simulation to confirm geometry/material setup",
         ],
         "expected_outputs": [
-            "All files written to 08_geant4 directory",
+            "All files written to geant4_project directory",
             "No compilation errors in generated C++ code",
         ],
         "metadata": {
             "source": "g4_codegen_agent_modules",
             "module_agent_count": len(module_results),
-            "passed_module_count": passed_count,
+            "included_module_count": included_count,
+            "passed_module_count": included_count,
             "failed_module_count": failed_count,
             "agent_authored_file_count": agent_file_count,
-            "module_gate_summary": module_gate_summary,
         },
     }
 
     # Persist
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
-    codegen_dir = get_job_dir(job_id) / "06_codegen"
+    codegen_dir = get_job_dir(job_id) / STAGE_CODEGEN
     codegen_dir.mkdir(parents=True, exist_ok=True)
 
     patch_path = codegen_dir / "proposed_patch.json"

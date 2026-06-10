@@ -9,9 +9,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from agent_core.config.workspace import get_stage_dir
 from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
 from agent_core.g4_modeling.subgraph_state import G4ModelingSubgraphState as RadiationAgentState
+from agent_core.workspace.io import get_stage_dir
+from agent_core.workspace.paths import STAGE_MODEL_IR
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ async def model_review_report_node(state: RadiationAgentState) -> dict[str, Any]
 
     # Persist
     if job_id:
-        model_ir_dir = get_stage_dir(job_id, "03_model_ir")
+        model_ir_dir = get_stage_dir(job_id, STAGE_MODEL_IR)
         model_ir_dir.mkdir(parents=True, exist_ok=True)
         report_file = model_ir_dir / "model_review.md"
         report_file.write_text(report)

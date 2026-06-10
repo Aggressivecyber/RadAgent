@@ -1,6 +1,7 @@
 """File permission validator enforcing zone-based access policy."""
 
 from fnmatch import fnmatch
+from importlib.resources import files
 from pathlib import Path
 
 import yaml
@@ -9,8 +10,8 @@ import yaml
 class FilePermissionValidator:
     """Classifies files into green/yellow/red zones and validates patch permissions."""
 
-    def __init__(self, policy_path: str = "agent_core/policies/file_access_policy.yaml"):
-        raw = yaml.safe_load(Path(policy_path).read_text())
+    def __init__(self, policy_path: str | Path | None = None):
+        raw = yaml.safe_load(_read_policy_text(policy_path))
         self._zones = {}
         for zone in ("green_zone", "yellow_zone", "red_zone"):
             self._zones[zone] = raw.get(zone, {}).get("patterns", [])
@@ -51,3 +52,13 @@ class FilePermissionValidator:
     def can_auto_apply(self, file_path: str) -> bool:
         """Return True only for green-zone files."""
         return self.classify_file(file_path) == "green"
+
+
+def _read_policy_text(policy_path: str | Path | None) -> str:
+    if policy_path is not None:
+        return Path(policy_path).read_text(encoding="utf-8")
+    return (
+        files("agent_core.policies")
+        .joinpath("file_access_policy.yaml")
+        .read_text(encoding="utf-8")
+    )

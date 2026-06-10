@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from agent_core.gates.nodes import _gate_name, run_base_gates, run_g4_modeling_gates
+from agent_core.gates.base_gates import gate_name as _gate_name
+from agent_core.gates.base_gates import run_base_gates
+from agent_core.gates.g4_modeling_gates import run_g4_modeling_gates
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION
 
 
 class TestGateNames:
@@ -24,6 +27,7 @@ class TestGateNames:
         assert _gate_name(16) == "G4-E Evidence Traceability"
         assert _gate_name(17) == "G4-F Code Module Boundary"
         assert _gate_name(18) == "G4-G No Magic Number"
+        assert _gate_name(19) == "G4-H Human Confirmation"
 
     def test_unknown_gate(self) -> None:
         assert _gate_name(99) == "Gate 99"
@@ -35,7 +39,7 @@ class TestRunBaseGates:
         workspace = tmp_path / "ws"
         workspace.mkdir()
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
-        job_dir = workspace / "jobs" / "test" / "09_validation"
+        job_dir = workspace / "jobs" / "test" / STAGE_GATE_VALIDATION
         job_dir.mkdir(parents=True)
 
         state = {
@@ -65,7 +69,7 @@ class TestRunBaseGates:
         workspace = tmp_path / "ws"
         workspace.mkdir()
         monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
-        job_dir = workspace / "jobs" / "test" / "09_validation"
+        job_dir = workspace / "jobs" / "test" / STAGE_GATE_VALIDATION
         job_dir.mkdir(parents=True)
 
         state = {
@@ -101,7 +105,7 @@ class TestRunG4ModelingGates:
         assert "gate_results" in result
 
     async def test_with_complex_model_ir(self) -> None:
-        """Complex model IR should be validated by G4-A to G4-G."""
+        """Complex model IR should be validated by G4-A to G4-H."""
         from agent_core.g4_modeling.schemas import (
             BeamProfile,
             ComponentSpec,
@@ -212,6 +216,6 @@ class TestRunG4ModelingGates:
         gate_results = result["gate_results"]
         g4_gate_ids = [g["gate_id"] for g in gate_results]
 
-        # Must have G4-A through G4-G (12-18)
-        for gid in range(12, 19):
+        # Must have G4-A through G4-H (12-19)
+        for gid in range(12, 20):
             assert gid in g4_gate_ids, f"Missing G4 gate {gid}"

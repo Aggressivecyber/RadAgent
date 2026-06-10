@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 from typing import Any, TypedDict
 
-from agent_core.config.workspace import get_job_dir
 from agent_core.human_confirmation.prompts import (
     CONFIRMATION_ROUND_LIMIT,
     MAX_QUESTIONS_PER_ROUND,
@@ -18,7 +17,15 @@ from agent_core.human_confirmation.prompts import (
     build_confirmation_summary,
 )
 from agent_core.human_confirmation.reports import generate_confirmation_report
+from agent_core.human_confirmation.schemas import (
+    ConfirmationRecord,
+    ConfirmationRequest,
+    ConfirmationResponse,
+    ProposedModelCompletion,
+)
 from agent_core.human_confirmation.validators import validate_human_confirmation
+from agent_core.workspace.io import get_job_dir
+from agent_core.workspace.paths import STAGE_HUMAN_CONFIRMATION
 
 
 class HumanConfirmationState(TypedDict, total=False):
@@ -45,7 +52,7 @@ def _get_confirmation_dir(job_id: str) -> Path:
 
     Creates the directory if it doesn't exist.
     """
-    conf_dir = get_job_dir(job_id) / "04_human_confirmation"
+    conf_dir = get_job_dir(job_id) / STAGE_HUMAN_CONFIRMATION
     conf_dir.mkdir(parents=True, exist_ok=True)
     return conf_dir
 
@@ -240,6 +247,7 @@ async def build_proposed_model_completion(
     # Save to file
     conf_dir = _get_confirmation_dir(job_id)
     output_path = conf_dir / "proposed_model_completion.json"
+    proposed = ProposedModelCompletion.model_validate(proposed).model_dump(mode="json")
     _save_json(proposed, output_path)
 
     return {
@@ -428,6 +436,7 @@ async def generate_confirmation_request(
 
     # Save to file
     output_path = conf_dir / f"confirmation_request_round_{round_n}.json"
+    request = ConfirmationRequest.model_validate(request).model_dump(mode="json")
     _save_json(request, output_path)
 
     return {
@@ -568,6 +577,7 @@ async def parse_confirmation_response(
     # Save to file
     conf_dir = _get_confirmation_dir(job_id)
     output_path = conf_dir / f"confirmation_response_round_{round_n}.json"
+    response = ConfirmationResponse.model_validate(response).model_dump(mode="json")
     _save_json(response, output_path)
 
     return {
@@ -828,6 +838,7 @@ async def merge_user_confirmation(
 
     # Save confirmation record
     record_path = conf_dir / "confirmation_record.json"
+    record = ConfirmationRecord.model_validate(record).model_dump(mode="json")
     _save_json(record, record_path)
 
     # Generate report

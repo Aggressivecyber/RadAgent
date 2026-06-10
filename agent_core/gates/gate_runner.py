@@ -1,6 +1,6 @@
 """Gate Runner — orchestrates base gates and G4 modeling gates.
 
-Runs Gate 0-11 via base_gates, then G4-A to G4-G via g4_modeling_gates.
+Runs Gate 0-11 via base_gates, then G4-A to G4-H via g4_modeling_gates.
 
 Status strategy (no dev mode, no partial pass):
   - passed: all critical gates passed; only explicitly non-critical gates may skip
@@ -14,8 +14,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_job_dir
 from agent_core.observability import record_event, write_failure_bundle
+from agent_core.workspace.io import get_job_dir
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION
 
 from .schemas import GateSubgraphState
 
@@ -27,10 +28,6 @@ VALID_RUN_MODES = {"strict", "test", "acceptance", "production"}
 def normalize_run_mode(run_mode: str | None) -> str:
     """Return a supported run mode, rejecting removed dev/partial modes."""
     mode = (run_mode or "strict").strip().lower()
-    if mode in {"dev", "dev_mode", "dev_no_geant4_env", "mvp1_acceptance"}:
-        raise ValueError(
-            f"Unsupported run_mode '{run_mode}'. Use strict/test/acceptance/production."
-        )
     if mode not in VALID_RUN_MODES:
         raise ValueError(
             f"Unsupported run_mode '{run_mode}'. Use strict/test/acceptance/production."
@@ -101,7 +98,7 @@ async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
     """Save gate results and determine validation status."""
     job_id = state.get("job_id", "unknown")
     job_dir = get_job_dir(job_id)
-    val_dir = job_dir / "08_gate_validation"
+    val_dir = job_dir / STAGE_GATE_VALIDATION
     val_dir.mkdir(parents=True, exist_ok=True)
 
     gate_results = state.get("gate_results", [])

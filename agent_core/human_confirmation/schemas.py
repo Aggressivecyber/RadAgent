@@ -114,5 +114,6 @@ class ConfirmationRecord(BaseModel):
     edited_fields: list[str] = Field(default_factory=list)
     rejected_fields: list[str] = Field(default_factory=list)
     remaining_unconfirmed_fields: list[str] = Field(default_factory=list)
+    unconfirmed_assumptions_count: int = Field(default=0, ge=0)
     confirmation_history: list[dict[str, Any]] = Field(default_factory=list)
     confirmed_model_plan_path: str | None = None

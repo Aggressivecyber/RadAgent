@@ -14,7 +14,7 @@ class TestPatchSubgraphRejectsContentField:
     @pytest.mark.asyncio
     async def test_rejects_content_without_new_content(self, tmp_path: Path) -> None:
         """apply_patch must reject entries with only 'content' (no 'new_content')."""
-        code_dir = tmp_path / "08_geant4"
+        code_dir = tmp_path / "geant4_project"
         code_dir.mkdir()
 
         state = {
@@ -42,7 +42,7 @@ class TestPatchSubgraphRejectsContentField:
     @pytest.mark.asyncio
     async def test_rejects_both_content_and_new_content(self, tmp_path: Path) -> None:
         """P0-8/P0-9: apply_patch must reject entries with both 'content' AND 'new_content'."""
-        code_dir = tmp_path / "08_geant4"
+        code_dir = tmp_path / "geant4_project"
         code_dir.mkdir()
 
         state = {
@@ -79,7 +79,7 @@ class TestPatchSubgraphRejectsContentField:
     @pytest.mark.asyncio
     async def test_accepts_only_new_content(self, tmp_path: Path) -> None:
         """apply_patch must accept entries with only 'new_content'."""
-        code_dir = tmp_path / "08_geant4"
+        code_dir = tmp_path / "geant4_project"
         code_dir.mkdir()
 
         state = {

@@ -11,11 +11,12 @@ import json
 import logging
 from typing import Any
 
-from agent_core.config.workspace import get_stage_dir
 from agent_core.g4_modeling.prompts.requirement_capture_prompt import (
     REQUIREMENT_CAPTURE_PROMPT,
 )
 from agent_core.g4_modeling.subgraph_state import G4ModelingSubgraphState as RadiationAgentState
+from agent_core.workspace.io import get_stage_dir
+from agent_core.workspace.paths import STAGE_MODEL_IR
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,8 @@ async def requirement_capture_node(state: RadiationAgentState) -> dict[str, Any]
     """Extract structured requirements from user query and task spec.
 
     Reads: user_query, task_spec, job_id
-    Writes: g4_model_ir (initialized), evidence_pack (stub)
-    Persists: 03_model_ir/requirements.json
+    Writes: g4_model_ir (initialized), evidence_pack (empty until retrieval)
+    Persists: model IR stage requirements.json
     """
     user_query = state.get("user_query", "")
     task_spec = state.get("task_spec", {})
@@ -93,7 +94,7 @@ async def requirement_capture_node(state: RadiationAgentState) -> dict[str, Any]
         model_ir.target_system = requirements.get("target_system", user_query)
 
     # Persist requirements
-    model_ir_dir = get_stage_dir(job_id, "03_model_ir")
+    model_ir_dir = get_stage_dir(job_id, STAGE_MODEL_IR)
     model_ir_dir.mkdir(parents=True, exist_ok=True)
     req_file = model_ir_dir / "requirements.json"
     req_file.write_text(json.dumps(requirements, indent=2, ensure_ascii=False))

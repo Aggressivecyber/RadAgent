@@ -31,7 +31,7 @@ class G4Config(BaseModel):
 
 
 class TCADConfig(BaseModel):
-    """TCAD Sentaurus device simulation parameters (MVP-1 stub).
+    """TCAD Sentaurus device simulation parameters.
 
     All fields optional to allow incremental population as the TCAD
     integration matures.
@@ -46,7 +46,7 @@ class TCADConfig(BaseModel):
 
 
 class SPICEConfig(BaseModel):
-    """SPICE circuit simulation parameters (stub).
+    """SPICE circuit simulation parameters.
 
     To be expanded when the circuit-level integration stage is implemented.
     """

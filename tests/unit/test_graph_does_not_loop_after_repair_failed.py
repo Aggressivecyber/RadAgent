@@ -1,45 +1,45 @@
-"""P0-15: Graph does not loop after repair fails."""
+"""P0-15: Graph does not continue after layer completion fails."""
 
 from __future__ import annotations
 
-from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_repair
+from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_layer_gate
 
 
-def test_repaired_routes_to_hard_gate():
-    route_fn = _route_after_repair("material")
+def test_passed_layer_routes_to_next_node():
+    route_fn = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
     state = {
-        "module_repair_results": {
-            "material": {"status": "repaired", "attempts": 1},
+        "layer_gate_results": {
+            "core_modules_gate": {"status": "pass"},
         },
     }
-    assert route_fn(state) == "material_hard_gate"
+    assert route_fn(state) == "run_runtime_modules"
 
 
-def test_failed_routes_to_persist():
-    route_fn = _route_after_repair("material")
+def test_failed_layer_routes_to_persist():
+    route_fn = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
     state = {
-        "module_repair_results": {
-            "material": {"status": "failed", "attempts": 3},
+        "layer_gate_results": {
+            "core_modules_gate": {"status": "fail"},
         },
     }
-    assert route_fn(state) == "material_complete"
+    assert route_fn(state) == "persist_codegen_output"
 
 
-def test_failed_does_not_route_to_next_module():
-    """P0-15: Failed repair must NOT go to the next module branch."""
-    route_fn = _route_after_repair("material")
+def test_failed_layer_does_not_route_to_next_layer():
+    """P0-15: Failed layer gate must NOT go to the next module layer."""
+    route_fn = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
     state = {
-        "module_repair_results": {
-            "material": {"status": "failed", "attempts": 3},
+        "layer_gate_results": {
+            "core_modules_gate": {"status": "fail"},
         },
     }
     result = route_fn(state)
-    assert result != "run_geometry_agent"
-    assert result == "material_complete"
+    assert result != "run_runtime_modules"
+    assert result == "persist_codegen_output"
 
 
-def test_missing_repair_result_routes_to_hard_gate():
-    """No repair result yet — assume repaired (shouldn't happen)."""
-    route_fn = _route_after_repair("material")
-    state = {"module_repair_results": {}}
-    assert route_fn(state) == "material_hard_gate"
+def test_missing_layer_result_routes_to_persist():
+    """No layer result should fail closed."""
+    route_fn = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
+    state = {"layer_gate_results": {}}
+    assert route_fn(state) == "persist_codegen_output"

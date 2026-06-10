@@ -87,5 +87,34 @@ class CodeStructureValidator:
         return (len(errors) == 0, errors)
 
     def validate_tcad_command_file(self, content: str) -> tuple[bool, list[str]]:
-        """Stub for MVP-1 -- basic structure check placeholder."""
-        return (True, [])
+        """Validate a Sentaurus command file at a structural level."""
+        errors: list[str] = []
+        stripped_lines = [
+            line.strip()
+            for line in content.splitlines()
+            if line.strip() and not line.strip().startswith(("#", "//"))
+        ]
+        text = "\n".join(stripped_lines)
+        low = text.lower()
+
+        if not stripped_lines:
+            return False, ["Empty TCAD command file"]
+
+        required_blocks = ("file", "electrode", "physics", "solve")
+        for block in required_blocks:
+            if not re.search(rf"\b{block}\s*\{{", low):
+                errors.append(f"Missing {block.capitalize()} {{...}} block")
+
+        if not re.search(r'\bgrid\s*=\s*"[^"]+"', low):
+            errors.append('Missing File block grid = "..." reference')
+        if not re.search(r'\bplot\s*=\s*"[^"]+"', low):
+            errors.append('Missing File block plot = "..." reference')
+
+        electrode_names = re.findall(r'\bname\s*=\s*"([^"]+)"', low)
+        if len(electrode_names) < 2:
+            errors.append("Expected at least two named electrodes")
+
+        if not re.search(r"\b(poisson|coupled|quasistationary|transient)\b", low):
+            errors.append("Solve block lacks a recognized solve directive")
+
+        return (len(errors) == 0, errors)

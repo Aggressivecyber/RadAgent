@@ -18,26 +18,29 @@ class TestGraphVisualizerUsesModuleAgentFlow:
         diagram = draw_main_graph()
         assert "g4_codegen_subgraph" in diagram
 
-    def test_codegen_spec_has_module_agents(self):
+    def test_codegen_spec_has_module_layers(self):
         spec = get_g4_codegen_subgraph_spec()
         node_ids = {n.node_id for n in spec.nodes}
-        assert "run_material_agent" in node_ids
-        assert "run_geometry_agent" in node_ids
-        assert "run_main_cmake_agent" in node_ids
+        assert "run_core_modules" in node_ids
+        assert "run_runtime_modules" in node_ids
+        assert "coordinate_core_modules_context" in node_ids
+        assert "coordinate_runtime_modules_context" in node_ids
+        assert "run_simulation_core_agent" not in node_ids
+        assert "run_beam_physics_agent" not in node_ids
+        assert "run_runtime_app_agent" not in node_ids
 
-    def test_codegen_spec_has_module_gates(self):
+    def test_codegen_spec_has_no_module_gates(self):
         spec = get_g4_codegen_subgraph_spec()
         node_ids = {n.node_id for n in spec.nodes}
-        assert "material_hard_gate" in node_ids
-        assert "material_llm_gate" in node_ids
-        assert "geometry_hard_gate" in node_ids
+        assert not any(node_id.endswith("_hard_gate") for node_id in node_ids)
+        assert not any(node_id.endswith("_llm_gate") for node_id in node_ids)
 
-    def test_codegen_spec_has_cross_file_gates(self):
+    def test_codegen_spec_has_physics_review(self):
         spec = get_g4_codegen_subgraph_spec()
         node_ids = {n.node_id for n in spec.nodes}
-        assert "cross_file_hard_gate" in node_ids
-        assert "cross_file_llm_gate" in node_ids
-        assert "static_semantic_scanner" in node_ids
+        assert "global_integration_agent" in node_ids
+        assert "runtime_execution_audit" in node_ids
+        assert "physics_quality_review" in node_ids
 
     def test_codegen_spec_has_integration_assembler(self):
         spec = get_g4_codegen_subgraph_spec()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import logging
 import os
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_core.config.environment import load_environment
+from agent_core.gates.output_quality import detect_smoke_runtime_errors
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +103,14 @@ class Geant4Runner:
         if job_id != "unknown":
             env_prefix += f"export G4_JOB_ID={job_id}; "
         rc, out, err = await self._run(env_prefix + cmd, cwd=str(Path(executable).parent))
+        runtime_error_patterns = detect_smoke_runtime_errors(err)
+        process_success = rc == 0
         return {
-            "success": rc == 0,
+            "success": process_success and not runtime_error_patterns,
+            "process_success": process_success,
+            "returncode": rc,
+            "command": cmd,
+            "runtime_error_patterns": runtime_error_patterns,
             "output_dir": output_dir or str(Path(executable).parent),
             "log": out,
             "errors": err,
@@ -243,6 +251,10 @@ class Geant4Runner:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         result = {
             "success": bool(sim.get("success")),
+            "process_success": bool(sim.get("process_success", sim.get("success"))),
+            "returncode": sim.get("returncode"),
+            "command": sim.get("command"),
+            "runtime_error_patterns": list(sim.get("runtime_error_patterns") or []),
             "log_tail": str(sim.get("log", ""))[-4000:],
             "errors": str(sim.get("errors", ""))[-4000:],
         }
@@ -270,27 +282,53 @@ class Geant4Runner:
                 shutil.copy2(src, out_dir / name)
 
         output_csv = out_dir / "output.csv"
-        if output_csv.is_file():
+        event_table = out_dir / "event_table.csv"
+        if output_csv.is_file() and not event_table.is_file():
             text = output_csv.read_text(encoding="utf-8", errors="replace")
             lines = [line for line in text.splitlines() if line.strip()]
             if lines:
-                header = lines[0]
-                rows = lines[1:]
-                (out_dir / "event_table.csv").write_text(text, encoding="utf-8")
-                self._write_quantity_csv(out_dir / "edep_3d.csv", header, rows, "edep_MeV")
-                self._write_quantity_csv(out_dir / "dose_3d.csv", header, rows, "dose_Gy")
+                event_table.write_text(text, encoding="utf-8")
+
+        event_rows = self._read_event_table_rows(event_table)
+        if event_rows:
+            for filename, quantity in (
+                ("edep_3d.csv", "edep_MeV"),
+                ("dose_3d.csv", "dose_Gy"),
+            ):
+                quantity_path = out_dir / filename
+                if not self._quantity_csv_has_usable_nonzero_rows(quantity_path, quantity):
+                    self._write_event_rows_as_mesh_quantity_csv(
+                        quantity_path,
+                        event_rows,
+                        quantity,
+                    )
 
         summary_path = out_dir / "run_summary.json"
+        summary_materialized_by_runner = False
         if summary_path.is_file():
             try:
                 summary = json.loads(summary_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 summary = {}
+        elif (out_dir / "g4_summary.json").is_file():
+            try:
+                summary = json.loads((out_dir / "g4_summary.json").read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                summary = {}
         else:
             summary = {}
+            summary_materialized_by_runner = True
         summary.setdefault("job_id", job_id)
         summary.setdefault("events_requested", events)
+        if event_rows:
+            summary.setdefault("total_events", len(event_rows))
         summary.setdefault("smoke_success", bool(sim.get("success")))
+        summary.setdefault(
+            "smoke_process_success",
+            bool(sim.get("process_success", sim.get("success"))),
+        )
+        if summary_materialized_by_runner:
+            summary.setdefault("materialized_by_runner", True)
         (out_dir / "g4_summary.json").write_text(
             json.dumps(summary, indent=2),
             encoding="utf-8",
@@ -301,7 +339,8 @@ class Geant4Runner:
             provenance = {
                 "job_id": job_id,
                 "runner": "Geant4Runner.smoke_test",
-                "source": "real Geant4 smoke simulation",
+                "source": "runner_materialized_contract_metadata",
+                "materialized_by_runner": True,
             }
             provenance_path.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
 
@@ -324,3 +363,58 @@ class Geant4Runner:
             if len(values) > max(event_idx, value_idx):
                 output.append(f"{values[event_idx]},{values[value_idx]}")
         path.write_text("\n".join(output) + "\n", encoding="utf-8")
+
+    def _read_event_table_rows(self, path: Path) -> list[dict[str, str]]:
+        if not path.is_file():
+            return []
+        try:
+            with path.open(newline="", encoding="utf-8") as handle:
+                reader = csv.DictReader(handle)
+                return [dict(row) for row in reader]
+        except OSError:
+            return []
+
+    def _quantity_csv_has_usable_nonzero_rows(self, path: Path, quantity: str) -> bool:
+        if not path.is_file():
+            return False
+        try:
+            with path.open(newline="", encoding="utf-8") as handle:
+                reader = csv.DictReader(handle)
+                fieldnames = set(reader.fieldnames or [])
+                coordinate_groups = (("x", "x_mm"), ("y", "y_mm"), ("z", "z_mm"))
+                has_coordinates = all(
+                    any(column in fieldnames for column in group)
+                    for group in coordinate_groups
+                )
+                if quantity not in fieldnames or not has_coordinates:
+                    return False
+                return any(self._positive_float(row.get(quantity)) for row in reader)
+        except OSError:
+            return False
+
+    def _write_event_rows_as_mesh_quantity_csv(
+        self,
+        path: Path,
+        rows: list[dict[str, str]],
+        quantity: str,
+    ) -> None:
+        output = [f"cellId,x_mm,y_mm,z_mm,{quantity}"]
+        for index, row in enumerate(rows):
+            cell_id = (row.get("EventID") or str(index)).strip() or str(index)
+            value = (row.get(quantity) or "0").strip() or "0"
+            if quantity == "dose_Gy" and not self._positive_float(value):
+                edep_mev = self._float_or_none(row.get("edep_MeV"))
+                if edep_mev is not None and edep_mev > 0.0:
+                    value = f"{edep_mev * 1.0e-12:.12g}"
+            output.append(f"{cell_id},{index},0,0,{value}")
+        path.write_text("\n".join(output) + "\n", encoding="utf-8")
+
+    def _positive_float(self, value: Any) -> bool:
+        parsed = self._float_or_none(value)
+        return parsed is not None and parsed > 0.0
+
+    def _float_or_none(self, value: Any) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None

@@ -11,6 +11,7 @@ from agent_core.g4_codegen.module_agents.module_context_examples import (
     get_module_interface_context,
 )
 from agent_core.g4_codegen.schemas import ModuleContext
+from agent_core.workspace.paths import STAGE_CODEGEN
 
 
 def build_module_context(
@@ -67,9 +68,9 @@ def build_module_context(
     )
 
     # Persist
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
-    ctx_dir = get_job_dir(job_id) / "06_codegen" / "module_contexts"
+    ctx_dir = get_job_dir(job_id) / STAGE_CODEGEN / "module_contexts"
     ctx_dir.mkdir(parents=True, exist_ok=True)
 
     ctx_path = ctx_dir / f"{module_name}.json"
@@ -110,16 +111,52 @@ def _select_context_snippets(
 def _module_context_keywords(module_name: str) -> set[str]:
     common = {"geant4", "g4", "cmake", "run manager"}
     by_module = {
-        "material": {"material", "g4material", "g4nistmanager", "nist"},
-        "geometry": {"geometry", "detectorconstruction", "g4box", "logicalvolume"},
-        "placement": {"placement", "g4pvplacement", "rotation", "transform"},
-        "source": {"source", "particlegun", "primarygenerator"},
-        "physics": {"physics", "physlist", "ftfp_bert", "production cut"},
-        "sensitive_detector": {"sensitive", "processhits", "hitscollection", "hit"},
-        "scoring": {"scoring", "scoremap", "scoringmesh", "primitive scorer"},
-        "output_manager": {"output", "csv", "json", "metadata", "file"},
-        "action_initialization": {"actioninitialization", "runaction", "user action"},
-        "main_cmake": {"main.cc", "cmakelists", "executable", "macro"},
+        "simulation_core": {
+            "material",
+            "g4material",
+            "g4nistmanager",
+            "nist",
+            "geometry",
+            "detectorconstruction",
+            "placement",
+            "g4pvplacement",
+            "logicalvolume",
+            "sensitive",
+            "processhits",
+            "hitscollection",
+            "scoring",
+            "dose",
+            "edep",
+            "step limit",
+            "production cut",
+        },
+        "beam_physics": {
+            "source",
+            "particlegun",
+            "primarygenerator",
+            "gps",
+            "physics",
+            "physlist",
+            "ftfp_bert",
+            "qgsp",
+            "production cut",
+            "range cut",
+        },
+        "runtime_app": {
+            "output",
+            "csv",
+            "json",
+            "metadata",
+            "actioninitialization",
+            "runaction",
+            "eventaction",
+            "steppingaction",
+            "main.cc",
+            "cmakelists",
+            "executable",
+            "macro",
+            "run manager",
+        },
     }
     return common | by_module.get(module_name, set())
 
@@ -132,25 +169,23 @@ def _extract_ir_subset(module_name: str, g4_model_ir: dict[str, Any]) -> dict[st
         "modeling_mode": g4_model_ir.get("modeling_mode", "realistic"),
     }
 
-    if module_name in ("material", "geometry", "placement"):
+    if module_name == "simulation_core":
         subset["components"] = g4_model_ir.get("components", [])
         subset["materials"] = g4_model_ir.get("materials", [])
-
-    if module_name in ("source",):
-        subset["sources"] = g4_model_ir.get("sources", [])
-
-    if module_name in ("physics",):
-        subset["physics"] = g4_model_ir.get("physics", {})
-
-    if module_name in ("sensitive_detector", "scoring"):
         subset["scoring"] = g4_model_ir.get("scoring", [])
-        subset["components"] = g4_model_ir.get("components", [])
-        subset["materials"] = g4_model_ir.get("materials", [])
         subset["sensitive_detectors"] = g4_model_ir.get("sensitive_detectors", [])
 
-    if module_name in ("output_manager",):
-        subset["scoring"] = g4_model_ir.get("scoring", [])
+    if module_name == "beam_physics":
         subset["sources"] = g4_model_ir.get("sources", [])
+        subset["physics"] = g4_model_ir.get("physics", {})
+        subset["scoring"] = g4_model_ir.get("scoring", [])
+
+    if module_name == "runtime_app":
+        subset["components"] = g4_model_ir.get("components", [])
+        subset["sources"] = g4_model_ir.get("sources", [])
+        subset["physics"] = g4_model_ir.get("physics", {})
+        subset["scoring"] = g4_model_ir.get("scoring", [])
+        subset["sensitive_detectors"] = g4_model_ir.get("sensitive_detectors", [])
 
     return subset
 
@@ -166,67 +201,39 @@ def _get_geant4_api_rules(module_name: str) -> list[str]:
     ]
 
     module_rules: dict[str, list[str]] = {
-        "material": [
-            "G4NistManager::Instance()->FindOrBuildMaterial() 用于 NIST 材料",
-            "自定义材料使用 new G4Material(name, density, ncomponents) 后 AddElement(...)",
+        "simulation_core": [
+            "材料、几何、放置、SensitiveDetector、Hit 和 ScoringManager 必须在同一接口模型下生成",
+            "不得把 unsupported geometry 简化成 G4Box；如无法建模必须显式暴露 unsupported feature",
+            "box dimensions 中 dx/dy/dz 表示全长；构造 G4Box 时使用 half-length 并乘以全局长度单位",
+            "placement position 坐标不要缩放；按 IR 数值乘以全局长度单位",
+            "SensitiveDetector 必须注册到 G4SDManager，并在 geometry 初始化时 "
+            "attach 到真实 logical volume",
+            "dose_Gy 必须基于真实能量沉积和质量/体积/密度关系，不能写固定占位值",
+            "需要精度控制时显式建模 production cuts、range cuts、step limiter 或用户 limits",
         ],
-        "geometry": [
-            "G4VUserDetectorConstruction::Construct() 返回 world LV",
-            "Solid 创建后不可修改",
-            (
-                "G4ModelIR global_units.length 默认是 mm；所有 component dimensions "
-                "和 placement position 都按该单位解释"
-            ),
-            (
-                "box dimensions 中 dx/dy/dz 表示全长；构造 G4Box 时必须传 "
-                "half-length: dx/2、dy/2、dz/2，并乘以 mm"
-            ),
-            "placement position 坐标不要缩放；按 IR 数值乘以 mm",
-            "材料查找必须通过 MaterialRegistry，不要在 geometry 模块直接调用 G4NistManager",
-            "world 物理体可直接构造为 null mother；非 world 物理体放置必须通过 PlacementManager",
-            (
-                "PlacementManager 预期接口：PlaceVolume(rotation, position, logical, name, "
-                "mother, many, copy_no, check_overlaps)"
-            ),
+        "beam_physics": [
+            "PrimaryGeneratorAction 必须使用 IR 中的粒子、能量、位置和方向，不得默认改粒子或能量",
+            "物理列表选择必须与粒子类型、能量范围和材料/探测器任务相匹配",
+            "生产截断、range cut 或精度控制必须与 scoring 需求一致，不能仅保留 Geant4 默认值",
+            "使用 G4SystemOfUnits.hh 中的单位常量",
         ],
-        "placement": [
-            "G4PVPlacement 需要 rotation matrix 和 translation vector",
-            "checkOverlaps 默认开启",
-        ],
-        "source": [
-            "G4ParticleGun 或 G4GeneralParticleSource",
-            "能量和方向必须设置",
-        ],
-        "physics": [
-            "G4VModularPhysicsList 需要 RegisterPhysics()",
-            "FTFP_BERT 是通用推荐",
-        ],
-        "sensitive_detector": [
-            "G4VSensitiveDetector::ProcessHits() 必须实现",
-            "Hit 必须实现 draw() 和 print()",
-        ],
-        "scoring": [
-            (
-                "如使用 primitive scoring，可使用 G4MultiFunctionalDetector 和 "
-                "G4VPrimitiveScorer；不要声称已注册未实现的 scorer"
-            ),
-            (
-                "不得硬编码 detector mass；dose_Gy 必须基于 IR 中几何尺寸和材料密度计算，"
-                "或通过显式接口参数传入质量"
-            ),
-            "能量沉积以 Geant4 内部能量单位累计；转换到 J 时使用 edep / joule，不要乘以 MeV",
-            "不要 SetSensitiveDetector 或覆盖 sensitive_detector 模块的 ownership",
-            "不要写 CSV/JSON 文件；输出由 output_manager 模块负责",
-        ],
-        "output_manager": [
-            "文件 I/O 在 BeginOfRunAction 和 EndOfRunAction 中处理",
-        ],
-        "action_initialization": [
-            "Build() 方法注册所有 user actions",
-        ],
-        "main_cmake": [
-            "find_package(Geant4 REQUIRED)",
-            "include(${Geant4_USE_FILE})",
+        "runtime_app": [
+            "main.cc 必须使用实际生成的 DetectorConstruction、"
+            "PhysicsListFactoryWrapper 和 ActionInitialization 接口",
+            "CMakeLists.txt 必须包含所有生成的 src/*.cc 和 main.cc，"
+            "设置足够的 C++ 标准，并启用 Geant4 UI/Vis/Qt 交互依赖",
+            "main.cc 必须参考 Geant4 B1 示例：无宏脚本参数时创建 UIExecutive "
+            "并打开交互 UI；有宏脚本参数时通过 UImanager 执行 batch macro",
+            "RunAction/EventAction/SteppingAction 必须真实连接 OutputManager 和 scoring 数据流",
+            "OutputManager 必须优先写入 G4_OUTPUT_DIR 环境变量指向的目录",
+            "输出目录必须包含 g4_summary.json、provenance.json、event_table.csv、"
+            "edep_3d.csv、dose_3d.csv",
+            "event_table.csv header 必须包含 EventID,edep_MeV,dose_Gy，"
+            "且每个事件至少一行真实沉积/剂量",
+            "edep_3d.csv 和 dose_3d.csv 必须包含坐标列与非零 "
+            "edep_MeV/dose_Gy bin，不能只依赖 scoring.csv",
+            "不要依赖目标环境不支持的 /score UI 命令；若使用 scoring 宏，"
+            "必须确保 G4ScoringManager 初始化且命令真实可用",
         ],
     }
 

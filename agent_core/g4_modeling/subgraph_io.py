@@ -12,7 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agent_core.config.workspace import get_stage_dir
+from agent_core.workspace.io import get_stage_dir
+from agent_core.workspace.paths import STAGE_MODEL_IR
 
 from .subgraph_state import G4ModelingSubgraphState
 
@@ -44,7 +45,7 @@ async def persist_model_ir(state: G4ModelingSubgraphState) -> dict[str, Any]:
             "errors": ["No g4_model_ir generated"],
         }
 
-    model_ir_dir = get_stage_dir(job_id, "03_model_ir")
+    model_ir_dir = get_stage_dir(job_id, STAGE_MODEL_IR)
     model_ir_dir.mkdir(parents=True, exist_ok=True)
 
     # Save main IR
@@ -101,6 +102,8 @@ async def persist_model_ir(state: G4ModelingSubgraphState) -> dict[str, Any]:
     default_review = "# Model Review\n\nNo review generated.\n"
     review_path.write_text(review_report if review_report else default_review)
 
+    human_confirmation_required = _requires_human_confirmation(model_ir_dict)
+
     # Determine status
     errors = state.get("model_ir_errors", [])
     status = "passed" if not errors else "failed"
@@ -112,4 +115,38 @@ async def persist_model_ir(state: G4ModelingSubgraphState) -> dict[str, Any]:
         "construction_ledger_path": str(ledger_path),
         "model_review_report_path": str(review_path),
         "g4_modeling_status": status,
+        "human_confirmation_required": human_confirmation_required,
     }
+
+
+def _requires_human_confirmation(model_ir: dict[str, Any]) -> bool:
+    """Return whether the persisted IR has unresolved user-confirmation items."""
+    if model_ir.get("unconfirmed_fields"):
+        return True
+    if model_ir.get("open_issues"):
+        return True
+
+    sections = (
+        "components",
+        "materials",
+        "sources",
+        "scoring",
+        "sensitive_detectors",
+    )
+    for section in sections:
+        items = model_ir.get(section, [])
+        if not isinstance(items, list):
+            continue
+        if any(_item_needs_confirmation(item) for item in items):
+            return True
+
+    physics = model_ir.get("physics")
+    return isinstance(physics, dict) and _item_needs_confirmation(physics)
+
+
+def _item_needs_confirmation(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if item.get("open_issues"):
+        return True
+    return bool(item.get("requires_confirmation")) and not bool(item.get("confirmed_by_user"))

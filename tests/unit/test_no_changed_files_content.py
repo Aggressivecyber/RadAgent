@@ -46,16 +46,6 @@ def _make_module_result(
     }
 
 
-def _gate_pass(*names: str) -> dict[str, dict[str, Any]]:
-    return {
-        n: {
-            "hard": {"status": "pass", "checks": [], "errors": []},
-            "llm": {"status": "pass", "checks": [], "errors": []},
-        }
-        for n in names
-    }
-
-
 class TestNoChangedFilesContent:
     """Verify that changed_files in the assembled patch never use 'content'."""
 
@@ -76,9 +66,7 @@ class TestNoChangedFilesContent:
                 ],
             ),
         }
-        gate_results = _gate_pass("material", "geometry")
-
-        patch = assemble_proposed_patch(module_results, gate_results, "test")
+        patch = assemble_proposed_patch(module_results, "test")
 
         for f in patch["changed_files"]:
             assert "content" not in f, (
@@ -96,9 +84,7 @@ class TestNoChangedFilesContent:
                 ],
             ),
         }
-        gate_results = _gate_pass("physics")
-
-        patch = assemble_proposed_patch(module_results, gate_results, "test")
+        patch = assemble_proposed_patch(module_results, "test")
 
         for entry in patch["changed_files"]:
             keys = set(entry.keys())

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from agent_core.g4_codegen.module_agents.module_context_builder import build_module_context
 from agent_core.g4_codegen.module_agents.module_context_examples import (
-    MODULE_LAYER_ORDER,
     get_module_code_example,
     get_module_interface_context,
 )
+from agent_core.graph.subgraphs.g4_codegen_graph import MODULE_LAYERS
+
+MODULE_NAMES = [module_name for _, modules in MODULE_LAYERS for module_name in modules]
 
 
 def _contract(module_name: str) -> dict:
@@ -20,13 +22,11 @@ def _contract(module_name: str) -> dict:
         "required_symbols": get_module_code_example(module_name).get("primary_symbols", []),
         "dependencies": get_module_interface_context(module_name).get("upstream_modules", []),
         "forbidden_patterns": [],
-        "hard_gate_names": [f"{module_name}_hard_gate"],
-        "llm_gate_names": [f"{module_name}_llm_gate"],
     }
 
 
 def test_all_required_modules_have_code_examples_and_interfaces() -> None:
-    for module_name in MODULE_LAYER_ORDER:
+    for module_name in MODULE_NAMES:
         example = get_module_code_example(module_name)
         interface = get_module_interface_context(module_name)
 
@@ -40,14 +40,15 @@ def test_all_required_modules_have_code_examples_and_interfaces() -> None:
 
 def test_module_context_includes_examples_interfaces_and_retrieval_policy() -> None:
     ctx = build_module_context(
-        module_name="physics",
-        module_contract=_contract("physics"),
+        module_name="beam_physics",
+        module_contract=_contract("beam_physics"),
         g4_model_ir={
             "model_ir_id": "test",
             "job_id": "job_001",
             "physics": {"physics_list": "FTFP_BERT"},
+            "sources": [{"particle_type": "proton"}],
         },
-        codegen_plan={"required_modules": MODULE_LAYER_ORDER},
+        codegen_plan={"required_modules": MODULE_NAMES},
         geometry_strategy_plan={"global_strategy": "agent_generated_geometry"},
         code_architecture_plan={"classes": []},
         job_id="job_001",
@@ -70,9 +71,12 @@ def test_module_context_includes_examples_interfaces_and_retrieval_policy() -> N
         web_search_available=True,
     )
 
-    assert ctx["module_code_example"]["primary_symbols"] == ["PhysicsListFactoryWrapper"]
-    assert "PhysicsListFactoryWrapper.hh" in ctx["module_code_example"]["owned_files"][0]
-    assert "main_cmake" in ctx["interface_context"]["downstream_modules"]
+    assert ctx["module_code_example"]["primary_symbols"] == [
+        "PrimaryGeneratorAction",
+        "PhysicsListFactoryWrapper",
+    ]
+    assert "PrimaryGeneratorAction.hh" in ctx["module_code_example"]["owned_files"][0]
+    assert "runtime_app" in ctx["interface_context"]["downstream_modules"]
     assert ctx["rag_snippets"]
     assert ctx["web_context"]
     assert ctx["context_retrieval_policy"]["rag_score"] == 0.91
@@ -81,14 +85,16 @@ def test_module_context_includes_examples_interfaces_and_retrieval_policy() -> N
 
 def test_module_context_filters_rag_snippets_by_module_keywords() -> None:
     ctx = build_module_context(
-        module_name="scoring",
-        module_contract=_contract("scoring"),
+        module_name="simulation_core",
+        module_contract=_contract("simulation_core"),
         g4_model_ir={
             "model_ir_id": "test",
             "job_id": "job_001",
             "scoring": [{"scoring_id": "edep"}],
+            "components": [{"component_id": "detector"}],
+            "materials": [{"material_id": "G4_Si"}],
         },
-        codegen_plan={"required_modules": MODULE_LAYER_ORDER},
+        codegen_plan={"required_modules": MODULE_NAMES},
         geometry_strategy_plan={"global_strategy": "agent_generated_geometry"},
         code_architecture_plan={"classes": []},
         job_id="job_001",

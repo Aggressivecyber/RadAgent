@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field
 
 
 class EnergySpec(BaseModel):
@@ -94,22 +94,6 @@ class SourceSpec(BaseModel):
         default_factory=list,
         description="Unresolved questions about this source",
     )
-
-    @field_validator("generator_type")
-    @classmethod
-    def _complex_source_needs_gps(cls, v: str, info: ValidationInfo) -> str:
-        """Warn if a complex profile uses gun instead of GPS."""
-        beam = info.data.get("beam")
-        if v == "gun" and beam is not None:
-            if (
-                getattr(beam, "sigma_position_um", None) is not None
-                or getattr(beam, "sigma_direction_rad", None) is not None
-                or getattr(beam, "surface_shape", "point") != "point"
-            ):
-                # Not raising — just noting. Validators enforce, nodes warn.
-                pass
-        return v
-
 
 def validate_source_spec(
     data: dict,

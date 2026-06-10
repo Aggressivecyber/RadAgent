@@ -24,9 +24,9 @@ from agent_core.visualization.graph_visualizer import (
 class TestMainGraphTopology:
     """Verify main graph topology matches the actual graph code."""
 
-    def test_main_graph_has_9_nodes(self) -> None:
+    def test_main_graph_has_13_nodes(self) -> None:
         spec = get_main_graph_spec()
-        assert len(spec.nodes) == 9
+        assert len(spec.nodes) == 13
 
     def test_main_graph_has_prepare_workspace(self) -> None:
         spec = get_main_graph_spec()
@@ -40,6 +40,7 @@ class TestMainGraphTopology:
             "context_subgraph",
             "task_planning_subgraph",
             "g4_modeling_subgraph",
+            "human_confirmation_subgraph",
             "g4_codegen_subgraph",
             "patch_subgraph",
             "gate_subgraph",
@@ -52,7 +53,7 @@ class TestMainGraphTopology:
         spec = get_main_graph_spec()
         entry_nodes = [n for n in spec.nodes if n.is_entry]
         assert len(entry_nodes) == 1
-        assert entry_nodes[0].node_id == "prepare_workspace"
+        assert entry_nodes[0].node_id == "initialize_request"
 
     def test_main_graph_conditional_routes(self) -> None:
         spec = get_main_graph_spec()
@@ -67,6 +68,7 @@ class TestMainGraphTopology:
         assert "context_subgraph" in retry_targets
         assert "task_planning_subgraph" in retry_targets
         assert "g4_modeling_subgraph" in retry_targets
+        assert "human_confirmation_subgraph" in retry_targets
         assert "g4_codegen_subgraph" in retry_targets
         assert "patch_subgraph" in retry_targets
 
@@ -80,7 +82,8 @@ class TestSubgraphTopology:
             ("context", 6),
             ("task_planning", 3),
             ("g4_modeling", 14),
-            ("g4_codegen", 52),
+            ("human_confirmation", 6),
+            ("g4_codegen", 18),
             ("gate_validation", 4),
             ("patch", 3),
             ("artifact", 3),
@@ -97,6 +100,7 @@ class TestSubgraphTopology:
             "context",
             "task_planning",
             "g4_modeling",
+            "human_confirmation",
             "g4_codegen",
             "gate_validation",
             "patch",
@@ -115,6 +119,7 @@ class TestSubgraphTopology:
             "context",
             "task_planning",
             "g4_modeling",
+            "human_confirmation",
             "g4_codegen",
             "gate_validation",
             "patch",
@@ -157,8 +162,15 @@ class TestSubgraphTopology:
         assert "retrieve_web_context" in targets
         assert "save_evidence_map" in targets
 
-    def test_eight_subgraphs_total(self) -> None:
-        assert len(get_all_subgraph_specs()) == 8
+    def test_gate_validation_mentions_current_gate_count_and_human_confirmation(self) -> None:
+        specs = get_all_subgraph_specs()
+        gate = specs["gate_validation"]
+
+        assert "20 道门禁" in gate.description
+        assert any(node.label == "G4 门禁 A-H" for node in gate.nodes)
+
+    def test_nine_subgraphs_total(self) -> None:
+        assert len(get_all_subgraph_specs()) == 9
 
 
 # ─── Mermaid renderer tests ──────────────────────────────────────────
@@ -195,9 +207,9 @@ class TestMermaidRenderer:
         with pytest.raises(ValueError, match="Unknown subgraph"):
             draw_subgraph("nonexistent")
 
-    def test_draw_all_returns_9_diagrams(self) -> None:
+    def test_draw_all_returns_10_diagrams(self) -> None:
         all_diagrams = draw_all()
-        assert len(all_diagrams) == 9  # main + 8 subgraphs
+        assert len(all_diagrams) == 10  # main + 9 subgraphs
         assert "main_graph" in all_diagrams
         assert "g4_modeling" in all_diagrams
 
@@ -254,6 +266,22 @@ class TestExportMermaid:
         names = {p.name for p in written}
         assert "radagent_graph_overview.mmd" in names
         assert len(written) == 1
+
+
+class TestViewGraphHtml:
+    """Test browser HTML wrappers used by scripts/view_graph.py."""
+
+    def test_single_page_html_does_not_render_source_lint_markers(self) -> None:
+        from scripts.view_graph import _build_html_page
+
+        html = _build_html_page("RadAgent", "flowchart TB\nA --> B")
+        assert "# noqa" not in html
+
+    def test_multi_page_html_does_not_render_source_lint_markers(self) -> None:
+        from scripts.view_graph import _build_multi_page
+
+        html = _build_multi_page("RadAgent", {"main_graph": "flowchart TB\nA --> B"})
+        assert "# noqa" not in html
 
 
 # ─── Data model tests ────────────────────────────────────────────────

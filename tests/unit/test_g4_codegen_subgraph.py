@@ -20,7 +20,7 @@ class TestG4CodegenSubgraphCompilation:
         assert compiled is not None
 
     def test_subgraph_has_parallel_layers_and_global_integration_agent(self) -> None:
-        """Subgraph should expose layered module gates and global integration."""
+        """Subgraph should expose coarse module layers and final integration."""
         from agent_core.graph.subgraphs.g4_codegen_graph import (
             MODULE_LAYERS,
             build_g4_codegen_subgraph,
@@ -31,14 +31,22 @@ class TestG4CodegenSubgraphCompilation:
         assert "global_integration_agent" in node_names
         retired_nodes = {"global_" + "llm_repair_agent", "global_" + "code_repair_agent"}
         assert node_names.isdisjoint(retired_nodes)
+        assert "runtime_execution_audit" in node_names
         assert ("integration_assembler", "global_integration_agent") in graph.edges
-        assert ("global_integration_agent", "static_semantic_scanner") in graph.edges
+        assert ("global_integration_agent", "runtime_execution_audit") in graph.edges
+        assert ("physics_quality_review", "persist_codegen_output") in graph.edges
         for layer_name, module_names in MODULE_LAYERS:
+            context_node = f"coordinate_{layer_name}_context"
             assert f"run_{layer_name}" in node_names
             assert f"{layer_name}_gate" in node_names
+            assert context_node in node_names
+            assert (context_node, "build_interface_contracts") in graph.edges or any(
+                edge[0] == context_node and edge[1].startswith("run_")
+                for edge in graph.edges
+            )
             for module_name in module_names:
-                assert f"run_{module_name}_agent" in node_names
-                assert f"{module_name}_complete" in node_names
+                assert f"run_{module_name}_agent" not in node_names
+                assert f"{module_name}_complete" not in node_names
 
     def test_subgraph_state_schema(self) -> None:
         """Subgraph state must have required fields."""
@@ -75,12 +83,31 @@ class TestG4CodegenSubgraphCompilation:
             == "run_application_modules"
         )
 
+    def test_runtime_execution_audit_routes_before_physics_review(self) -> None:
+        """Physics review should run only after runtime execution audit passes."""
+        from agent_core.graph.subgraphs.g4_codegen_graph import (
+            _route_after_runtime_execution_audit,
+        )
+
+        assert (
+            _route_after_runtime_execution_audit(
+                {"runtime_execution_audit": {"status": "fail"}}
+            )
+            == "persist_codegen_output"
+        )
+        assert (
+            _route_after_runtime_execution_audit(
+                {"runtime_execution_audit": {"status": "pass"}}
+            )
+            == "physics_quality_review"
+        )
+
 
 class TestNewIntegrationAssembler:
     """Test the NEW integration assembler (module-level agent path).
 
-    P0-10/P0-12: Old integration_assembler is deprecated and raises
-    RuntimeError on import. These tests use the new path.
+    P0-10/P0-12: Old integration_assembler nodes were removed. These tests use
+    the supported integration path.
     """
 
     def test_new_assembler_produces_valid_patch(self) -> None:
@@ -90,23 +117,20 @@ class TestNewIntegrationAssembler:
         )
 
         module_results = {
-            "material": {
+            "simulation_core": {
                 "status": "generated",
                 "generated_files": [
                     {
                         "path": "include/MaterialRegistry.hh",
                         "new_content": "#pragma once\n",
-                        "generated_by": "material_module_agent",
-                        "module_name": "material",
+                        "generated_by": "simulation_core_module_agent",
+                        "module_name": "simulation_core",
                         "rationale": "test",
                     }
                 ],
             },
         }
-        module_gates = {
-            "material": {"hard": {"status": "pass"}, "llm": {"status": "pass"}},
-        }
-        patch = assemble_proposed_patch(module_results, module_gates, "test")
+        patch = assemble_proposed_patch(module_results, "test")
 
         # Must have all PatchValidator required fields
         required = {
@@ -130,28 +154,7 @@ class TestNewIntegrationAssembler:
 
 
 class TestCodegenValidators:
-    """Test g4_codegen validators."""
-
-    def test_code_module_boundary_valid(self) -> None:
-        """Valid module with clean boundaries should pass."""
-        from agent_core.g4_codegen.validators.code_module_boundary import (
-            validate_code_module_boundary,
-        )
-
-        code = '#include "MyModule.hh"\nvoid myFunction() {}\n'
-        header = "include/MyModule.hh"
-        valid, issues = validate_code_module_boundary("my_module", code, header)
-        assert valid, f"Unexpected issues: {issues}"
-
-    def test_code_module_boundary_empty_code(self) -> None:
-        """Empty code should fail validation."""
-        from agent_core.g4_codegen.validators.code_module_boundary import (
-            validate_code_module_boundary,
-        )
-
-        valid, issues = validate_code_module_boundary("empty_mod", "", "")
-        assert not valid
-        assert any("empty" in i for i in issues)
+    """Test g4_codegen validators that are still used by production gates."""
 
     def test_no_magic_number_clean(self) -> None:
         """Code with named constants should pass."""
@@ -170,41 +173,13 @@ class TestCodegenValidators:
         assert not clean
         assert len(violations) > 0
 
-    def test_cmake_structure_valid(self) -> None:
-        """Valid CMakeLists.txt should pass."""
-        from agent_core.g4_codegen.validators.cmake_structure import (
-            validate_cmake_structure,
-        )
-
-        cmake = """cmake_minimum_required(VERSION 3.16)
-project(test_sim)
-find_package(Geant4 REQUIRED)
-file(GLOB sources src/*.cc)
-add_executable(test_sim ${sources})
-target_include_directories(test_sim PRIVATE include)
-target_link_libraries(test_sim ${Geant4_LIBRARIES})
-"""
-        valid, issues = validate_cmake_structure(cmake)
-        assert valid, f"Unexpected issues: {issues}"
-
-    def test_cmake_structure_missing_geant4(self) -> None:
-        """CMake without Geant4 should fail."""
-        from agent_core.g4_codegen.validators.cmake_structure import (
-            validate_cmake_structure,
-        )
-
-        cmake = "cmake_minimum_required(VERSION 3.16)\nproject(test)\n"
-        valid, issues = validate_cmake_structure(cmake)
-        assert not valid
-        assert any("Geant4" in i for i in issues)
-
 
 class TestLoadModelIr:
     """Test the codegen I/O functions."""
 
     async def test_load_from_file(self, tmp_path: Path) -> None:
         """Should load model IR from JSON file."""
-        from agent_core.g4_codegen import load_model_ir
+        from agent_core.g4_codegen.io_nodes import load_model_ir
 
         ir_file = tmp_path / "ir.json"
         ir_file.write_text(json.dumps({"model_ir_id": "test", "components": []}))
@@ -214,7 +189,7 @@ class TestLoadModelIr:
 
     async def test_load_missing_file(self) -> None:
         """Missing file should return empty model IR."""
-        from agent_core.g4_codegen import load_model_ir
+        from agent_core.g4_codegen.io_nodes import load_model_ir
 
         result = await load_model_ir({"g4_model_ir_path": "/nonexistent/ir.json"})
         assert result["g4_model_ir"] == {}

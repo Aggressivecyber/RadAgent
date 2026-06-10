@@ -111,20 +111,14 @@ class OverlapPolicyValidator:
         b_hy = b_dims.get("half_y", b_dims.get("dy", 0) / 2.0)
         b_hz = b_dims.get("half_z", b_dims.get("dz", 0) / 2.0)
 
-        # AABB overlap test
-        for i, (ap, ah, bp, bh) in enumerate(
-            zip(
-                a_xyz,
-                [a_hx, a_hy, a_hz],
-                b_xyz,
-                [b_hx, b_hy, b_hz],
-            )
+        # AABB overlap test: separation on any axis means the boxes do not overlap.
+        for ap, ah, bp, bh in zip(
+            a_xyz,
+            [a_hx, a_hy, a_hz],
+            b_xyz,
+            [b_hx, b_hy, b_hz],
         ):
-            if abs(ap - bp) < (ah + bh):
-                # At least one axis overlaps — this is necessary but not sufficient
-                # For a full check we'd need all three axes overlapping
-                pass
-            else:
-                return False  # Separated on this axis — no overlap
+            if abs(ap - bp) >= (ah + bh):
+                return False
 
-        return True  # Overlapping on all three axes
+        return True

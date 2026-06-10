@@ -7,18 +7,16 @@ Flow:
     → plan_code_architecture
     → build_module_contracts
     → build_module_contexts
-    → [layered parallel module groups: agent → hard_gate → llm_gate → repair_if_needed]
+    → [coarse module groups: simulation_core + beam_physics → runtime_app]
     → build_interface_contracts
     → integration_assembler
     → global_integration_agent
-    → static_semantic_scanner
-    → cross_file_hard_gate
-    → cross_file_llm_gate
+    → runtime_execution_audit
+    → physics_quality_review
     → persist_codegen_output
 
-Per-module LM repair is intentionally scoped to a single failed module inside
-the layer. The global integration agent is the only cross-module writer in the
-codegen graph.
+The global integration agent is the only cross-module writer in the codegen
+graph. It owns compile/runtime repair from real terminal observations.
 """
 
 from __future__ import annotations
@@ -27,27 +25,23 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
-from agent_core.g4_codegen import load_model_ir
 from agent_core.g4_codegen.graph_nodes import (
     build_codegen_plan_node,
     build_interface_contracts_node,
     build_module_contexts_node,
     build_module_contracts_node,
-    cross_file_hard_gate_node,
-    cross_file_llm_gate_node,
+    context_coordinator_node,
     global_integration_agent_node,
     integration_assembler_node,
     layer_consistency_gate_node,
     persist_codegen_output_node,
+    physics_quality_review_node,
     plan_code_architecture_node,
     plan_geometry_strategy_node,
-    repair_module_node,
-    run_module_agent_node,
-    run_module_hard_gate_node,
     run_module_layer_node,
-    run_module_llm_gate_node,
-    static_semantic_scanner_node,
+    runtime_execution_audit_node,
 )
+from agent_core.g4_codegen.io_nodes import load_model_ir
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 
 # Layered module execution plan. Modules inside a layer run in parallel; the
@@ -55,37 +49,19 @@ from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 # layer.
 MODULE_LAYERS = [
     (
-        "foundation_modules",
+        "core_modules",
         [
-            "material",
-            "physics",
-            "source",
-            "output_manager",
+            "simulation_core",
+            "beam_physics",
         ],
     ),
     (
-        "detector_modules",
+        "runtime_modules",
         [
-            "placement",
-            "geometry",
-            "sensitive_detector",
-            "scoring",
-        ],
-    ),
-    (
-        "action_modules",
-        [
-            "action_initialization",
-        ],
-    ),
-    (
-        "application_modules",
-        [
-            "main_cmake",
+            "runtime_app",
         ],
     ),
 ]
-MODULE_ORDER = [module for _, modules in MODULE_LAYERS for module in modules]
 
 
 def build_g4_codegen_subgraph() -> StateGraph:
@@ -102,34 +78,8 @@ def build_g4_codegen_subgraph() -> StateGraph:
     graph.add_node("build_module_contracts", build_module_contracts_node)
     graph.add_node("build_module_contexts", build_module_contexts_node)
 
-    # ── Module agent nodes (one per module) ───────────────────────────
-    for module_name in MODULE_ORDER:
-        # Agent node
-        graph.add_node(
-            f"run_{module_name}_agent",
-            _make_module_agent_node(module_name),
-        )
-        # Hard gate node
-        graph.add_node(
-            f"{module_name}_hard_gate",
-            _make_hard_gate_node(module_name),
-        )
-        # LLM gate node
-        graph.add_node(
-            f"{module_name}_llm_gate",
-            _make_llm_gate_node(module_name),
-        )
-        # Repair node
-        graph.add_node(
-            f"repair_{module_name}",
-            _make_repair_node(module_name),
-        )
-        graph.add_node(
-            f"{module_name}_complete",
-            _make_module_complete_node(module_name),
-        )
-
-    for layer_name, module_names in MODULE_LAYERS:
+    # ── Module layers ─────────────────────────────────────────────────
+    for layer_index, (layer_name, module_names) in enumerate(MODULE_LAYERS):
         graph.add_node(
             f"run_{layer_name}",
             _make_module_layer_node(layer_name, module_names),
@@ -138,14 +88,20 @@ def build_g4_codegen_subgraph() -> StateGraph:
             f"{layer_name}_gate",
             _make_layer_gate_node(f"{layer_name}_gate", module_names),
         )
+        graph.add_node(
+            f"coordinate_{layer_name}_context",
+            _make_context_coordinator_node(
+                f"coordinate_{layer_name}_context",
+                _target_modules_after_layer(layer_index),
+            ),
+        )
 
     # ── Integration nodes ─────────────────────────────────────────────
     graph.add_node("build_interface_contracts", build_interface_contracts_node)
     graph.add_node("integration_assembler", integration_assembler_node)
     graph.add_node("global_integration_agent", global_integration_agent_node)
-    graph.add_node("static_semantic_scanner", static_semantic_scanner_node)
-    graph.add_node("cross_file_hard_gate", cross_file_hard_gate_node)
-    graph.add_node("cross_file_llm_gate", cross_file_llm_gate_node)
+    graph.add_node("runtime_execution_audit", runtime_execution_audit_node)
+    graph.add_node("physics_quality_review", physics_quality_review_node)
     graph.add_node("persist_codegen_output", persist_codegen_output_node)
 
     # ── Flow: Planning ────────────────────────────────────────────────
@@ -165,26 +121,34 @@ def build_g4_codegen_subgraph() -> StateGraph:
 
         graph.add_edge(run_node, gate_node)
 
+        context_node = f"coordinate_{layer_name}_context"
         if layer_index + 1 < len(MODULE_LAYERS):
             next_node = f"run_{MODULE_LAYERS[layer_index + 1][0]}"
         else:
             next_node = "build_interface_contracts"
         graph.add_conditional_edges(
             gate_node,
-            _route_after_layer_gate(gate_node, next_node),
+            _route_after_layer_gate(gate_node, context_node),
             {
-                next_node: next_node,
+                context_node: context_node,
                 "persist_codegen_output": "persist_codegen_output",
             },
         )
+        graph.add_edge(context_node, next_node)
 
     # ── Flow: Integration ─────────────────────────────────────────────
     graph.add_edge("build_interface_contracts", "integration_assembler")
     graph.add_edge("integration_assembler", "global_integration_agent")
-    graph.add_edge("global_integration_agent", "static_semantic_scanner")
-    graph.add_edge("static_semantic_scanner", "cross_file_hard_gate")
-    graph.add_edge("cross_file_hard_gate", "cross_file_llm_gate")
-    graph.add_edge("cross_file_llm_gate", "persist_codegen_output")
+    graph.add_edge("global_integration_agent", "runtime_execution_audit")
+    graph.add_conditional_edges(
+        "runtime_execution_audit",
+        _route_after_runtime_execution_audit,
+        {
+            "physics_quality_review": "physics_quality_review",
+            "persist_codegen_output": "persist_codegen_output",
+        },
+    )
+    graph.add_edge("physics_quality_review", "persist_codegen_output")
     graph.add_edge("persist_codegen_output", END)
 
     return graph
@@ -193,65 +157,11 @@ def build_g4_codegen_subgraph() -> StateGraph:
 # ── Node factories ───────────────────────────────────────────────────
 
 
-def _make_module_agent_node(module_name: str) -> Any:
-    """Create a module agent node function."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return await run_module_agent_node(state, module_name)
-
-    return _run
-
-
-def _make_hard_gate_node(module_name: str) -> Any:
-    """Create a hard gate node function."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return await run_module_hard_gate_node(state, module_name)
-
-    return _run
-
-
-def _make_llm_gate_node(module_name: str) -> Any:
-    """Create an LLM gate node function."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return await run_module_llm_gate_node(state, module_name)
-
-    return _run
-
-
-def _make_repair_node(module_name: str) -> Any:
-    """Create a repair node function."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return await repair_module_node(state, module_name)
-
-    return _run
-
-
 def _make_module_layer_node(layer_name: str, module_names: list[str]) -> Any:
     """Create a node that runs one module layer concurrently."""
 
     async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
         return await run_module_layer_node(state, layer_name, module_names)
-
-    return _run
-
-
-def _make_module_complete_node(module_name: str) -> Any:
-    """Create a no-op terminal node for a module branch."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return {"current_node": f"{module_name}_complete"}
-
-    return _run
-
-
-def _make_layer_start_node(layer_name: str) -> Any:
-    """Create a no-op fan-out node for a parallel module layer."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return {"current_node": f"start_{layer_name}"}
 
     return _run
 
@@ -265,33 +175,16 @@ def _make_layer_gate_node(layer_gate_name: str, module_names: list[str]) -> Any:
     return _run
 
 
+def _make_context_coordinator_node(coordinator_name: str, target_modules: list[str]) -> Any:
+    """Create a context coordination graph node."""
+
+    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
+        return await context_coordinator_node(state, coordinator_name, target_modules)
+
+    return _run
+
+
 # ── Routing functions ────────────────────────────────────────────────
-
-
-def _route_after_hard_gate(module_name: str) -> Any:
-    """Route after hard gate: pass → LLM gate, fail → repair."""
-
-    def _route(state: G4CodegenSubgraphState) -> str:
-        gate_results = state.get("module_gate_results", {})
-        hard_gate = gate_results.get(module_name, {}).get("hard", {})
-        if hard_gate.get("status") == "pass":
-            return f"{module_name}_llm_gate"
-        return f"repair_{module_name}"
-
-    return _route
-
-
-def _route_after_llm_gate(module_name: str) -> Any:
-    """Route after LLM gate: pass → module complete, fail → repair."""
-
-    def _route(state: G4CodegenSubgraphState) -> str:
-        gate_results = state.get("module_gate_results", {})
-        llm_gate = gate_results.get(module_name, {}).get("llm", {})
-        if llm_gate.get("status") == "pass":
-            return f"{module_name}_complete"
-        return f"repair_{module_name}"
-
-    return _route
 
 
 def _route_after_layer_gate(layer_gate_name: str, next_node: str) -> Any:
@@ -306,39 +199,15 @@ def _route_after_layer_gate(layer_gate_name: str, next_node: str) -> Any:
     return _route
 
 
-def _route_after_cross_hard_gate(state: G4CodegenSubgraphState) -> str:
-    """Route after cross-file hard gate."""
-    gate = state.get("cross_file_hard_gate", {})
-    if gate.get("status") == "pass":
-        return "cross_file_llm_gate"
+def _route_after_runtime_execution_audit(state: G4CodegenSubgraphState) -> str:
+    """Run physics review only after runtime execution authenticity passes."""
+    audit = state.get("runtime_execution_audit", {})
+    if audit.get("status") == "pass":
+        return "physics_quality_review"
     return "persist_codegen_output"
 
 
-def _route_after_cross_llm_gate(state: G4CodegenSubgraphState) -> str:
-    """Route after cross-file LLM gate."""
-    return "persist_codegen_output"
-
-
-def _route_after_static_scan(state: G4CodegenSubgraphState) -> str:
-    """Route after static semantic scan: pass → cross_file_hard_gate, fail → persist."""
-    scan = state.get("static_semantic_scan", {})
-    if scan.get("status") == "pass":
-        return "cross_file_hard_gate"
-    return "persist_codegen_output"
-
-
-def _route_after_repair(module_name: str) -> Any:
-    """Route after repair: success → hard gate, failed → module complete.
-
-    The layer consistency gate terminates codegen if any branch failed. This
-    avoids multiple parallel branches writing final output at once.
-    """
-
-    def _route(state: G4CodegenSubgraphState) -> str:
-        repair_results = state.get("module_repair_results", {})
-        repair = repair_results.get(module_name, {})
-        if repair.get("status") == "failed":
-            return f"{module_name}_complete"
-        return f"{module_name}_hard_gate"
-
-    return _route
+def _target_modules_after_layer(layer_index: int) -> list[str]:
+    if layer_index + 1 < len(MODULE_LAYERS):
+        return list(MODULE_LAYERS[layer_index + 1][1])
+    return ["global_integration_agent", "runtime_execution_auditor", "physics_quality_reviewer"]

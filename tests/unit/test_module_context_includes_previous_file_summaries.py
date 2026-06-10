@@ -22,10 +22,10 @@ class TestModuleContextIncludesPreviousFileSummaries:
     def test_includes_empty_summaries_by_default(self, workspace: Path) -> None:
         """When no previous files, existing_generated_file_summaries should be empty list."""
         ctx = build_module_context(
-            module_name="physics",
-            module_contract={"module_name": "physics", "module_type": "physics"},
+            module_name="beam_physics",
+            module_contract={"module_name": "beam_physics", "module_type": "beam_physics"},
             g4_model_ir={"model_ir_id": "test", "physics": {"physics_list": "FTFP_BERT"}},
-            codegen_plan={"required_modules": ["physics"]},
+            codegen_plan={"required_modules": ["beam_physics"]},
             geometry_strategy_plan={},
             code_architecture_plan={},
             job_id="test_ctx",
@@ -39,9 +39,9 @@ class TestModuleContextIncludesPreviousFileSummaries:
         """When summaries are provided, they should appear in context."""
         summaries = [
             {
-                "module_name": "material",
+                "module_name": "simulation_core",
                 "path": "src/MaterialRegistry.cc",
-                "generated_by": "material_module_agent",
+                "generated_by": "simulation_core_module_agent",
                 "classes": ["MaterialRegistry"],
                 "public_methods": ["DefineMaterials"],
                 "includes": ["G4NistManager.hh"],
@@ -50,10 +50,10 @@ class TestModuleContextIncludesPreviousFileSummaries:
         ]
 
         ctx = build_module_context(
-            module_name="geometry",
-            module_contract={"module_name": "geometry", "module_type": "geometry"},
+            module_name="runtime_app",
+            module_contract={"module_name": "runtime_app", "module_type": "runtime_app"},
             g4_model_ir={"model_ir_id": "test"},
-            codegen_plan={"required_modules": ["geometry"]},
+            codegen_plan={"required_modules": ["runtime_app"]},
             geometry_strategy_plan={},
             code_architecture_plan={},
             job_id="test_ctx2",
@@ -66,8 +66,8 @@ class TestModuleContextIncludesPreviousFileSummaries:
     def test_context_has_required_fields(self, workspace: Path) -> None:
         """Context should have all required fields for a module agent."""
         ctx = build_module_context(
-            module_name="source",
-            module_contract={"module_name": "source"},
+            module_name="beam_physics",
+            module_contract={"module_name": "beam_physics"},
             g4_model_ir={"model_ir_id": "test"},
             codegen_plan={},
             geometry_strategy_plan={},

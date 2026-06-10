@@ -37,6 +37,7 @@ from agent_core.context.rag_client import (
     RAGDocument,
     cosine_similarity,
 )
+from agent_core.workspace.paths import STAGE_CONTEXT
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -510,7 +511,7 @@ class TestRetrieveRAGContext:
             }
             await retrieve_rag_context(state)
 
-            context_dir = tmp_path / "jobs" / "test_files" / "01_context"
+            context_dir = tmp_path / "jobs" / "test_files" / STAGE_CONTEXT
             assert (context_dir / "rag_context.json").exists()
             assert (context_dir / "rag_sufficiency.json").exists()
 

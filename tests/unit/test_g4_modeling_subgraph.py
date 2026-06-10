@@ -223,6 +223,32 @@ class TestG4ModelingNodes:
         }
         result = await persist_model_ir(state)
         assert result.get("g4_modeling_status") == "passed"
+        assert result.get("human_confirmation_required") is False
 
         ir_path = result.get("g4_model_ir_path", "")
         assert ir_path and Path(ir_path).exists()
+
+    async def test_persist_model_ir_flags_human_confirmation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """persist_model_ir should surface unresolved IR questions to the main graph."""
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
+
+        from agent_core.g4_modeling.subgraph_io import persist_model_ir
+
+        model_ir = self._minimal_model_ir()
+        model_ir["components"][0]["open_issues"] = ["Missing world volume margin evidence"]
+        model_ir["components"][0]["requires_confirmation"] = True
+
+        result = await persist_model_ir(
+            {
+                "job_id": "test_confirm",
+                "g4_model_ir": model_ir,
+                "model_ir_errors": [],
+            }
+        )
+
+        assert result.get("g4_modeling_status") == "passed"
+        assert result.get("human_confirmation_required") is True

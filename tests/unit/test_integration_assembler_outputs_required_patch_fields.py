@@ -22,14 +22,14 @@ PATCH_REQUIRED_FIELDS = {
 @pytest.fixture
 def sample_module_results():
     return {
-        "material": {
+        "simulation_core": {
             "status": "generated",
             "generated_files": [
                 {
                     "path": "include/MaterialRegistry.hh",
                     "new_content": "#pragma once\n",
-                    "generated_by": "material_module_agent",
-                    "module_name": "material",
+                    "generated_by": "simulation_core_module_agent",
+                    "module_name": "simulation_core",
                     "rationale": "test",
                 },
             ],
@@ -37,24 +37,14 @@ def sample_module_results():
     }
 
 
-@pytest.fixture
-def sample_gate_results():
-    return {
-        "material": {
-            "hard": {"status": "pass"},
-            "llm": {"status": "pass"},
-        },
-    }
-
-
-def test_patch_has_all_required_fields(sample_module_results, sample_gate_results):
-    patch = assemble_proposed_patch(sample_module_results, sample_gate_results, "job_001")
+def test_patch_has_all_required_fields(sample_module_results):
+    patch = assemble_proposed_patch(sample_module_results, "job_001")
     missing = PATCH_REQUIRED_FIELDS - set(patch.keys())
     assert not missing, f"Missing fields: {sorted(missing)}"
 
 
-def test_patch_has_metadata(sample_module_results, sample_gate_results):
-    patch = assemble_proposed_patch(sample_module_results, sample_gate_results, "job_001")
+def test_patch_has_metadata(sample_module_results):
+    patch = assemble_proposed_patch(sample_module_results, "job_001")
     assert "metadata" in patch
     meta = patch["metadata"]
     assert "source" in meta
@@ -62,11 +52,10 @@ def test_patch_has_metadata(sample_module_results, sample_gate_results):
     assert "module_agent_count" in meta
     assert "passed_module_count" in meta
     assert "failed_module_count" in meta
-    assert "module_gate_summary" in meta
 
 
-def test_changed_files_have_required_fields(sample_module_results, sample_gate_results):
-    patch = assemble_proposed_patch(sample_module_results, sample_gate_results, "job_001")
+def test_changed_files_have_required_fields(sample_module_results):
+    patch = assemble_proposed_patch(sample_module_results, "job_001")
     file_required = {
         "path",
         "operation",
