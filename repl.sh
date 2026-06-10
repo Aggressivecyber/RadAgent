@@ -4,8 +4,8 @@
 #
 # Usage:
 #   ./repl.sh                         # 默认 acceptance 模式
-#   ./repl.sh --dev                   # 开发模式（不要求 Geant4 环境）
-#   ./repl.sh --mode mvp1_acceptance  # 显式指定模式
+#   ./repl.sh --mode test             # 测试模式
+#   ./repl.sh --mode production       # 显式指定模式
 #   ./repl.sh --setup                 # 仅安装依赖，不启动 REPL
 #   ./repl.sh --check                 # 检查环境状态
 #   ./repl.sh --help                  # 查看帮助
@@ -44,7 +44,7 @@ banner() {
 /_/ |_|\__,_/\__,_/_/_/\___/\___/_/  |_/___/
 EOF
     echo -e "${NC}"
-    echo -e "  ${DIM}Radiation Simulation Agent — Geant4 · TCAD · ngspice${NC}"
+    echo -e "  ${DIM}Radiation Simulation Agent — Geant4 · TCAD · external tools${NC}"
     echo ""
 }
 
@@ -55,12 +55,19 @@ ACTION="run"  # run | setup | check
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --dev)
-            MODE="test"
-            shift
-            ;;
         --mode)
+            if [[ $# -lt 2 ]]; then
+                fail "--mode 需要一个值: strict|test|acceptance|production"
+                exit 2
+            fi
             MODE="$2"
+            case "$MODE" in
+                strict|test|acceptance|production) ;;
+                *)
+                    fail "无效模式: $MODE (支持 strict|test|acceptance|production)"
+                    exit 2
+                    ;;
+            esac
             shift 2
             ;;
         --setup)
@@ -75,7 +82,7 @@ while [[ $# -gt 0 ]]; do
             banner
             echo -e "${BOLD}Usage:${NC}"
             echo "  ./repl.sh                         # 默认 acceptance 模式"
-            echo "  ./repl.sh --dev                   # 开发模式"
+            echo "  ./repl.sh --mode test             # 测试模式"
             echo "  ./repl.sh --mode acceptance       # 显式指定模式 (strict|test|acceptance|production)"
             echo "  ./repl.sh --setup                 # 安装依赖"
             echo "  ./repl.sh --check                 # 检查环境"
@@ -147,7 +154,7 @@ check_api_key() {
 
     if [[ -z "$key_val" ]] || [[ "$key_val" == "your_api_key_here" ]]; then
         warn "API key 未配置 (env: $key_env)"
-        warn "请在 .env 中设置 RADAGENT_API_KEY 或导出 DEEPSEEK_API_KEY"
+        warn "请在 .env 中设置 RADAGENT_API_KEY，或通过前端 /model key=<api_key> 更新"
     else
         ok "API key 已配置 (${key_val:0:10}...)"
     fi

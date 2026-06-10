@@ -24,6 +24,14 @@ venv/
 .coverage
 htmlcov/
 
+# Generated graph viewer artifacts
+docs/graphs/*.html
+docs/graphs/*.png
+docs/graphs/langgraph_current/
+
+# Local repair/debug logs
+repair_logs/
+
 # MyPy
 .mypy_cache/
 

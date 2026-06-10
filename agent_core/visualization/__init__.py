@@ -9,6 +9,7 @@ Usage:
         draw_main_graph,
         draw_subgraph,
         draw_all,
+        draw_combined,
         export_mermaid,
     )
 
@@ -22,6 +23,7 @@ from agent_core.visualization.graph_visualizer import (
     MermaidRenderer,
     SubgraphSpec,
     draw_all,
+    draw_combined,
     draw_main_graph,
     draw_subgraph,
     export_mermaid,
@@ -31,6 +33,7 @@ __all__ = [
     "MermaidRenderer",
     "SubgraphSpec",
     "draw_all",
+    "draw_combined",
     "draw_main_graph",
     "draw_subgraph",
     "export_mermaid",

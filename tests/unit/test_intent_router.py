@@ -43,8 +43,8 @@ class TestFallbackIntent:
         assert result.requires_job is False
         assert result.requires_simulation_pipeline is False
 
-    def test_fallback_defaults_to_chat_with_active_job(self) -> None:
-        result = fallback_intent("继续", has_active_job=True)
+    def test_fallback_defaults_to_chat_without_rule_based_guessing(self) -> None:
+        result = fallback_intent("继续")
         assert result.intent == "chat"
         assert result.requires_simulation_pipeline is False
 
@@ -96,12 +96,12 @@ class TestClassifyIntentWithLiteModel:
         assert result.requires_simulation_pipeline is True
 
     @pytest.mark.asyncio
-    async def test_legacy_lm_chat_label_is_normalized(self) -> None:
+    async def test_detail_only_chat_label_is_normalized(self) -> None:
         mock_result = _mock_result(
             {
                 "intent": "help",
                 "confidence": 0.9,
-                "routing_reason": "legacy detail",
+                "routing_reason": "detail-only label",
                 "normalized_user_query": "怎么用",
             }
         )
@@ -116,12 +116,12 @@ class TestClassifyIntentWithLiteModel:
         assert result.requires_simulation_pipeline is False
 
     @pytest.mark.asyncio
-    async def test_legacy_lm_simulation_label_is_normalized(self) -> None:
+    async def test_detail_only_simulation_label_is_normalized(self) -> None:
         mock_result = _mock_result(
             {
                 "intent": "simulation_request",
                 "confidence": 0.9,
-                "routing_reason": "legacy detail",
+                "routing_reason": "detail-only label",
                 "normalized_user_query": "run a detector simulation",
             }
         )

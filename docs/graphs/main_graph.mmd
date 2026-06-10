@@ -3,39 +3,56 @@ flowchart TB
     %% RadAgent Main Graph
     %% 主调度图 — 仅负责子图调度，不含领域逻辑
 
-    prepare_workspace("准备工作区") :::entry
+    initialize_request["初始化请求"] :::entry
+    intent_router{{"意图路由"}}
+    chat_response_node("聊天响应")
+    prepare_workspace("准备工作区")
     context_subgraph["Context 子图"]
     task_planning_subgraph["任务规划 子图"]
     g4_modeling_subgraph["G4 建模 子图"]
+    human_confirmation_subgraph["Human Confirmation 子图"]
     g4_codegen_subgraph["G4 代码生成 子图"]
     patch_subgraph["Patch 子图"]
     gate_subgraph["门禁验证 子图"]
     artifact_subgraph["产物收集 子图"]
     report_subgraph["报告生成 子图"]
 
+    initialize_request --> intent_router
+    chat_response_node --> END((END))
     prepare_workspace --> context_subgraph
     report_subgraph --> END((END))
 
     %% Conditional routes
+    intent_router --> |chat|chat_response_node
+    intent_router --> |确认回复|human_confirmation_subgraph
+    intent_router --> |simulation_work|prepare_workspace
     context_subgraph --> |充分 → 规划|task_planning_subgraph
     context_subgraph ==> |不足 → 报告|report_subgraph
     task_planning_subgraph --> |scope=geant4|g4_modeling_subgraph
     task_planning_subgraph ==> |TCAD/SPICE/失败|report_subgraph
-    g4_modeling_subgraph --> |通过|g4_codegen_subgraph
+    g4_modeling_subgraph --> |需确认|human_confirmation_subgraph
+    g4_modeling_subgraph --> |通过且无需确认|g4_codegen_subgraph
     g4_modeling_subgraph ==> |失败|report_subgraph
+    human_confirmation_subgraph --> |确认完成|g4_codegen_subgraph
+    human_confirmation_subgraph -.-> |补充信息|context_subgraph
+    human_confirmation_subgraph ==> |拒绝/失败/待输入|report_subgraph
     g4_codegen_subgraph --> |通过|patch_subgraph
     g4_codegen_subgraph ==> |失败|report_subgraph
     patch_subgraph --> |已应用|gate_subgraph
     patch_subgraph ==> |失败|report_subgraph
-    gate_subgraph --> |VERIFIED|artifact_subgraph
-    gate_subgraph -.-> |Gate 0/G4-E 失败|context_subgraph
+    gate_subgraph --> |passed|artifact_subgraph
+    gate_subgraph -.-> |Gate 0 失败|context_subgraph
     gate_subgraph -.-> |Gate 1 失败|task_planning_subgraph
-    gate_subgraph -.-> |Gate 2/G4-A~D 失败|g4_modeling_subgraph
-    gate_subgraph -.-> |Gate 5~7/G4-F~G 失败|g4_codegen_subgraph
+    gate_subgraph -.-> |Gate 2/G4-A~E 失败|g4_modeling_subgraph
+    gate_subgraph -.-> |G4-H 失败|human_confirmation_subgraph
+    gate_subgraph -.-> |Gate 5~9/11/G4-F~G 失败|g4_codegen_subgraph
     gate_subgraph -.-> |Gate 3~4 失败|patch_subgraph
     gate_subgraph ==> |retry≥5 或其他|report_subgraph
     artifact_subgraph --> report_subgraph
 
     %% Node styles
+    classDef artifact fill:#E0F7FA,stroke:#00838F,stroke-width:2px,color:#333
+    classDef guard fill:#FCE4EC,stroke:#C62828,stroke-width:2px,color:#333
+    classDef io fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#333
     classDef subgraph fill:#F5F5F5,stroke:#757575,stroke-width:2px,color:#333
     classDef workspace fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#333

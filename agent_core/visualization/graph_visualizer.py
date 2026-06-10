@@ -79,16 +79,20 @@ class SubgraphSpec:
 
 
 def get_main_graph_spec() -> SubgraphSpec:
-    """Main orchestration graph — 9 nodes, conditional routing."""
+    """Main orchestration graph — 13 nodes, conditional routing."""
     return SubgraphSpec(
         name="main_graph",
         display_name="RadAgent Main Graph",
         description="主调度图 — 仅负责子图调度，不含领域逻辑",
         nodes=(
-            NodeSpec("prepare_workspace", "准备工作区", "workspace", is_entry=True),
+            NodeSpec("initialize_request", "初始化请求", "io", is_entry=True),
+            NodeSpec("intent_router", "意图路由", "guard"),
+            NodeSpec("chat_response_node", "聊天响应", "artifact"),
+            NodeSpec("prepare_workspace", "准备工作区", "workspace"),
             NodeSpec("context_subgraph", "Context 子图", "subgraph"),
             NodeSpec("task_planning_subgraph", "任务规划 子图", "subgraph"),
             NodeSpec("g4_modeling_subgraph", "G4 建模 子图", "subgraph"),
+            NodeSpec("human_confirmation_subgraph", "Human Confirmation 子图", "subgraph"),
             NodeSpec("g4_codegen_subgraph", "G4 代码生成 子图", "subgraph"),
             NodeSpec("patch_subgraph", "Patch 子图", "subgraph"),
             NodeSpec("gate_subgraph", "门禁验证 子图", "subgraph"),
@@ -96,25 +100,35 @@ def get_main_graph_spec() -> SubgraphSpec:
             NodeSpec("report_subgraph", "报告生成 子图", "subgraph"),
         ),
         edges=(
+            EdgeSpec("initialize_request", "intent_router"),
+            EdgeSpec("chat_response_node", "END"),
             EdgeSpec("prepare_workspace", "context_subgraph"),
             EdgeSpec("report_subgraph", "END"),
         ),
         conditional_edges=(
+            EdgeSpec("intent_router", "chat_response_node", "chat"),
+            EdgeSpec("intent_router", "human_confirmation_subgraph", "确认回复"),
+            EdgeSpec("intent_router", "prepare_workspace", "simulation_work"),
             EdgeSpec("context_subgraph", "task_planning_subgraph", "充分 → 规划"),
             EdgeSpec("context_subgraph", "report_subgraph", "不足 → 报告", "block"),
             EdgeSpec("task_planning_subgraph", "g4_modeling_subgraph", "scope=geant4"),
             EdgeSpec("task_planning_subgraph", "report_subgraph", "TCAD/SPICE/失败", "block"),
-            EdgeSpec("g4_modeling_subgraph", "g4_codegen_subgraph", "通过"),
+            EdgeSpec("g4_modeling_subgraph", "human_confirmation_subgraph", "需确认"),
+            EdgeSpec("g4_modeling_subgraph", "g4_codegen_subgraph", "通过且无需确认"),
             EdgeSpec("g4_modeling_subgraph", "report_subgraph", "失败", "block"),
+            EdgeSpec("human_confirmation_subgraph", "g4_codegen_subgraph", "确认完成"),
+            EdgeSpec("human_confirmation_subgraph", "context_subgraph", "补充信息", "retry"),
+            EdgeSpec("human_confirmation_subgraph", "report_subgraph", "拒绝/失败/待输入", "block"),
             EdgeSpec("g4_codegen_subgraph", "patch_subgraph", "通过"),
             EdgeSpec("g4_codegen_subgraph", "report_subgraph", "失败", "block"),
             EdgeSpec("patch_subgraph", "gate_subgraph", "已应用"),
             EdgeSpec("patch_subgraph", "report_subgraph", "失败", "block"),
             EdgeSpec("gate_subgraph", "artifact_subgraph", "passed"),
-            EdgeSpec("gate_subgraph", "context_subgraph", "Gate 0/G4-E 失败", "retry"),
+            EdgeSpec("gate_subgraph", "context_subgraph", "Gate 0 失败", "retry"),
             EdgeSpec("gate_subgraph", "task_planning_subgraph", "Gate 1 失败", "retry"),
-            EdgeSpec("gate_subgraph", "g4_modeling_subgraph", "Gate 2/G4-A~D 失败", "retry"),
-            EdgeSpec("gate_subgraph", "g4_codegen_subgraph", "Gate 5~7/G4-F~G 失败", "retry"),
+            EdgeSpec("gate_subgraph", "g4_modeling_subgraph", "Gate 2/G4-A~E 失败", "retry"),
+            EdgeSpec("gate_subgraph", "human_confirmation_subgraph", "G4-H 失败", "retry"),
+            EdgeSpec("gate_subgraph", "g4_codegen_subgraph", "Gate 5~9/11/G4-F~G 失败", "retry"),
             EdgeSpec("gate_subgraph", "patch_subgraph", "Gate 3~4 失败", "retry"),
             EdgeSpec("gate_subgraph", "report_subgraph", "retry≥5 或其他", "block"),
             EdgeSpec("artifact_subgraph", "report_subgraph", ""),
@@ -221,30 +235,7 @@ def get_g4_modeling_subgraph_spec() -> SubgraphSpec:
 
 
 def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
-    """G4 Codegen subgraph — module agent pipeline.
-
-    P0-27: Updated to reflect the actual module agent flow:
-    codegen_plan → geometry_strategy → architecture_plan →
-    module_contracts → module_contexts →
-    [per module: agent → hard_gate → llm_gate → repair] →
-    interface_contracts → integration_assembler →
-    static_semantic_scanner → cross_file_hard_gate →
-    cross_file_llm_gate → persist_codegen_output
-    """
-    # Module names in execution order
-    modules = [
-        "material",
-        "geometry",
-        "placement",
-        "source",
-        "physics",
-        "sensitive_detector",
-        "scoring",
-        "output_manager",
-        "action_initialization",
-        "main_cmake",
-    ]
-
+    """G4 Codegen subgraph — coarse module agents plus final integration."""
     nodes = [
         NodeSpec("load_model_ir", "加载 Model IR", "io", is_entry=True),
         NodeSpec("build_codegen_plan", "代码生成规划", "codegen"),
@@ -252,6 +243,18 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
         NodeSpec("plan_code_architecture", "架构规划", "codegen"),
         NodeSpec("build_module_contracts", "模块契约", "codegen"),
         NodeSpec("build_module_contexts", "模块上下文", "codegen"),
+        NodeSpec("run_core_modules", "生成核心模块", "codegen"),
+        NodeSpec("core_modules_gate", "核心层一致性", "guard"),
+        NodeSpec("coordinate_core_modules_context", "协调核心上下文", "codegen"),
+        NodeSpec("run_runtime_modules", "生成运行模块", "codegen"),
+        NodeSpec("runtime_modules_gate", "运行层一致性", "guard"),
+        NodeSpec("coordinate_runtime_modules_context", "协调运行上下文", "codegen"),
+        NodeSpec("build_interface_contracts", "接口契约", "codegen"),
+        NodeSpec("integration_assembler", "集成组装", "codegen"),
+        NodeSpec("global_integration_agent", "最终集成 Agent", "codegen"),
+        NodeSpec("runtime_execution_audit", "运行真实性审核", "guard"),
+        NodeSpec("physics_quality_review", "物理质量审核", "guard"),
+        NodeSpec("persist_codegen_output", "持久化输出", "io"),
     ]
 
     edges = [
@@ -260,91 +263,78 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
         EdgeSpec("plan_geometry_strategy", "plan_code_architecture"),
         EdgeSpec("plan_code_architecture", "build_module_contracts"),
         EdgeSpec("build_module_contracts", "build_module_contexts"),
+        EdgeSpec("build_module_contexts", "run_core_modules"),
+        EdgeSpec("run_core_modules", "core_modules_gate"),
+        EdgeSpec("coordinate_core_modules_context", "run_runtime_modules"),
+        EdgeSpec("run_runtime_modules", "runtime_modules_gate"),
+        EdgeSpec("coordinate_runtime_modules_context", "build_interface_contracts"),
+        EdgeSpec("build_interface_contracts", "integration_assembler"),
+        EdgeSpec("integration_assembler", "global_integration_agent"),
+        EdgeSpec("global_integration_agent", "runtime_execution_audit"),
+        EdgeSpec("physics_quality_review", "persist_codegen_output"),
+        EdgeSpec("persist_codegen_output", "END"),
     ]
 
-    conditional_edges = []
-
-    # Per-module: agent → hard_gate → llm_gate → repair
-    for i, mod in enumerate(modules):
-        agent = f"run_{mod}_agent"
-        hard = f"{mod}_hard_gate"
-        llm = f"{mod}_llm_gate"
-        repair = f"repair_{mod}"
-
-        nodes.append(NodeSpec(agent, f"{mod} Agent", "codegen"))
-        nodes.append(NodeSpec(hard, f"{mod} 硬门禁", "guard"))
-        nodes.append(NodeSpec(llm, f"{mod} LLM 门禁", "guard"))
-        nodes.append(NodeSpec(repair, f"{mod} 修复", "codegen"))
-
-        # Connect from previous module or build_module_contexts
-        if i == 0:
-            edges.append(EdgeSpec("build_module_contexts", agent))
-        else:
-            prev_llm = f"{modules[i - 1]}_llm_gate"
-            edges.append(EdgeSpec(prev_llm, agent))
-
-        # Agent → hard gate (always)
-        edges.append(EdgeSpec(agent, hard))
-
-        # Hard gate → LLM gate (pass) or repair (fail)
-        conditional_edges.append(EdgeSpec(hard, llm, "pass"))
-        conditional_edges.append(EdgeSpec(hard, repair, "fail"))
-
-        # LLM gate → next module (pass) or repair (fail)
-        next_target = (
-            f"run_{modules[i + 1]}_agent" if i + 1 < len(modules) else "build_interface_contracts"
-        )
-        conditional_edges.append(EdgeSpec(llm, next_target, "pass"))
-        conditional_edges.append(EdgeSpec(llm, repair, "fail"))
-
-        # Repair → hard gate (repaired) or persist (failed, terminate)
-        conditional_edges.append(EdgeSpec(repair, hard, "repaired"))
-        conditional_edges.append(
-            EdgeSpec(repair, "persist_codegen_output", "failed → 终止", "block")
-        )
-
-    # Integration pipeline
-    nodes.extend(
-        [
-            NodeSpec("build_interface_contracts", "接口契约", "codegen"),
-            NodeSpec("integration_assembler", "集成组装", "codegen"),
-            NodeSpec("static_semantic_scanner", "静态语义扫描", "guard"),
-            NodeSpec("cross_file_hard_gate", "跨文件硬门禁", "guard"),
-            NodeSpec("cross_file_llm_gate", "跨文件 LLM 门禁", "guard"),
-            NodeSpec("persist_codegen_output", "持久化输出", "io"),
-        ]
+    conditional_edges = (
+        EdgeSpec("core_modules_gate", "coordinate_core_modules_context", "通过"),
+        EdgeSpec("core_modules_gate", "persist_codegen_output", "失败", "block"),
+        EdgeSpec("runtime_modules_gate", "coordinate_runtime_modules_context", "通过"),
+        EdgeSpec("runtime_modules_gate", "persist_codegen_output", "失败", "block"),
+        EdgeSpec("runtime_execution_audit", "physics_quality_review", "通过"),
+        EdgeSpec("runtime_execution_audit", "persist_codegen_output", "失败", "block"),
     )
-
-    edges.extend(
-        [
-            EdgeSpec("build_interface_contracts", "integration_assembler"),
-            EdgeSpec("integration_assembler", "static_semantic_scanner"),
-        ]
-    )
-
-    # Static scan → cross hard gate (pass) or persist (fail)
-    conditional_edges.append(EdgeSpec("static_semantic_scanner", "cross_file_hard_gate", "pass"))
-    conditional_edges.append(
-        EdgeSpec("static_semantic_scanner", "persist_codegen_output", "fail → 阻断", "block")
-    )
-
-    # Cross hard gate → cross LLM gate (pass) or persist (fail)
-    conditional_edges.append(EdgeSpec("cross_file_hard_gate", "cross_file_llm_gate", "pass"))
-    conditional_edges.append(
-        EdgeSpec("cross_file_hard_gate", "persist_codegen_output", "fail → 阻断", "block")
-    )
-
-    # Cross LLM gate → persist
-    edges.append(EdgeSpec("cross_file_llm_gate", "persist_codegen_output"))
-    edges.append(EdgeSpec("persist_codegen_output", "END"))
 
     return SubgraphSpec(
         name="g4_codegen_subgraph",
         display_name="G4 Codegen 子图",
-        description="模块级 Agent 代码生成流水线 (10 模块 × 4 节点 + 集成)",
+        description="粗粒度 Agent 代码生成流水线 (2 层模块 + 最终集成 + 运行/物理审核)",
         nodes=tuple(nodes),
         edges=tuple(edges),
-        conditional_edges=tuple(conditional_edges),
+        conditional_edges=conditional_edges,
+    )
+
+
+def get_human_confirmation_subgraph_spec() -> SubgraphSpec:
+    return SubgraphSpec(
+        name="human_confirmation_subgraph",
+        display_name="Human Confirmation 子图",
+        description="多轮人工确认模型假设 (6 nodes)",
+        nodes=(
+            NodeSpec(
+                "build_proposed_model_completion",
+                "构建待确认模型",
+                "core",
+                is_entry=True,
+            ),
+            NodeSpec("generate_confirmation_request", "生成确认请求", "artifact"),
+            NodeSpec("human_interrupt_node", "等待人工输入", "guard"),
+            NodeSpec("parse_confirmation_response", "解析确认回复", "core"),
+            NodeSpec("merge_user_confirmation", "合并确认结果", "core"),
+            NodeSpec("validate_confirmation_completeness", "校验确认完整性", "guard"),
+        ),
+        edges=(
+            EdgeSpec("build_proposed_model_completion", "generate_confirmation_request"),
+            EdgeSpec("generate_confirmation_request", "human_interrupt_node"),
+            EdgeSpec("parse_confirmation_response", "merge_user_confirmation"),
+        ),
+        conditional_edges=(
+            EdgeSpec("human_interrupt_node", "parse_confirmation_response", "已回复"),
+            EdgeSpec("human_interrupt_node", "END", "待回复", "block"),
+            EdgeSpec("merge_user_confirmation", "generate_confirmation_request", "ask_more"),
+            EdgeSpec(
+                "merge_user_confirmation",
+                "validate_confirmation_completeness",
+                "approved/edited/pending",
+            ),
+            EdgeSpec("merge_user_confirmation", "END", "rejected/failed", "block"),
+            EdgeSpec(
+                "validate_confirmation_completeness",
+                "generate_confirmation_request",
+                "仍待确认",
+                "retry",
+            ),
+            EdgeSpec("validate_confirmation_completeness", "END", "完成"),
+        ),
     )
 
 
@@ -352,11 +342,11 @@ def get_gate_validation_subgraph_spec() -> SubgraphSpec:
     return SubgraphSpec(
         name="gate_validation_subgraph",
         display_name="Gate Validation 子图",
-        description="19 道门禁检查 (4 nodes, 线性)",
+        description="20 道门禁检查 (4 nodes, 线性)",
         nodes=(
             NodeSpec("load_gate_inputs", "加载门禁输入", "io", is_entry=True),
             NodeSpec("run_base_gates", "基础门禁 0-11", "gate"),
-            NodeSpec("run_g4_modeling_gates", "G4 门禁 A-G", "gate"),
+            NodeSpec("run_g4_modeling_gates", "G4 门禁 A-H", "gate"),
             NodeSpec("finalize_gate_results", "汇总结果", "gate"),
         ),
         edges=(
@@ -420,6 +410,7 @@ def get_all_subgraph_specs() -> dict[str, SubgraphSpec]:
         "context": get_context_subgraph_spec(),
         "task_planning": get_task_planning_subgraph_spec(),
         "g4_modeling": get_g4_modeling_subgraph_spec(),
+        "human_confirmation": get_human_confirmation_subgraph_spec(),
         "g4_codegen": get_g4_codegen_subgraph_spec(),
         "gate_validation": get_gate_validation_subgraph_spec(),
         "patch": get_patch_subgraph_spec(),
@@ -607,7 +598,7 @@ def draw_subgraph(name: str) -> str:
 
     Args:
         name: Subgraph key — one of: context, task_planning, g4_modeling,
-              g4_codegen, gate_validation, patch, artifact, report
+              human_confirmation, g4_codegen, gate_validation, patch, artifact, report
     """
     specs = get_all_subgraph_specs()
     if name not in specs:
@@ -695,7 +686,8 @@ def main() -> None:
         type=str,
         default=None,
         help="仅输出指定子图 "
-        "(context/task_planning/g4_modeling/g4_codegen/gate_validation/patch/artifact/report)",
+        "(context/task_planning/g4_modeling/human_confirmation/g4_codegen/"
+        "gate_validation/patch/artifact/report)",
     )
     parser.add_argument(
         "--combined",

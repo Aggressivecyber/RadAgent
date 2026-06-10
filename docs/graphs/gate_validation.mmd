@@ -1,11 +1,11 @@
 flowchart TB
 
     %% Gate Validation 子图
-    %% 19 道门禁检查 (4 nodes, 线性)
+    %% 20 道门禁检查 (4 nodes, 线性)
 
     load_gate_inputs["加载门禁输入"] :::entry
     run_base_gates{{"基础门禁 0-11"}}
-    run_g4_modeling_gates{{"G4 门禁 A-G"}}
+    run_g4_modeling_gates{{"G4 门禁 A-H"}}
     finalize_gate_results{{"汇总结果"}}
 
     load_gate_inputs --> run_base_gates

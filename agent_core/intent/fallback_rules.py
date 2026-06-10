@@ -6,7 +6,6 @@ from agent_core.intent.schemas import IntentResult
 def fallback_intent(
     user_query: str,
     *,
-    has_active_job: bool = False,  # noqa: ARG001 - kept for call-site compatibility
     reason: str = "",
 ) -> IntentResult:
     """Conservative fallback when the LM cannot classify.

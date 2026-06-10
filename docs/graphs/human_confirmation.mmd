@@ -1,0 +1,29 @@
+flowchart TB
+
+    %% Human Confirmation 子图
+    %% 多轮人工确认模型假设 (6 nodes)
+
+    build_proposed_model_completion("构建待确认模型") :::entry
+    generate_confirmation_request("生成确认请求")
+    human_interrupt_node{{"等待人工输入"}}
+    parse_confirmation_response("解析确认回复")
+    merge_user_confirmation("合并确认结果")
+    validate_confirmation_completeness{{"校验确认完整性"}}
+
+    build_proposed_model_completion --> generate_confirmation_request
+    generate_confirmation_request --> human_interrupt_node
+    parse_confirmation_response --> merge_user_confirmation
+
+    %% Conditional routes
+    human_interrupt_node --> |已回复|parse_confirmation_response
+    human_interrupt_node ==> |待回复|END((END))
+    merge_user_confirmation --> |ask_more|generate_confirmation_request
+    merge_user_confirmation --> |approved/edited/pending|validate_confirmation_completeness
+    merge_user_confirmation ==> |rejected/failed|END((END))
+    validate_confirmation_completeness -.-> |仍待确认|generate_confirmation_request
+    validate_confirmation_completeness --> |完成|END((END))
+
+    %% Node styles
+    classDef artifact fill:#E0F7FA,stroke:#00838F,stroke-width:2px,color:#333
+    classDef core fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#333
+    classDef guard fill:#FCE4EC,stroke:#C62828,stroke-width:2px,color:#333

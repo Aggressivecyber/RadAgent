@@ -7,8 +7,8 @@ C++ generation, validation gates, artifact collection, and persistent workspace
 metadata.
 
 The current implementation is focused on Geant4 detector/model generation.
-TCAD and SPICE assets exist in the repository as knowledge-base and benchmark
-material, but they are not the primary production pipeline yet.
+Geant4 and TCAD knowledge-base assets exist in the repository. SPICE support is
+reserved for external tooling and later pipeline work.
 
 ## What It Does
 
@@ -20,8 +20,9 @@ RadAgent can:
   detectors, scoring, and output contracts;
 - pause for human confirmation when generated assumptions need approval;
 - generate a Geant4 C++ project through independent module agents;
-- validate generated code with module gates, cross-file integration checks,
-  build/smoke/data-contract gates, and report generation;
+- validate generated code with layer consistency checks, global integration,
+  runtime execution auditing, physics review, build/smoke/data-contract gates,
+  and report generation;
 - persist jobs, projects, resume snapshots, events, artifacts, and chat context
   in a workspace SQLite database;
 - expose the same core operations through CLI, REPL, and a UI-neutral
@@ -109,8 +110,8 @@ Useful commands:
 
 ### Application Service Layer
 
-`agent_core.app.service.RadAgentAppService` is a UI-neutral facade for desktop,
-web, or API frontends. It owns session state, emits structured events, and
+`agent_core.app.service.RadAgentAppService` is a UI-neutral facade for TUI, web,
+or API frontends. It owns session state, emits structured events, and
 provides operations for jobs, phases, artifacts, build, and simulation without
 depending on Rich or prompt-toolkit.
 
@@ -145,14 +146,14 @@ simulation_workspace/
       00_input/
       01_context/
       02_task_plan/
-      03_modeling/
+      03_model_ir/
       04_human_confirmation/
-      05_model_ir/
-      06_codegen/
-      07_patch/
-      08_gate_validation/
-      09_artifacts/
-      10_report/
+      05_codegen/
+      06_patch/
+        geant4_project/
+      07_gate_validation/
+      08_artifacts/
+      09_report/
       logs/
 ```
 
@@ -181,29 +182,106 @@ Key packages:
 ```text
 agent_core/
   app/                 UI-neutral service layer and Pydantic response schemas
+  artifacts/           artifact collection graph, manifests, and schemas
   chat/                conversational assistant with RAG/web/job context
+  config/              environment, workspace, model endpoint, and runtime settings
   context/             RAG and web-context retrieval nodes
-  g4_modeling/         Model IR schemas, modeling nodes, validators, codegen helpers
-  g4_codegen/          module agents, module gates, repair loop, integration checks
+  g4_codegen/          coarse module agents, integration, runtime audit, physics review
+  g4_modeling/         Model IR schemas, modeling nodes, validators, and reports
   gates/               validation gate runners and schemas
   graph/               LangGraph main graph, routes, subgraph builders, main state
   human_confirmation/  confirmation request/response handling
   intent/              intent schemas, fallback rules, router, response routing
-  models/              model gateway, tiers, usage, tool-call logging
+  models/              model gateway, tier profiles, mock model, tool-call logging
   observability/       job-scoped events and failure bundles
   patching/            patch contract review and application
+  planning/            task-spec planning graph and schemas
+  policies/            packaged YAML runtime policies
+  pipeline.py          canonical pipeline phase order shared by CLI, REPL, app, and storage
   reports/             final report nodes and schemas
   response/            non-pipeline response handling
+  schemas/             shared cross-module schemas
   storage/             SQLite workspace metadata repository
-  tools/               shell, patch, web search, Geant4 runner wrappers
+  tools/               web search and Geant4 build/run wrappers
+  tui/                 Textual terminal frontend
+  validators/          shared file, patch, code, and schema validators
+  visualization/       graph visualization helpers
   workspace/           job directory and stage path management
 ```
 
-The Geant4 codegen layer is module-oriented. Independent agents generate and
-validate modules such as geometry, placement, material, physics, source,
-sensitive detector, scoring, action initialization, output manager, and
-`main`/CMake. Integration gates then check cross-file contracts before outputs
-are persisted.
+Runtime flow:
+
+```text
+frontend/CLI/TUI
+  -> app service or agent_core.main
+  -> intent routing
+  -> graph/main_graph
+  -> context -> planning -> g4_modeling -> human_confirmation
+  -> g4_codegen -> patching -> gates -> artifacts -> reports
+  -> storage/workspace/observability
+```
+
+Module responsibilities and links:
+
+| Module | Role | Upstream callers | Downstream dependencies |
+| --- | --- | --- | --- |
+| `agent_core.app` | Stable facade for frontends, model settings, chat, job/artifact/build/simulation operations. | TUI, future web/API frontends. | `chat`, `config`, `graph`, `models`, `storage`, `tools`, `workspace`. |
+| `agent_core.chat` | Conversational assistant with RAG, web search, and workspace/job context. | `app`, REPL, response nodes. | `context`, `models`, `storage`, `tools`, `workspace`. |
+| `agent_core.config` | Environment, run-mode, external tool, concurrency, and workspace configuration. | Most runtime packages. | `models.schemas`, `workspace.paths`. |
+| `agent_core.context` | RAG/web context retrieval and context decision graph. | main graph, chat, codegen context coordination. | `config`, `tools.web_search_tool`. |
+| `agent_core.planning` | Converts user request and context into a scoped task spec. | main graph, graph viewer. | `config`. |
+| `agent_core.g4_modeling` | Builds and validates structured Geant4 Model IR before code generation. | main graph, gates. | `config`, `models`. |
+| `agent_core.human_confirmation` | Captures user approval/edits for uncertain model assumptions. | main graph, gates. | `config`. |
+| `agent_core.g4_codegen` | Generates coarse Geant4 code modules, coordinates cross-module context, runs integration, runtime audit, and physics review. | main graph, gates, maintenance scripts. | `context`, `gates`, `models`, `observability`, `tools`, `knowledge_base.geant4`. |
+| `agent_core.patching` | Validates and applies proposed file changes inside allowed workspace zones. | main graph, graph viewer. | `config`, `validators`. |
+| `agent_core.gates` | Runs validation gates and classifies failures for retry routing. | main graph, app build/simulation helpers, Geant4 runner. | `g4_modeling`, `g4_codegen`, `human_confirmation`, `tools`, `validators`, `observability`. |
+| `agent_core.artifacts` | Collects reviewable outputs, manifests, and final artifact indexes. | main graph. | `config`, workspace files. |
+| `agent_core.reports` | Writes final human-readable job reports from state, gates, and artifacts. | main graph, graph viewer. | `config`. |
+| `agent_core.response` | Handles non-pipeline responses and delegates ordinary chat. | main graph. | `chat`. |
+| `agent_core.graph` | Owns the LangGraph main graph, routing, state schema, and subgraph adapters. | CLI, REPL, app service, scripts. | all pipeline subgraphs above. |
+| `agent_core.models` | Unified OpenAI-compatible model gateway, tier selection, MiMo thinking defaults, mock model, and model-call logs. | chat, intent, modeling, codegen, app config. | `config`, `observability`. |
+| `agent_core.observability` | Writes job-scoped events, redacted artifacts, and failure bundles. | model gateway, codegen, gates. | `config`. |
+| `agent_core.policies` | Ships static YAML policies, currently file-access zones used by validators. | package resources. | none. |
+| `agent_core.schemas` | Shared schema objects used across validators and simulation contracts. | validators, pipeline state helpers. | none. |
+| `agent_core.storage` | SQLite control-plane repository for projects, jobs, snapshots, events, artifacts, and chat. | app, chat, CLI/REPL. | `workspace`. |
+| `agent_core.tools` | External tool wrappers for web search, Geant4 build/run, and simulation contracts. | chat, context, gates, app. | `config`, `gates`. |
+| `agent_core.validators` | Shared patch/file/code/schema validators used by patching and gates. | patching, gates. | `schemas`. |
+| `agent_core.workspace` | Resolves workspace root, job directories, and stage paths. | app, chat, config, graph, REPL, storage. | filesystem only. |
+| `agent_core.tui` | Textual terminal frontend entry point. | `radagent-tui` command, `python -m agent_core.tui`. | `app`. |
+| `agent_core.visualization` | Static graph visualization helpers and CLI graph rendering support. | `scripts/view_graph.py`. | none. |
+| `knowledge_base.geant4` | Geant4 RAG data prep, indexing, MCP helper, query rewrite, and generator utilities. | codegen example lookup, manual maintenance entry points. | `knowledge_base.llm_client`. |
+| `knowledge_base.tcad` | TCAD RAG data prep, indexing, MCP helper, query rewrite, generator utilities, and optional WeChat scraper. | manual maintenance entry points. | `knowledge_base.llm_client`. |
+| `knowledge_base.llm_client` | Shared OpenAI-compatible helper for knowledge-base generation/query rewrite scripts. | Geant4 and TCAD KB scripts. | `agent_core.config`. |
+| `scripts` | Operational helpers for running pipeline, viewing graphs, validating examples, inspecting logs, and regenerating tracked fixtures. | command line only. | public `agent_core` APIs. |
+
+Top-level runtime modules:
+
+| Module | Role | Used by |
+| --- | --- | --- |
+| `agent_core.main` | One-shot CLI entry point and status inspection helper around the main LangGraph pipeline. | `python -m agent_core.main`, `scripts/run_pipeline.py` pattern. |
+| `agent_core.repl` | Rich/prompt-toolkit interactive shell for phase-by-phase pipeline control and job inspection. | `repl.sh`, local operators. |
+| `agent_core.naming` | Model-assisted job title slug generation with deterministic fallback. | main graph job initialization. |
+
+The Geant4 codegen layer is module-oriented. Coarse agents generate
+`simulation_core`, `beam_physics`, and `runtime_app` file groups. Layer gates
+check that each group produced usable files, a read-only context coordinator
+summarizes upstream interfaces for later agents, and the global integration
+agent is the only cross-module writer before output is persisted.
+
+Dead-code policy:
+
+- Runtime Python files under `agent_core`, `knowledge_base`, and `scripts` are
+  checked by `tests/unit/test_architecture_invariants.py` for detached modules:
+  a non-entry module must have an incoming local import edge.
+- Package `__init__.py` files stay as lightweight public APIs and must not hide
+  business logic.
+- CLI/TUI/RAG maintenance scripts are valid entry points when they provide a
+  `__main__` guard or console-script target.
+- Runtime jobs, logs, caches, and knowledge-base generated data are not source
+  modules and are ignored under `simulation_workspace/` or `knowledge_base/**/data/`.
+
+The current codebase has no known orphan runtime module after this cleanup. The
+graph and import invariants above are the regression guard for future changes.
 
 ## Validation
 
@@ -213,8 +291,9 @@ Validation is layered:
 - modeling gates for completeness, no unapproved simplification, geometry
   interfaces, overlap policy, evidence traceability, module boundaries, and
   magic-number policy;
-- module-specific hard gates and LLM review gates for generated Geant4 code;
-- static semantic scans and cross-file hard/LLM integration gates;
+- layer consistency gates for generated Geant4 module outputs;
+- global integration repair from concrete compile/runtime observations;
+- runtime execution auditing and LLM physics fidelity review;
 - build, smoke-test, output-contract, benchmark, and physics-sanity gates.
 
 Generated output is considered useful only when it is accompanied by structured
@@ -230,7 +309,10 @@ review_artifacts/g4_complex_model/latest/
 ```
 
 This directory is intended for code review and regression inspection. Runtime
-job outputs are produced under `simulation_workspace/jobs/<job_id>/`.
+job outputs are produced under `simulation_workspace/jobs/<job_id>/`. The
+tracked sample is marked `validation_scope=fixture_model_review`: it preserves
+current Model IR, gate, manifest, and human-confirmation formats, but skips
+real runtime gates because it does not execute Geant4.
 
 ## Knowledge Bases
 
@@ -247,10 +329,34 @@ or retrieval behavior changes.
 
 ## Development
 
-Install:
+Runtime install:
+
+```bash
+python -m pip install -e .
+```
+
+Development install:
 
 ```bash
 python -m pip install -e ".[dev]"
+```
+
+TUI install:
+
+```bash
+python -m pip install -e ".[tui]"
+```
+
+TCAD WeChat article collection is an optional maintenance tool:
+
+```bash
+python -m pip install -e ".[wechat-scraper]"
+```
+
+For local development across all optional surfaces:
+
+```bash
+python -m pip install -e ".[dev,tui,wechat-scraper]"
 ```
 
 Common checks:
@@ -258,13 +364,15 @@ Common checks:
 ```bash
 python -m pytest -q tests/unit/test_storage_repository.py tests/unit/test_repl.py
 python -m pytest -q tests/unit/
-python -m ruff check agent_core tests
-python -m compileall -q agent_core
+python -m ruff check agent_core tests scripts
+python -m ruff check --select F,I knowledge_base
+python -m compileall -q agent_core tests scripts knowledge_base
 ```
 
-Some integration and real-module tests require external tools such as Geant4,
-TCAD Sentaurus, ngspice, or configured model providers. Those tests are marked
-in `pyproject.toml` and should not be treated as ordinary local smoke tests.
+Some integration and real full-graph tests require external tools such as
+Geant4, TCAD Sentaurus, ngspice, or a configured model API. Those tests are
+marked in `pyproject.toml` and should not be treated as ordinary local smoke
+tests.
 
 ## Environment Notes
 
@@ -272,9 +380,25 @@ Typical configuration comes from `.env` and `agent_core/config/environment.py`.
 Important values include:
 
 - `RADAGENT_WORKSPACE_ROOT`
-- model provider/API credentials used by `agent_core.models`
+- model API credentials used by `agent_core.models`
 - RAG/web-search availability settings
 - external tool paths for Geant4/TCAD/SPICE integration tests
+
+Model access is configured through one OpenAI-compatible surface. Set the base
+URL, API key, and tier model names in `.env`; MiMo Token Plan and other
+OpenAI-compatible endpoints use the same fields:
+
+```bash
+RADAGENT_MODEL_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
+RADAGENT_API_KEY=<api-key>
+RADAGENT_MODEL_LITE=mimo-v2.5
+RADAGENT_MODEL_PRO=mimo-v2.5-pro
+RADAGENT_MODEL_MAX=mimo-v2.5-pro
+```
+
+Frontend code should call `RadAgentAppService.get_model_config()` and
+`RadAgentAppService.update_model_config(...)` instead of editing model globals
+directly.
 
 The project is designed so the main graph and service layer can run in strict
 mode with persisted state, while expensive external validation is guarded by
@@ -286,7 +410,7 @@ Production focus:
 
 - Geant4 detector/model planning;
 - module-based Geant4 C++ generation;
-- validation and repair loops;
+- validation, runtime auditing, and global integration repair;
 - persisted local project/job management;
 - CLI, REPL, and service-layer consumption.
 

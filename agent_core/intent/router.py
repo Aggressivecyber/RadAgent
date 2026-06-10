@@ -37,7 +37,6 @@ async def classify_intent_with_lite_model(
     if result.error or not result.parsed_json:
         return fallback_intent(
             user_query,
-            has_active_job=has_active_job,
             reason=f"lite model failed: {result.error}",
         )
 
@@ -51,7 +50,6 @@ async def classify_intent_with_lite_model(
     except Exception as exc:
         return fallback_intent(
             user_query,
-            has_active_job=has_active_job,
             reason=f"invalid lite intent json: {exc}",
         )
 
@@ -95,7 +93,6 @@ def _normalize_intent_payload(
     else:
         fallback = fallback_intent(
             user_query,
-            has_active_job=has_active_job,
             reason=f"unrecognized lite intent: {raw_intent}",
         )
         return fallback.model_dump()
