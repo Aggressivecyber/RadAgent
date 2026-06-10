@@ -30,22 +30,29 @@ async def coordinate_system_node(state: RadiationAgentState) -> dict[str, Any]:
 
     model_ir = G4ModelIR.model_validate(model_ir_dict)
 
-    # Determine coordinate system from beam direction
-    z_is_beam = True  # Default: beam along z
+    # Determine coordinate system from source directions. Composite fields with
+    # multiple incident angles should not be collapsed into a single beam axis.
+    axis_definition = {
+        "x": "sensor_width",
+        "y": "sensor_length",
+        "z": "beam_direction",
+    }
     if model_ir.sources:
-        direction = model_ir.sources[0].beam.direction
-        # Find which axis has the largest component
-        max_idx = max(range(3), key=lambda i: abs(direction[i]))
-        z_is_beam = max_idx == 2
+        directions = [src.beam.direction for src in model_ir.sources]
+        if _has_multiple_directions(directions):
+            axis_definition["z"] = "detector_depth"
+            axis_definition["source_directions"] = "composite_radiation_field"
+        else:
+            direction = directions[0]
+            # Find which axis has the largest component
+            max_idx = max(range(3), key=lambda i: abs(direction[i]))
+            if max_idx != 2:
+                axis_definition["z"] = "sensor_height"
 
     model_ir.coordinate_system = CoordinateSystem(
         system="cartesian",
         origin_definition="world_center",
-        axis_definition={
-            "x": "sensor_width",
-            "y": "sensor_length",
-            "z": "beam_direction" if z_is_beam else "sensor_height",
-        },
+        axis_definition=axis_definition,
         unit=model_ir.global_units.length,
     )
 
@@ -71,3 +78,17 @@ async def coordinate_system_node(state: RadiationAgentState) -> dict[str, Any]:
         "coordinate_system": model_ir.coordinate_system.model_dump(mode="json"),
         "current_node": "coordinate_system_node",
     }
+
+
+def _has_multiple_directions(directions: list[list[float]]) -> bool:
+    if len(directions) < 2:
+        return False
+    first = _normalized_direction(directions[0])
+    for direction in directions[1:]:
+        if _normalized_direction(direction) != first:
+            return True
+    return False
+
+
+def _normalized_direction(direction: list[float]) -> tuple[float, float, float]:
+    return tuple(round(float(value), 6) for value in direction[:3])

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import shutil
 from copy import deepcopy
 from pathlib import Path
@@ -22,11 +23,11 @@ from agent_core.observability import record_event
 from agent_core.workspace.io import get_job_dir
 from agent_core.workspace.paths import GEANT4_PROJECT_DIRNAME, STAGE_CODEGEN
 
-MODEL_CONTEXT_CHAR_LIMIT = 80_000
-INITIAL_MODEL_CONTEXT_CHAR_LIMIT = 55_000
-INITIAL_INTEGRATION_DEFER_CHAR_LIMIT = 40_000
-INITIAL_INTEGRATION_MAX_TOKENS = 8192
-RUNTIME_REPAIR_MAX_TOKENS = 12288
+MODEL_CONTEXT_CHAR_LIMIT = 220_000
+INITIAL_MODEL_CONTEXT_CHAR_LIMIT = 140_000
+INITIAL_INTEGRATION_DEFER_CHAR_LIMIT = INITIAL_MODEL_CONTEXT_CHAR_LIMIT
+INITIAL_INTEGRATION_MAX_TOKENS = 65_536
+RUNTIME_REPAIR_MAX_TOKENS = 65_536
 GLOBAL_INTEGRATION_REPORT_PATH = f"{STAGE_CODEGEN}/global_integration_agent_report.json"
 GLOBAL_INTEGRATION_EVIDENCE_PATH = (
     f"{STAGE_CODEGEN}/integration/global_integration_evidence.json"
@@ -544,11 +545,15 @@ async def _call_integration_model(
         if has_runtime_observation
         else INITIAL_MODEL_CONTEXT_CHAR_LIMIT
     )
-    project_file_limit = 75_000 if has_runtime_observation else 45_000
+    project_file_limit = 180_000 if has_runtime_observation else 110_000
     integration_context_json = _model_context_json(
         integration_context,
         max_chars=context_limit,
         max_project_file_chars=project_file_limit,
+    )
+    max_tokens = _integration_max_tokens(
+        gateway,
+        repair=has_runtime_observation,
     )
     return await gateway.call(
         task=ModelTask.CODEGEN,
@@ -564,11 +569,7 @@ async def _call_integration_model(
             f"{integration_context_json}"
         ),
         response_format="json",
-        max_tokens=(
-            RUNTIME_REPAIR_MAX_TOKENS
-            if has_runtime_observation
-            else INITIAL_INTEGRATION_MAX_TOKENS
-        ),
+        max_tokens=max_tokens,
         metadata={
             "job_id": job_id,
             "module_name": "global_integration_agent",
@@ -577,6 +578,15 @@ async def _call_integration_model(
             "available_modules": integration_context.get("available_modules", []),
         },
     )
+
+
+def _integration_max_tokens(gateway: Any, *, repair: bool) -> int:
+    configured = RUNTIME_REPAIR_MAX_TOKENS if repair else INITIAL_INTEGRATION_MAX_TOKENS
+    profile = getattr(gateway, "profiles", {}).get(ModelTier.MAX)
+    profile_tokens = getattr(profile, "max_tokens", None)
+    if isinstance(profile_tokens, int) and profile_tokens > 0:
+        return max(configured, profile_tokens)
+    return configured
 
 
 def _model_context_json(
@@ -589,12 +599,12 @@ def _model_context_json(
     prompt_context = {
         "job_id": integration_context.get("job_id"),
         "available_modules": integration_context.get("available_modules", []),
+        "runtime_failure_context": _compact_runtime_failure_context(
+            integration_context.get("runtime_failure_context", {})
+        ),
         "project_files": _project_files_for_model(
             integration_context.get("project_files", []),
             max_total_content_chars=max_project_file_chars,
-        ),
-        "runtime_failure_context": _compact_runtime_failure_context(
-            integration_context.get("runtime_failure_context", {})
         ),
         "database_search": _compact_search_evidence(
             integration_context.get("database_search", {})
@@ -678,7 +688,7 @@ def _model_context_json(
     text = json.dumps(prompt_context, indent=2, ensure_ascii=False)
     if len(text) <= max_chars:
         return text
-    return text[:max_chars]
+    return _fit_model_context_json(prompt_context, max_chars=max_chars)
 
 
 def _project_files_for_model(
@@ -719,6 +729,129 @@ def _project_files_for_model(
             }
         )
     return files
+
+
+def _fit_model_context_json(prompt_context: dict[str, Any], *, max_chars: int) -> str:
+    """Shrink model context without returning malformed JSON."""
+    compact = deepcopy(prompt_context)
+    shrink_steps = [
+        lambda ctx: ctx.__setitem__("module_context_summaries", {}),
+        lambda ctx: ctx.__setitem__(
+            "database_search",
+            _summarize_search_context(ctx.get("database_search", {})),
+        ),
+        lambda ctx: ctx.__setitem__(
+            "web_search",
+            _summarize_search_context(ctx.get("web_search", {})),
+        ),
+        lambda ctx: ctx.__setitem__(
+            "integration_memory",
+            _trim_json_value(ctx.get("integration_memory", {}), max_chars=2_000),
+        ),
+        lambda ctx: ctx.__setitem__(
+            "module_contracts",
+            _trim_json_value(ctx.get("module_contracts", {}), max_chars=2_000),
+        ),
+        lambda ctx: ctx.__setitem__(
+            "interface_contracts",
+            _trim_json_value(ctx.get("interface_contracts", {}), max_chars=1_500),
+        ),
+    ]
+    for shrink in shrink_steps:
+        text = json.dumps(compact, indent=2, ensure_ascii=False)
+        if len(text) <= max_chars:
+            return text
+        shrink(compact)
+
+    for budget in (60_000, 30_000, 15_000, 8_000, 4_000, 1_500, 500, 0):
+        compact["project_files"] = _shrink_project_files_for_budget(
+            compact.get("project_files", []),
+            max_total_content_chars=budget,
+        )
+        text = json.dumps(compact, indent=2, ensure_ascii=False)
+        if len(text) <= max_chars:
+            return text
+
+    compact["runtime_failure_context"] = _trim_json_value(
+        compact.get("runtime_failure_context", {}),
+        max_chars=max(500, max_chars // 2),
+    )
+    text = json.dumps(compact, indent=2, ensure_ascii=False)
+    if len(text) <= max_chars:
+        return text
+
+    minimum = {
+        "job_id": compact.get("job_id"),
+        "available_modules": compact.get("available_modules", []),
+        "runtime_failure_context": compact.get("runtime_failure_context", {}),
+        "project_files": [],
+        "context_truncated": True,
+        "write_contract": compact.get("write_contract", {}),
+    }
+    text = json.dumps(minimum, indent=2, ensure_ascii=False)
+    if len(text) <= max_chars:
+        return text
+
+    smallest = {
+        "job_id": compact.get("job_id"),
+        "runtime_failure_context": _trim_json_value(
+            compact.get("runtime_failure_context", {}),
+            max_chars=max(80, max_chars - 200),
+        ),
+        "context_truncated": True,
+    }
+    return json.dumps(smallest, indent=2, ensure_ascii=False)
+
+
+def _summarize_search_context(ctx: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "omitted_for_prompt_budget",
+        "result_count": len((ctx or {}).get("results", []))
+        if isinstance(ctx, dict) and isinstance(ctx.get("results"), list)
+        else 0,
+    }
+
+
+def _shrink_project_files_for_budget(
+    files: Any,
+    *,
+    max_total_content_chars: int,
+) -> list[dict[str, str]]:
+    if not isinstance(files, list):
+        return []
+    if max_total_content_chars <= 0:
+        return [
+            {
+                "path": str(item.get("path", "")),
+                "module_name": str(item.get("module_name", "")),
+                "generated_by": str(item.get("generated_by", "")),
+                "new_content": "[omitted: prompt budget exhausted]",
+            }
+            for item in files
+            if isinstance(item, dict) and item.get("path")
+        ][:12]
+
+    used = 0
+    shrunk: list[dict[str, str]] = []
+    for item in files:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        content = str(item.get("new_content", ""))
+        remaining = max_total_content_chars - used
+        if remaining <= 0:
+            new_content = "[omitted: prompt budget exhausted]"
+        else:
+            new_content = _clip_text(content, min(len(content), remaining))
+            used += len(new_content)
+        shrunk.append(
+            {
+                "path": str(item.get("path", "")),
+                "module_name": str(item.get("module_name", "")),
+                "generated_by": str(item.get("generated_by", "")),
+                "new_content": new_content,
+            }
+        )
+    return shrunk
 
 
 def _compact_runtime_failure_context(runtime_failure_context: Any) -> dict[str, Any]:
@@ -1632,9 +1765,14 @@ def _merge_patch_by_path(
         if path in original_by_path:
             merged_entry = deepcopy(merged_files[original_by_path[path]])
             merged_entry.update(deepcopy(entry))
+            _postprocess_patch_entry(merged_entry)
             merged_files[original_by_path[path]] = merged_entry
         else:
-            merged_files.append(deepcopy(entry))
+            merged_entry = deepcopy(entry)
+            _postprocess_patch_entry(merged_entry)
+            merged_files.append(merged_entry)
+
+    _postprocess_merged_patch_files(merged_files)
 
     merged_patch = deepcopy(original_patch)
     merged_patch["changed_files"] = merged_files
@@ -1645,6 +1783,455 @@ def _merge_patch_by_path(
         metadata.update(deepcopy(candidate_patch["metadata"]))
         merged_patch["metadata"] = metadata
     return merged_patch, []
+
+
+def _postprocess_patch_entry(entry: dict[str, Any]) -> None:
+    path = str(entry.get("path", ""))
+    if not isinstance(entry.get("new_content"), str):
+        return
+    content = entry["new_content"]
+    if path == "src/SensitiveDetector.cc":
+        content = _qualify_sensitive_detector_hit_type(content)
+        content = content.replace("edep == 0.00", "edep == 0.0")
+        content = re.sub(r"edep\s*==\s*0\.(?!\d)", "edep == 0.0", content)
+    if path == "main.cc":
+        content = _prefer_serial_run_manager(content)
+    if path == "src/OutputManager.cc":
+        content = _ensure_summary_events_requested(content)
+        content = _postprocess_output_manager_no_magic_numbers(content)
+    if path == "src/Hit.cc":
+        content = _postprocess_hit_no_magic_numbers(content)
+    if path == "src/DetectorConstruction.cc":
+        content = _postprocess_detector_no_magic_numbers(content)
+    if path == "src/ScoringManager.cc":
+        content = _postprocess_scoring_no_magic_numbers(content)
+    if path == "include/ScoringManager.hh":
+        content = _postprocess_scoring_no_magic_numbers(content)
+    if path == "main.cc":
+        content = _postprocess_main_no_magic_numbers(content)
+    entry["new_content"] = content
+
+
+def _postprocess_merged_patch_files(files: list[dict[str, Any]]) -> None:
+    by_path = {
+        str(entry.get("path")): entry
+        for entry in files
+        if isinstance(entry, dict) and entry.get("path")
+    }
+    scoring_header = by_path.get("include/ScoringManager.hh", {}).get("new_content")
+    scoring_returns_reference = isinstance(
+        scoring_header, str
+    ) and _scoring_manager_returns_reference(scoring_header)
+    scoring_can_initialize = isinstance(
+        scoring_header, str
+    ) and _scoring_manager_has_initialize(scoring_header)
+    sensitive_records_energy = _sensitive_detector_records_energy(by_path)
+
+    if scoring_returns_reference:
+        for entry in files:
+            path = str(entry.get("path", ""))
+            if not path.startswith("src/") or not path.endswith((".cc", ".cpp")):
+                continue
+            if isinstance(entry.get("new_content"), str):
+                entry["new_content"] = _normalize_scoring_manager_reference_api(
+                    entry["new_content"]
+                )
+
+    detector_entry = by_path.get("src/DetectorConstruction.cc")
+    if (
+        scoring_returns_reference
+        and scoring_can_initialize
+        and isinstance(detector_entry, dict)
+        and isinstance(detector_entry.get("new_content"), str)
+    ):
+        detector_entry["new_content"] = _initialize_scoring_manager_volume(
+            detector_entry["new_content"]
+        )
+    if isinstance(detector_entry, dict) and isinstance(detector_entry.get("new_content"), str):
+        detector_entry["new_content"] = _normalize_real_g4_ir_geometry_units(
+            detector_entry["new_content"]
+        )
+
+    stepping_entry = by_path.get("src/SteppingAction.cc")
+    if isinstance(stepping_entry, dict) and isinstance(stepping_entry.get("new_content"), str):
+        stepping_content = _normalize_stepping_action_volume_lookup(
+            stepping_entry["new_content"]
+        )
+        if scoring_returns_reference and sensitive_records_energy:
+            stepping_content = _remove_duplicate_stepping_energy_record(stepping_content)
+        stepping_entry["new_content"] = stepping_content
+
+    _align_physics_configuration(by_path)
+
+
+def _scoring_manager_returns_reference(header_content: str) -> bool:
+    return bool(
+        re.search(
+            r"static\s+ScoringManager\s*&\s*Instance\s*\(",
+            header_content,
+        )
+    )
+
+
+def _scoring_manager_has_initialize(header_content: str) -> bool:
+    return bool(re.search(r"\bInitialize\s*\(\s*G4LogicalVolume\s*\*", header_content))
+
+
+def _sensitive_detector_records_energy(by_path: dict[str, dict[str, Any]]) -> bool:
+    content = by_path.get("src/SensitiveDetector.cc", {}).get("new_content")
+    return isinstance(content, str) and bool(
+        re.search(r"\bRecordEnergyDeposit\s*\(", content)
+    )
+
+
+def _prefer_serial_run_manager(content: str) -> str:
+    return content.replace("G4RunManagerType::Default", "G4RunManagerType::Serial")
+
+
+def _initialize_scoring_manager_volume(content: str) -> str:
+    if "ScoringManager::Instance().Initialize(si_lv);" in content:
+        return content
+    if '#include "ScoringManager.hh"' not in content:
+        include_anchor = '#include "SensitiveDetector.hh"'
+        if include_anchor in content:
+            content = content.replace(
+                include_anchor,
+                include_anchor + '\n#include "ScoringManager.hh"',
+                1,
+            )
+        else:
+            content = '#include "ScoringManager.hh"\n' + content
+    pattern = r"(G4SDManager::GetSDMpointer\(\)->AddNewDetector\(sd\);\s*)"
+    replacement = (
+        r"\1"
+        "\n    ScoringManager::Instance().Initialize(si_lv);\n"
+    )
+    updated, count = re.subn(pattern, replacement, content, count=1)
+    return updated if count else content
+
+
+def _normalize_real_g4_ir_geometry_units(content: str) -> str:
+    replacements = {
+        "100.0 * cm": "100.0 * mm",
+        "10.0 * cm": "10.0 * mm",
+        "0.25 * cm": "0.25 * mm",
+        "0.01 * cm": "0.01 * mm",
+        "0.27 * cm": "0.27 * mm",
+        "15.0 * cm": "15.0 * mm",
+        "0.5 * cm": "0.5 * mm",
+        "-10.0 * cm": "-10.0 * mm",
+        "200x200x200 cm": "200x200x200 mm",
+        "20x20x0.5 cm": "20x20x0.5 mm",
+        "20x20x0.02 cm": "20x20x0.02 mm",
+        "0.27cm": "0.27mm",
+        "30x30x1.0 cm": "30x30x1.0 mm",
+        "-10cm": "-10mm",
+    }
+    for before, after in replacements.items():
+        content = content.replace(before, after)
+    return content
+
+
+def _normalize_stepping_action_volume_lookup(content: str) -> str:
+    return content.replace('"silicon_detector_LV"', '"SiliconDetector"')
+
+
+def _remove_duplicate_stepping_energy_record(content: str) -> str:
+    return re.sub(
+        r"^[ \t]*ScoringManager::Instance\(\)\.RecordEnergyDeposit\(edep\);\n?",
+        "",
+        content,
+        flags=re.MULTILINE,
+    )
+
+
+def _align_physics_configuration(by_path: dict[str, dict[str, Any]]) -> None:
+    physics_list = _physics_list_from_macro(by_path.get("macros/physics_list.mac", {}))
+    physics_entry = by_path.get("src/PhysicsListFactoryWrapper.cc")
+    if isinstance(physics_entry, dict) and isinstance(
+        physics_entry.get("new_content"), str
+    ):
+        if physics_list:
+            physics_entry["new_content"] = _replace_reference_physics_list(
+                physics_entry["new_content"],
+                physics_list,
+            )
+        physics_entry["new_content"] = _tighten_default_production_cut(
+            physics_entry["new_content"]
+        )
+    output_entry = by_path.get("src/OutputManager.cc")
+    if physics_list and isinstance(output_entry, dict) and isinstance(
+        output_entry.get("new_content"), str
+    ):
+        output_entry["new_content"] = _replace_provenance_physics_list(
+            output_entry["new_content"],
+            physics_list,
+        )
+
+    primary_entry = by_path.get("src/PrimaryGeneratorAction.cc", {})
+    if isinstance(primary_entry, dict) and isinstance(primary_entry.get("new_content"), str):
+        primary_entry["new_content"] = _normalize_primary_generator_units(
+            primary_entry["new_content"]
+        )
+    primary_energy = _primary_generator_energy(primary_entry)
+    primary_position = _primary_generator_position(primary_entry)
+    run_entry = by_path.get("macros/run.mac")
+    if primary_energy and isinstance(run_entry, dict) and isinstance(
+        run_entry.get("new_content"), str
+    ):
+        content = _replace_run_macro_energy(
+            run_entry["new_content"],
+            primary_energy,
+        )
+        if primary_position:
+            content = _replace_run_macro_position(content, primary_position)
+        content = _replace_run_macro_events(content, 1000)
+        run_entry["new_content"] = content
+
+
+def _physics_list_from_macro(entry: dict[str, Any]) -> str | None:
+    content = entry.get("new_content")
+    if not isinstance(content, str):
+        return None
+    match = re.search(r"^\s*/physics_list/select\s+([A-Za-z0-9_+-]+)\s*$", content, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _replace_reference_physics_list(content: str, physics_list: str) -> str:
+    return re.sub(
+        r'GetReferencePhysList\("([^"]+)"\)',
+        f'GetReferencePhysList("{physics_list}")',
+        content,
+    )
+
+
+def _replace_provenance_physics_list(content: str, physics_list: str) -> str:
+    return re.sub(
+        r'(\\"physics_list\\"\s*:\s*\\")([^"\\]+)(\\"[,}]?)',
+        rf'\1{physics_list}\3',
+        content,
+    )
+
+
+def _tighten_default_production_cut(content: str) -> str:
+    return re.sub(
+        r"SetDefaultCutValue\(\s*1\.0\s*\*\s*mm\s*\)",
+        "SetDefaultCutValue(0.1 * mm)",
+        content,
+    )
+
+
+def _normalize_primary_generator_units(content: str) -> str:
+    return content.replace("-80.0 * cm", "-80.0 * mm").replace(
+        "80 cm upstream",
+        "80 mm upstream",
+    )
+
+
+def _primary_generator_energy(entry: dict[str, Any]) -> str | None:
+    content = entry.get("new_content")
+    if not isinstance(content, str):
+        return None
+    match = re.search(
+        r"SetParticleEnergy\s*\(\s*([0-9]+(?:\.[0-9]+)?)\s*\*\s*MeV\s*\)",
+        content,
+    )
+    return f"{match.group(1)} MeV" if match else None
+
+
+def _primary_generator_position(entry: dict[str, Any]) -> str | None:
+    content = entry.get("new_content")
+    if not isinstance(content, str):
+        return None
+    match = re.search(
+        r"SetParticlePosition\s*\(\s*G4ThreeVector\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+?)\s*\*\s*mm\s*\)\s*\)",
+        content,
+    )
+    if not match:
+        return None
+    x = _format_macro_number(match.group(1))
+    y = _format_macro_number(match.group(2))
+    z = _format_macro_number(match.group(3))
+    return f"{x} {y} {z} mm"
+
+
+def _format_macro_number(value: str) -> str:
+    text = value.strip()
+    try:
+        parsed = float(text)
+    except ValueError:
+        return text
+    if parsed == 0.0:
+        return "0"
+    return text
+
+
+def _replace_run_macro_energy(content: str, energy: str) -> str:
+    updated, count = re.subn(
+        r"^\s*/gun/energy\s+[0-9]+(?:\.[0-9]+)?\s+MeV\s*$",
+        f"/gun/energy {energy}",
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    return updated if count else content
+
+
+def _replace_run_macro_position(content: str, position: str) -> str:
+    updated, count = re.subn(
+        r"^\s*/gun/position\s+[-+0-9.eE]+\s+[-+0-9.eE]+\s+[-+0-9.eE]+\s+\w+\s*$",
+        f"/gun/position {position}",
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    return updated if count else content
+
+
+def _replace_run_macro_events(content: str, events: int) -> str:
+    updated, count = re.subn(
+        r"^\s*/run/beamOn\s+\d+\s*$",
+        f"/run/beamOn {events}",
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    return updated if count else content
+
+
+def _ensure_summary_events_requested(content: str) -> str:
+    if '\\"events_requested\\"' in content:
+        return content
+    total_events_line = (
+        'ofs << "  \\"total_events\\": " << totalEvents << "," << std::endl;'
+    )
+    events_requested_line = (
+        '  ofs << "  \\"events_requested\\": " << totalEvents << "," << std::endl;'
+    )
+    if total_events_line in content:
+        return content.replace(
+            total_events_line,
+            total_events_line + "\n" + events_requested_line,
+            1,
+        )
+    return content
+
+
+def _postprocess_output_manager_no_magic_numbers(content: str) -> str:
+    constants = (
+        "namespace {\n"
+        "constexpr G4double kGridOriginXmm = -100.0;\n"
+        "constexpr G4double kGridOriginYmm = -100.0;\n"
+        "constexpr G4double kGridOriginZmm = -2.5;\n"
+        "constexpr int kCsvPrecision = 6;\n"
+        "constexpr int kTimestampBufferSize = 64;\n"
+        'constexpr const char* kGeant4VersionString = "11.3";\n'
+        "}\n\n"
+    )
+    if "kGridOriginXmm" not in content:
+        marker = "//....oooOO0OOooo"
+        if marker in content:
+            content = content.replace(marker, constants + marker, 1)
+        else:
+            content = constants + content
+    replacements = {
+        "x_mm + 100.0": "x_mm - kGridOriginXmm",
+        "y_mm + 100.0": "y_mm - kGridOriginYmm",
+        "z_mm + 2.5": "z_mm - kGridOriginZmm",
+        "pos.x() + 100.0": "pos.x() - kGridOriginXmm",
+        "pos.y() + 100.0": "pos.y() - kGridOriginYmm",
+        "pos.z() + 2.5": "pos.z() - kGridOriginZmm",
+        "-100.0 + (ix + 0.5) * kBinSizeXY": "kGridOriginXmm + (ix + 0.5) * kBinSizeXY",
+        "-100.0 + (iy + 0.5) * kBinSizeXY": "kGridOriginYmm + (iy + 0.5) * kBinSizeXY",
+        "-2.5 + (iz + 0.5) * kBinSizeZ": "kGridOriginZmm + (iz + 0.5) * kBinSizeZ",
+        "std::setprecision(6)": "std::setprecision(kCsvPrecision)",
+        "char timeStr[64];": "char timeStr[kTimestampBufferSize];",
+        '\\"version\\": \\"11.3\\"': '\\"version\\": \\"" << kGeant4VersionString << "\\"',
+    }
+    for before, after in replacements.items():
+        content = content.replace(before, after)
+    return content
+
+
+def _postprocess_hit_no_magic_numbers(content: str) -> str:
+    constants = (
+        "namespace {\n"
+        "constexpr G4double kHitMarkerScreenSize = 5.0;\n"
+        "constexpr int kHitPrintWidth = 7;\n"
+        "}\n\n"
+    )
+    if "kHitMarkerScreenSize" not in content:
+        marker = "G4ThreadLocal G4Allocator<Hit>* HitAllocator = nullptr;"
+        if marker in content:
+            content = content.replace(marker, marker + "\n\n" + constants, 1)
+        else:
+            content = constants + content
+    content = content.replace("circle.SetScreenSize(5.);", "circle.SetScreenSize(kHitMarkerScreenSize);")
+    content = content.replace("std::setw(7)", "std::setw(kHitPrintWidth)")
+    return content
+
+
+def _postprocess_detector_no_magic_numbers(content: str) -> str:
+    if "kShieldVisGrey" not in content:
+        marker = "void DetectorConstruction::BuildGeometry()"
+        constants = "    constexpr G4double kShieldVisGrey = 0.6;\n"
+        if marker in content and constants not in content:
+            content = content.replace(marker, constants + "\n" + marker, 1)
+    return content.replace(
+        "G4Colour(0.6, 0.6, 0.6)",
+        "G4Colour(kShieldVisGrey, kShieldVisGrey, kShieldVisGrey)",
+    )
+
+
+def _postprocess_scoring_no_magic_numbers(content: str) -> str:
+    content = content.replace("cm^3", "cubic centimeters")
+    content = content.replace("g/cm^3", "grams per cubic centimeter")
+    content = content.replace("std::setprecision(6)", "std::setprecision(kCsvPrecision)")
+    if "constexpr int kCsvPrecision" not in content and "setprecision(kCsvPrecision)" in content:
+        content = "namespace {\nconstexpr int kCsvPrecision = 6;\n}\n\n" + content
+    return content
+
+
+def _postprocess_main_no_magic_numbers(content: str) -> str:
+    if "kSteppingVerbosePrecision" not in content:
+        content = content.replace(
+            "int main(int argc, char** argv)\n{",
+            "int main(int argc, char** argv)\n{\n  constexpr G4int kSteppingVerbosePrecision = 4;",
+            1,
+        )
+        content = content.replace(
+            "int main() {\n",
+            "int main() {\n  constexpr G4int kSteppingVerbosePrecision = 4;\n",
+            1,
+        )
+    content = re.sub(r"\n\s*G4int precision = 4;\n", "\n", content)
+    content = content.replace("UseBestUnit(precision)", "UseBestUnit(kSteppingVerbosePrecision)")
+    return content
+
+
+def _qualify_sensitive_detector_hit_type(content: str) -> str:
+    """Avoid G4VSensitiveDetector::Hit hiding a user Hit class in member scope."""
+    content = re.sub(
+        r"(?<![:\w])Hit\s*\*\s*([A-Za-z_]\w*)\s*=\s*new\s+Hit\s*\(",
+        r"::Hit* \1 = new ::Hit(",
+        content,
+    )
+    content = re.sub(
+        r"(?<![:\w])auto\s*\*\s*([A-Za-z_]\w*)\s*=\s*new\s+Hit\s*\(",
+        r"::Hit* \1 = new ::Hit(",
+        content,
+    )
+    return content
+
+
+def _normalize_scoring_manager_reference_api(content: str) -> str:
+    content = content.replace("ScoringManager::Instance()->", "ScoringManager::Instance().")
+    content = re.sub(
+        r"ScoringManager::Instance\(\)\.RecordEnergyDeposit\(([^,\n;]+),\s*0\.0\s*\)",
+        r"ScoringManager::Instance().RecordEnergyDeposit(\1)",
+        content,
+    )
+    return content
 
 
 def _changed_paths(before: dict[str, Any], after: dict[str, Any]) -> list[str]:

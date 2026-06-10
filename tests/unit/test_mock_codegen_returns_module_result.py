@@ -123,6 +123,56 @@ class TestMockCodegenReturnsModuleResult:
         assert "content" not in result.generated_files[0].model_dump()
 
     @pytest.mark.asyncio
+    async def test_repairs_malformed_json_response_once(self) -> None:
+        """Malformed JSON with invalid escapes should be repaired before failing."""
+        repaired_response = {
+            "module_name": "runtime_app",
+            "status": "generated",
+            "generated_files": [
+                {
+                    "path": "main.cc",
+                    "new_content": "int main() { return 0; }\n",
+                    "generated_by": "runtime_app_module_agent",
+                    "module_name": "runtime_app",
+                    "rationale": "test main",
+                }
+            ],
+            "warnings": [],
+            "errors": [],
+        }
+
+        with patch(
+            "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        ) as mock_gw_cls:
+            mock_gw = AsyncMock()
+            mock_gw_cls.return_value = mock_gw
+
+            malformed_result = AsyncMock()
+            malformed_result.error = None
+            malformed_result.content = (
+                '{"module_name":"runtime_app","status":"generated",'
+                '"generated_files":[{"path":"main.cc","new_content":"int main()\\  { return 0; }"}]}'
+            )
+            malformed_result.parsed_json = None
+
+            repair_result = AsyncMock()
+            repair_result.error = None
+            repair_result.content = "{}"
+            repair_result.parsed_json = repaired_response
+            mock_gw.call.side_effect = [malformed_result, repair_result]
+
+            result = await run_module_agent("runtime_app", {"module_name": "runtime_app"})
+
+        assert result.status == "generated"
+        assert len(result.generated_files) == 1
+        assert result.generated_files[0].path == "main.cc"
+        assert mock_gw.call.call_count == 2
+        repair_call = mock_gw.call.call_args_list[1].kwargs
+        assert repair_call["response_format"] == "json"
+        assert repair_call["metadata"]["json_repair"] is True
+        assert "只返回一个合法 JSON 对象" in repair_call["user_prompt"]
+
+    @pytest.mark.asyncio
     async def test_normalizes_path_keyed_file_map(self) -> None:
         """Real providers may return a dict keyed by file path."""
         mock_response = {

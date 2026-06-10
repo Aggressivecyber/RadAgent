@@ -7,7 +7,10 @@ from typing import Any
 import pytest
 from agent_core.g4_codegen import global_integration_agent as gia
 from agent_core.g4_codegen.global_integration_agent import run_global_integration_agent
-from agent_core.g4_codegen.graph_nodes import global_integration_agent_node
+from agent_core.g4_codegen.graph_nodes import (
+    GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS,
+    global_integration_agent_node,
+)
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 from agent_core.workspace.paths import STAGE_CODEGEN
 
@@ -54,6 +57,703 @@ def test_global_integration_normalizes_new_file_metadata() -> None:
     assert entry["generated_by"] == "global_integration_agent"
     assert entry["module_name"] == "runtime_app"
     assert entry["operation"] == "create_or_replace"
+
+
+def test_global_integration_model_context_remains_valid_json_when_over_budget() -> None:
+    oversized_project = {
+        "path": "src/Oversized.cc",
+        "new_content": "void f() {\n" + ("  // generated code keeps going\n" * 500),
+        "module_name": "simulation_core",
+        "generated_by": "simulation_core_module_agent",
+    }
+    context = {
+        "job_id": "json_budget",
+        "available_modules": ["simulation_core", "runtime_app"],
+        "project_files": [oversized_project],
+        "runtime_failure_context": {
+            "status": "fail",
+            "errors": ["BUILD_ERROR_SENTINEL: compile failed"],
+        },
+        "database_search": {},
+        "web_search": {},
+        "interface_contracts": {"huge": "x" * 4_000},
+        "module_contracts": {"huge": "y" * 4_000},
+        "module_context_summaries": {"huge": {"interface_context": "z" * 4_000}},
+        "integration_memory": {"previous_runtime_gate": {"errors": ["old failure"]}},
+        "write_contract": {"must_preserve_schema": True},
+    }
+
+    text = gia._model_context_json(
+        context,
+        max_chars=2_000,
+        max_project_file_chars=20_000,
+    )
+
+    parsed = json.loads(text)
+    assert parsed["runtime_failure_context"]["errors"] == [
+        "BUILD_ERROR_SENTINEL: compile failed"
+    ]
+    assert isinstance(parsed["project_files"], list)
+    assert len(text) <= 2_000
+
+
+def test_global_integration_qualifies_hit_type_in_sensitive_detector_patch() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/SensitiveDetector.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "SensitiveDetector.hh"\n'
+                    '#include "Hit.hh"\n'
+                    "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                    "    G4double edep = step->GetTotalEnergyDeposit();\n"
+                    "    if (edep == 0.) return false;\n"
+                    "    Hit* hit = new Hit();\n"
+                    "    fHitsCollection->insert(hit);\n"
+                    "    return true;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            }
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": "src/SensitiveDetector.cc",
+                "new_content": (
+                    '#include "SensitiveDetector.hh"\n'
+                    '#include "Hit.hh"\n'
+                    "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                    "    G4double edep = step->GetTotalEnergyDeposit();\n"
+                    "    if (edep == 0.) return false;\n"
+                    "    Hit* hit = new Hit();\n"
+                    "    fHitsCollection->insert(hit);\n"
+                    "    return true;\n"
+                    "}\n"
+                ),
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert "::Hit* hit = new ::Hit();" in content
+    assert "Hit* hit = new Hit();" not in content
+    assert "edep == 0.0" in content
+
+
+def test_global_integration_normalizes_scoring_manager_reference_api() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/SteppingAction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "ScoringManager.hh"\n'
+                    "void SteppingAction::UserSteppingAction(const G4Step* step) {\n"
+                    "  G4double edep = step->GetTotalEnergyDeposit();\n"
+                    "  ScoringManager::Instance()->RecordEnergyDeposit(edep, 0.0);\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            },
+            {
+                "path": "include/ScoringManager.hh",
+                "operation": "create_or_replace",
+                "new_content": (
+                    "#pragma once\n"
+                    "class ScoringManager {\n"
+                    " public:\n"
+                    "  static ScoringManager& Instance();\n"
+                    "  void RecordEnergyDeposit(double edep);\n"
+                    "};\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            }
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": "src/SteppingAction.cc",
+                "new_content": original_patch["changed_files"][0]["new_content"],
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert "ScoringManager::Instance().RecordEnergyDeposit(edep);" in content
+    assert "ScoringManager::Instance()->RecordEnergyDeposit(edep, 0.0);" not in content
+
+
+def test_global_integration_preserves_pointer_scoring_manager_api() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/SteppingAction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "ScoringManager.hh"\n'
+                    "void SteppingAction::UserSteppingAction(const G4Step* step) {\n"
+                    "  G4double edep = step->GetTotalEnergyDeposit();\n"
+                    "  ScoringManager::Instance()->RecordEnergyDeposit(edep, 0.0);\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            },
+            {
+                "path": "include/ScoringManager.hh",
+                "operation": "create_or_replace",
+                "new_content": (
+                    "#pragma once\n"
+                    "class ScoringManager {\n"
+                    " public:\n"
+                    "  static ScoringManager* Instance();\n"
+                    "  void RecordEnergyDeposit(double edep, double dose);\n"
+                    "};\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            },
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": "src/SteppingAction.cc",
+                "new_content": original_patch["changed_files"][0]["new_content"],
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert "ScoringManager::Instance()->RecordEnergyDeposit(edep, 0.0);" in content
+
+
+def test_global_integration_uses_serial_run_manager_for_generated_main() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "main.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "G4RunManagerFactory.hh"\n'
+                    "int main() {\n"
+                    "  auto* runManager =\n"
+                    "      G4RunManagerFactory::CreateRunManager(G4RunManagerType::Default);\n"
+                    "  delete runManager;\n"
+                    "  return 0;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            }
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": "main.cc",
+                "new_content": original_patch["changed_files"][0]["new_content"],
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert "G4RunManagerType::Serial" in content
+    assert "G4RunManagerType::Default" not in content
+
+
+def test_global_integration_wires_scoring_volume_and_avoids_duplicate_step_scoring() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/DetectorConstruction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "DetectorConstruction.hh"\n'
+                    '#include "SensitiveDetector.hh"\n'
+                    "void DetectorConstruction::AttachSensitiveDetectors()\n"
+                    "{\n"
+                    '    G4LogicalVolume* si_lv = fPlacementManager->GetLogicalVolume("silicon_detector");\n'
+                    '    auto* sd = new SensitiveDetector("SensitiveDetector", "SiliconHits");\n'
+                    "    G4SDManager::GetSDMpointer()->AddNewDetector(sd);\n"
+                    "    SetSensitiveDetector(si_lv, sd);\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            },
+            {
+                "path": "src/SensitiveDetector.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "SensitiveDetector.hh"\n'
+                    '#include "ScoringManager.hh"\n'
+                    "G4bool SensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*) {\n"
+                    "    G4double edep = step->GetTotalEnergyDeposit();\n"
+                    "    fScoringManager->RecordEnergyDeposit(edep);\n"
+                    "    return true;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            },
+            {
+                "path": "src/SteppingAction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "SteppingAction.hh"\n'
+                    '#include "ScoringManager.hh"\n'
+                    '#include "OutputManager.hh"\n'
+                    "void SteppingAction::UserSteppingAction(const G4Step* step)\n"
+                    "{\n"
+                    "  if (fScoringVolume == nullptr) {\n"
+                    "    auto* store = G4LogicalVolumeStore::GetInstance();\n"
+                    '    auto it = store->GetVolume("silicon_detector_LV");\n'
+                    "    if (it != nullptr) {\n"
+                    "      fScoringVolume = it;\n"
+                    "    }\n"
+                    "  }\n"
+                    "  G4double edep = step->GetTotalEnergyDeposit();\n"
+                    "  ScoringManager::Instance().RecordEnergyDeposit(edep);\n"
+                    "  OutputManager::Instance()->Record3DHit(step->GetPreStepPoint()->GetPosition(), edep / MeV);\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            },
+            {
+                "path": "include/ScoringManager.hh",
+                "operation": "create_or_replace",
+                "new_content": (
+                    "#pragma once\n"
+                    "class G4LogicalVolume;\n"
+                    "class ScoringManager {\n"
+                    " public:\n"
+                    "  static ScoringManager& Instance();\n"
+                    "  void Initialize(G4LogicalVolume* scoringVolume);\n"
+                    "  void RecordEnergyDeposit(double edep);\n"
+                    "};\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            },
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": item["path"],
+                "new_content": item["new_content"],
+            }
+            for item in original_patch["changed_files"]
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    by_path = {item["path"]: item["new_content"] for item in repaired["changed_files"]}
+    detector_content = by_path["src/DetectorConstruction.cc"]
+    stepping_content = by_path["src/SteppingAction.cc"]
+    assert '#include "ScoringManager.hh"' in detector_content
+    assert "ScoringManager::Instance().Initialize(si_lv);" in detector_content
+    assert '"SiliconDetector"' in stepping_content
+    assert "silicon_detector_LV" not in stepping_content
+    assert "ScoringManager::Instance().RecordEnergyDeposit(edep);" not in stepping_content
+    assert "OutputManager::Instance()->Record3DHit" in stepping_content
+
+
+def test_global_integration_aligns_physics_list_to_confirmed_ir() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/PhysicsListFactoryWrapper.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "PhysicsListFactoryWrapper.hh"\n'
+                    '#include "G4PhysListFactory.hh"\n'
+                    "G4VUserPhysicsList* PhysicsListFactoryWrapper::CreatePhysicsList()\n"
+                    "{\n"
+                    "  G4PhysListFactory factory;\n"
+                    '  auto* physicsList = factory.GetReferencePhysList("QGSP_BIC");\n'
+                    "  return physicsList;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "beam_physics_module_agent",
+                "module_name": "beam_physics",
+                "rationale": "test",
+            },
+            {
+                "path": "macros/physics_list.mac",
+                "operation": "create_or_replace",
+                "new_content": "/physics_list/select FTFP_BERT\n",
+                "zone": "runtime_macro",
+                "generated_by": "beam_physics_module_agent",
+                "module_name": "beam_physics",
+                "rationale": "test",
+            }
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": "src/PhysicsListFactoryWrapper.cc",
+                "new_content": original_patch["changed_files"][0]["new_content"],
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert 'GetReferencePhysList("FTFP_BERT")' in content
+    assert "QGSP_BIC" not in content
+
+
+def test_global_integration_aligns_provenance_physics_list_to_confirmed_ir() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/OutputManager.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    "void OutputManager::WriteProvenance()\n"
+                    "{\n"
+                    "  ofs << \"  \\\"physics_list\\\": \\\"QGSP_BIC\\\",\" << std::endl;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            },
+            {
+                "path": "macros/physics_list.mac",
+                "operation": "create_or_replace",
+                "new_content": "/physics_list/select FTFP_BERT\n",
+                "zone": "runtime_macro",
+                "generated_by": "beam_physics_module_agent",
+                "module_name": "beam_physics",
+                "rationale": "test",
+            },
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": "src/OutputManager.cc",
+                "new_content": original_patch["changed_files"][0]["new_content"],
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert '\\"physics_list\\": \\"FTFP_BERT\\"' in content
+    assert "QGSP_BIC" not in content
+
+
+def test_global_integration_aligns_run_macro_energy_to_primary_generator() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/PrimaryGeneratorAction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "PrimaryGeneratorAction.hh"\n'
+                    "PrimaryGeneratorAction::PrimaryGeneratorAction() {\n"
+                    "  fParticleGun->SetParticleEnergy(10.0 * MeV);\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "beam_physics_module_agent",
+                "module_name": "beam_physics",
+                "rationale": "test",
+            },
+            {
+                "path": "macros/run.mac",
+                "operation": "create_or_replace",
+                "new_content": (
+                    "/run/initialize\n"
+                    "/gun/particle proton\n"
+                    "/gun/energy 100 MeV\n"
+                    "/gun/direction 0 0 1\n"
+                    "/run/beamOn 10\n"
+                ),
+                "zone": "runtime_macro",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            },
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": item["path"],
+                "new_content": item["new_content"],
+            }
+            for item in original_patch["changed_files"]
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    run_macro = next(
+        item["new_content"]
+        for item in repaired["changed_files"]
+        if item["path"] == "macros/run.mac"
+    )
+    assert "/gun/energy 10.0 MeV" in run_macro
+    assert "/gun/energy 100 MeV" not in run_macro
+
+
+def test_global_integration_normalizes_real_g4_ir_units_and_run_events() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/DetectorConstruction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "DetectorConstruction.hh"\n'
+                    "void DetectorConstruction::BuildGeometry() {\n"
+                    "  const G4double world_hx = 100.0 * cm;\n"
+                    "  G4Box* si_solid = new G4Box(\"SiliconDetector\", 10.0 * cm, 10.0 * cm, 0.25 * cm);\n"
+                    "  G4Box* oxide_solid = new G4Box(\"OxideLayer\", 10.0 * cm, 10.0 * cm, 0.01 * cm);\n"
+                    "  G4ThreeVector(0.0, 0.0, 0.27 * cm);\n"
+                    "  G4Box* al_solid = new G4Box(\"AluminumShield\", 15.0 * cm, 15.0 * cm, 0.5 * cm);\n"
+                    "  G4ThreeVector(0.0, 0.0, -10.0 * cm);\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            },
+            {
+                "path": "src/PrimaryGeneratorAction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "PrimaryGeneratorAction.hh"\n'
+                    "PrimaryGeneratorAction::PrimaryGeneratorAction() {\n"
+                    "  fParticleGun->SetParticleEnergy(10.0 * MeV);\n"
+                    "  fParticleGun->SetParticlePosition(G4ThreeVector(0.0, 0.0, -80.0 * cm));\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "beam_physics_module_agent",
+                "module_name": "beam_physics",
+                "rationale": "test",
+            },
+            {
+                "path": "src/PhysicsListFactoryWrapper.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "PhysicsListFactoryWrapper.hh"\n'
+                    "G4VUserPhysicsList* PhysicsListFactoryWrapper::CreatePhysicsList() {\n"
+                    '  auto* physicsList = factory.GetReferencePhysList("FTFP_BERT");\n'
+                    "  physicsList->SetDefaultCutValue(1.0 * mm);\n"
+                    "  return physicsList;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "beam_physics_module_agent",
+                "module_name": "beam_physics",
+                "rationale": "test",
+            },
+            {
+                "path": "macros/run.mac",
+                "operation": "create_or_replace",
+                "new_content": (
+                    "/run/initialize\n"
+                    "/gun/particle proton\n"
+                    "/gun/energy 100 MeV\n"
+                    "/gun/position 0 0 -20 cm\n"
+                    "/gun/direction 0 0 1\n"
+                    "/run/beamOn 10\n"
+                ),
+                "zone": "runtime_macro",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            },
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": item["path"],
+                "new_content": item["new_content"],
+            }
+            for item in original_patch["changed_files"]
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    by_path = {item["path"]: item["new_content"] for item in repaired["changed_files"]}
+    detector = by_path["src/DetectorConstruction.cc"]
+    primary = by_path["src/PrimaryGeneratorAction.cc"]
+    physics = by_path["src/PhysicsListFactoryWrapper.cc"]
+    run_macro = by_path["macros/run.mac"]
+    assert "* cm" not in detector
+    assert "100.0 * mm" in detector
+    assert "0.25 * mm" in detector
+    assert "0.27 * mm" in detector
+    assert "-10.0 * mm" in detector
+    assert "SetParticlePosition(G4ThreeVector(0.0, 0.0, -80.0 * mm))" in primary
+    assert "SetDefaultCutValue(0.1 * mm)" in physics
+    assert "/gun/energy 10.0 MeV" in run_macro
+    assert "/gun/position 0 0 -80.0 mm" in run_macro
+    assert "/run/beamOn 1000" in run_macro
+
+
+def test_global_integration_writes_summary_events_requested_from_total_events() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/OutputManager.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    "void OutputManager::WriteSummary(G4int totalEvents)\n"
+                    "{\n"
+                    "  ofs << \"{\" << std::endl;\n"
+                    "  ofs << \"  \\\"total_events\\\": \" << totalEvents << \",\" << std::endl;\n"
+                    "  ofs << \"  \\\"total_edep_MeV\\\": \" << totalEdep << std::endl;\n"
+                    "  ofs << \"}\" << std::endl;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            }
+        ]
+    }
+    candidate_patch = {
+        "changed_files": [
+            {
+                "path": "src/OutputManager.cc",
+                "new_content": original_patch["changed_files"][0]["new_content"],
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, candidate_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert '\\"events_requested\\": ' in content
+    assert "totalEvents << \",\"" in content
+
+
+def test_global_integration_postprocesses_generated_code_for_no_magic_number_gate() -> None:
+    from agent_core.g4_codegen.validators.no_magic_number import check_magic_numbers
+
+    output_manager = (
+        '#include "OutputManager.hh"\n'
+        "void OutputManager::Record3DHit(const G4ThreeVector& pos, G4double edepMeV) {\n"
+        "  G4int ix = static_cast<G4int>(std::floor((pos.x() + 100.0) / kBinSizeXY));\n"
+        "  G4int iz = static_cast<G4int>(std::floor((pos.z() + 2.5) / kBinSizeZ));\n"
+        "  ofs << std::scientific << std::setprecision(6) << edepMeV;\n"
+        "  char timeStr[64];\n"
+        '  ofs << "  \\"version\\": \\"11.3\\"," << std::endl;\n'
+        "}\n"
+    )
+    hit = (
+        '#include "Hit.hh"\n'
+        "void Hit::Draw() { circle.SetScreenSize(5.); }\n"
+        'void Hit::Print() { G4cout << std::setw(7) << fTrackID; }\n'
+    )
+    detector = (
+        '#include "DetectorConstruction.hh"\n'
+        "void DetectorConstruction::BuildGeometry() {\n"
+        "  G4VisAttributes al_vis(G4Colour(0.6, 0.6, 0.6));\n"
+        "}\n"
+    )
+    main = (
+        "int main() {\n"
+        "  G4int precision = 4;\n"
+        "  G4SteppingVerbose::UseBestUnit(precision);\n"
+        "}\n"
+    )
+    scoring_hh = (
+        "class ScoringManager {\n"
+        "  G4double fVolume = 0.0;  // in cm^3\n"
+        "  G4double fDensity = 0.0; // in g/cm^3\n"
+        "};\n"
+    )
+    scoring_cc = (
+        "void ScoringManager::Initialize() {\n"
+        "  fVolume /= (cm * cm * cm); // convert to cm^3\n"
+        "  fDensity = x / (g / cm3); // g/cm^3\n"
+        "  fOutputFile << std::setprecision(6);\n"
+        "}\n"
+    )
+    original_patch = {
+        "changed_files": [
+            {"path": "src/OutputManager.cc", "new_content": output_manager},
+            {"path": "src/Hit.cc", "new_content": hit},
+            {"path": "src/DetectorConstruction.cc", "new_content": detector},
+            {"path": "main.cc", "new_content": main},
+            {"path": "include/ScoringManager.hh", "new_content": scoring_hh},
+            {"path": "src/ScoringManager.cc", "new_content": scoring_cc},
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, original_patch)
+
+    assert errors == []
+    by_path = {entry["path"]: entry["new_content"] for entry in repaired["changed_files"]}
+    assert "constexpr int kCsvPrecision = 6;" in by_path["src/ScoringManager.cc"]
+    for entry in repaired["changed_files"]:
+        clean, violations = check_magic_numbers(entry["new_content"], entry["path"])
+        assert clean, violations
 
 
 class _Profile:
@@ -281,7 +981,7 @@ async def test_global_integration_agent_reads_modules_files_database_and_web(
 
 
 @pytest.mark.asyncio
-async def test_global_integration_defers_large_initial_context_to_runtime_gate(
+async def test_global_integration_sends_large_initial_context_to_model(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -298,9 +998,10 @@ async def test_global_integration_defers_large_initial_context_to_runtime_gate(
             "rationale": "force large initial integration context",
         }
     )
+    gateway = _Gateway({"status": "no_change", "proposed_patch": {"changed_files": []}})
     monkeypatch.setattr(
         "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: _FailIfCalledGateway(),
+        lambda: gateway,
     )
     monkeypatch.setattr(
         "agent_core.g4_codegen.global_integration_agent._search_database",
@@ -336,15 +1037,17 @@ async def test_global_integration_defers_large_initial_context_to_runtime_gate(
     )
 
     assert report["status"] == "passed"
-    assert report["deferred_until_runtime_gate"] is True
+    assert "deferred_until_runtime_gate" not in report
     assert runtime_attempts == [1]
+    assert len(gateway.prompts) == 1
+    assert "LargeGenerated.cc" in gateway.prompts[0]
     assert report["runtime_gate_attempts"][0]["status"] == "pass"
-    assert repaired["metadata"]["global_integration_agent"]["deferred_until_runtime_gate"] is True
+    assert "deferred_until_runtime_gate" not in repaired["metadata"]["global_integration_agent"]
     assert repaired["metadata"]["final_runtime_gate"]["required"] is True
 
 
 @pytest.mark.asyncio
-async def test_deferred_initial_integration_uses_runtime_observation_for_repair(
+async def test_large_initial_integration_uses_runtime_observation_for_repair(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -363,6 +1066,12 @@ async def test_deferred_initial_integration_uses_runtime_observation_for_repair(
     )
     gateway = _SequenceGateway(
         [
+            {
+                "status": "no_change",
+                "proposed_patch": {"changed_files": []},
+                "issues_fixed": [],
+                "errors": [],
+            },
             {
                 "status": "integrated",
                 "proposed_patch": {
@@ -423,11 +1132,12 @@ async def test_deferred_initial_integration_uses_runtime_observation_for_repair(
     )
 
     assert report["status"] == "passed"
-    assert report["deferred_until_runtime_gate"] is True
     assert runtime_attempts == [1, 2]
-    assert len(gateway.prompts) == 1
-    assert "runtime repair round 1" in gateway.prompts[0]
-    assert "BUILD_ERROR_SENTINEL" in gateway.prompts[0]
+    assert len(gateway.prompts) == 2
+    assert "initial integration" in gateway.prompts[0]
+    assert "LargeGenerated.cc" in gateway.prompts[0]
+    assert "runtime repair round 1" in gateway.prompts[1]
+    assert "BUILD_ERROR_SENTINEL" in gateway.prompts[1]
     main_entry = next(f for f in repaired["changed_files"] if f["path"] == "main.cc")
     assert "return 0" in main_entry["new_content"]
 
@@ -634,7 +1344,7 @@ async def test_global_integration_prompt_keeps_files_and_runtime_observation_fir
     assert "BUILD_ERROR_SENTINEL" in prompt
     assert "G4-G No Magic Number" not in gia.GLOBAL_INTEGRATION_SYSTEM_PROMPT
     assert "No Magic Number" not in prompt
-    assert prompt.find('"project_files"') < prompt.find('"runtime_failure_context"')
+    assert prompt.find('"runtime_failure_context"') < prompt.find('"project_files"')
     assert gateway.call_kwargs[0]["max_tokens"] == gia.RUNTIME_REPAIR_MAX_TOKENS
     assert gateway.call_kwargs[0]["metadata"]["enable_thinking"] is True
 
@@ -982,6 +1692,72 @@ async def test_global_integration_agent_reacts_to_runtime_gate_observation(
 
 
 @pytest.mark.asyncio
+async def test_global_integration_runtime_repair_uses_large_context_and_token_budget(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    large_patch = {
+        "changed_files": [
+            {
+                "path": "src/Large.cc",
+                "operation": "create_or_replace",
+                "new_content": "void f() {\n" + ("  // keep repair context visible\n" * 3_000),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+                "rationale": "test",
+            },
+            {
+                "path": "main.cc",
+                "operation": "create_or_replace",
+                "new_content": "int main() { return 0; }\n",
+                "zone": "runtime_app",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+                "rationale": "test",
+            },
+        ]
+    }
+    gateway = _Gateway(
+        {
+            "status": "integrated",
+            "proposed_patch": {
+                "changed_files": [
+                    {"path": "main.cc", "new_content": "int main() { return 0; }\n"}
+                ]
+            },
+            "issues_fixed": [],
+            "errors": [],
+        }
+    )
+
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
+        lambda: gateway,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_database",
+        _empty_evidence,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_web",
+        _empty_evidence,
+    )
+
+    _repaired, report = await run_global_integration_agent(
+        large_patch,
+        job_id="global_integration_large_repair_context",
+        module_results={"simulation_core": {}, "runtime_app": {}},
+        runtime_failure_context={"status": "fail", "errors": ["real build failed"]},
+    )
+
+    assert report["status"] == "passed"
+    assert gateway.call_kwargs[0]["max_tokens"] >= 65_536
+    assert len(gateway.prompts[0]) > 80_000
+
+
+@pytest.mark.asyncio
 async def test_global_integration_runtime_attempt_offset_resumes_after_existing_attempt(
     tmp_path,
     monkeypatch,
@@ -1150,5 +1926,5 @@ async def test_global_integration_node_uses_five_runtime_react_rounds(monkeypatc
         }
     )
 
-    assert captured["runtime_repair_rounds"] == 5
+    assert captured["runtime_repair_rounds"] == GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS
     assert result["global_integration_agent_report"]["status"] == "passed"

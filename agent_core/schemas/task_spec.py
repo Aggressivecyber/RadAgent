@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -18,14 +19,76 @@ class SimulationScope(StrEnum):
 class ParticleSpec(BaseModel):
     """Particle source specification."""
 
+    source_id: str | None = Field(
+        default=None,
+        description="Optional unique source identifier for composite radiation fields",
+    )
     type: str = Field(description="Particle type, e.g. proton, neutron, gamma")
     energy_MeV: float = Field(gt=0, description="Kinetic energy in MeV")  # noqa: N815
+    energy_unit: Literal["MeV", "keV", "GeV", "eV"] = Field(
+        default="MeV",
+        description="Energy unit for source energy",
+    )
+    energy_distribution: Literal["mono", "gaussian", "uniform", "spectrum"] = Field(
+        default="mono",
+        description="Energy distribution type",
+    )
+    energy_sigma: float | None = Field(
+        default=None,
+        ge=0,
+        description="Sigma for gaussian energy distribution in energy_unit",
+    )
+    spectrum_file: str | None = Field(
+        default=None,
+        description="Spectrum file path for spectrum distributions",
+    )
     direction: list[float] = Field(
         min_length=3,
         max_length=3,
         description="Unit direction vector [x, y, z]",
     )
+    position: list[float] | None = Field(
+        default=None,
+        min_length=3,
+        max_length=3,
+        description="Source position [x, y, z] in um",
+    )
+    sigma_position_um: float | None = Field(
+        default=None,
+        ge=0,
+        description="Beam spot size sigma in um",
+    )
+    sigma_direction_rad: float | None = Field(
+        default=None,
+        ge=0,
+        description="Angular spread sigma in radians",
+    )
+    angular_distribution: Literal["mono", "gaussian", "isotropic", "cosine", "custom"] = Field(
+        default="mono",
+        description="Angular distribution model for the source",
+    )
+    angular_spectrum_file: str | None = Field(
+        default=None,
+        description="Optional angle distribution file for custom/angular-spectrum sources",
+    )
+    surface_shape: Literal["circle", "rectangle", "point"] = Field(
+        default="point",
+        description="Beam surface shape",
+    )
+    surface_size: list[float] | None = Field(
+        default=None,
+        description="Surface dimensions for broad beams",
+    )
+    generator_type: Literal["gun", "gps"] = Field(
+        default="gun",
+        description="Particle gun for simple beams, GPS for spectra or broad beams",
+    )
     events: int = Field(default=1000, gt=0, description="Number of primary events")
+    relative_weight: float | None = Field(
+        default=None,
+        ge=0,
+        description="Relative source weight/fraction for composite radiation fields",
+    )
 
 
 class TargetSpec(BaseModel):
@@ -110,6 +173,31 @@ class TaskSpec(BaseModel):
                         "direction": [0.0, 0.0, -1.0],
                         "events": 200000,
                     },
+                    "particles": [
+                        {
+                            "source_id": "forward_protons",
+                            "type": "proton",
+                            "energy_MeV": 100.0,
+                            "energy_distribution": "mono",
+                            "direction": [0.0, 0.0, -1.0],
+                            "angular_distribution": "mono",
+                            "events": 140000,
+                            "relative_weight": 0.7,
+                        },
+                        {
+                            "source_id": "oblique_gamma_spectrum",
+                            "type": "gamma",
+                            "energy_MeV": 2.5,
+                            "energy_distribution": "spectrum",
+                            "spectrum_file": "inputs/gamma_spectrum.csv",
+                            "direction": [0.5, 0.0, -0.8660254],
+                            "angular_distribution": "gaussian",
+                            "sigma_direction_rad": 0.05,
+                            "generator_type": "gps",
+                            "events": 60000,
+                            "relative_weight": 0.3,
+                        },
+                    ],
                     "target": {
                         "material": "Silicon",
                         "size_um": [100.0, 100.0, 50.0],
@@ -143,6 +231,14 @@ class TaskSpec(BaseModel):
         default=None,
         description="Particle source configuration",
     )
+    particles: list[ParticleSpec] | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Composite radiation field components. When provided, each entry "
+            "becomes one Geant4 source and takes precedence over particle."
+        ),
+    )
     target: TargetSpec | None = Field(
         default=None,
         description="Irradiation target configuration",
@@ -159,7 +255,7 @@ class TaskSpec(BaseModel):
         default_factory=list,
         description="Requested output types",
     )
-    physics_options: dict[str, str] | None = Field(
+    physics_options: dict[str, Any] | None = Field(
         default=None,
         description="Physics list and model options",
     )

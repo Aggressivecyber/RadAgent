@@ -123,18 +123,11 @@ def _heuristic_requirements(user_query: str, task_spec: dict) -> dict[str, Any]:
     sources: list[dict[str, str]] = []
 
     # Extract from task_spec if available
-    particle = task_spec.get("particle", {})
+    particles = _source_particles(task_spec)
     target = task_spec.get("target", {})
 
-    if particle:
-        sources.append(
-            {
-                "particle_type": particle.get("type", "proton"),
-                "energy": f"{particle.get('energy_MeV', 10)} MeV",
-                "distribution": "mono",
-                "geometry": "pencil",
-            }
-        )
+    for index, particle in enumerate(particles):
+        sources.append(_source_requirement(particle, index))
 
     if target:
         mat_name = target.get("material", "Si")
@@ -167,3 +160,51 @@ def _heuristic_requirements(user_query: str, task_spec: dict) -> dict[str, Any]:
         "forbidden_simplifications": [],
         "missing_information": [],
     }
+
+
+def _source_particles(task_spec: dict[str, Any]) -> list[dict[str, Any]]:
+    composite = task_spec.get("particles")
+    if isinstance(composite, list) and composite:
+        return [item for item in composite if isinstance(item, dict)]
+    particle = task_spec.get("particle")
+    if isinstance(particle, dict) and particle:
+        return [particle]
+    return []
+
+
+def _source_requirement(particle: dict[str, Any], index: int) -> dict[str, str]:
+    energy_unit = str(particle.get("energy_unit", "MeV"))
+    distribution = str(particle.get("energy_distribution", "mono"))
+    direction = particle.get("direction")
+    source_id = str(
+        particle.get("source_id")
+        or ("primary_source" if index == 0 else f"source_{index + 1}")
+    )
+    requirement = {
+        "source_id": source_id,
+        "particle_type": str(particle.get("type", "proton")),
+        "energy": f"{particle.get('energy_MeV', 10)} {energy_unit}",
+        "distribution": distribution,
+        "geometry": _source_geometry(particle),
+        "direction": json.dumps(direction) if direction is not None else "",
+        "angular_distribution": str(particle.get("angular_distribution", "mono")),
+    }
+    spectrum_file = particle.get("spectrum_file")
+    if spectrum_file:
+        requirement["spectrum_file"] = str(spectrum_file)
+    angular_file = particle.get("angular_spectrum_file")
+    if angular_file:
+        requirement["angular_spectrum_file"] = str(angular_file)
+    return requirement
+
+
+def _source_geometry(particle: dict[str, Any]) -> str:
+    if particle.get("sigma_position_um") is not None:
+        return "broad_beam"
+    shape = particle.get("surface_shape")
+    if shape and shape != "point":
+        return "broad_beam"
+    angular = particle.get("angular_distribution")
+    if angular in {"isotropic", "cosine"}:
+        return str(angular)
+    return "pencil"

@@ -23,6 +23,7 @@ from agent_core.g4_modeling.schemas.g4_model_ir import (
 from agent_core.g4_modeling.schemas.material_spec import MaterialSpec
 from agent_core.g4_modeling.schemas.physics_spec import PhysicsSpec, validate_physics_spec
 from agent_core.g4_modeling.schemas.source_spec import SourceSpec
+from agent_core.schemas.task_spec import TaskSpec
 
 
 def _make_world() -> ComponentSpec:
@@ -231,6 +232,82 @@ class TestSubSchemas:
         )
         assert len(ledger.steps) == 1
         assert ledger.steps[0].node_name == "test_node"
+
+
+class TestTaskSpecSourceCustomization:
+    """Test user-facing task spec can express source customization."""
+
+    def test_particle_spec_accepts_spectrum_and_gps_fields(self):
+        task = TaskSpec.model_validate(
+            {
+                "simulation_scope": ["geant4"],
+                "particle": {
+                    "type": "gamma",
+                    "energy_MeV": 2.5,
+                    "energy_unit": "MeV",
+                    "energy_distribution": "spectrum",
+                    "spectrum_file": "inputs/source_spectrum.csv",
+                    "direction": [0.0, 0.0, 1.0],
+                    "position": [0.0, 0.0, -500.0],
+                    "sigma_position_um": 20.0,
+                    "sigma_direction_rad": 0.01,
+                    "surface_shape": "circle",
+                    "surface_size": [100.0],
+                    "generator_type": "gps",
+                    "events": 2000,
+                },
+                "outputs": ["dose"],
+            }
+        )
+
+        assert task.particle is not None
+        assert task.particle.energy_distribution == "spectrum"
+        assert task.particle.spectrum_file == "inputs/source_spectrum.csv"
+        assert task.particle.generator_type == "gps"
+        assert task.particle.surface_shape == "circle"
+
+    def test_task_spec_accepts_composite_radiation_field_sources(self):
+        task = TaskSpec.model_validate(
+            {
+                "simulation_scope": ["geant4"],
+                "particles": [
+                    {
+                        "source_id": "forward_protons",
+                        "type": "proton",
+                        "energy_MeV": 100.0,
+                        "energy_distribution": "mono",
+                        "direction": [0.0, 0.0, 1.0],
+                        "angular_distribution": "mono",
+                        "events": 700,
+                        "relative_weight": 0.7,
+                    },
+                    {
+                        "source_id": "oblique_gamma_spectrum",
+                        "type": "gamma",
+                        "energy_MeV": 2.5,
+                        "energy_distribution": "spectrum",
+                        "spectrum_file": "inputs/gamma_spectrum.csv",
+                        "direction": [0.5, 0.0, 0.8660254],
+                        "angular_distribution": "gaussian",
+                        "angular_spectrum_file": "inputs/gamma_angles.csv",
+                        "sigma_direction_rad": 0.05,
+                        "generator_type": "gps",
+                        "events": 300,
+                        "relative_weight": 0.3,
+                    },
+                ],
+                "outputs": ["dose"],
+            }
+        )
+
+        assert task.particles is not None
+        assert len(task.particles) == 2
+        assert task.particles[0].source_id == "forward_protons"
+        assert task.particles[0].relative_weight == 0.7
+        assert task.particles[1].energy_distribution == "spectrum"
+        assert task.particles[1].spectrum_file == "inputs/gamma_spectrum.csv"
+        assert task.particles[1].angular_distribution == "gaussian"
+        assert task.particles[1].angular_spectrum_file == "inputs/gamma_angles.csv"
 
 
 class TestPhysicsSpec:

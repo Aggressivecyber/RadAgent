@@ -35,10 +35,15 @@ Respond with a JSON object containing:
   ],
   "required_sources": [
     {{
+      "source_id": "unique source id when available",
       "particle_type": "proton|gamma|electron|...",
       "energy": "Energy with unit",
       "distribution": "mono|gaussian|spectrum",
-      "geometry": "pencil|broad_beam|isotropic"
+      "spectrum_file": "path or null",
+      "geometry": "pencil|broad_beam|isotropic",
+      "direction": "[dx, dy, dz]",
+      "angular_distribution": "mono|gaussian|isotropic|cosine|custom",
+      "relative_weight": "relative source weight or null"
     }}
   ],
   "required_outputs": ["edep", "dose_3d", "event_table", ...],
@@ -56,6 +61,9 @@ IMPORTANT RULES:
 3. Do NOT skip oxide layers, metal electrodes, or packaging
 4. Mark information source as user_specified or inferred_from_context
 5. List ALL missing dimensions and materials that need evidence lookup
+6. For composite radiation fields, emit one required_sources item per source
+   component and preserve source_id, spectrum_file, direction,
+   angular_distribution, and relative_weight when provided
 """
 
 GEOMETRY_DECOMPOSITION_PROMPT = """You are a Geant4 geometry decomposition specialist.
@@ -103,10 +111,11 @@ RULES:
 
 PHYSICS_SELECTION_PROMPT = """You are a Geant4 physics list selection specialist.
 
-Given the particle type, energy range, target materials, and scoring requirements,
-select the most appropriate Geant4 physics list and explain your choice.
+Given the particle type or composite radiation field source summary, energy range,
+target materials, and scoring requirements, select the most appropriate Geant4
+physics list and explain your choice.
 
-Particle: {particle_type}
+Particle/source components: {particle_type}
 Energy: {energy} {energy_unit}
 Target materials: {materials}
 Scoring requirements: {scoring_requirements}
@@ -135,6 +144,8 @@ RULES:
 4. For proton therapy (10-250 MeV), QGSP_BIC is often better than FTFP_BERT
 5. selection_reasoning must be at least 50 characters explaining the choice
 6. Reference specific physics processes needed for the simulation
+7. For a composite radiation field, consider all source components together,
+   not only the first particle in the list
 """
 
 MATERIAL_DEFINITION_PROMPT = """You are a Geant4 material definition specialist.
