@@ -39,6 +39,7 @@ GATE_NAMES: dict[int, str] = {
     17: "G4-F Code Module Boundary",
     18: "G4-G No Magic Number",
     19: "G4-H Human Confirmation",
+    20: "Credibility/Plausibility Assessment",
 }
 
 
