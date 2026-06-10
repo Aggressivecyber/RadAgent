@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -874,6 +875,124 @@ class RadAgentAppService:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 return data if isinstance(data, dict) else {}
         return {}
+
+    def create_revision(self, user_request: str, job_id: str | None = None) -> dict[str, Any]:
+        from agent_core.revision import RevisionManager
+
+        active_job_id = job_id or str(self.state.get("job_id", ""))
+        if not active_job_id:
+            raise RuntimeError("No active job for revision.")
+        base_dir = str(self.state.get("generated_code_dir", ""))
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        request = manager.create_revision(
+            active_job_id,
+            user_request,
+            base_generated_code_dir=base_dir or None,
+        )
+        self._emit(
+            "revision_created",
+            status="success",
+            summary=request.revision_id,
+            job_id=active_job_id,
+            payload=request.model_dump(mode="json"),
+        )
+        return request.model_dump(mode="json")
+
+    async def run_revision(
+        self,
+        revision_id: str,
+        *,
+        proposed_patch_path: str | None = None,
+    ) -> dict[str, Any]:
+        from agent_core.revision import RevisionManager
+
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        status = await manager.arun_revision(revision_id, proposed_patch_path)
+        self._emit(
+            "revision_finished" if status.status == "completed" else "revision_failed",
+            status="success" if status.status == "completed" else "error",
+            summary=revision_id,
+            job_id=status.job_id,
+            payload=status.model_dump(mode="json"),
+        )
+        return status.model_dump(mode="json")
+
+    def list_revisions(self, job_id: str | None = None) -> list[dict[str, Any]]:
+        active_job_id = job_id or str(self.state.get("job_id", ""))
+        if not active_job_id:
+            return []
+        root = self.workspace.root / "jobs" / active_job_id / "revisions"
+        if not root.is_dir():
+            return []
+        rows: list[dict[str, Any]] = []
+        for path in sorted(root.glob("*/revision_summary.json"), reverse=True):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(data, dict):
+                rows.append(data)
+        return rows
+
+    async def accept_revision(self, revision_id: str) -> JobStatus:
+        from agent_core.revision import RevisionManager, check_accept_preconditions
+
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        summary = manager.get_summary(revision_id)
+        gate_state = self._revision_gate_state(summary.revision_dir)
+        ok, errors = check_accept_preconditions(gate_state)
+        if not ok:
+            raise RuntimeError("; ".join(errors))
+        candidate = Path(summary.candidate_project_dir)
+        target_value = str(self.state.get("generated_code_dir", ""))
+        if not target_value:
+            raise RuntimeError("No generated_code_dir in current workflow state.")
+        target = Path(target_value)
+        if not candidate.is_dir():
+            raise RuntimeError(f"Revision candidate project not found: {candidate}")
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(candidate, target)
+        self._emit(
+            "revision_accepted",
+            status="success",
+            summary=revision_id,
+            job_id=summary.job_id,
+            payload=summary.model_dump(mode="json"),
+        )
+        return self.get_status()
+
+    def reject_revision(self, revision_id: str, reason: str = "") -> dict[str, Any]:
+        from agent_core.revision import RevisionManager
+
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        summary = manager.get_summary(revision_id)
+        self._emit(
+            "revision_rejected",
+            status="warning",
+            summary=revision_id,
+            job_id=summary.job_id,
+            payload={"reason": reason, "revision": summary.model_dump(mode="json")},
+        )
+        return summary.model_dump(mode="json")
+
+    def _revision_gate_state(self, revision_dir: str) -> dict[str, Any]:
+        path = Path(revision_dir) / "gate_results.json"
+        if not path.is_file():
+            return {"validation_status": "missing", "gate_results": []}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {"validation_status": "unreadable", "gate_results": []}
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list):
+            failed = [g for g in data if g.get("status") in {"fail", "block", "blocked"}]
+            return {
+                "validation_status": "failed" if failed else "passed",
+                "gate_results": data,
+            }
+        return {"validation_status": "invalid", "gate_results": []}
 
     def _state_for_job(self, job_id: str | None) -> dict[str, Any]:
         if not job_id or job_id == self.state.get("job_id"):

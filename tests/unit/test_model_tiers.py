@@ -79,6 +79,7 @@ class TestTaskDefaultTier:
             ModelTask.INTENT_ROUTING,
             ModelTask.SIMPLE_EXTRACTION,
             ModelTask.CONTEXT_SUMMARY,
+            ModelTask.CREDIBILITY_ASSESSMENT,
         }
         assert lite_tasks == expected
 

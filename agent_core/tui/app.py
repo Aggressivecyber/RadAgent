@@ -385,6 +385,16 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     self._show_projects()
                 case "project":
                     self._switch_project(command.args)
+                case "revise":
+                    self._create_revision(command.args)
+                case "revisions":
+                    self._show_revisions()
+                case "revision":
+                    self._show_revision(command.args)
+                case "accept-revision":
+                    self._start_operation(self.service.accept_revision(command.args))
+                case "reject-revision":
+                    self._reject_revision(command.args)
                 case "build":
                     self._start_operation(self.service.build_generated_code())
                 case "simulate":
@@ -561,6 +571,64 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                 lines.extend(["", "Warnings:", *[f"- {item}" for item in warnings[:8]]])
             self._show_panel("Credibility", lines)
 
+        def _create_revision(self, request: str) -> None:
+            try:
+                revision = self.service.create_revision(request)
+            except Exception as exc:
+                self._add_system_row("Revision failed", str(exc), "error")
+                return
+            self._add_system_row(
+                "Revision created",
+                str(revision.get("revision_id", "")),
+                "success",
+            )
+            self._show_revision(str(revision.get("revision_id", "")))
+
+        def _show_revisions(self) -> None:
+            revisions = self.service.list_revisions()
+            if not revisions:
+                self._show_panel("Revisions", ["No revisions for the active job."])
+                return
+            lines = [
+                (
+                    f"{item.get('status', 'unknown'):10} "
+                    f"{item.get('revision_id', '')}  "
+                    f"{item.get('user_request', '')}"
+                )
+                for item in revisions[:30]
+            ]
+            self._show_panel("Revisions", lines)
+
+        def _show_revision(self, revision_id: str) -> None:
+            revisions = self.service.list_revisions()
+            revision = next(
+                (item for item in revisions if item.get("revision_id") == revision_id),
+                None,
+            )
+            if not revision:
+                self._show_panel("Revision", [f"Revision not found: {revision_id}"])
+                return
+            lines = [
+                f"id: {revision.get('revision_id', '')}",
+                f"status: {revision.get('status', '')}",
+                f"patch: {revision.get('patch_status', '')}",
+                f"candidate: {revision.get('candidate_project_dir', '')}",
+                "",
+                str(revision.get("user_request", "")),
+            ]
+            errors = revision.get("errors", [])
+            if errors:
+                lines.extend(["", "Errors:", *[f"- {item}" for item in errors[:8]]])
+            self._show_panel("Revision", lines)
+
+        def _reject_revision(self, revision_id: str) -> None:
+            try:
+                self.service.reject_revision(revision_id)
+            except Exception as exc:
+                self._add_system_row("Revision reject failed", str(exc), "error")
+                return
+            self._add_system_row("Revision rejected", revision_id, "warning")
+
         def _show_model_config(self) -> None:
             config = self.service.get_model_config()
             lines = [
@@ -658,6 +726,11 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     "/simulate [events]",
                     "/projects",
                     "/project <slug-or-id>",
+                    "/revise <request>",
+                    "/revisions",
+                    "/revision <revision_id>",
+                    "/accept-revision <revision_id>",
+                    "/reject-revision <revision_id>",
                     "/help",
                     "/exit",
                 ],

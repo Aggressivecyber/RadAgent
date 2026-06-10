@@ -49,6 +49,14 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     gate_results: list[dict[str, Any]] = []
     if gate_path and Path(gate_path).exists():
         gate_results = json.loads(Path(gate_path).read_text())
+    credibility_gate = next(
+        (
+            gate
+            for gate in gate_results
+            if isinstance(gate, dict) and gate.get("gate_id") == 20
+        ),
+        None,
+    )
 
     # Determine verified status
     verified = validation_status == "passed"
@@ -84,6 +92,11 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     scoring = model_ir.get("scoring", [])
     simplification_policy = model_ir.get("simplification_policy", {})
     open_issues = model_ir.get("open_issues", [])
+    credibility_level = (
+        credibility_gate.get("credibility_level", "not_run")
+        if credibility_gate
+        else "not_run"
+    )
 
     # Build report
     report_lines = [
@@ -100,6 +113,7 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
         f"| **Termination Reason** | {termination} |",
         "| **Modeling Mode** | realistic |",
         f"| **Context Source** | {context_decision} |",
+        f"| **Credibility** | {credibility_level} |",
     ]
 
     if reserved_note:
@@ -209,16 +223,31 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
             gmsg = g.get("message", "")[:80]
             gpassed = len(g.get("passed_items", []))
             gfailed = len(g.get("failed_items", []))
-            emoji = {
-                "pass": "✅",
-                "warning": "⚠️",
-                "fail": "❌",
-                "block": "🚫",
-                "skipped": "⏭️",
-            }.get(gstatus, "?")
             report_lines.append(
-                f"| {gid} | {gname} | {emoji} {gstatus} | {gpassed} | {gfailed} | {gmsg} |"
+                f"| {gid} | {gname} | {gstatus} | {gpassed} | {gfailed} | {gmsg} |"
             )
+
+    if credibility_gate:
+        report_lines.extend(
+            [
+                "",
+                "### Credibility Assessment",
+                "",
+                f"- Gate status: `{credibility_gate.get('status', 'unknown')}`",
+                f"- Credibility level: `{credibility_gate.get('credibility_level', 'unknown')}`",
+                f"- Confidence: `{credibility_gate.get('confidence', '')}`",
+                f"- Summary: {credibility_gate.get('message', '')}",
+                "",
+                "This assessment checks plausibility against output sanity, "
+                "available evidence, and basic physics constraints. It does not require "
+                "an identical experimental dataset.",
+            ]
+        )
+        warnings = credibility_gate.get("warnings", [])
+        if warnings:
+            report_lines.extend(["", "Warnings:"])
+            for warning in warnings[:8]:
+                report_lines.append(f"- {warning}")
 
     # Open issues
     if open_issues:

@@ -211,8 +211,8 @@ class TestGenerateFinalReport:
         assert "Context Sufficiency" in report, "Report must show gate name from 'name' field"
         assert "Static Check" in report, "Report must show failed gate name"
         # Must show status, not '?'
-        assert "❌ fail" in report, "Report must show gate status from 'status' field"
-        assert "✅ pass" in report, "Report must show passed gate status"
+        assert "| 5 | Static Check | fail |" in report
+        assert "| 0 | Context Sufficiency | pass |" in report
         # Must show passed/failed counts in the table
         assert "Missing CMakeLists.txt" in report
 
