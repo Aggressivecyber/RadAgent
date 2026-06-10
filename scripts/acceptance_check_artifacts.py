@@ -13,6 +13,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from agent_core.workspace.paths import (  # noqa: E402
+    GEANT4_PROJECT_DIRNAME,
+    STAGE_CODEGEN,
+    STAGE_GATE_VALIDATION,
+    STAGE_PATCH,
+)
+
 
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -48,11 +59,11 @@ def main() -> None:
     print(f"=== Artifact Acceptance Check: {artifact_dir} ===")
     _check("artifact directory exists", artifact_dir.is_dir(), failures)
 
-    g4_dir = artifact_dir / "08_geant4"
-    codegen_dir = artifact_dir / "06_codegen"
-    gate_dir = artifact_dir / "08_gate_validation"
+    g4_dir = artifact_dir / STAGE_PATCH / GEANT4_PROJECT_DIRNAME
+    codegen_dir = artifact_dir / STAGE_CODEGEN
+    gate_dir = artifact_dir / STAGE_GATE_VALIDATION
 
-    _check("08_geant4 exists", g4_dir.is_dir(), failures)
+    _check(f"{STAGE_PATCH}/{GEANT4_PROJECT_DIRNAME} exists", g4_dir.is_dir(), failures)
     _check("CMakeLists.txt exists", (g4_dir / "CMakeLists.txt").is_file(), failures)
     _check("main.cc exists", (g4_dir / "main.cc").is_file(), failures)
     _check(

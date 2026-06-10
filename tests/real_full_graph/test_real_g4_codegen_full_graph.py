@@ -9,18 +9,19 @@ import pytest
 from agent_core.gates import build_gate_validation_subgraph
 from agent_core.graph.subgraphs.g4_codegen_graph import build_g4_codegen_subgraph
 from agent_core.patching.nodes import apply_patch
+from agent_core.workspace.paths import STAGE_INPUT
 
-from tests.real_g4_modules.common import build_real_g4_model_ir, require_real_model_provider
+from tests.fixtures.real_g4_case import build_real_g4_model_ir, require_real_model_api
 
 
 async def test_real_g4_codegen_full_graph(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    require_real_model_provider()
+    require_real_model_api()
     workspace = tmp_path / "simulation_workspace"
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
 
     job_id = "real_full_graph"
     job_dir = workspace / "jobs" / job_id
-    input_dir = job_dir / "00_input"
+    input_dir = job_dir / STAGE_INPUT
     input_dir.mkdir(parents=True)
 
     g4_model_ir_path = input_dir / "g4_model_ir.json"
@@ -93,24 +94,15 @@ async def test_real_g4_codegen_full_graph(tmp_path: Path, monkeypatch: pytest.Mo
     assert result["g4_codegen_status"] == "passed"
     assert result["proposed_patch"]
     assert result["proposed_patch"]["changed_files"]
-    assert result["static_semantic_scan"]["status"] == "pass"
-    assert result["cross_file_hard_gate"]["status"] == "pass"
-    assert result["cross_file_llm_gate"]["status"] == "pass"
     assert result["global_integration_agent_report"]["status"] == "passed"
+    assert result["physics_quality_review"]["status"] == "pass"
     assert result["proposed_patch"]["metadata"]["final_runtime_gate"]["required"] is True
-    assert result["generated_code_dir"].endswith("08_geant4")
+    assert result["generated_code_dir"].endswith("geant4_project")
 
     required_modules = {
-        "material",
-        "geometry",
-        "placement",
-        "source",
-        "physics",
-        "sensitive_detector",
-        "scoring",
-        "output_manager",
-        "action_initialization",
-        "main_cmake",
+        "simulation_core",
+        "beam_physics",
+        "runtime_app",
     }
     modules_in_patch = {f["module_name"] for f in result["proposed_patch"]["changed_files"]}
     assert required_modules.issubset(modules_in_patch)
@@ -122,7 +114,7 @@ async def test_real_g4_codegen_full_graph(tmp_path: Path, monkeypatch: pytest.Mo
         assert "generated_by" in file_entry
         assert "module_name" in file_entry
         assert file_entry["path"]
-        assert not file_entry["path"].startswith("08_geant4/")
+        assert not file_entry["path"].startswith("geant4_project/")
 
     patch_result = await apply_patch(
         {

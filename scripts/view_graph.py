@@ -1,12 +1,13 @@
-# ruff: noqa: E501
 #!/usr/bin/env python3
+# ruff: noqa: E501
 """Graph viewer — renders Mermaid diagrams as HTML and opens in browser.
 
 Usage:
-    python scripts/view_graph.py                    # 打开合并总览
+    python scripts/view_graph.py                    # 打开当前 LangGraph 主图
     python scripts/view_graph.py --main             # 仅主图
-    python scripts/view_graph.py --sub g4_modeling  # 仅 G4 建模子图
-    python scripts/view_graph.py --all              # 所有图
+    python scripts/view_graph.py --sub g4_codegen   # 仅 G4 代码生成子图
+    python scripts/view_graph.py --all              # 当前主图 + 所有子图
+    python scripts/view_graph.py --source static    # 使用手工整理版 Mermaid 总览
     python scripts/view_graph.py --no-open          # 仅生成，不打开浏览器
 """
 
@@ -16,13 +17,21 @@ import argparse
 import html
 import tempfile
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from agent_core.visualization import (
-    draw_all,
-    draw_combined,
-    draw_main_graph,
-    draw_subgraph,
+    draw_all as draw_static_all,
+)
+from agent_core.visualization import (
+    draw_combined as draw_static_combined,
+)
+from agent_core.visualization import (
+    draw_main_graph as draw_static_main_graph,
+)
+from agent_core.visualization import (
+    draw_subgraph as draw_static_subgraph,
 )
 
 
@@ -94,10 +103,10 @@ def _build_html_page(title: str, mermaid_content: str) -> str:
 <h1>{html.escape(title)}</h1>
 
 <div class="legend">
-  <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>  # noqa: E501
-  <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>  # noqa: E501
-  <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>  # noqa: E501
-  <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>  # noqa: E501
+  <div class="legend-item"><div class="legend-swatch" style="background:#E8F5E9;border-color:#388E3C"></div>工作区</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#FFF3E0;border-color:#F57C00"></div>I/O</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#E3F2FD;border-color:#1976D2"></div>核心节点</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#FCE4EC;border-color:#C62828"></div>守卫/门禁</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#F3E5F5;border-color:#7B1FA2"></div>代码生成</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#FFF9C4;border-color:#F9A825"></div>门禁检查</div>
   <div class="legend-item"><div class="legend-swatch" style="background:#E0F7FA;border-color:#00838F"></div>产物/报告</div>
@@ -126,6 +135,69 @@ def _build_html_page(title: str, mermaid_content: str) -> str:
 </script>
 </body>
 </html>"""
+
+
+def _compile_if_needed(graph_or_compiled: Any) -> Any:
+    if hasattr(graph_or_compiled, "get_graph"):
+        return graph_or_compiled
+    return graph_or_compiled.compile()
+
+
+def _langgraph_builders() -> dict[str, tuple[str, Callable[[], Any]]]:
+    """Return actual LangGraph builders keyed by user-facing subgraph name."""
+    from agent_core.artifacts import build_artifact_subgraph
+    from agent_core.context import build_context_subgraph
+    from agent_core.gates import build_gate_validation_subgraph
+    from agent_core.graph.main_graph import build_main_graph
+    from agent_core.graph.subgraphs.g4_codegen_graph import build_g4_codegen_subgraph
+    from agent_core.graph.subgraphs.g4_modeling_graph import build_g4_modeling_subgraph
+    from agent_core.graph.subgraphs.human_confirmation_graph import (
+        build_human_confirmation_subgraph,
+    )
+    from agent_core.patching import build_patch_subgraph
+    from agent_core.planning import build_task_planning_subgraph
+    from agent_core.reports import build_report_subgraph
+
+    return {
+        "main_graph": ("RadAgent Main Graph", build_main_graph),
+        "context": ("Context Subgraph", build_context_subgraph),
+        "task_planning": ("Task Planning Subgraph", build_task_planning_subgraph),
+        "g4_modeling": ("G4 Modeling Subgraph", build_g4_modeling_subgraph),
+        "human_confirmation": (
+            "Human Confirmation Subgraph",
+            build_human_confirmation_subgraph,
+        ),
+        "g4_codegen": ("G4 Codegen Subgraph", build_g4_codegen_subgraph),
+        "patch": ("Patch Subgraph", build_patch_subgraph),
+        "gate_validation": ("Gate Validation Subgraph", build_gate_validation_subgraph),
+        "artifact": ("Artifact Subgraph", build_artifact_subgraph),
+        "report": ("Report Subgraph", build_report_subgraph),
+    }
+
+
+def _draw_langgraph(name: str) -> str:
+    builders = _langgraph_builders()
+    if name not in builders:
+        available = ", ".join(sorted(builders))
+        raise ValueError(f"Unknown graph '{name}'. Available: {available}")
+    _, builder = builders[name]
+    compiled = _compile_if_needed(builder())
+    return compiled.get_graph().draw_mermaid()
+
+
+def _draw_langgraph_all() -> dict[str, str]:
+    return {name: _draw_langgraph(name) for name in _langgraph_builders()}
+
+
+def _static_diagrams_for_all() -> dict[str, str]:
+    diagrams = draw_static_all()
+    if "human_confirmation" not in diagrams:
+        diagrams["human_confirmation"] = (
+            "flowchart TB\n"
+            "    human_confirmation_subgraph[Human Confirmation 子图]\n"
+            "    human_confirmation_subgraph --> END((END))\n"
+        )
+    return diagrams
 
 
 def _build_multi_page(title: str, diagrams: dict[str, str]) -> str:
@@ -256,27 +328,29 @@ def view_graph(
     all_graphs: bool = False,
     no_open: bool = False,
     output: str | None = None,
+    source: str = "langgraph",
 ) -> Path:
     """Generate and optionally open graph visualization HTML.
 
     Returns path to the generated HTML file.
     """
+    use_langgraph = source == "langgraph"
+    source_label = "当前 LangGraph" if use_langgraph else "静态 Mermaid"
     if sub:
-        title = f"RadAgent — {sub} 子图"
-        mermaid = draw_subgraph(sub)
+        title = f"RadAgent — {sub} 子图 ({source_label})"
+        mermaid = _draw_langgraph(sub) if use_langgraph else draw_static_subgraph(sub)
         html_content = _build_html_page(title, mermaid)
     elif main:
-        title = "RadAgent — 主图"
-        mermaid = draw_main_graph()
+        title = f"RadAgent — 主图 ({source_label})"
+        mermaid = _draw_langgraph("main_graph") if use_langgraph else draw_static_main_graph()
         html_content = _build_html_page(title, mermaid)
     elif all_graphs:
-        title = "RadAgent — 全部图结构"
-        diagrams = draw_all()
+        title = f"RadAgent — 全部图结构 ({source_label})"
+        diagrams = _draw_langgraph_all() if use_langgraph else _static_diagrams_for_all()
         html_content = _build_multi_page(title, diagrams)
     else:
-        # Default: combined overview
-        title = "RadAgent — 图结构总览"
-        mermaid = draw_combined()
+        title = f"RadAgent — 图结构总览 ({source_label})"
+        mermaid = _draw_langgraph("main_graph") if use_langgraph else draw_static_combined()
         html_content = _build_html_page(title, mermaid)
 
     if output:
@@ -309,6 +383,12 @@ def main() -> None:
     parser.add_argument("--main", action="store_true", help="仅查看主图")
     parser.add_argument("--sub", type=str, default=None, help="查看指定子图")
     parser.add_argument("--all", action="store_true", dest="all_graphs", help="查看所有图")
+    parser.add_argument(
+        "--source",
+        choices=["langgraph", "static"],
+        default="langgraph",
+        help="图数据来源：langgraph=当前代码编译图，static=手工整理 Mermaid",
+    )
     parser.add_argument("--no-open", action="store_true", help="仅生成 HTML，不打开浏览器")
     parser.add_argument("-o", "--output", type=str, default=None, help="指定输出 HTML 路径")
 
@@ -319,6 +399,7 @@ def main() -> None:
         all_graphs=args.all_graphs,
         no_open=args.no_open,
         output=args.output,
+        source=args.source,
     )
 
 

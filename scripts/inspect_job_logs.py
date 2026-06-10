@@ -14,7 +14,7 @@ def _resolve_job_dir(value: str) -> Path:
     candidate = Path(value)
     if candidate.exists():
         return candidate
-    from agent_core.config.workspace import get_job_dir
+    from agent_core.workspace.io import get_job_dir
 
     return get_job_dir(value)
 
@@ -32,10 +32,21 @@ def _read_events(job_dir: Path) -> list[dict[str, Any]]:
     return events
 
 
+def _read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
 def build_summary(job_dir: Path) -> dict[str, Any]:
     events = _read_events(job_dir)
+    active_model_call = _read_json(job_dir / "logs" / "active_model_call.json")
     failed = [e for e in events if e.get("status") in {"failed", "error"}]
     model_calls = [e for e in events if e.get("event_type") == "model_call"]
+    model_call_starts = [e for e in events if e.get("event_type") == "model_call_start"]
     slow_model_calls = sorted(
         model_calls,
         key=lambda e: float(e.get("duration_ms") or 0.0),
@@ -52,9 +63,20 @@ def build_summary(job_dir: Path) -> dict[str, Any]:
         "job_dir": str(job_dir),
         "event_count": len(events),
         "event_types": dict(Counter(e.get("event_type", "unknown") for e in events)),
+        "active_model_call": active_model_call,
         "final_status_events": final_status_events,
         "failed_event_count": len(failed),
         "failed_events": failed[-20:],
+        "recent_model_call_starts": [
+            {
+                "module_name": e.get("module_name"),
+                "phase": e.get("phase"),
+                "status": e.get("status"),
+                "summary": e.get("summary"),
+                "artifacts": e.get("artifacts", []),
+            }
+            for e in model_call_starts[-5:]
+        ],
         "slow_model_calls": [
             {
                 "module_name": e.get("module_name"),
@@ -62,6 +84,7 @@ def build_summary(job_dir: Path) -> dict[str, Any]:
                 "duration_ms": e.get("duration_ms"),
                 "status": e.get("status"),
                 "errors": e.get("errors", []),
+                "artifacts": e.get("artifacts", []),
             }
             for e in slow_model_calls
         ],
@@ -95,6 +118,27 @@ def main() -> int:
         for event in summary["final_status_events"]:
             print(f"  - {event.get('event_type')}: {event.get('status')} {event.get('summary')}")
 
+    if summary["active_model_call"]:
+        call = summary["active_model_call"]
+        print("Current/last model call:")
+        print(
+            f"  - {call.get('module_name') or '-'} {call.get('task')} "
+            f"{call.get('status')} {call.get('model_name')}"
+        )
+        if call.get("transcript_path"):
+            print(f"    transcript: {job_dir / call['transcript_path']}")
+
+    if summary["recent_model_call_starts"]:
+        print("Recent model call starts:")
+        for call in summary["recent_model_call_starts"]:
+            artifact = (call.get("artifacts") or [{}])[0].get("path", "")
+            print(
+                f"  - {call.get('module_name') or '-'} "
+                f"{call.get('phase')} {call.get('status')}"
+            )
+            if artifact:
+                print(f"    transcript: {job_dir / artifact}")
+
     if summary["failed_events"]:
         print("Recent failures:")
         for event in summary["failed_events"][-10:]:
@@ -110,6 +154,9 @@ def main() -> int:
                 f"  - {call.get('module_name') or '-'} "
                 f"{call.get('phase')} {call.get('duration_ms')} ms {call.get('status')}"
             )
+            artifact = (call.get("artifacts") or [{}])[0].get("path", "")
+            if artifact:
+                print(f"    transcript: {job_dir / artifact}")
 
     if summary["has_failure_bundle"]:
         print(f"Failure bundle: {summary['failure_bundle_path']}")

@@ -13,9 +13,11 @@ from pathlib import Path
 
 from agent_core.config.environment import load_environment
 from agent_core.g4_codegen.module_agents.module_context_examples import (
-    MODULE_LAYER_ORDER,
     get_module_code_example,
 )
+from agent_core.graph.subgraphs.g4_codegen_graph import MODULE_LAYERS
+
+MODULE_NAMES = [module_name for _, modules in MODULE_LAYERS for module_name in modules]
 
 COMMON_PRELUDE = r"""
 #include <memory>
@@ -47,7 +49,7 @@ struct ScoringRecord { double value = 0.0; };
 """
 
 
-MAIN_CMAKE_PRELUDE = COMMON_PRELUDE + r"""
+RUNTIME_APP_PRELUDE = COMMON_PRELUDE + r"""
 class DetectorConstruction : public G4VUserDetectorConstruction {
 public:
   G4VPhysicalVolume* Construct() override;
@@ -82,7 +84,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="radagent-example-compile-") as tmp:
         tmp_path = Path(tmp)
         failures: list[str] = []
-        for module_name in MODULE_LAYER_ORDER:
+        for module_name in MODULE_NAMES:
             source = _source_for_module(module_name)
             source_path = tmp_path / f"{module_name}_example.cc"
             source_path.write_text(source)
@@ -137,8 +139,8 @@ def _geant4_cflags(geant4_config: str) -> list[str]:
 
 def _source_for_module(module_name: str) -> str:
     example = get_module_code_example(module_name)["example"]
-    if module_name == "main_cmake":
-        return f"{MAIN_CMAKE_PRELUDE}\nvoid validate_main_cmake_example() {{\n{example}\n}}\n"
+    if module_name == "runtime_app":
+        return f"{RUNTIME_APP_PRELUDE}\nvoid validate_runtime_app_example() {{\n{example}\n}}\n"
     return f"{COMMON_PRELUDE}\n{example}\n"
 
 

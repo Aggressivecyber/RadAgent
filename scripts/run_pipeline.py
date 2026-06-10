@@ -4,8 +4,8 @@
 Usage:
     python scripts/run_pipeline.py --query "Simulate..."
     python scripts/run_pipeline.py --query-file query.txt
-    python scripts/run_pipeline.py --run-mode dev --query "..."
-    python scripts/run_pipeline.py --run-mode dev --query "你好"
+    python scripts/run_pipeline.py --run-mode test --query "..."
+    python scripts/run_pipeline.py --run-mode acceptance --query "你好"
 """
 
 import argparse
@@ -23,10 +23,14 @@ from agent_core.graph.main_graph import compile_main_graph  # noqa: E402
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RadAgent production pipeline")
     parser.add_argument("--job-id", default="", help="Job identifier (auto-generated if empty)")
-    parser.add_argument("--run-mode", default="dev", choices=["dev", "acceptance", "production"])
+    parser.add_argument(
+        "--run-mode",
+        default="test",
+        choices=["strict", "test", "acceptance", "production"],
+    )
     parser.add_argument("--query", help="User query string")
     parser.add_argument("--query-file", help="Path to file containing user query")
-    parser.add_argument("--human-response-file", help="Path to human response JSON (for dev mode)")
+    parser.add_argument("--human-response-file", help="Path to human response JSON")
     return parser.parse_args()
 
 
