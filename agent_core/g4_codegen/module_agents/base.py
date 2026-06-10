@@ -201,12 +201,33 @@ async def run_module_agent(
         try:
             data = result.parsed_json or json.loads(result.content.strip())
         except (json.JSONDecodeError, TypeError) as exc:
-            return ModuleAgentResult(
+            repair = await _repair_module_json_response(
+                gateway=gateway,
                 module_name=module_name,
-                status="failed",
-                generated_files=[],
-                errors=[f"Invalid JSON response: {exc}"],
+                job_id=job_id,
+                raw_content=result.content or "",
+                parse_error=exc,
+                tool_round=tool_round,
             )
+            if repair.error:
+                return ModuleAgentResult(
+                    module_name=module_name,
+                    status="failed",
+                    generated_files=[],
+                    errors=[f"Invalid JSON response: {exc}; repair failed: {repair.error}"],
+                )
+            try:
+                data = repair.parsed_json or json.loads(repair.content.strip())
+            except (json.JSONDecodeError, TypeError) as repair_exc:
+                return ModuleAgentResult(
+                    module_name=module_name,
+                    status="failed",
+                    generated_files=[],
+                    errors=[
+                        "Invalid JSON response after repair: "
+                        f"{repair_exc}; original parse error: {exc}"
+                    ],
+                )
 
         file_entries = _extract_generated_file_entries(data)
         example_requests = _extract_geant4_example_requests(data)
@@ -298,6 +319,39 @@ async def run_module_agent(
         generated_files=generated_files,
         errors=errors,
         warnings=data.get("warnings", []),
+    )
+
+
+async def _repair_module_json_response(
+    *,
+    gateway: Any,
+    module_name: str,
+    job_id: str,
+    raw_content: str,
+    parse_error: Exception,
+    tool_round: int,
+) -> Any:
+    repair_prompt = (
+        "下面是上一轮模型输出，无法被 json.loads 解析。"
+        "请只返回一个合法 JSON 对象，不要 Markdown fence，不要解释。"
+        "JSON 顶层必须包含 module_name、status、generated_files、warnings、errors。"
+        "generated_files 中每个文件对象必须使用 path 和 new_content。"
+        f"\n\n解析错误: {parse_error}\n\n上一轮输出:\n{raw_content[-120000:]}"
+    )
+    return await gateway.call(
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="You repair malformed model output into strict JSON only.",
+        user_prompt=repair_prompt,
+        response_format="json",
+        max_tokens=65536,
+        metadata={
+            "module_name": module_name,
+            "job_id": job_id,
+            "enable_thinking": False,
+            "tool_round": tool_round,
+            "json_repair": True,
+        },
     )
 
 

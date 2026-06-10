@@ -51,6 +51,14 @@ class BeamProfile(BaseModel):
         ge=0,
         description="Angular spread sigma in radians (None = parallel)",
     )
+    angular_distribution: Literal["mono", "gaussian", "isotropic", "cosine", "custom"] = Field(
+        default="mono",
+        description="Angular distribution model",
+    )
+    angular_spectrum_file: str | None = Field(
+        default=None,
+        description="Optional angular distribution file for custom/angular-spectrum sources",
+    )
     surface_shape: Literal["circle", "rectangle", "point"] = Field(
         default="point",
         description="Beam surface shape",
@@ -84,6 +92,11 @@ class SourceSpec(BaseModel):
         default=1000,
         ge=1,
         description="Number of events to generate",
+    )
+    relative_weight: float | None = Field(
+        default=None,
+        ge=0,
+        description="Relative source weight/fraction in a composite radiation field",
     )
     source_evidence: list[str] = Field(
         ...,

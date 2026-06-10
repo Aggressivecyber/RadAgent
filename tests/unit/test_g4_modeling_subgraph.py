@@ -170,6 +170,318 @@ class TestG4ModelingNodes:
         assert result is not None
         assert result.get("current_node") == "model_scope_guard_node"
 
+    async def test_coordinate_system_marks_composite_source_directions(self) -> None:
+        """Multiple incident angles should not be collapsed into one beam axis."""
+        from agent_core.g4_modeling.nodes.coordinate_system_node import (
+            coordinate_system_node,
+        )
+
+        model_ir = self._minimal_model_ir()
+        model_ir["sources"] = [
+            {
+                "source_id": "normal_gamma",
+                "particle_type": "gamma",
+                "energy": {"value": 2.0, "unit": "MeV", "distribution": "mono"},
+                "beam": {
+                    "position": [0.0, 0.0, -500.0],
+                    "direction": [0.0, 0.0, 1.0],
+                },
+                "generator_type": "gun",
+                "events": 500,
+                "source_evidence": ["task_spec.particles[0]"],
+            },
+            {
+                "source_id": "oblique_neutron",
+                "particle_type": "neutron",
+                "energy": {"value": 0.025, "unit": "eV", "distribution": "mono"},
+                "beam": {
+                    "position": [0.0, 0.0, -500.0],
+                    "direction": [0.3, 0.0, 0.953939],
+                },
+                "generator_type": "gun",
+                "events": 500,
+                "source_evidence": ["task_spec.particles[1]"],
+            },
+        ]
+
+        result = await coordinate_system_node({"job_id": "test", "g4_model_ir": model_ir})
+        axis_definition = result["g4_model_ir"]["coordinate_system"]["axis_definition"]
+
+        assert axis_definition["z"] == "detector_depth"
+        assert axis_definition["source_directions"] == "composite_radiation_field"
+
+    async def test_source_definition_preserves_user_spectrum_and_gps(self) -> None:
+        """Source definition should carry user spectrum and beam parameters into IR."""
+        from agent_core.g4_modeling.nodes.source_definition_node import (
+            source_definition_node,
+        )
+
+        state = {
+            "job_id": "test",
+            "g4_model_ir": self._minimal_model_ir(),
+            "task_spec": {
+                "particle": {
+                    "type": "gamma",
+                    "energy_MeV": 2.5,
+                    "energy_unit": "MeV",
+                    "energy_distribution": "spectrum",
+                    "spectrum_file": "inputs/source_spectrum.csv",
+                    "direction": [0.0, 0.0, 1.0],
+                    "position": [1.0, 2.0, -300.0],
+                    "sigma_position_um": 25.0,
+                    "sigma_direction_rad": 0.02,
+                    "surface_shape": "circle",
+                    "surface_size": [50.0],
+                    "generator_type": "gps",
+                    "events": 2500,
+                }
+            },
+        }
+
+        result = await source_definition_node(state)
+        source = result["g4_model_ir"]["sources"][0]
+
+        assert source["particle_type"] == "gamma"
+        assert source["energy"]["value"] == 2.5
+        assert source["energy"]["distribution"] == "spectrum"
+        assert source["energy"]["spectrum_file"] == "inputs/source_spectrum.csv"
+        assert source["generator_type"] == "gps"
+        assert source["events"] == 2500
+        assert source["beam"]["position"] == [1.0, 2.0, -300.0]
+        assert source["beam"]["sigma_position_um"] == 25.0
+        assert source["beam"]["sigma_direction_rad"] == 0.02
+        assert source["beam"]["surface_shape"] == "circle"
+        assert source["beam"]["surface_size"] == [50.0]
+
+    async def test_source_definition_builds_composite_radiation_field_sources(self) -> None:
+        """Composite task_spec.particles should become multiple IR sources."""
+        from agent_core.g4_modeling.nodes.source_definition_node import (
+            source_definition_node,
+        )
+
+        state = {
+            "job_id": "test",
+            "g4_model_ir": self._minimal_model_ir(),
+            "task_spec": {
+                "particles": [
+                    {
+                        "source_id": "forward_protons",
+                        "type": "proton",
+                        "energy_MeV": 100.0,
+                        "energy_distribution": "mono",
+                        "direction": [0.0, 0.0, 1.0],
+                        "angular_distribution": "mono",
+                        "events": 700,
+                        "relative_weight": 0.7,
+                    },
+                    {
+                        "source_id": "oblique_gamma_spectrum",
+                        "type": "gamma",
+                        "energy_MeV": 2.5,
+                        "energy_distribution": "spectrum",
+                        "spectrum_file": "inputs/gamma_spectrum.csv",
+                        "direction": [0.5, 0.0, 0.8660254],
+                        "angular_distribution": "gaussian",
+                        "angular_spectrum_file": "inputs/gamma_angles.csv",
+                        "sigma_direction_rad": 0.05,
+                        "generator_type": "gps",
+                        "events": 300,
+                        "relative_weight": 0.3,
+                    },
+                ]
+            },
+        }
+
+        result = await source_definition_node(state)
+        sources = result["g4_model_ir"]["sources"]
+
+        assert len(sources) == 2
+        assert sources[0]["source_id"] == "forward_protons"
+        assert sources[0]["particle_type"] == "proton"
+        assert sources[0]["energy"]["distribution"] == "mono"
+        assert sources[0]["generator_type"] == "gun"
+        assert sources[0]["relative_weight"] == 0.7
+        assert sources[0]["beam"]["angular_distribution"] == "mono"
+        assert sources[1]["source_id"] == "oblique_gamma_spectrum"
+        assert sources[1]["particle_type"] == "gamma"
+        assert sources[1]["energy"]["distribution"] == "spectrum"
+        assert sources[1]["energy"]["spectrum_file"] == "inputs/gamma_spectrum.csv"
+        assert sources[1]["generator_type"] == "gps"
+        assert sources[1]["relative_weight"] == 0.3
+        assert sources[1]["beam"]["direction"] == [0.5, 0.0, 0.8660254]
+        assert sources[1]["beam"]["angular_distribution"] == "gaussian"
+        assert sources[1]["beam"]["angular_spectrum_file"] == "inputs/gamma_angles.csv"
+
+    async def test_source_definition_keeps_validated_spectrum_sources_on_gps(self) -> None:
+        """TaskSpec defaults must not force spectrum sources back to particle gun."""
+        from agent_core.g4_modeling.nodes.source_definition_node import (
+            source_definition_node,
+        )
+        from agent_core.schemas.task_spec import TaskSpec
+
+        task_spec = TaskSpec.model_validate(
+            {
+                "simulation_scope": ["geant4"],
+                "particles": [
+                    {
+                        "source_id": "gamma_spectrum",
+                        "type": "gamma",
+                        "energy_MeV": 2.0,
+                        "energy_distribution": "spectrum",
+                        "spectrum_file": "inputs/gamma.csv",
+                        "direction": [0.0, 0.0, 1.0],
+                    }
+                ],
+            }
+        ).model_dump(mode="json")
+
+        result = await source_definition_node(
+            {
+                "job_id": "test",
+                "g4_model_ir": self._minimal_model_ir(),
+                "task_spec": task_spec,
+            }
+        )
+
+        source = result["g4_model_ir"]["sources"][0]
+        assert source["energy"]["distribution"] == "spectrum"
+        assert source["generator_type"] == "gps"
+
+    async def test_physics_list_node_prefers_user_physics_options(self) -> None:
+        """Explicit user physics_options should override model/fallback selection."""
+        from agent_core.g4_modeling.nodes.physics_list_node import physics_list_node
+
+        state = {
+            "job_id": "test",
+            "g4_model_ir": self._minimal_model_ir(),
+            "task_spec": {
+                "physics_options": {
+                    "physics_list": "QGSP_BIC_HP",
+                    "em_physics": "option4",
+                    "hadronic": "binary_cascade",
+                    "hp_neutron": "true",
+                    "neutron": "0.05",
+                    "gamma": "0.1",
+                }
+            },
+        }
+
+        result = await physics_list_node(state)
+        physics = result["g4_model_ir"]["physics"]
+
+        assert physics["physics_list"] == "QGSP_BIC_HP"
+        assert physics["em_physics"] == "option4"
+        assert physics["hadronic"] == "binary_cascade"
+        assert physics["hp_neutron"] is True
+        assert physics["cuts"]["neutron"] == 0.05
+        assert physics["cuts"]["gamma"] == 0.1
+        assert "task_spec.physics_options" in physics["source_evidence"][0]
+
+    async def test_physics_list_fallback_considers_all_composite_sources(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Fallback physics selection should not ignore non-primary composite sources."""
+        from agent_core.g4_modeling.nodes.physics_list_node import physics_list_node
+
+        class FailingGateway:
+            async def call(self, **_: Any) -> Any:
+                raise RuntimeError("offline")
+
+        monkeypatch.setattr(
+            "agent_core.models.gateway.get_model_gateway",
+            lambda: FailingGateway(),
+        )
+
+        model_ir = self._minimal_model_ir()
+        model_ir["sources"] = [
+            {
+                "source_id": "gamma_spectrum",
+                "particle_type": "gamma",
+                "energy": {
+                    "value": 2.0,
+                    "unit": "MeV",
+                    "distribution": "spectrum",
+                    "spectrum_file": "inputs/gamma.csv",
+                },
+                "beam": {
+                    "position": [0.0, 0.0, -500.0],
+                    "direction": [0.0, 0.0, 1.0],
+                },
+                "generator_type": "gps",
+                "events": 500,
+                "source_evidence": ["task_spec.particles[0]"],
+            },
+            {
+                "source_id": "thermal_neutrons",
+                "particle_type": "neutron",
+                "energy": {"value": 0.025, "unit": "eV", "distribution": "mono"},
+                "beam": {
+                    "position": [0.0, 0.0, -500.0],
+                    "direction": [0.3, 0.0, 0.953939],
+                },
+                "generator_type": "gun",
+                "events": 500,
+                "source_evidence": ["task_spec.particles[1]"],
+            },
+        ]
+
+        result = await physics_list_node(
+            {
+                "job_id": "test",
+                "g4_model_ir": model_ir,
+                "task_spec": {},
+            }
+        )
+        physics = result["g4_model_ir"]["physics"]
+
+        assert physics["physics_list"] == "QGSP_BIC_HP"
+        assert physics["hp_neutron"] is True
+        assert "gamma_spectrum" in physics["selection_reasoning"]
+        assert "thermal_neutrons" in physics["selection_reasoning"]
+
+    def test_heuristic_requirements_preserves_composite_sources(self) -> None:
+        """Fallback requirement extraction should include every task_spec source."""
+        from agent_core.g4_modeling.nodes.requirement_capture_node import (
+            _heuristic_requirements,
+        )
+
+        requirements = _heuristic_requirements(
+            "mixed gamma and neutron field",
+            {
+                "particles": [
+                    {
+                        "source_id": "gamma_spectrum",
+                        "type": "gamma",
+                        "energy_MeV": 2.0,
+                        "energy_distribution": "spectrum",
+                        "spectrum_file": "inputs/gamma.csv",
+                        "direction": [0.0, 0.0, 1.0],
+                    },
+                    {
+                        "source_id": "thermal_neutrons",
+                        "type": "neutron",
+                        "energy_MeV": 2.5e-8,
+                        "energy_unit": "MeV",
+                        "energy_distribution": "mono",
+                        "direction": [0.3, 0.0, 0.953939],
+                        "angular_distribution": "gaussian",
+                    },
+                ],
+                "outputs": ["dose"],
+            },
+        )
+
+        sources = requirements["required_sources"]
+        assert len(sources) == 2
+        assert sources[0]["source_id"] == "gamma_spectrum"
+        assert sources[0]["particle_type"] == "gamma"
+        assert sources[0]["distribution"] == "spectrum"
+        assert sources[0]["spectrum_file"] == "inputs/gamma.csv"
+        assert sources[1]["source_id"] == "thermal_neutrons"
+        assert sources[1]["particle_type"] == "neutron"
+        assert sources[1]["angular_distribution"] == "gaussian"
+
     async def test_persist_model_ir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """persist_model_ir should save JSON files."""
         workspace = tmp_path / "ws"

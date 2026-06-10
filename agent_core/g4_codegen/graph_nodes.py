@@ -20,6 +20,9 @@ REQUIRED_MODULES = {
     "beam_physics",
     "runtime_app",
 }
+GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS = 8
+RUNTIME_AUDIT_REPAIR_ROUNDS = 4
+PHYSICS_REVIEW_REPAIR_ROUNDS = 4
 
 
 # ── Planning nodes ───────────────────────────────────────────────────
@@ -555,7 +558,7 @@ async def global_integration_agent_node(
         module_contexts=state.get("module_contexts", {}),
         interface_contracts=state.get("interface_contracts", {}),
         runtime_failure_context=state.get("runtime_failure_context", {}),
-        runtime_repair_rounds=5,
+        runtime_repair_rounds=GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS,
     )
     record_event(
         job_id=job_id,
@@ -631,7 +634,7 @@ async def runtime_execution_audit_node(
         module_contexts=state.get("module_contexts", {}),
         interface_contracts=state.get("interface_contracts", {}),
         runtime_failure_context=observation,
-        runtime_repair_rounds=2,
+        runtime_repair_rounds=RUNTIME_AUDIT_REPAIR_ROUNDS,
         runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
     )
     second_audit = await run_runtime_execution_auditor(
@@ -713,7 +716,7 @@ async def physics_quality_review_node(
         module_contexts=state.get("module_contexts", {}),
         interface_contracts=state.get("interface_contracts", {}),
         runtime_failure_context=observation,
-        runtime_repair_rounds=2,
+        runtime_repair_rounds=PHYSICS_REVIEW_REPAIR_ROUNDS,
         runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
     )
     second_review = await run_physics_quality_reviewer(

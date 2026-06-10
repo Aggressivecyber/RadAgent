@@ -53,7 +53,10 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "beam_physics": {
         "module_type": "beam_physics",
         "responsibilities": [
-            "Generate the primary particle source from G4ModelIR source requirements",
+            "Generate primary particle generation from all G4ModelIR sources, "
+            "including multi-source composite radiation fields",
+            "Preserve each source's particle type, energy spectrum, direction, "
+            "angular distribution, event count, and relative_weight semantics",
             "Select and configure an appropriate Geant4 physics list from the "
             "requested physics model",
             "Set production cuts and transport controls needed for the requested scoring fidelity",

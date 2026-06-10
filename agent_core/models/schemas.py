@@ -22,6 +22,7 @@ class ModelTask(StrEnum):
     HUMAN_CONFIRMATION = "human_confirmation"
     CODEGEN = "codegen"
     GATE_EXPLANATION = "gate_explanation"
+    CREDIBILITY_ASSESSMENT = "credibility_assessment"
     FINAL_REVIEW = "final_review"
     FAILURE_DIAGNOSIS = "failure_diagnosis"
 

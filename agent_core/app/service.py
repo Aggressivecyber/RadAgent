@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,7 @@ from agent_core.app.schemas import (
     ArtifactContent,
     ArtifactSummary,
     BuildResult,
-    ChatResponse,
+    CopilotResponse,
     JobStatus,
     ModelConfigUpdate,
     ModelConfigView,
@@ -33,7 +34,12 @@ from agent_core.models.schemas import ModelTask, ModelTier
 from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.storage import RadAgentStore
 from agent_core.workspace.manager import WorkspaceManager
-from agent_core.workspace.paths import STAGE_INPUT
+from agent_core.workspace.paths import (
+    HC_REPORT,
+    STAGE_GATE_VALIDATION,
+    STAGE_HUMAN_CONFIRMATION,
+    STAGE_INPUT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -253,26 +259,57 @@ class RadAgentAppService:
         )
         return result
 
-    async def chat(self, message: str) -> ChatResponse:
+    async def chat(self, message: str) -> CopilotResponse:
+        """Answer through the single workflow-aware RadAgent copilot."""
+        context = self.get_workflow_context()
+        command = self._safe_copilot_command(message)
+        if command is not None:
+            started = self._emit(
+                "copilot_started",
+                status="running",
+                summary=message[:120],
+                payload={"command": command["name"]},
+            )
+            response = self._execute_safe_copilot_command(command)
+            finished = self._emit(
+                "copilot_finished",
+                status="success",
+                summary=response[:120],
+                payload={"command": command, "message": response},
+            )
+            return CopilotResponse(
+                message=response,
+                commands=[command],
+                context=context.model_dump(mode="json"),
+                events=[started, finished],
+            )
+
         agent = self._get_chat_agent()
         started = self._emit(
-            "chat_started",
+            "copilot_started",
             status="running",
             summary=message[:120],
-            payload={"message": message},
+            payload={"message": message, "workflow_context": context.model_dump(mode="json")},
         )
         try:
-            response = await agent.chat(message)
+            response = await agent.chat(
+                message,
+                workflow_context=context.model_dump(mode="json"),
+            )
         except Exception as exc:
-            self._emit("chat_failed", status="error", summary=str(exc))
+            self._emit("copilot_failed", status="error", summary=str(exc))
             raise
         finished = self._emit(
-            "chat_finished",
+            "copilot_finished",
             status="success",
             summary=response[:120],
             payload={"message": response},
         )
-        return ChatResponse(message=response, events=[started, finished])
+        return CopilotResponse(
+            message=response,
+            context=context.model_dump(mode="json"),
+            events=[started, finished],
+        )
 
     def _get_chat_agent(self) -> Any:
         if self._chat_agent is None:
@@ -280,6 +317,95 @@ class RadAgentAppService:
 
             self._chat_agent = ChatAgent()
         return self._chat_agent
+
+    def _safe_copilot_command(self, message: str) -> dict[str, Any] | None:
+        stripped = message.strip().lower()
+        aliases = {
+            "/status": "status",
+            "status": "status",
+            "状态": "status",
+            "/gates": "gates",
+            "gates": "gates",
+            "门禁": "gates",
+            "/artifacts": "artifacts",
+            "artifacts": "artifacts",
+            "产物": "artifacts",
+            "/memory": "memory",
+            "memory": "memory",
+            "记忆": "memory",
+            "/credibility": "credibility",
+            "credibility": "credibility",
+            "可信度": "credibility",
+            "/confirm": "confirmation",
+            "confirm": "confirmation",
+            "确认": "confirmation",
+        }
+        if stripped in aliases:
+            name = aliases[stripped]
+            return {
+                "name": name,
+                "args": {},
+                "risk": "read",
+                "status": "executed",
+                "summary": f"Read {name}",
+            }
+        return None
+
+    def _execute_safe_copilot_command(self, command: dict[str, Any]) -> str:
+        name = command.get("name", "")
+        if name == "status":
+            status = self.get_status()
+            return (
+                f"当前状态: {status.status}; job={status.job_id or 'none'}; "
+                f"phase={status.current_phase or 'idle'}; "
+                f"confirmation={'yes' if status.needs_confirmation else 'no'}."
+            )
+        if name == "gates":
+            gates = self.get_gate_results()
+            if not gates:
+                return "当前 job 还没有 gate results。"
+            failed = [g for g in gates if g.get("status") in {"fail", "block", "blocked"}]
+            gate20 = next((g for g in gates if g.get("gate_id") == 20), None)
+            parts = [f"门禁总数 {len(gates)}，失败 {len(failed)}。"]
+            if gate20:
+                parts.append(
+                    "可信度门禁: "
+                    f"{gate20.get('status', 'unknown')} "
+                    f"({gate20.get('credibility_level', 'unknown')})."
+                )
+            return " ".join(parts)
+        if name == "artifacts":
+            artifacts = self.list_artifacts()
+            if not artifacts:
+                return "当前 job 还没有可展示 artifact。"
+            shown = ", ".join(
+                item.kind or item.stage or Path(item.path).name
+                for item in artifacts[:8]
+            )
+            return f"当前记录了 {len(artifacts)} 个 artifact：{shown}。"
+        if name == "memory":
+            context = self.get_workflow_context()
+            lines = [item.summary for item in context.memory[:6]]
+            return "工作流记忆: " + ("; ".join(lines) if lines else "暂无。")
+        if name == "credibility":
+            report = self.get_credibility_report()
+            if not report:
+                return "当前还没有可信度门禁结果。"
+            return (
+                "可信度门禁: "
+                f"{report.get('status', 'unknown')} "
+                f"({report.get('credibility_level', 'unknown')}) - "
+                f"{report.get('message', '')}"
+            )
+        if name == "confirmation":
+            review = self.get_confirmation_review()
+            if not review:
+                return "当前没有人工确认报告。"
+            return (
+                f"人工确认状态: {review.get('status', 'unknown')}; "
+                f"report={review.get('report_path', '')}"
+            )
+        return "这个命令还没有安全只读实现。"
 
     # ------------------------------------------------------------------
     # Pipeline
@@ -678,6 +804,195 @@ class RadAgentAppService:
             return []
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return data if isinstance(data, list) else data.get("results", [])
+
+    def get_workflow_context(self, job_id: str | None = None) -> Any:
+        from agent_core.workflow import build_workflow_context
+
+        state = self._state_for_job(job_id)
+        if not state and job_id:
+            status = JobStatus(job_id=job_id, workspace_root=str(self.workspace.root))
+        else:
+            active_state = self.state
+            if job_id and job_id != self.state.get("job_id"):
+                active_state = state
+            status = self.get_status() if active_state is self.state else JobStatus(
+                job_id=str(active_state.get("job_id", job_id or "")),
+                user_query=str(active_state.get("user_query", "")),
+                status=str(active_state.get("status", "paused")),
+                current_phase=str(active_state.get("current_node", "")),
+                current_phase_idx=int(active_state.get("current_phase_idx", 0)),
+                completed_phases=list(active_state.get("completed_phases", [])),
+                execution_mode=str(active_state.get("execution_mode", self.execution_mode)),
+                run_mode=str(active_state.get("run_mode", "strict")),
+                workspace_root=str(active_state.get("workspace_root", self.workspace.root)),
+                job_workspace=str(active_state.get("job_workspace", "")),
+            )
+        context_state = {**state, "run_id": self.run_id}
+        return build_workflow_context(
+            status=status,
+            state=context_state,
+            recent_events=self.recent_events(30),
+            artifacts=self.list_artifacts(status.job_id) if status.job_id else [],
+            gate_results=self.get_gate_results(status.job_id) if status.job_id else [],
+            workspace_root=self.workspace.root,
+        )
+
+    def get_confirmation_review(self, job_id: str | None = None) -> dict[str, Any]:
+        state = self._state_for_job(job_id)
+        report_path = str(state.get("confirmation_report_path", ""))
+        if not report_path and state.get("job_workspace"):
+            candidate = Path(str(state["job_workspace"])) / STAGE_HUMAN_CONFIRMATION / HC_REPORT
+            if candidate.is_file():
+                report_path = str(candidate)
+        preview = ""
+        if report_path and Path(report_path).is_file():
+            preview = Path(report_path).read_text(encoding="utf-8", errors="replace")[:8000]
+        return {
+            "status": state.get("confirmation_status", ""),
+            "required": bool(state.get("human_confirmation_required")),
+            "unconfirmed_assumptions_count": state.get("unconfirmed_assumptions_count", 0),
+            "report_path": report_path,
+            "record_path": state.get("confirmation_record_path", ""),
+            "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
+            "preview": preview,
+        }
+
+    def get_credibility_report(self, job_id: str | None = None) -> dict[str, Any]:
+        state = self._state_for_job(job_id)
+        for gate in self.get_gate_results(job_id):
+            if gate.get("gate_id") == 20:
+                return gate
+        active_job_id = str(job_id or state.get("job_id", ""))
+        if active_job_id:
+            path = (
+                self.workspace.root
+                / "jobs"
+                / active_job_id
+                / STAGE_GATE_VALIDATION
+                / "credibility_assessment.json"
+            )
+            if path.is_file():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                return data if isinstance(data, dict) else {}
+        return {}
+
+    def create_revision(self, user_request: str, job_id: str | None = None) -> dict[str, Any]:
+        from agent_core.revision import RevisionManager
+
+        active_job_id = job_id or str(self.state.get("job_id", ""))
+        if not active_job_id:
+            raise RuntimeError("No active job for revision.")
+        base_dir = str(self.state.get("generated_code_dir", ""))
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        request = manager.create_revision(
+            active_job_id,
+            user_request,
+            base_generated_code_dir=base_dir or None,
+        )
+        self._emit(
+            "revision_created",
+            status="success",
+            summary=request.revision_id,
+            job_id=active_job_id,
+            payload=request.model_dump(mode="json"),
+        )
+        return request.model_dump(mode="json")
+
+    async def run_revision(
+        self,
+        revision_id: str,
+        *,
+        proposed_patch_path: str | None = None,
+    ) -> dict[str, Any]:
+        from agent_core.revision import RevisionManager
+
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        status = await manager.arun_revision(revision_id, proposed_patch_path)
+        self._emit(
+            "revision_finished" if status.status == "completed" else "revision_failed",
+            status="success" if status.status == "completed" else "error",
+            summary=revision_id,
+            job_id=status.job_id,
+            payload=status.model_dump(mode="json"),
+        )
+        return status.model_dump(mode="json")
+
+    def list_revisions(self, job_id: str | None = None) -> list[dict[str, Any]]:
+        active_job_id = job_id or str(self.state.get("job_id", ""))
+        if not active_job_id:
+            return []
+        root = self.workspace.root / "jobs" / active_job_id / "revisions"
+        if not root.is_dir():
+            return []
+        rows: list[dict[str, Any]] = []
+        for path in sorted(root.glob("*/revision_summary.json"), reverse=True):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(data, dict):
+                rows.append(data)
+        return rows
+
+    async def accept_revision(self, revision_id: str) -> JobStatus:
+        from agent_core.revision import RevisionManager, check_accept_preconditions
+
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        summary = manager.get_summary(revision_id)
+        gate_state = self._revision_gate_state(summary.revision_dir)
+        ok, errors = check_accept_preconditions(gate_state)
+        if not ok:
+            raise RuntimeError("; ".join(errors))
+        candidate = Path(summary.candidate_project_dir)
+        target_value = str(self.state.get("generated_code_dir", ""))
+        if not target_value:
+            raise RuntimeError("No generated_code_dir in current workflow state.")
+        target = Path(target_value)
+        if not candidate.is_dir():
+            raise RuntimeError(f"Revision candidate project not found: {candidate}")
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(candidate, target)
+        self._emit(
+            "revision_accepted",
+            status="success",
+            summary=revision_id,
+            job_id=summary.job_id,
+            payload=summary.model_dump(mode="json"),
+        )
+        return self.get_status()
+
+    def reject_revision(self, revision_id: str, reason: str = "") -> dict[str, Any]:
+        from agent_core.revision import RevisionManager
+
+        manager = RevisionManager(workspace_root=self.workspace.root)
+        summary = manager.get_summary(revision_id)
+        self._emit(
+            "revision_rejected",
+            status="warning",
+            summary=revision_id,
+            job_id=summary.job_id,
+            payload={"reason": reason, "revision": summary.model_dump(mode="json")},
+        )
+        return summary.model_dump(mode="json")
+
+    def _revision_gate_state(self, revision_dir: str) -> dict[str, Any]:
+        path = Path(revision_dir) / "gate_results.json"
+        if not path.is_file():
+            return {"validation_status": "missing", "gate_results": []}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {"validation_status": "unreadable", "gate_results": []}
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list):
+            failed = [g for g in data if g.get("status") in {"fail", "block", "blocked"}]
+            return {
+                "validation_status": "failed" if failed else "passed",
+                "gate_results": data,
+            }
+        return {"validation_status": "invalid", "gate_results": []}
 
     def _state_for_job(self, job_id: str | None) -> dict[str, Any]:
         if not job_id or job_id == self.state.get("job_id"):

@@ -12,6 +12,7 @@ TASK_DEFAULT_TIER: dict[ModelTask, ModelTier] = {
     ModelTask.HUMAN_CONFIRMATION: ModelTier.PRO,
     ModelTask.CODEGEN: ModelTier.PRO,
     ModelTask.GATE_EXPLANATION: ModelTier.MAX,
+    ModelTask.CREDIBILITY_ASSESSMENT: ModelTier.LITE,
     ModelTask.FINAL_REVIEW: ModelTier.MAX,
     ModelTask.FAILURE_DIAGNOSIS: ModelTier.MAX,
 }
@@ -27,6 +28,7 @@ THINKING_DEFAULT_BY_TASK: dict[ModelTask, bool] = {
     ModelTask.HUMAN_CONFIRMATION: False,
     ModelTask.CODEGEN: True,
     ModelTask.GATE_EXPLANATION: True,
+    ModelTask.CREDIBILITY_ASSESSMENT: False,
     ModelTask.FINAL_REVIEW: True,
     ModelTask.FAILURE_DIAGNOSIS: True,
 }

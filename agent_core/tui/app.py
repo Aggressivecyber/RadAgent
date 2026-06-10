@@ -368,6 +368,12 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     self._show_artifact(command.args)
                 case "gates":
                     self._show_gates()
+                case "memory":
+                    self._show_memory()
+                case "confirm":
+                    self._show_confirmation()
+                case "credibility":
+                    self._show_credibility()
                 case "model":
                     if command.args:
                         self._update_model_config(command.args)
@@ -379,6 +385,16 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     self._show_projects()
                 case "project":
                     self._switch_project(command.args)
+                case "revise":
+                    self._create_revision(command.args)
+                case "revisions":
+                    self._show_revisions()
+                case "revision":
+                    self._show_revision(command.args)
+                case "accept-revision":
+                    self._start_operation(self.service.accept_revision(command.args))
+                case "reject-revision":
+                    self._reject_revision(command.args)
                 case "build":
                     self._start_operation(self.service.build_generated_code())
                 case "simulate":
@@ -507,12 +523,111 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                 return
             lines = [
                 (
-                    f"{'OK' if gate.get('passed') else 'FAIL'} "
-                    f"{gate.get('name', gate.get('gate', 'gate'))}"
+                    f"{gate.get('status', 'unknown'):8} "
+                    f"{gate.get('gate_id', '?'):>2} "
+                    f"{gate.get('name', gate.get('gate', 'gate'))}: "
+                    f"{gate.get('message', '')}"
                 )
                 for gate in gates[:40]
             ]
             self._show_panel("Gates", lines)
+
+        def _show_memory(self) -> None:
+            context = self.service.get_workflow_context()
+            lines = [
+                f"{item.source:8} {item.key}: {item.summary}"
+                for item in context.memory[:30]
+            ]
+            self._show_panel("Memory", lines or ["No workflow memory for the active job."])
+
+        def _show_confirmation(self) -> None:
+            review = self.service.get_confirmation_review()
+            if not review.get("report_path"):
+                self._show_panel("Confirmation", ["No confirmation report for the active job."])
+                return
+            preview = str(review.get("preview", ""))
+            lines = [
+                f"status: {review.get('status', '') or 'unknown'}",
+                f"unconfirmed: {review.get('unconfirmed_assumptions_count', 0)}",
+                f"report: {review.get('report_path', '')}",
+                "",
+                *preview.splitlines()[:180],
+            ]
+            self._show_panel("Confirmation", lines)
+
+        def _show_credibility(self) -> None:
+            report = self.service.get_credibility_report()
+            if not report:
+                self._show_panel("Credibility", ["No credibility gate result yet."])
+                return
+            lines = [
+                f"status: {report.get('status', 'unknown')}",
+                f"level: {report.get('credibility_level', 'unknown')}",
+                f"confidence: {report.get('confidence', '')}",
+                f"message: {report.get('message', '')}",
+            ]
+            warnings = report.get("warnings", [])
+            if warnings:
+                lines.extend(["", "Warnings:", *[f"- {item}" for item in warnings[:8]]])
+            self._show_panel("Credibility", lines)
+
+        def _create_revision(self, request: str) -> None:
+            try:
+                revision = self.service.create_revision(request)
+            except Exception as exc:
+                self._add_system_row("Revision failed", str(exc), "error")
+                return
+            self._add_system_row(
+                "Revision created",
+                str(revision.get("revision_id", "")),
+                "success",
+            )
+            self._show_revision(str(revision.get("revision_id", "")))
+
+        def _show_revisions(self) -> None:
+            revisions = self.service.list_revisions()
+            if not revisions:
+                self._show_panel("Revisions", ["No revisions for the active job."])
+                return
+            lines = [
+                (
+                    f"{item.get('status', 'unknown'):10} "
+                    f"{item.get('revision_id', '')}  "
+                    f"{item.get('user_request', '')}"
+                )
+                for item in revisions[:30]
+            ]
+            self._show_panel("Revisions", lines)
+
+        def _show_revision(self, revision_id: str) -> None:
+            revisions = self.service.list_revisions()
+            revision = next(
+                (item for item in revisions if item.get("revision_id") == revision_id),
+                None,
+            )
+            if not revision:
+                self._show_panel("Revision", [f"Revision not found: {revision_id}"])
+                return
+            lines = [
+                f"id: {revision.get('revision_id', '')}",
+                f"status: {revision.get('status', '')}",
+                f"patch: {revision.get('patch_status', '')}",
+                f"candidate: {revision.get('candidate_project_dir', '')}",
+                "",
+                str(revision.get("user_request", "")),
+            ]
+            errors = revision.get("errors", [])
+            if errors:
+                lines.extend(["", "Errors:", *[f"- {item}" for item in errors[:8]]])
+            self._show_panel("Revision", lines)
+
+        def _reject_revision(self, revision_id: str) -> None:
+            try:
+                self.service.reject_revision(revision_id)
+            except Exception as exc:
+                self._add_system_row("Revision reject failed", str(exc), "error")
+                return
+            self._add_system_row("Revision rejected", revision_id, "warning")
 
         def _show_model_config(self) -> None:
             config = self.service.get_model_config()
@@ -602,12 +717,20 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     "/artifacts",
                     "/artifact <path>",
                     "/gates",
+                    "/memory",
+                    "/confirm",
+                    "/credibility",
                     "/model [url=... key=... lite=... pro=... max=...]",
                     "/logs",
                     "/build",
                     "/simulate [events]",
                     "/projects",
                     "/project <slug-or-id>",
+                    "/revise <request>",
+                    "/revisions",
+                    "/revision <revision_id>",
+                    "/accept-revision <revision_id>",
+                    "/reject-revision <revision_id>",
                     "/help",
                     "/exit",
                 ],

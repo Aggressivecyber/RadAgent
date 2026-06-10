@@ -34,7 +34,7 @@ def test_event_to_row_maps_phase_event() -> None:
 def test_event_to_row_uses_full_chat_payload() -> None:
     full_message = "**bold** " * 40
     event = RadAgentEvent(
-        event_type="chat_finished",
+        event_type="copilot_finished",
         status="success",
         summary=full_message[:120],
         payload={"message": full_message},

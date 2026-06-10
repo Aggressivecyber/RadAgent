@@ -18,11 +18,13 @@ PHYSICS_REVIEW_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 物理质量审核 
 重点关注：
 1. 物理模型/physics list 是否适合粒子、能量、材料和 scoring 目标。
 2. 粒子源是否忠实保留粒子类型、能量、方向、位置、空间分布和单位。
-3. 几何、材料、敏感体和 scoring 是否被擅自简化。
-4. transport precision 是否足够，包括 production cuts、range cuts、step limits、
+3. 对复合辐射场，必须审核 all G4ModelIR sources；不得只看第一个 source。逐项核验
+   每个 source 的 spectrum、angular_distribution、events 和 relative_weight 是否保留。
+4. 几何、材料、敏感体和 scoring 是否被擅自简化。
+5. transport precision 是否足够，包括 production cuts、range cuts、step limits、
    user limits、最小步长或等效控制是否合理。
-5. 输出 artifact 是否代表真实 event/scoring 数据，而不是表头、固定零值或 fallback 假数据。
-6. 如果使用 Geant4 示例代码，是否只是参考真实接口，而不是把 B1/B2 示例需求照搬进当前需求。
+6. 输出 artifact 是否代表真实 event/scoring 数据，而不是表头、固定零值或 fallback 假数据。
+7. 如果使用 Geant4 示例代码，是否只是参考真实接口，而不是把 B1/B2 示例需求照搬进当前需求。
 
 只返回 JSON，不要输出 Markdown fence。
 
@@ -74,16 +76,16 @@ async def run_physics_quality_reviewer(
 
     gateway = get_model_gateway()
     result = await gateway.call(
-        task=ModelTask.FINAL_REVIEW,
-        tier=ModelTier.MAX,
+        task=ModelTask.CONTEXT_SUMMARY,
+        tier=ModelTier.LITE,
         system_prompt=PHYSICS_REVIEW_SYSTEM_PROMPT,
         user_prompt=prompt,
         response_format="json",
-        max_tokens=8192,
+        max_tokens=4096,
         metadata={
             "job_id": job_id,
             "module_name": "physics_quality_reviewer",
-            "enable_thinking": True,
+            "enable_thinking": False,
         },
     )
 
@@ -101,12 +103,14 @@ async def run_physics_quality_reviewer(
                     ),
                 }
             ],
+            "summary_model": _model_info(result),
         }
         _persist_review(review, job_id)
         return review
 
     data = result.parsed_json or _safe_parse_json(result.content) or {}
     review = _normalize_review(data)
+    review["summary_model"] = _model_info(result)
     _persist_review(review, job_id)
     return review
 
@@ -171,6 +175,15 @@ def _normalize_review(data: Any) -> dict[str, Any]:
             }
         ]
     return review
+
+
+def _model_info(result: Any) -> dict[str, Any]:
+    return {
+        "model_name": result.model_name,
+        "tier": str(result.tier),
+        "latency_ms": result.latency_ms,
+        "error": result.error,
+    }
 
 
 def _score(value: Any) -> int:

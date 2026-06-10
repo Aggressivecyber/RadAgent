@@ -33,6 +33,11 @@ ALL_STAGES: tuple[str, ...] = (
 
 GEANT4_PROJECT_DIRNAME = "geant4_project"
 
+# ── Revision sandbox directories (under jobs/<job_id>/revisions/<revision_id>)
+REVISION_DIRNAME = "revisions"
+REVISION_BASELINE_DIRNAME = "baseline"
+REVISION_CANDIDATE_PROJECT_DIRNAME = "candidate_project"
+
 # ── Geant4 project subdirectories (under STAGE_PATCH/GEANT4_PROJECT_DIRNAME)
 GEANT4_SUBDIRS: tuple[str, ...] = (
     "src",

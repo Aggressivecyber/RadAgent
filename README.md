@@ -23,7 +23,7 @@ RadAgent can:
 - validate generated code with layer consistency checks, global integration,
   runtime execution auditing, physics review, build/smoke/data-contract gates,
   and report generation;
-- persist jobs, projects, resume snapshots, events, artifacts, and chat context
+- persist jobs, projects, resume snapshots, events, artifacts, and copilot context
   in a workspace SQLite database;
 - expose the same core operations through CLI, REPL, and a UI-neutral
   application service layer.
@@ -105,7 +105,7 @@ Useful commands:
 /projects             list workspace projects
 /project new <name>   create and switch to a project
 /project use <slug>   switch projects
-/chat <message>       ask a contextual chat question
+/chat <message>       ask the workflow-aware copilot
 ```
 
 ### Application Service Layer
@@ -170,7 +170,7 @@ export RADAGENT_WORKSPACE_ROOT=/path/to/workspace
 - phase snapshots for `/resume`;
 - artifact indexes pointing to files on disk;
 - structured events;
-- chat sessions/messages and tool-call records.
+- copilot sessions/messages and tool-call records.
 
 Large outputs remain as files. The database is the control plane, not a blob
 store.
@@ -183,7 +183,7 @@ Key packages:
 agent_core/
   app/                 UI-neutral service layer and Pydantic response schemas
   artifacts/           artifact collection graph, manifests, and schemas
-  chat/                conversational assistant with RAG/web/job context
+  chat/                workflow-aware copilot with RAG/web/job context
   config/              environment, workspace, model endpoint, and runtime settings
   context/             RAG and web-context retrieval nodes
   g4_codegen/          coarse module agents, integration, runtime audit, physics review
@@ -199,6 +199,7 @@ agent_core/
   policies/            packaged YAML runtime policies
   pipeline.py          canonical pipeline phase order shared by CLI, REPL, app, and storage
   reports/             final report nodes and schemas
+  revision/            isolated revision sandboxes and acceptance checks
   response/            non-pipeline response handling
   schemas/             shared cross-module schemas
   storage/             SQLite workspace metadata repository
@@ -206,6 +207,7 @@ agent_core/
   tui/                 Textual terminal frontend
   validators/          shared file, patch, code, and schema validators
   visualization/       graph visualization helpers
+  workflow/            copilot-visible workflow context and memory schemas
   workspace/           job directory and stage path management
 ```
 
@@ -225,8 +227,8 @@ Module responsibilities and links:
 
 | Module | Role | Upstream callers | Downstream dependencies |
 | --- | --- | --- | --- |
-| `agent_core.app` | Stable facade for frontends, model settings, chat, job/artifact/build/simulation operations. | TUI, future web/API frontends. | `chat`, `config`, `graph`, `models`, `storage`, `tools`, `workspace`. |
-| `agent_core.chat` | Conversational assistant with RAG, web search, and workspace/job context. | `app`, REPL, response nodes. | `context`, `models`, `storage`, `tools`, `workspace`. |
+| `agent_core.app` | Stable facade for frontends, model settings, copilot, job/artifact/build/simulation/revision operations. | TUI, future web/API frontends. | `chat`, `config`, `graph`, `models`, `storage`, `tools`, `workspace`, `workflow`, `revision`. |
+| `agent_core.chat` | Workflow-aware copilot with RAG, web search, and workspace/job context. | `app`, REPL, response nodes. | `context`, `models`, `storage`, `tools`, `workspace`. |
 | `agent_core.config` | Environment, run-mode, external tool, concurrency, and workspace configuration. | Most runtime packages. | `models.schemas`, `workspace.paths`. |
 | `agent_core.context` | RAG/web context retrieval and context decision graph. | main graph, chat, codegen context coordination. | `config`, `tools.web_search_tool`. |
 | `agent_core.planning` | Converts user request and context into a scoped task spec. | main graph, graph viewer. | `config`. |
@@ -237,7 +239,8 @@ Module responsibilities and links:
 | `agent_core.gates` | Runs validation gates and classifies failures for retry routing. | main graph, app build/simulation helpers, Geant4 runner. | `g4_modeling`, `g4_codegen`, `human_confirmation`, `tools`, `validators`, `observability`. |
 | `agent_core.artifacts` | Collects reviewable outputs, manifests, and final artifact indexes. | main graph. | `config`, workspace files. |
 | `agent_core.reports` | Writes final human-readable job reports from state, gates, and artifacts. | main graph, graph viewer. | `config`. |
-| `agent_core.response` | Handles non-pipeline responses and delegates ordinary chat. | main graph. | `chat`. |
+| `agent_core.revision` | Creates isolated revision sandboxes and checks whether candidates may be accepted back into a job. | app service, TUI. | `patching`, `workspace`. |
+| `agent_core.response` | Handles non-pipeline responses and delegates copilot answers. | main graph. | `chat`. |
 | `agent_core.graph` | Owns the LangGraph main graph, routing, state schema, and subgraph adapters. | CLI, REPL, app service, scripts. | all pipeline subgraphs above. |
 | `agent_core.models` | Unified OpenAI-compatible model gateway, tier selection, MiMo thinking defaults, mock model, and model-call logs. | chat, intent, modeling, codegen, app config. | `config`, `observability`. |
 | `agent_core.observability` | Writes job-scoped events, redacted artifacts, and failure bundles. | model gateway, codegen, gates. | `config`. |
@@ -249,6 +252,7 @@ Module responsibilities and links:
 | `agent_core.workspace` | Resolves workspace root, job directories, and stage paths. | app, chat, config, graph, REPL, storage. | filesystem only. |
 | `agent_core.tui` | Textual terminal frontend entry point. | `radagent-tui` command, `python -m agent_core.tui`. | `app`. |
 | `agent_core.visualization` | Static graph visualization helpers and CLI graph rendering support. | `scripts/view_graph.py`. | none. |
+| `agent_core.workflow` | Builds copilot-visible workflow context, memory summaries, and evidence summaries. | app service, copilot, TUI. | `app.schemas`, `workspace`. |
 | `knowledge_base.geant4` | Geant4 RAG data prep, indexing, MCP helper, query rewrite, and generator utilities. | codegen example lookup, manual maintenance entry points. | `knowledge_base.llm_client`. |
 | `knowledge_base.tcad` | TCAD RAG data prep, indexing, MCP helper, query rewrite, generator utilities, and optional WeChat scraper. | manual maintenance entry points. | `knowledge_base.llm_client`. |
 | `knowledge_base.llm_client` | Shared OpenAI-compatible helper for knowledge-base generation/query rewrite scripts. | Geant4 and TCAD KB scripts. | `agent_core.config`. |

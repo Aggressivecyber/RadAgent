@@ -3,7 +3,7 @@
 from agent_core.app.schemas import (
     ArtifactContent,
     ArtifactSummary,
-    ChatResponse,
+    CopilotResponse,
     JobStatus,
     ModelConfigUpdate,
     ModelConfigView,
@@ -17,7 +17,7 @@ __all__ = [
     "PIPELINE_PHASES",
     "ArtifactContent",
     "ArtifactSummary",
-    "ChatResponse",
+    "CopilotResponse",
     "JobStatus",
     "ModelConfigUpdate",
     "ModelConfigView",
