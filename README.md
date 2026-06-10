@@ -240,7 +240,7 @@ Module responsibilities and links:
 | `agent_core.artifacts` | Collects reviewable outputs, manifests, and final artifact indexes. | main graph. | `config`, workspace files. |
 | `agent_core.reports` | Writes final human-readable job reports from state, gates, and artifacts. | main graph, graph viewer. | `config`. |
 | `agent_core.revision` | Creates isolated revision sandboxes and checks whether candidates may be accepted back into a job. | app service, TUI. | `patching`, `workspace`. |
-| `agent_core.response` | Handles non-pipeline responses and delegates ordinary chat. | main graph. | `chat`. |
+| `agent_core.response` | Handles non-pipeline responses and delegates copilot answers. | main graph. | `chat`. |
 | `agent_core.graph` | Owns the LangGraph main graph, routing, state schema, and subgraph adapters. | CLI, REPL, app service, scripts. | all pipeline subgraphs above. |
 | `agent_core.models` | Unified OpenAI-compatible model gateway, tier selection, MiMo thinking defaults, mock model, and model-call logs. | chat, intent, modeling, codegen, app config. | `config`, `observability`. |
 | `agent_core.observability` | Writes job-scoped events, redacted artifacts, and failure bundles. | model gateway, codegen, gates. | `config`. |

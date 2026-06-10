@@ -37,7 +37,7 @@ async def test_textual_app_mounts_and_opens_help(tmp_path) -> None:
 
         full_message = "**bold answer**\n\n- one\n- two"
         app.service._emit(
-            "chat_finished",
+            "copilot_finished",
             status="success",
             summary=full_message[:10],
             payload={"message": full_message},

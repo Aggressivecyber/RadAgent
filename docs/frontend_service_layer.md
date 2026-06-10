@@ -81,8 +81,8 @@ Important event types:
 - `phase_failed`
 - `human_confirmation_required`
 - `human_confirmation_submitted`
-- `chat_started`
-- `chat_finished`
+- `copilot_started`
+- `copilot_finished`
 - `build_started`
 - `build_finished`
 - `simulation_started`
