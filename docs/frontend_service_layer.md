@@ -1,7 +1,7 @@
 # RadAgent Frontend Service Layer
 
-This branch introduces a UI-neutral application layer for terminal, Qt, web,
-or API frontends.
+This branch introduces a UI-neutral application layer for terminal, web, or
+API frontends.
 
 ## Entry Point
 
@@ -19,7 +19,7 @@ The service owns one interactive session:
 - project/job/artifact storage access
 - structured frontend events
 
-It has no Rich, prompt-toolkit, Qt, or web framework dependency.
+It has no Rich, prompt-toolkit, Textual, or web framework dependency.
 
 ## Core Methods
 
@@ -45,13 +45,28 @@ service.read_artifact(path)
 service.get_model_ir(job_id)
 service.get_gate_results(job_id)
 
+service.get_model_config()
+service.update_model_config({
+    "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
+    "api_key": "<api-key>",
+    "lite_model": "mimo-v2.5",
+    "pro_model": "mimo-v2.5-pro",
+    "max_model": "mimo-v2.5-pro",
+})
+
 await service.build_generated_code()
 await service.run_simulation(events=1000)
 ```
 
+`get_model_config()` is frontend-safe and never returns the API key value; it
+only reports the configured env var name and whether a key is present.
+`update_model_config()` writes the project `.env`, updates the current process,
+and refreshes the model gateway. MiMo Token Plan and other OpenAI-compatible
+endpoints use the same fields: model name, base URL, and API key.
+
 ## Event Stream
 
-Qt or TUI code can subscribe to structured events:
+TUI or web code can subscribe to structured events:
 
 ```python
 async for event in service.subscribe_events():
@@ -72,6 +87,7 @@ Important event types:
 - `build_finished`
 - `simulation_started`
 - `simulation_finished`
+- `model_config_updated`
 
 Each event includes:
 
@@ -86,13 +102,13 @@ Each event includes:
 
 ## Frontend Mapping
 
-Recommended Qt panels:
+Recommended terminal/web frontend regions:
 
-- left: projects/jobs
-- center: chat and job timeline from events
-- right: current status, phases, gates, artifacts
-- bottom: command/input bar
-- modal: human confirmation review
+- fixed header: project, job, phase, mode, and confirmation state
+- primary region: chat and job timeline from events
+- bottom region: command/input composer
+- inspector overlay/drawer: jobs, artifacts, gates, model IR, logs, and status
+- modal/overlay: human confirmation review
 
-Avoid calling `agent_core.repl.RadAgentREPL` from Qt. Use
+Avoid calling `agent_core.repl.RadAgentREPL` from new frontends. Use
 `RadAgentAppService` and render its models/events.

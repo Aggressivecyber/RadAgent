@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -14,29 +15,27 @@ from agent_core.app.schemas import (
     BuildResult,
     ChatResponse,
     JobStatus,
+    ModelConfigUpdate,
+    ModelConfigView,
+    ModelTierConfig,
     PhaseResult,
-    PipelinePhase,
     RadAgentEvent,
     SimulationResult,
 )
+from agent_core.config.environment import (
+    DEFAULT_ENV_PATH,
+    load_environment,
+    write_project_env_values,
+)
 from agent_core.gates.gate_runner import normalize_run_mode
+from agent_core.models.registry import thinking_for_task
+from agent_core.models.schemas import ModelTask, ModelTier
+from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.storage import RadAgentStore
 from agent_core.workspace.manager import WorkspaceManager
+from agent_core.workspace.paths import STAGE_INPUT
 
 logger = logging.getLogger(__name__)
-
-PIPELINE_PHASES: tuple[PipelinePhase, ...] = (
-    "prepare_workspace",
-    "context",
-    "task_planning",
-    "g4_modeling",
-    "human_confirmation",
-    "g4_codegen",
-    "patch",
-    "gate",
-    "artifact",
-    "report",
-)
 
 VALID_MODES = frozenset({"strict", "test", "acceptance", "production"})
 TEXT_ARTIFACT_SUFFIXES = {
@@ -60,11 +59,11 @@ EventCallback = Callable[[RadAgentEvent], None]
 
 
 class RadAgentAppService:
-    """UI-neutral facade for REPL, Qt, web, or API frontends.
+    """UI-neutral facade for REPL, TUI, web, or API frontends.
 
     This class owns session state and emits structured events. It contains no
-    Rich, prompt_toolkit, or Qt dependencies, so UI layers can render the same
-    operations in a terminal, desktop app, or web frontend.
+    Rich, prompt_toolkit, or Textual dependencies, so UI layers can render the
+    same operations in terminal, TUI, web, or API frontends.
     """
 
     def __init__(
@@ -72,12 +71,14 @@ class RadAgentAppService:
         *,
         execution_mode: str = "strict",
         workspace_root: Path | None = None,
+        env_path: Path | None = None,
         event_callback: EventCallback | None = None,
     ) -> None:
         if execution_mode not in VALID_MODES:
             raise ValueError(f"Invalid execution_mode: {execution_mode}")
         self.execution_mode = execution_mode
         self.workspace = WorkspaceManager(root=workspace_root)
+        self.env_path = env_path or DEFAULT_ENV_PATH
         self.store = RadAgentStore(workspace_root=self.workspace.root)
         self.state: dict[str, Any] = {}
         self.current_phase_idx = 0
@@ -88,6 +89,94 @@ class RadAgentAppService:
         self._events: list[RadAgentEvent] = []
         self._event_callback = event_callback
         self._subscribers: list[asyncio.Queue[RadAgentEvent]] = []
+
+    # ------------------------------------------------------------------
+    # Model configuration
+    # ------------------------------------------------------------------
+
+    def get_model_config(self) -> ModelConfigView:
+        """Return frontend-safe model configuration without exposing secrets."""
+        env = load_environment(self.env_path)
+        thinking_defaults = {
+            ModelTier.LITE: thinking_for_task(ModelTask.INTENT_ROUTING),
+            ModelTier.PRO: thinking_for_task(ModelTask.G4_MODELING),
+            ModelTier.MAX: thinking_for_task(ModelTask.FINAL_REVIEW),
+        }
+        return ModelConfigView(
+            env_path=str(self.env_path),
+            default_api_key_env="RADAGENT_API_KEY",
+            tiers={
+                tier.value: ModelTierConfig(
+                    tier=config.tier,
+                    model_name=config.model_name,
+                    base_url=config.base_url,
+                    api_key_env=config.api_key_env,
+                    api_key_configured=bool(os.getenv(config.api_key_env)),
+                    timeout_s=config.timeout_s,
+                    max_retries=config.max_retries,
+                    temperature=config.temperature,
+                    max_tokens=config.max_tokens,
+                    thinking_default=thinking_defaults.get(tier, False),
+                )
+                for tier, config in env.models.items()
+            },
+        )
+
+    def update_model_config(
+        self,
+        update: ModelConfigUpdate | dict[str, Any],
+    ) -> ModelConfigView:
+        """Persist OpenAI-compatible model settings and refresh runtime profiles."""
+        if not isinstance(update, ModelConfigUpdate):
+            update = ModelConfigUpdate.model_validate(update)
+
+        values: dict[str, str] = {}
+        api_key_env = update.api_key_env.strip() or "RADAGENT_API_KEY"
+
+        if update.base_url is not None:
+            values["RADAGENT_MODEL_BASE_URL"] = update.base_url
+        if update.api_key:
+            values[api_key_env] = update.api_key
+        if api_key_env:
+            values["RADAGENT_LITE_API_KEY_ENV"] = api_key_env
+            values["RADAGENT_PRO_API_KEY_ENV"] = api_key_env
+            values["RADAGENT_MAX_API_KEY_ENV"] = api_key_env
+        if update.lite_model is not None:
+            values["RADAGENT_MODEL_LITE"] = update.lite_model
+        if update.pro_model is not None:
+            values["RADAGENT_MODEL_PRO"] = update.pro_model
+        if update.max_model is not None:
+            values["RADAGENT_MODEL_MAX"] = update.max_model
+        if update.lite_timeout_s is not None:
+            values["RADAGENT_LITE_TIMEOUT_S"] = str(update.lite_timeout_s)
+        if update.pro_timeout_s is not None:
+            values["RADAGENT_PRO_TIMEOUT_S"] = str(update.pro_timeout_s)
+        if update.max_timeout_s is not None:
+            values["RADAGENT_MAX_TIMEOUT_S"] = str(update.max_timeout_s)
+        if update.lite_max_tokens is not None:
+            values["RADAGENT_LITE_MAX_TOKENS"] = str(update.lite_max_tokens)
+        if update.pro_max_tokens is not None:
+            values["RADAGENT_PRO_MAX_TOKENS"] = str(update.pro_max_tokens)
+        if update.max_max_tokens is not None:
+            values["RADAGENT_MAX_MAX_TOKENS"] = str(update.max_max_tokens)
+
+        if not values:
+            return self.get_model_config()
+
+        write_project_env_values(values, env_path=self.env_path, update_process_env=True)
+
+        from agent_core.models.gateway import reset_model_gateway
+
+        reset_model_gateway()
+        self._chat_agent = None
+        updated = self.get_model_config()
+        self._emit(
+            "model_config_updated",
+            status="success",
+            summary=str(updated.tiers[ModelTier.PRO.value].model_name),
+            payload=updated.model_dump(mode="json"),
+        )
+        return updated
 
     # ------------------------------------------------------------------
     # Event stream
@@ -166,13 +255,23 @@ class RadAgentAppService:
 
     async def chat(self, message: str) -> ChatResponse:
         agent = self._get_chat_agent()
-        started = self._emit("chat_started", status="running", summary=message[:120])
+        started = self._emit(
+            "chat_started",
+            status="running",
+            summary=message[:120],
+            payload={"message": message},
+        )
         try:
             response = await agent.chat(message)
         except Exception as exc:
             self._emit("chat_failed", status="error", summary=str(exc))
             raise
-        finished = self._emit("chat_finished", status="success", summary=response[:120])
+        finished = self._emit(
+            "chat_finished",
+            status="success",
+            summary=response[:120],
+            payload={"message": response},
+        )
         return ChatResponse(message=response, events=[started, finished])
 
     def _get_chat_agent(self) -> Any:
@@ -352,7 +451,7 @@ class RadAgentAppService:
         )
         job = self.workspace.create_job(job_id)
         job.write_text(
-            "00_input",
+            STAGE_INPUT,
             "user_query.md",
             f"# User Query\n\n{self.state.get('user_query', '')}\n",
         )
@@ -546,8 +645,16 @@ class RadAgentAppService:
                     size_bytes=size,
                     truncated=truncated,
                 )
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as exc:
+                return ArtifactContent(
+                    path=str(artifact_path),
+                    exists=True,
+                    kind="text",
+                    text=text,
+                    size_bytes=size,
+                    truncated=truncated,
+                    errors=[f"Invalid JSON: {exc.msg} at line {exc.lineno}, column {exc.colno}"],
+                )
         return ArtifactContent(
             path=str(artifact_path),
             exists=True,
@@ -596,16 +703,11 @@ class RadAgentAppService:
             self._emit("build_failed", status="error", summary=result.errors)
             return result
 
-        root = Path(code_dir)
-        nested_source_dir = root / "05_geant4"
-        if (nested_source_dir / "CMakeLists.txt").is_file():
-            source_dir = nested_source_dir
-        elif (root / "CMakeLists.txt").is_file():
-            source_dir = root
-        else:
+        source_dir = Path(code_dir)
+        if not (source_dir / "CMakeLists.txt").is_file():
             raise RuntimeError(f"No CMakeLists.txt found in {code_dir}")
 
-        build_dir = root / "build"
+        build_dir = source_dir / "build"
         self._emit("build_configure_started", status="running", summary=str(source_dir))
         configure = await runner.configure(str(source_dir), str(build_dir))
         if not configure.get("success"):

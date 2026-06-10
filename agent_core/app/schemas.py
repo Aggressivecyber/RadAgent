@@ -3,20 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-PipelinePhase = Literal[
-    "prepare_workspace",
-    "context",
-    "task_planning",
-    "g4_modeling",
-    "human_confirmation",
-    "g4_codegen",
-    "patch",
-    "gate",
-    "artifact",
-    "report",
-]
+from agent_core.models.schemas import ModelTier
 
 
 class RadAgentEvent(BaseModel):
@@ -80,6 +69,7 @@ class ArtifactContent(BaseModel):
     json_data: Any | None = None
     size_bytes: int = 0
     truncated: bool = False
+    errors: list[str] = Field(default_factory=list)
 
 
 class BuildResult(BaseModel):
@@ -95,3 +85,39 @@ class SimulationResult(BaseModel):
     output_dir: str = ""
     log: str = ""
     errors: str = ""
+
+
+class ModelTierConfig(BaseModel):
+    tier: ModelTier
+    model_name: str
+    base_url: str = ""
+    api_key_env: str = "RADAGENT_API_KEY"
+    api_key_configured: bool = False
+    timeout_s: float = 60
+    max_retries: int = 2
+    temperature: float = 0.0
+    max_tokens: int = 4096
+    thinking_default: bool = False
+
+
+class ModelConfigView(BaseModel):
+    env_path: str
+    default_api_key_env: str = "RADAGENT_API_KEY"
+    tiers: dict[str, ModelTierConfig] = Field(default_factory=dict)
+
+
+class ModelConfigUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    base_url: str | None = None
+    api_key: str | None = None
+    api_key_env: str = "RADAGENT_API_KEY"
+    lite_model: str | None = None
+    pro_model: str | None = None
+    max_model: str | None = None
+    lite_timeout_s: float | None = None
+    pro_timeout_s: float | None = None
+    max_timeout_s: float | None = None
+    lite_max_tokens: int | None = None
+    pro_max_tokens: int | None = None
+    max_max_tokens: int | None = None

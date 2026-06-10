@@ -5,10 +5,13 @@ from agent_core.app.schemas import (
     ArtifactSummary,
     ChatResponse,
     JobStatus,
-    PipelinePhase,
+    ModelConfigUpdate,
+    ModelConfigView,
+    ModelTierConfig,
     RadAgentEvent,
 )
-from agent_core.app.service import PIPELINE_PHASES, RadAgentAppService
+from agent_core.app.service import RadAgentAppService
+from agent_core.pipeline import PIPELINE_PHASES, PipelinePhase
 
 __all__ = [
     "PIPELINE_PHASES",
@@ -16,6 +19,9 @@ __all__ = [
     "ArtifactSummary",
     "ChatResponse",
     "JobStatus",
+    "ModelConfigUpdate",
+    "ModelConfigView",
+    "ModelTierConfig",
     "PipelinePhase",
     "RadAgentAppService",
     "RadAgentEvent",

@@ -4,6 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from agent_core.app import PIPELINE_PHASES, RadAgentAppService
+from agent_core.models.schemas import ModelTier
+from agent_core.workspace.paths import STAGE_INPUT
+from pydantic import ValidationError
 
 
 def test_service_exposes_pipeline_contract(tmp_path) -> None:
@@ -38,7 +41,7 @@ async def test_prepare_workspace_phase_persists_job_and_events(tmp_path, monkeyp
     assert result.success is True
     assert result.status.job_id == "job_frontend_test"
     assert result.status.current_phase == "context"
-    assert (tmp_path / "jobs" / "job_frontend_test" / "00_input" / "user_query.md").is_file()
+    assert (tmp_path / "jobs" / "job_frontend_test" / STAGE_INPUT / "user_query.md").is_file()
     assert service.store.get_job("job_frontend_test") is not None
     assert [event.event_type for event in events] == ["phase_started", "phase_finished"]
 
@@ -65,18 +68,101 @@ def test_read_artifact_supports_text_json_binary_and_missing(tmp_path) -> None:
     assert missing.exists is False
 
 
+def test_read_artifact_reports_invalid_json_without_blocking_text_view(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    json_path = tmp_path / "broken.json"
+    json_path.write_text('{"ok": ', encoding="utf-8")
+
+    content = service.read_artifact(str(json_path))
+
+    assert content.kind == "text"
+    assert content.text == '{"ok": '
+    assert content.json_data is None
+    assert content.errors
+    assert content.errors[0].startswith("Invalid JSON:")
+
+
 @pytest.mark.asyncio
 async def test_chat_emits_events_without_ui_dependency(tmp_path, monkeypatch) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
     agent = AsyncMock()
-    agent.chat.return_value = "answer"
+    long_answer = "x" * 300
+    agent.chat.return_value = long_answer
     service._chat_agent = agent
 
     response = await service.chat("question")
 
-    assert response.message == "answer"
+    assert response.message == long_answer
     assert [event.event_type for event in response.events] == [
         "chat_started",
         "chat_finished",
     ]
+    assert response.events[0].payload["message"] == "question"
+    assert len(response.events[1].summary) == 120
+    assert response.events[1].payload["message"] == long_answer
     agent.chat.assert_awaited_once_with("question")
+
+
+def test_service_exposes_frontend_safe_model_config(tmp_path, monkeypatch) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "RADAGENT_MODEL_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1",
+                "RADAGENT_API_KEY=secret-key",
+                "RADAGENT_MODEL_PRO=mimo-v2.5-pro",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("RADAGENT_MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("RADAGENT_API_KEY", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_PRO", raising=False)
+    service = RadAgentAppService(workspace_root=tmp_path, env_path=env_file)
+
+    config = service.get_model_config()
+
+    assert config.tiers[ModelTier.PRO.value].model_name == "mimo-v2.5-pro"
+    assert config.tiers[ModelTier.PRO.value].base_url == "https://token-plan-cn.xiaomimimo.com/v1"
+    assert config.tiers[ModelTier.PRO.value].api_key_configured is True
+    assert "secret-key" not in config.model_dump_json()
+
+
+def test_service_updates_model_config_for_frontend(tmp_path, monkeypatch) -> None:
+    env_file = tmp_path / ".env"
+    events = []
+    monkeypatch.delenv("RADAGENT_MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("RADAGENT_API_KEY", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_LITE", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_PRO", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_MAX", raising=False)
+    service = RadAgentAppService(
+        workspace_root=tmp_path,
+        env_path=env_file,
+        event_callback=events.append,
+    )
+
+    config = service.update_model_config(
+        {
+            "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
+            "api_key": "tp-test-key",
+            "lite_model": "mimo-v2.5",
+            "pro_model": "mimo-v2.5-pro",
+            "max_model": "mimo-v2.5-pro",
+        }
+    )
+
+    text = env_file.read_text(encoding="utf-8")
+    assert "RADAGENT_MODEL_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1" in text
+    assert "RADAGENT_API_KEY=tp-test-key" in text
+    assert config.tiers[ModelTier.LITE.value].model_name == "mimo-v2.5"
+    assert config.tiers[ModelTier.PRO.value].api_key_configured is True
+    assert "provider" not in config.tiers[ModelTier.PRO.value].model_dump()
+    assert events[-1].event_type == "model_config_updated"
+
+
+def test_service_rejects_provider_in_frontend_model_config(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path, env_path=tmp_path / ".env")
+
+    with pytest.raises(ValidationError):
+        service.update_model_config({"provider": "mock"})

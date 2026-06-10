@@ -5,22 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "radiation-sim-agent"
 version = "0.1.0"
-description = "LangGraph-based autonomous code generation agent for radiation co-simulation (Geant4 → TCAD → SPICE)"
+description = "LangGraph-based autonomous code generation agent for Geant4 radiation simulation"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [
     "langgraph>=0.2.0",
-    "langchain-core>=0.3.0",
-    "langchain-openai>=0.2.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
-    "jsonschema>=4.0",
-    "h5py>=3.0",
-    "pandas>=2.0",
     "numpy>=1.24",
     "rich>=13.0",
     "python-dotenv>=1.0",
     "prompt-toolkit>=3.0",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -31,23 +27,33 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
-desktop = [
-    "PySide6>=6.7",
+tui = [
+    "textual>=0.80",
+]
+wechat-scraper = [
+    "beautifulsoup4>=4.12",
+    "requests>=2.31",
 ]
 
 [project.scripts]
-radagent-desktop = "agent_core.desktop.app:main"
+radagent-tui = "agent_core.tui.app:main"
 
 [tool.setuptools.packages.find]
-include = ["agent_core*"]
+include = ["agent_core*", "knowledge_base*"]
+
+[tool.setuptools.package-data]
+agent_core = ["policies/*.yaml"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["agent_core", "tests"]
+src = ["agent_core", "knowledge_base", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"knowledge_base/**/*.py" = ["E402", "E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
