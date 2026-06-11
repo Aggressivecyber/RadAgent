@@ -25,6 +25,9 @@ DEFAULT_MODEL_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL_LITE = "mimo-v2.5"
 DEFAULT_MODEL_PRO = "mimo-v2.5-pro"
 DEFAULT_MODEL_MAX = DEFAULT_MODEL_PRO
+DEFAULT_CONTEXT_WINDOW_LITE = 32_000
+DEFAULT_CONTEXT_WINDOW_PRO = 128_000
+DEFAULT_CONTEXT_WINDOW_MAX = 128_000
 _ENV_ASSIGNMENT_RE = re.compile(r"^(\s*(?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)(\s*=).*$")
 
 
@@ -138,6 +141,7 @@ class ModelTierEnvironment:
     max_retries: int
     temperature: float
     max_tokens: int
+    context_window_tokens: int
 
 
 @dataclass(frozen=True)
@@ -182,6 +186,8 @@ def _model_tier(
     default_timeout: float,
     max_tokens_env: str,
     default_max_tokens: int,
+    context_window_env: str,
+    default_context_window_tokens: int,
     max_retries_env: str,
     default_max_retries: int,
     temperature_env: str,
@@ -205,6 +211,10 @@ def _model_tier(
         max_retries=_env_int(max_retries_env, default_max_retries),
         temperature=_env_float(temperature_env, default_temperature),
         max_tokens=_env_int(max_tokens_env, default_max_tokens),
+        context_window_tokens=_env_int(
+            context_window_env,
+            default_context_window_tokens,
+        ),
     )
 
 
@@ -294,6 +304,8 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
             30.0,
             "RADAGENT_LITE_MAX_TOKENS",
             2048,
+            "RADAGENT_LITE_CONTEXT_WINDOW_TOKENS",
+            DEFAULT_CONTEXT_WINDOW_LITE,
             "RADAGENT_LITE_MAX_RETRIES",
             2,
             "RADAGENT_LITE_TEMPERATURE",
@@ -308,6 +320,8 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
             240.0,
             "RADAGENT_PRO_MAX_TOKENS",
             8192,
+            "RADAGENT_PRO_CONTEXT_WINDOW_TOKENS",
+            DEFAULT_CONTEXT_WINDOW_PRO,
             "RADAGENT_PRO_MAX_RETRIES",
             2,
             "RADAGENT_PRO_TEMPERATURE",
@@ -322,6 +336,8 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
             300.0,
             "RADAGENT_MAX_MAX_TOKENS",
             12000,
+            "RADAGENT_MAX_CONTEXT_WINDOW_TOKENS",
+            DEFAULT_CONTEXT_WINDOW_MAX,
             "RADAGENT_MAX_MAX_RETRIES",
             2,
             "RADAGENT_MAX_TEMPERATURE",

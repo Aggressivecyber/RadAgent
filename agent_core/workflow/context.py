@@ -197,6 +197,28 @@ def _memory_items(
                 payload=_confirmation_summary(state),
             )
         )
+    briefing = state.get("copilot_briefing")
+    if isinstance(briefing, dict):
+        summary = _briefing_summary(briefing)
+        if summary:
+            items.append(
+                MemoryItem(
+                    source="run",
+                    key="copilot_briefing",
+                    summary=summary,
+                    payload=briefing,
+                )
+            )
+    external_sources = _external_sources_from_task_spec(state)
+    if external_sources:
+        items.append(
+            MemoryItem(
+                source="evidence",
+                key="external_sources",
+                summary=_external_sources_summary(external_sources),
+                payload={"sources": external_sources},
+            )
+        )
     failed_gates = [gate for gate in gate_results if gate.get("status") in {"fail", "block"}]
     if failed_gates:
         items.append(
@@ -208,3 +230,46 @@ def _memory_items(
             )
         )
     return items
+
+
+def _briefing_summary(briefing: dict[str, Any]) -> str:
+    approval = briefing.get("approval_request")
+    if isinstance(approval, dict) and approval.get("summary"):
+        return str(approval["summary"])
+    if briefing.get("understanding"):
+        return str(briefing["understanding"])
+    if briefing.get("final_query"):
+        return str(briefing["final_query"])
+    return ""
+
+
+def _external_sources_from_task_spec(state: dict[str, Any]) -> list[dict[str, Any]]:
+    task_spec = state.get("task_spec")
+    if not isinstance(task_spec, dict):
+        task_spec_path = str(state.get("task_spec_path", ""))
+        if task_spec_path and Path(task_spec_path).is_file():
+            try:
+                data = json.loads(Path(task_spec_path).read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                data = {}
+            task_spec = data if isinstance(data, dict) else {}
+        else:
+            task_spec = {}
+    sources = task_spec.get("external_sources")
+    if not isinstance(sources, list):
+        return []
+    return [dict(source) for source in sources if isinstance(source, dict)]
+
+
+def _external_sources_summary(sources: list[dict[str, Any]]) -> str:
+    labels = []
+    for source in sources[:3]:
+        source_id = str(source.get("source_id") or "external")
+        provider = str(source.get("provider") or "")
+        model = str(source.get("model") or "")
+        status = str(source.get("status") or "unknown")
+        provider_model = "/".join(item for item in (provider, model) if item)
+        label = " ".join(item for item in (source_id, provider_model, status) if item)
+        labels.append(label)
+    suffix = "; ".join(labels)
+    return f"{len(sources)} external source(s): {suffix}" if suffix else "external sources"

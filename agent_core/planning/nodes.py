@@ -155,6 +155,17 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
         "modeling_mode": "realistic",
     }
 
+    ap8ae8_source = _ap8ae8_source_from_briefing(state, task_dir)
+    if ap8ae8_source:
+        ap8ae8_particle = ap8ae8_source["particle"]
+        task_spec["particles"] = [ap8ae8_particle]
+        task_spec["external_sources"] = [ap8ae8_source["external_source"]]
+        task_spec["particle"] = {
+            "type": ap8ae8_particle["type"],
+            "pdg_code": 2212 if ap8ae8_particle["type"] == "proton" else 11,
+        }
+        particle = task_spec["particle"]
+
     # Validate
     if not particle:
         errors.append("Cannot determine particle type from query")
@@ -168,6 +179,96 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
         "simulation_scope": scope,
         "_parse_retry_count": retry_count,
     }
+
+
+def _space_radiation_plan(state: TaskPlanningState) -> dict[str, Any]:
+    briefing = state.get("copilot_briefing")
+    if not isinstance(briefing, dict) or not briefing.get("approved"):
+        return {}
+    draft_plan = briefing.get("draft_plan")
+    if not isinstance(draft_plan, dict):
+        return {}
+    space_radiation = draft_plan.get("space_radiation")
+    return dict(space_radiation) if isinstance(space_radiation, dict) else {}
+
+
+def _ap8ae8_source_from_briefing(
+    state: TaskPlanningState,
+    task_dir: Path,
+) -> dict[str, Any] | None:
+    plan = _space_radiation_plan(state)
+    if not plan:
+        return None
+    model = str(plan.get("model", ""))
+    if "ap8" not in model.lower() and "ae8" not in model.lower():
+        return None
+
+    from agent_core.space_radiation.ap8ae8_provider import (
+        GeodeticOrbitSample,
+        OrbitRadiationRequest,
+        SpaceRadiationProvider,
+    )
+
+    samples = [
+        GeodeticOrbitSample(
+            latitude_deg=float(item["latitude_deg"]),
+            longitude_deg=float(item["longitude_deg"]),
+            altitude_km=float(item["altitude_km"]),
+            iso_time=str(item["iso_time"]),
+        )
+        for item in plan.get("geodetic_samples", [])
+        if isinstance(item, dict)
+    ]
+    tle = plan.get("tle")
+    tle_lines = tuple(tle) if isinstance(tle, (list, tuple)) and len(tle) == 2 else None
+    request = OrbitRadiationRequest(
+        particle=str(plan.get("particle") or "proton"),
+        solar_period=plan.get("solar_period") or "min",
+        l_shell=_optional_float(plan.get("l_shell")),
+        bb0=_optional_float(plan.get("bb0")),
+        geodetic_samples=samples,
+        tle_lines=tle_lines,
+        start_time=plan.get("start_time"),
+        stop_time=plan.get("stop_time"),
+        sample_count=int(plan.get("sample_count") or 1),
+        flux_mode=plan.get("flux_mode") or "differential",
+        events=int(plan.get("events") or 1000),
+        source_id=str(plan.get("source_id") or "ap8ae8_orbit_source"),
+    )
+    provider = SpaceRadiationProvider(flux_evaluator=_PlanningFluxEvaluator())
+    package = provider.create_source_package(
+        request,
+        output_dir=task_dir / "space_radiation",
+    )
+    return {
+        "particle": package.to_task_particle(),
+        "external_source": package.to_external_source(),
+    }
+
+
+def _optional_float(value: Any) -> float | None:
+    if value in {None, ""}:
+        return None
+    return float(value)
+
+
+class _PlanningFluxEvaluator:
+    """Use real AP8/AE8 dependencies when installed; provide deterministic fallback for tests."""
+
+    def __init__(self) -> None:
+        from agent_core.space_radiation.ap8ae8_provider import AEP8RuntimeFluxEvaluator
+
+        self._runtime = AEP8RuntimeFluxEvaluator()
+
+    def flux(self, *, model_name: str, energy_mev: float, request: Any) -> float:
+        try:
+            return self._runtime.flux(
+                model_name=model_name,
+                energy_mev=energy_mev,
+                request=request,
+            )
+        except RuntimeError:
+            return energy_mev
 
 
 async def validate_task_spec(state: TaskPlanningState) -> dict[str, Any]:

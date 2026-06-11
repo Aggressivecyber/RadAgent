@@ -1511,6 +1511,45 @@ def _build_final_review_result(module_name: str) -> dict[str, Any]:
     }
 
 
+def _build_simulation_briefing_result() -> dict[str, Any]:
+    return {
+        "status": "ready_for_approval",
+        "understanding": "User wants to start a controlled Geant4 simulation workflow.",
+        "questions": [],
+        "recommendations": ["Run a small validation event count before production."],
+        "draft_plan": {
+            "objective": "Generate and validate a Geant4 simulation.",
+            "simulation_scope": ["geant4"],
+            "geometry": {"summary": "Use the geometry described by the user."},
+            "materials": [],
+            "source": {"summary": "Use the particle source described by the user."},
+            "physics": {"physics_list": "FTFP_BERT"},
+            "scoring": [{"quantity": "energy_deposition"}],
+            "run_plan": {"validation_events": 100, "production_events": 1000},
+            "codegen_constraints": ["Keep generated modules explicit and testable."],
+        },
+        "missing_critical_fields": [],
+        "assumptions": ["Unspecified dimensions and materials must be confirmed downstream."],
+        "risks": ["The generated model may require human confirmation for missing details."],
+        "final_query": "Build a controlled Geant4 simulation from the user's approved brief.",
+        "proposed_command": {
+            "name": "start_job",
+            "args": {
+                "query": "Build a controlled Geant4 simulation from the user's approved brief.",
+                "run_mode": "strict",
+            },
+            "risk": "write",
+            "status": "pending",
+            "summary": "Start the approved controlled Geant4 simulation workflow.",
+        },
+        "approval_request": {
+            "requires_human_approval": True,
+            "summary": "Start the controlled Geant4 simulation workflow.",
+            "risks": ["Missing details may trigger human confirmation."],
+        },
+    }
+
+
 def call_mock_model(
     task: ModelTask,
     metadata: dict[str, Any],
@@ -1527,6 +1566,8 @@ def call_mock_model(
         parsed = _build_diagnosis_result(module_name)
     elif task == ModelTask.FINAL_REVIEW:
         parsed = _build_final_review_result(module_name)
+    elif task == ModelTask.SIMULATION_BRIEFING:
+        parsed = _build_simulation_briefing_result()
     else:
         parsed = {
             "status": "success",

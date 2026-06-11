@@ -78,3 +78,11 @@ class TestLoadModelProfiles:
         profiles = load_model_profiles()
         assert profiles[ModelTier.LITE].max_tokens < profiles[ModelTier.PRO].max_tokens
         assert profiles[ModelTier.PRO].max_tokens < profiles[ModelTier.MAX].max_tokens
+
+    def test_profiles_expose_context_window_tokens(self) -> None:
+        """Compaction should use model context window, not output token budget."""
+        profiles = load_model_profiles()
+
+        assert profiles[ModelTier.LITE].context_window_tokens > profiles[ModelTier.LITE].max_tokens
+        assert profiles[ModelTier.PRO].context_window_tokens > profiles[ModelTier.PRO].max_tokens
+        assert profiles[ModelTier.MAX].context_window_tokens > profiles[ModelTier.MAX].max_tokens

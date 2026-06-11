@@ -1,0 +1,23 @@
+//
+// Macro for physics list configuration.
+// Sets physics list and production cuts for the simulation.
+//
+
+// Set physics list to FTFP_BERT as specified in model
+/physics_list/select FTFP_BERT
+
+// Set default production cuts for all materials
+// 1 mm is appropriate for small detector volumes and dose scoring
+/process/em/setCuts 1 mm
+
+// Verify the cuts are set
+/process/em/getCuts
+
+// Optional: Enable additional verbosity for physics
+// /physics_list/verbose 1
+
+// Optional: Set region-specific cuts if needed
+// /run/setCutForRegion <region_name> 0.1 mm
+
+// Print physics list information
+/physics_list/verbose 0

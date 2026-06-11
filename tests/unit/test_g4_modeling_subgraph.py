@@ -31,6 +31,30 @@ class TestG4ModelingSubgraphCompilation:
         # LangGraph stores entry point in _entrypoint
         assert hasattr(graph, "_nodes") or hasattr(graph, "nodes")
 
+    def test_subgraph_still_uses_active_modeling_nodes(self) -> None:
+        """Fine-grained modeling nodes are still active until the modeling graph is consolidated."""
+        from agent_core.graph.subgraphs.g4_modeling_graph import (
+            build_g4_modeling_subgraph,
+        )
+
+        graph = build_g4_modeling_subgraph()
+        node_names = set(getattr(graph, "nodes", getattr(graph, "_nodes", {})))
+
+        assert {
+            "requirement_capture_node",
+            "evidence_retrieval_node",
+            "model_scope_guard_node",
+            "geometry_decomposition_node",
+            "coordinate_system_node",
+            "material_definition_node",
+            "source_definition_node",
+            "physics_list_node",
+            "sensitive_detector_node",
+            "scoring_design_node",
+            "model_ir_validation_node",
+            "model_review_report_node",
+        }.issubset(node_names)
+
     def test_subgraph_state_schema(self) -> None:
         """Subgraph state must have required fields."""
         from agent_core.g4_modeling.subgraph_state import G4ModelingSubgraphState

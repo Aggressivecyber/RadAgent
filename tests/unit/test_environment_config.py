@@ -162,6 +162,28 @@ def test_max_tier_reads_frontend_max_tokens_env(
     assert env.models[ModelTier.MAX].max_tokens == 32000
 
 
+def test_max_tier_reads_context_window_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "RADAGENT_MODEL_BASE_URL=https://models.example/v1",
+                "RADAGENT_MAX_CONTEXT_WINDOW_TOKENS=200000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("RADAGENT_MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("RADAGENT_MAX_CONTEXT_WINDOW_TOKENS", raising=False)
+
+    env = load_environment(env_file)
+
+    assert env.models[ModelTier.MAX].context_window_tokens == 200000
+
+
 def test_write_project_env_values_upserts_without_exposing_other_lines(
     tmp_path: Path,
     monkeypatch,

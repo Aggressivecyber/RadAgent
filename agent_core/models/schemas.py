@@ -25,6 +25,7 @@ class ModelTask(StrEnum):
     CREDIBILITY_ASSESSMENT = "credibility_assessment"
     FINAL_REVIEW = "final_review"
     FAILURE_DIAGNOSIS = "failure_diagnosis"
+    SIMULATION_BRIEFING = "simulation_briefing"
 
 
 class ModelProvider(StrEnum):
@@ -42,6 +43,7 @@ class ModelProfile(BaseModel):
     max_retries: int = 2
     temperature: float = 0.0
     max_tokens: int = 4096
+    context_window_tokens: int = 128_000
 
 
 class ModelCallRequest(BaseModel):
@@ -62,6 +64,7 @@ class ModelCallResult(BaseModel):
     model_name: str
     content: str
     parsed_json: dict[str, Any] | None = None
+    reasoning_content: str = ""
     usage: dict[str, Any] = Field(default_factory=dict)
     latency_ms: float | None = None
     error: str | None = None

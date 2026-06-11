@@ -14,6 +14,11 @@ _ALIASES = {
     "sim": "simulate",
     "status": "inspect",
     "log": "logs",
+    "option": "options",
+    "opts": "options",
+    "setting": "options",
+    "settings": "options",
+    "config": "options",
 }
 
 _KNOWN_COMMANDS = {
@@ -31,6 +36,7 @@ _KNOWN_COMMANDS = {
     "logs",
     "memory",
     "model",
+    "options",
     "project",
     "projects",
     "accept-revision",

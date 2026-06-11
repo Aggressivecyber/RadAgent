@@ -20,7 +20,7 @@ from agent_core.models.schemas import (
     ModelTask,
     ModelTier,
 )
-from agent_core.workspace.io import get_job_dir
+from agent_core.workspace.io import get_job_dir, get_workspace_root
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +77,18 @@ class ModelGateway:
                 content = json.dumps(mock_result.parsed_json or {})
                 parsed_json = mock_result.parsed_json
                 usage = {"mock": True}
+                reasoning_content = ""
             elif profile.provider == ModelProvider.OPENAI_COMPATIBLE:
                 if _model_timeouts_enabled():
-                    content, usage = await asyncio.wait_for(
+                    provider_result = await asyncio.wait_for(
                         call_openai_compatible_model(profile, req),
                         timeout=_provider_call_deadline_s(profile),
                     )
                 else:
-                    content, usage = await call_openai_compatible_model(profile, req)
+                    provider_result = await call_openai_compatible_model(profile, req)
+                content, usage, reasoning_content = _normalize_provider_result(
+                    provider_result
+                )
                 parsed_json = None
                 if response_format == "json":
                     parsed_json = _safe_parse_json(content)
@@ -98,6 +102,7 @@ class ModelGateway:
                 model_name=profile.model_name,
                 content=content,
                 parsed_json=parsed_json,
+                reasoning_content=reasoning_content,
                 usage=usage,
                 latency_ms=(time.time() - start) * 1000,
             )
@@ -253,17 +258,16 @@ class ModelGateway:
     ) -> str:
         """Persist full prompt/response context for job-scoped debugging."""
         job_id = str(req.metadata.get("job_id") or "")
-        if not job_id:
-            return ""
         try:
             from agent_core.observability.redaction import sanitize
 
-            log_dir = get_job_dir(job_id) / "logs" / "model_calls"
+            base_dir = get_job_dir(job_id) if job_id else get_workspace_root()
+            log_dir = base_dir / "logs" / "model_calls"
             log_dir.mkdir(parents=True, exist_ok=True)
             module_name = _safe_path_token(str(req.metadata.get("module_name", "model")))
             task_name = _safe_path_token(str(req.task).split(".")[-1] or "task")
             relative_path = f"logs/model_calls/{call_id}_{module_name}_{task_name}.json"
-            path = get_job_dir(job_id) / relative_path
+            path = base_dir / relative_path
             payload: dict[str, Any] = {
                 "job_id": job_id,
                 "model_call_id": call_id,
@@ -290,12 +294,13 @@ class ModelGateway:
                     "usage": result.usage,
                     "content": result.content,
                     "parsed_json": result.parsed_json,
+                    "reasoning_content": result.reasoning_content,
                 }
             path.write_text(
                 json.dumps(sanitize(payload, max_string=500000), indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
-            _write_active_model_call(get_job_dir(job_id), payload, relative_path)
+            _write_active_model_call(base_dir, payload, relative_path)
             return relative_path
         except Exception as exc:
             logger.warning("Failed to write model call transcript: %s", exc)
@@ -314,6 +319,16 @@ def _safe_parse_json(content: str) -> dict[str, Any] | None:
             except Exception:
                 return None
     return None
+
+
+def _normalize_provider_result(raw: Any) -> tuple[str, dict[str, Any], str]:
+    if isinstance(raw, tuple) and len(raw) == 3:
+        content, usage, reasoning_content = raw
+        return str(content), dict(usage or {}), str(reasoning_content or "")
+    if isinstance(raw, tuple) and len(raw) == 2:
+        content, usage = raw
+        return str(content), dict(usage or {}), ""
+    raise ValueError("Provider call must return (content, usage) or (content, usage, reasoning)")
 
 
 def _provider_call_deadline_s(profile: Any) -> float:

@@ -48,6 +48,70 @@ class TestParseTask:
         # geant4 scope keywords, so scope is ["tcad"] only.
         # This will be blocked by scope guard regardless.
 
+    async def test_approved_ap8ae8_briefing_writes_particle_for_g4(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        state = {
+            "job_id": "test_job",
+            "user_query": "仿真 500km 轨道 AP8 质子辐照硅探测器",
+            "copilot_briefing": {
+                "approved": True,
+                "draft_plan": {
+                    "space_radiation": {
+                        "model": "AP8/AE8",
+                        "particle": "proton",
+                        "solar_period": "min",
+                        "flux_mode": "integral",
+                        "l_shell": 2.0,
+                        "bb0": 1.05,
+                        "events": 2500,
+                        "source_id": "ap8_orbit_protons",
+                    }
+                },
+            },
+        }
+
+        result = await parse_task(state)
+
+        particle = result["task_spec"]["particles"][0]
+        assert particle["source_id"] == "ap8_orbit_protons"
+        assert particle["type"] == "proton"
+        assert particle["energy_distribution"] == "spectrum"
+        assert particle["generator_type"] == "gps"
+        assert particle["events"] == 2500
+        assert Path(particle["spectrum_file"]).is_file()
+        assert "AP8/AE8 dataset" in particle["source_evidence"][0]
+        external_source = result["task_spec"]["external_sources"][0]
+        assert external_source["source_id"] == "ap8_orbit_protons"
+        assert external_source["source_type"] == "environment"
+        assert external_source["domain"] == "space_radiation"
+        assert external_source["provider"] == "ap8ae8"
+        assert external_source["model"] == "AP8MIN"
+        assert external_source["status"] == "ready"
+        assert particle["spectrum_file"] in external_source["artifact_paths"]
+        assert external_source["parameters"]["flux_mode"] == "integral"
+        assert external_source["consumers"] == [
+            "task_planning",
+            "g4_modeling",
+            "g4_codegen",
+            "gates",
+            "copilot",
+        ]
+
+        saved = await save_task_spec(
+            {
+                "job_id": "test_job",
+                "task_spec": result["task_spec"],
+                "simulation_scope": result["simulation_scope"],
+            }
+        )
+        saved_spec = json.loads(Path(saved["task_spec_path"]).read_text())
+        assert saved_spec["particles"][0]["spectrum_file"] == particle["spectrum_file"]
+        assert saved_spec["external_sources"][0]["artifact_paths"] == [
+            particle["spectrum_file"]
+        ]
+
 
 class TestValidateTaskSpec:
     async def test_valid_spec(self) -> None:

@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "command": "ctest --output-on-failure",
+  "stdout": "Test project /home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify_fixed_provenance/05_codegen/integration/runtime_attempt_1/geant4_project/build\n",
+  "errors": "No tests were found!!!\n"
+}

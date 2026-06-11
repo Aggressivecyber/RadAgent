@@ -35,6 +35,15 @@ class JobStatus(BaseModel):
     state: dict[str, Any] = Field(default_factory=dict)
 
 
+class RuntimeToolStatus(BaseModel):
+    key: str
+    label: str
+    configured: bool = False
+    available: bool = False
+    path: str = ""
+    detail: str = ""
+
+
 class CopilotResponse(BaseModel):
     message: str
     commands: list[dict[str, Any]] = Field(default_factory=list)
@@ -97,6 +106,7 @@ class ModelTierConfig(BaseModel):
     max_retries: int = 2
     temperature: float = 0.0
     max_tokens: int = 4096
+    context_window_tokens: int = 128_000
     thinking_default: bool = False
 
 
@@ -104,6 +114,15 @@ class ModelConfigView(BaseModel):
     env_path: str
     default_api_key_env: str = "RADAGENT_API_KEY"
     tiers: dict[str, ModelTierConfig] = Field(default_factory=dict)
+
+
+class StartupStatusView(BaseModel):
+    product_name: str = "RadAgent"
+    project_slug: str = "default"
+    workspace_root: str = ""
+    env_path: str = ""
+    tools: dict[str, RuntimeToolStatus] = Field(default_factory=dict)
+    models: dict[str, ModelTierConfig] = Field(default_factory=dict)
 
 
 class ModelConfigUpdate(BaseModel):
@@ -121,3 +140,6 @@ class ModelConfigUpdate(BaseModel):
     lite_max_tokens: int | None = None
     pro_max_tokens: int | None = None
     max_max_tokens: int | None = None
+    lite_context_window_tokens: int | None = None
+    pro_context_window_tokens: int | None = None
+    max_context_window_tokens: int | None = None

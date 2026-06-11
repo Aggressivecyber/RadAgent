@@ -70,6 +70,7 @@ class TestModelGateway:
         assert result.content == mock_content
         assert result.parsed_json == {"intent": "smalltalk"}
         assert result.usage == mock_usage
+        assert result.reasoning_content == ""
         assert result.error is None
 
     @pytest.mark.asyncio
@@ -203,6 +204,26 @@ class TestModelGateway:
         assert captured_requests[1].metadata["enable_thinking"] is False
 
     @pytest.mark.asyncio
+    async def test_gateway_preserves_public_reasoning_content_outside_usage(self) -> None:
+        gw = get_model_gateway()
+
+        with patch(
+            "agent_core.models.gateway.call_openai_compatible_model",
+            new_callable=AsyncMock,
+            return_value=("ok", {"total_tokens": 42}, "public reasoning summary"),
+        ):
+            result = await gw.call(
+                task=ModelTask.CODEGEN,
+                system_prompt="test",
+                user_prompt="build",
+            )
+
+        assert result.content == "ok"
+        assert result.reasoning_content == "public reasoning summary"
+        assert result.usage == {"total_tokens": 42}
+        assert result.usage.get("reasoning_content") is None
+
+    @pytest.mark.asyncio
     async def test_gateway_preserves_explicit_thinking_override(self) -> None:
         """Node-level metadata can still override the task default."""
         gw = get_model_gateway()
@@ -261,6 +282,38 @@ class TestModelGateway:
             "model_call",
         ]
         assert payloads[0]["artifacts"][0]["path"] == active["transcript_path"]
+
+    @pytest.mark.asyncio
+    async def test_call_without_job_id_writes_workspace_transcript(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pre-job calls, such as simulation briefing, still need an accident log."""
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        gw = get_model_gateway()
+
+        with patch(
+            "agent_core.models.gateway.call_openai_compatible_model",
+            new_callable=AsyncMock,
+            return_value=("not json", {"prompt_tokens": 3}),
+        ):
+            result = await gw.call(
+                task=ModelTask.SIMULATION_BRIEFING,
+                system_prompt="system",
+                user_prompt="user",
+                response_format="json",
+                metadata={"module_name": "simulation_briefing"},
+            )
+
+        assert result.error is None
+        active = json.loads((tmp_path / "logs" / "active_model_call.json").read_text())
+        transcript_path = tmp_path / active["transcript_path"]
+        transcript = json.loads(transcript_path.read_text())
+
+        assert transcript["job_id"] == ""
+        assert transcript["status"] == "passed"
+        assert transcript["result"]["content"] == "not json"
+        assert transcript["result"]["parsed_json"] is None
+        assert "simulation_briefing" in transcript_path.name
 
     @pytest.mark.asyncio
     async def test_tool_log_failure_is_visible_but_non_blocking(
@@ -348,7 +401,10 @@ class TestModelGateway:
             metadata={"enable_thinking": True},
         )
 
-        content, usage = await call_openai_compatible_model(profile, request)
+        content, usage, reasoning_content = await call_openai_compatible_model(
+            profile,
+            request,
+        )
 
         assert content == '{"ok": true}'
         assert captured_headers[0]["api-key"] == "tp-test"
@@ -358,7 +414,8 @@ class TestModelGateway:
         assert "temperature" not in captured_payloads[0]
         assert "reasoning_effort" not in captured_payloads[0]
         assert captured_payloads[0]["thinking"] == {"type": "enabled"}
-        assert usage["reasoning_content"] == "checked build errors and interfaces"
+        assert usage.get("reasoning_content") is None
+        assert reasoning_content == "checked build errors and interfaces"
 
     @pytest.mark.asyncio
     async def test_mimo_token_plan_payload_disables_thinking_for_simple_call(
@@ -403,9 +460,13 @@ class TestModelGateway:
             user_prompt="user",
         )
 
-        content, _usage = await call_openai_compatible_model(profile, request)
+        content, _usage, reasoning_content = await call_openai_compatible_model(
+            profile,
+            request,
+        )
 
         assert content == "ok"
+        assert reasoning_content == ""
         assert captured_payloads[0]["thinking"] == {"type": "disabled"}
         assert captured_payloads[0]["temperature"] == profile.temperature
 

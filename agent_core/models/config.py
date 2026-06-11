@@ -17,6 +17,7 @@ def load_model_profiles() -> dict[ModelTier, ModelProfile]:
             max_retries=tier_config.max_retries,
             temperature=tier_config.temperature,
             max_tokens=tier_config.max_tokens,
+            context_window_tokens=tier_config.context_window_tokens,
         )
         for tier, tier_config in env.models.items()
     }

@@ -45,7 +45,7 @@ def _auth_headers(profile: ModelProfile) -> dict[str, str]:
 async def call_openai_compatible_model(
     profile: ModelProfile,
     req: ModelCallRequest,
-) -> tuple[str, dict]:
+) -> tuple[str, dict, str]:
     if not profile.base_url:
         raise RuntimeError(f"Missing base_url for model tier {profile.tier}")
 
@@ -77,11 +77,8 @@ async def call_openai_compatible_model(
                 message = data["choices"][0]["message"]
                 content = message["content"]
                 usage = data.get("usage", {})
-                reasoning_content = message.get("reasoning_content")
-                if reasoning_content:
-                    usage = dict(usage)
-                    usage["reasoning_content"] = reasoning_content
-                return content, usage
+                reasoning_content = str(message.get("reasoning_content") or "")
+                return content, usage, reasoning_content
         except Exception as exc:
             last_error = exc
 

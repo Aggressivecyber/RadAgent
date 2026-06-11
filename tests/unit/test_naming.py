@@ -1,15 +1,17 @@
-"""Tests for agent_core.naming — dsv4lite-based intelligent job naming.
+"""Tests for agent_core.naming.
 
 Verifies:
   - sanitize_title handles various inputs correctly
   - generate_job_title produces valid slugs
-  - build_job_id combines UUID + title properly
+  - build_job_id combines UUID + creation timestamp
   - Fallback works when LLM is unavailable
   - User-provided job_id is preserved unchanged
 """
 
 from __future__ import annotations
 
+from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -121,28 +123,34 @@ class TestGenerateJobTitle:
 
 
 class TestBuildJobId:
-    """Verify build_job_id combines UUID and title correctly."""
+    """Verify build_job_id combines UUID and creation timestamp correctly."""
 
     @pytest.mark.asyncio
-    async def test_format_with_title(self) -> None:
-        with patch("agent_core.naming.generate_job_title", new_callable=AsyncMock) as mock_gen:
-            mock_gen.return_value = "proton_sim"
-            result = await build_job_id("", "proton detector")
-            # Must match: job_{8hex}__proton_sim
-            assert result.startswith("job_")
-            assert result.endswith("__proton_sim")
-            # UUID part: "job_" + 8 hex chars
-            uuid_part = result.split("__")[0]
-            assert len(uuid_part) == 12  # "job_" + 8 hex chars
+    async def test_format_uses_timestamp_suffix_without_semantic_title(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls) -> datetime:
+                return cls(2026, 6, 11, 15, 4, 5)
 
-    @pytest.mark.asyncio
-    async def test_format_without_title(self) -> None:
-        with patch("agent_core.naming.generate_job_title", new_callable=AsyncMock) as mock_gen:
-            mock_gen.return_value = ""
-            result = await build_job_id("", "some query")
-            assert result.startswith("job_")
-            assert "__" not in result
-            assert len(result) == 12
+        async def _fail_title_generation(user_query: str) -> str:
+            raise AssertionError("build_job_id must not generate semantic title suffixes")
+
+        monkeypatch.setattr("agent_core.naming.datetime", _FixedDateTime)
+        monkeypatch.setattr(
+            "agent_core.naming.uuid.uuid4",
+            lambda: SimpleNamespace(hex="abcdef1234567890"),
+        )
+        monkeypatch.setattr(
+            "agent_core.naming.generate_job_title",
+            _fail_title_generation,
+        )
+
+        result = await build_job_id("", "proton detector")
+
+        assert result == "job_abcdef12__20260611_150405"
 
     @pytest.mark.asyncio
     async def test_user_provided_id_preserved(self) -> None:
@@ -150,10 +158,13 @@ class TestBuildJobId:
         assert result == "my_custom_job"
 
     @pytest.mark.asyncio
-    async def test_uuid_part_is_hex(self) -> None:
-        with patch("agent_core.naming.generate_job_title", new_callable=AsyncMock) as mock_gen:
-            mock_gen.return_value = "test"
-            result = await build_job_id("", "query")
-            uuid_hex = result.split("__")[0][4:]  # strip "job_"
-            assert len(uuid_hex) == 8
-            int(uuid_hex, 16)  # Must be valid hex
+    async def test_uuid_part_is_hex_and_suffix_is_creation_time(self) -> None:
+        result = await build_job_id("", "query")
+        uuid_part, timestamp = result.split("__")
+        uuid_hex = uuid_part[4:]  # strip "job_"
+
+        assert len(uuid_hex) == 8
+        int(uuid_hex, 16)  # Must be valid hex
+        assert len(timestamp) == 15
+        assert timestamp[8] == "_"
+        datetime.strptime(timestamp, "%Y%m%d_%H%M%S")

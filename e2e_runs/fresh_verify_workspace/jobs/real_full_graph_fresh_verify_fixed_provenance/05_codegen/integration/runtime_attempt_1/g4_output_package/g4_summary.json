@@ -1,0 +1,11 @@
+{
+  "total_events": 1000,
+  "events_requested": 1000,
+  "total_edep_MeV": 702.9644,
+  "total_dose_Gy": 2.416895e-07,
+  "avg_edep_MeV_per_event": 0.7029644,
+  "avg_dose_Gy_per_event": 2.416895e-10,
+  "job_id": "real_full_graph_fresh_verify_fixed_provenance",
+  "smoke_success": true,
+  "smoke_process_success": true
+}

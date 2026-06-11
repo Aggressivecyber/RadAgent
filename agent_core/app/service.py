@@ -21,7 +21,9 @@ from agent_core.app.schemas import (
     ModelTierConfig,
     PhaseResult,
     RadAgentEvent,
+    RuntimeToolStatus,
     SimulationResult,
+    StartupStatusView,
 )
 from agent_core.config.environment import (
     DEFAULT_ENV_PATH,
@@ -62,6 +64,53 @@ TEXT_ARTIFACT_SUFFIXES = {
 }
 
 EventCallback = Callable[[RadAgentEvent], None]
+
+
+def _path_is_executable(path: str) -> bool:
+    if not path:
+        return False
+    target = Path(path)
+    return target.is_file() and os.access(target, os.X_OK)
+
+
+def _status_word(ok: bool) -> str:
+    return "ok" if ok else "missing"
+
+
+def _clip_short_text(value: Any, *, limit: int = 50) -> str:
+    text = " ".join(str(value or "").split()).strip()
+    return text[:limit]
+
+
+def _normalize_task_summary_short(value: Any) -> dict[str, str]:
+    if isinstance(value, dict):
+        result = {
+            key: _clip_short_text(value.get(key))
+            for key in ("zh", "en")
+            if _clip_short_text(value.get(key))
+        }
+        return result
+    text = _clip_short_text(value)
+    if not text:
+        return {}
+    return {"zh": text, "en": text}
+
+
+def _normalize_context_usage(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    allowed = {
+        "compacted",
+        "compacted_history_turns",
+        "context_window_tokens",
+        "cycle",
+        "history_estimated_tokens",
+        "history_usage_ratio",
+        "recent_history_turns",
+        "state",
+        "threshold",
+    }
+    return {key: value[key] for key in allowed if key in value}
 
 
 class RadAgentAppService:
@@ -122,10 +171,90 @@ class RadAgentAppService:
                     max_retries=config.max_retries,
                     temperature=config.temperature,
                     max_tokens=config.max_tokens,
+                    context_window_tokens=config.context_window_tokens,
                     thinking_default=thinking_defaults.get(tier, False),
                 )
                 for tier, config in env.models.items()
             },
+        )
+
+    def get_startup_status(self) -> StartupStatusView:
+        """Return frontend-safe runtime status for the TUI startup frame."""
+        env = load_environment(self.env_path)
+        software = env.software
+        try:
+            project_slug = str(self.current_project().get("slug", "default"))
+        except Exception:
+            project_slug = "default"
+        model_config = self.get_model_config()
+
+        geant4_configured = bool(
+            software.geant4_config_bin or software.geant4_install_dir
+        )
+        geant4_available = _path_is_executable(software.geant4_config_bin)
+        geant4_detail = (
+            f"config={software.geant4_config_bin or 'unset'}; "
+            f"cmake={software.cmake_bin or 'missing'}"
+        )
+
+        tcad_tool_paths = [
+            software.tcad_sde_bin,
+            software.tcad_svisual_bin,
+            software.tcad_swb_bin,
+            software.tcad_inspect_bin,
+        ]
+        tcad_configured = any(
+            [
+                software.tcad_install_dir,
+                software.tcad_docker_container,
+                *tcad_tool_paths,
+            ]
+        )
+        tcad_available = Path(software.tcad_install_dir).exists() or any(
+            _path_is_executable(path) for path in tcad_tool_paths
+        )
+        tcad_detail = (
+            f"dir={software.tcad_install_dir or 'unset'}; "
+            f"sde={_status_word(_path_is_executable(software.tcad_sde_bin))}; "
+            f"svisual={_status_word(_path_is_executable(software.tcad_svisual_bin))}; "
+            f"swb={_status_word(_path_is_executable(software.tcad_swb_bin))}"
+        )
+
+        ngspice_configured = bool(software.ngspice_bin)
+        ngspice_available = _path_is_executable(software.ngspice_bin)
+
+        return StartupStatusView(
+            product_name="RadAgent",
+            project_slug=project_slug,
+            workspace_root=str(self.workspace.root),
+            env_path=str(self.env_path),
+            tools={
+                "geant4": RuntimeToolStatus(
+                    key="geant4",
+                    label="Geant4",
+                    configured=geant4_configured,
+                    available=geant4_available,
+                    path=software.geant4_config_bin,
+                    detail=geant4_detail,
+                ),
+                "tcad": RuntimeToolStatus(
+                    key="tcad",
+                    label="TCAD",
+                    configured=tcad_configured,
+                    available=tcad_available,
+                    path=software.tcad_install_dir,
+                    detail=tcad_detail,
+                ),
+                "ngspice": RuntimeToolStatus(
+                    key="ngspice",
+                    label="ngspice",
+                    configured=ngspice_configured,
+                    available=ngspice_available,
+                    path=software.ngspice_bin,
+                    detail=software.ngspice_bin or "set NGSPICE_BIN",
+                ),
+            },
+            models=model_config.tiers,
         )
 
     def update_model_config(
@@ -165,6 +294,18 @@ class RadAgentAppService:
             values["RADAGENT_PRO_MAX_TOKENS"] = str(update.pro_max_tokens)
         if update.max_max_tokens is not None:
             values["RADAGENT_MAX_MAX_TOKENS"] = str(update.max_max_tokens)
+        if update.lite_context_window_tokens is not None:
+            values["RADAGENT_LITE_CONTEXT_WINDOW_TOKENS"] = str(
+                update.lite_context_window_tokens
+            )
+        if update.pro_context_window_tokens is not None:
+            values["RADAGENT_PRO_CONTEXT_WINDOW_TOKENS"] = str(
+                update.pro_context_window_tokens
+            )
+        if update.max_context_window_tokens is not None:
+            values["RADAGENT_MAX_CONTEXT_WINDOW_TOKENS"] = str(
+                update.max_context_window_tokens
+            )
 
         if not values:
             return self.get_model_config()
@@ -311,6 +452,32 @@ class RadAgentAppService:
             events=[started, finished],
         )
 
+    async def brief_simulation(
+        self,
+        user_message: str,
+        *,
+        conversation: list[dict[str, str]] | None = None,
+    ) -> Any:
+        """Plan a simulation request with the MAX-tier briefing copilot."""
+        from agent_core.chat.briefing import SimulationBriefingPlanner
+
+        planner = SimulationBriefingPlanner()
+        return await planner.brief(
+            user_message=user_message,
+            conversation=conversation or [],
+            workflow_context=self.get_workflow_context().model_dump(mode="json"),
+        )
+
+    async def summarize_approved_simulation_plan(
+        self,
+        briefing_context: dict[str, Any],
+    ) -> dict[str, str]:
+        """Return a short bilingual task summary for the approved plan."""
+        from agent_core.chat.briefing import ApprovedPlanSummarizer
+
+        summarizer = ApprovedPlanSummarizer()
+        return await summarizer.summarize(briefing_context)
+
     def _get_chat_agent(self) -> Any:
         if self._chat_agent is None:
             from agent_core.chat.agent import ChatAgent
@@ -417,6 +584,8 @@ class RadAgentAppService:
         *,
         run_mode: str = "strict",
         auto_continue: bool = True,
+        briefing_context: dict[str, Any] | None = None,
+        reset_chat: bool = True,
     ) -> JobStatus:
         query = query.strip()
         if not query:
@@ -431,10 +600,24 @@ class RadAgentAppService:
             "run_mode": run_mode,
             "skipped_gates": [],
         }
+        if briefing_context:
+            self.state["copilot_briefing"] = self._approved_briefing_context(
+                briefing_context
+            )
+            summary = _normalize_task_summary_short(
+                briefing_context.get("task_summary_short")
+            )
+            if summary:
+                self.state["task_summary_short"] = summary
+            context_usage = _normalize_context_usage(
+                briefing_context.get("context_window_stats")
+            )
+            if context_usage:
+                self.state["copilot_context_usage"] = context_usage
         self.current_phase_idx = 0
         self.completed_phases = []
         self.run_id = uuid4().hex
-        if self._chat_agent is not None:
+        if reset_chat and self._chat_agent is not None:
             self._chat_agent.reset()
 
         self._emit("job_started", status="running", summary=query[:160])
@@ -443,6 +626,17 @@ class RadAgentAppService:
         else:
             await self.run_phase("prepare_workspace")
         return self.get_status()
+
+    def _approved_briefing_context(self, briefing_context: dict[str, Any]) -> dict[str, Any]:
+        data = dict(briefing_context)
+        data["approved"] = True
+        approval = data.get("approval_request")
+        if isinstance(approval, dict):
+            approval["requires_human_approval"] = True
+            data["approval_request"] = approval
+        else:
+            data["approval_request"] = {"requires_human_approval": True}
+        return data
 
     async def run_until_blocked(self) -> JobStatus:
         while self.current_phase_idx < len(PIPELINE_PHASES):

@@ -9,6 +9,8 @@ from agent_core.app.schemas import (
     ModelConfigView,
     ModelTierConfig,
     RadAgentEvent,
+    RuntimeToolStatus,
+    StartupStatusView,
 )
 from agent_core.app.service import RadAgentAppService
 from agent_core.pipeline import PIPELINE_PHASES, PipelinePhase
@@ -25,4 +27,6 @@ __all__ = [
     "PipelinePhase",
     "RadAgentAppService",
     "RadAgentEvent",
+    "RuntimeToolStatus",
+    "StartupStatusView",
 ]

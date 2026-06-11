@@ -1,0 +1,117 @@
+{
+  "events": [
+    {
+      "event_id": "15041020dadc4da5b03c71463778e79a",
+      "timestamp": "2026-06-10T15:36:22.164232+00:00",
+      "job_id": "real_full_graph_fresh_verify",
+      "run_id": "",
+      "span_id": "",
+      "parent_span_id": "",
+      "event_type": "global_integration_runtime_gate_start",
+      "status": "running",
+      "phase": "g4_codegen",
+      "layer": "",
+      "module_name": "global_integration_agent",
+      "gate_name": "",
+      "summary": "Runtime gate attempt 1",
+      "duration_ms": null,
+      "metrics": {},
+      "artifacts": [
+        {
+          "path": "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/geant4_project"
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "details": {}
+    },
+    {
+      "event_id": "d187cea8f56a45068f25a50df88d215b",
+      "timestamp": "2026-06-10T15:36:27.251764+00:00",
+      "job_id": "real_full_graph_fresh_verify",
+      "run_id": "",
+      "span_id": "",
+      "parent_span_id": "",
+      "event_type": "global_integration_runtime_gate_result",
+      "status": "passed",
+      "phase": "g4_codegen",
+      "layer": "",
+      "module_name": "global_integration_agent",
+      "gate_name": "",
+      "summary": "Runtime gate attempt 1 pass",
+      "duration_ms": null,
+      "metrics": {},
+      "artifacts": [
+        {
+          "path": "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/runtime_gate_result.json"
+        }
+      ],
+      "errors": [],
+      "warnings": [
+        "No tests were found!!!\n"
+      ],
+      "details": {
+        "status": "pass",
+        "attempt": 1,
+        "project_dir": "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/geant4_project",
+        "output_dir": "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/g4_output_package",
+        "errors": [],
+        "warnings": [
+          "No tests were found!!!\n"
+        ],
+        "missing_outputs": [],
+        "artifacts": [
+          "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/g4_output_package/cmake_configure_result.json",
+          "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/g4_output_package/build_result.json",
+          "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/g4_output_package/unit_test_result.json",
+          "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/g4_output_package/smoke_simulation_result.json"
+        ],
+        "cmake_configure_result": {
+          "success": true,
+          "cmake_output": {
+            "preview": "-- The C compiler identification is GNU 13.3.0\n-- The CXX compiler identification is GNU 13.3.0\n-- Detecting C compiler ABI info\n-- Detecting C compiler ABI info - done\n-- Check for working C compiler: /usr/bin/cc - skipped\n-- Detecting C compile features\n-- Detecting C compile features - done\n-- Detecting CXX compiler ABI info\n-- Detecting CXX compiler ABI info - done\n-- Check for working CXX compiler: /usr/bin/c++ - skipped\n-- Detecting CXX compile features\n-- Detecting CXX compile features - done\n-- Found EXPAT: /usr/lib/x86_64-linux-gnu/libexpat.so (found suitable version \"2.6.1\", minimum required is \"2.6.1\") \n-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n-- Found Threads: TRUE  \n-- Found OpenGL: /usr/lib/x86_64-linux-gnu/libOpenGL.so   \n-- Found X11: /usr/include   \n-- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.so;/usr/lib/x86_64-linux-gnu/libXext.so\n-- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.",
+            "truncated": true,
+            "sha256": "80e8163e4c1b8c3f80376306fa6da20130161dea49e5eaa8c1e9128c6de35886",
+            "byte_count": 1698
+          },
+          "errors": ""
+        },
+        "build_result": {
+          "success": true,
+          "build_output": {
+            "preview": "[ 13%] Building CXX object CMakeFiles/RadAgentG4.dir/src/DetectorConstruction.cc.o\n[ 13%] Building CXX object CMakeFiles/RadAgentG4.dir/src/MaterialRegistry.cc.o\n[ 26%] Building CXX object CMakeFiles/RadAgentG4.dir/src/Hit.cc.o\n[ 26%] Building CXX object CMakeFiles/RadAgentG4.dir/src/PlacementManager.cc.o\n[ 33%] Building CXX object CMakeFiles/RadAgentG4.dir/src/SensitiveDetector.cc.o\n[ 40%] Building CXX object CMakeFiles/RadAgentG4.dir/src/ScoringManager.cc.o\n[ 46%] Building CXX object CMakeFiles/RadAgentG4.dir/src/PrimaryGeneratorAction.cc.o\n[ 53%] Building CXX object CMakeFiles/RadAgentG4.dir/src/PhysicsListFactoryWrapper.cc.o\n[ 60%] Building CXX object CMakeFiles/RadAgentG4.dir/src/OutputManager.cc.o\n[ 66%] Building CXX object CMakeFiles/RadAgentG4.dir/src/ActionInitialization.cc.o\n[ 73%] Building CXX object CMakeFiles/RadAgentG4.dir/src/RunAction.cc.o\n[ 80%] Building CXX object CMakeFiles/RadAgentG4.dir/src/EventAction.cc.o\n[ 86%] Building CXX object CMakeFiles/RadAgentG4.dir/src/S",
+            "truncated": true,
+            "sha256": "61a2ff18373b4949db924260b8535ec5eb80e4ae724a9498370eb0b4357634c3",
+            "byte_count": 1154
+          },
+          "executable_path": "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/geant4_project/build/RadAgentG4",
+          "errors": ""
+        },
+        "unit_test_result": {
+          "success": true,
+          "command": "ctest --output-on-failure",
+          "stdout": "Test project /home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/geant4_project/build\n",
+          "errors": "No tests were found!!!\n"
+        },
+        "output_quality": {
+          "status": "pass",
+          "errors": [],
+          "warnings": [],
+          "metrics": {
+            "missing_outputs": [],
+            "events_requested": 1000,
+            "event_table_rows": 1000,
+            "event_table_nonzero_rows": 999,
+            "edep_3d_rows": 1000,
+            "edep_3d_nonzero_rows": 999,
+            "edep_3d_positive_sum": 702.964374500001,
+            "dose_3d_rows": 1000,
+            "dose_3d_nonzero_rows": 999,
+            "dose_3d_positive_sum": 2.416895058000001e-07
+          }
+        },
+        "output_summary": "==== Run Started ====\n\n=================== Scoring Summary ===================\n  Total events: 1000\n  Total energy deposited: 702.964 MeV\n  Average dose per event: 241.69 Gy\n=====================================================\n==== OutputManager: Artifacts written to /home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1/g4_output_package ====\n==== Run Ended ====\nGraphics systems deleted.\nVisualization Manager deleting...\n"
+      }
+    }
+  ]
+}

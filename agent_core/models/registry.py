@@ -15,6 +15,7 @@ TASK_DEFAULT_TIER: dict[ModelTask, ModelTier] = {
     ModelTask.CREDIBILITY_ASSESSMENT: ModelTier.LITE,
     ModelTask.FINAL_REVIEW: ModelTier.MAX,
     ModelTask.FAILURE_DIAGNOSIS: ModelTier.MAX,
+    ModelTask.SIMULATION_BRIEFING: ModelTier.MAX,
 }
 
 
@@ -31,6 +32,7 @@ THINKING_DEFAULT_BY_TASK: dict[ModelTask, bool] = {
     ModelTask.CREDIBILITY_ASSESSMENT: False,
     ModelTask.FINAL_REVIEW: True,
     ModelTask.FAILURE_DIAGNOSIS: True,
+    ModelTask.SIMULATION_BRIEFING: True,
 }
 
 

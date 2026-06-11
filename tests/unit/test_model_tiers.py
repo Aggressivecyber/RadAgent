@@ -62,6 +62,11 @@ class TestTaskDefaultTier:
         """Failure diagnosis should use MAX tier."""
         assert tier_for_task(ModelTask.FAILURE_DIAGNOSIS) == ModelTier.MAX
 
+    def test_simulation_briefing_uses_max(self) -> None:
+        """Interactive simulation briefing should use the strongest model tier."""
+        assert tier_for_task(ModelTask.SIMULATION_BRIEFING) == ModelTier.MAX
+        assert thinking_for_task(ModelTask.SIMULATION_BRIEFING) is True
+
     def test_thinking_defaults_match_task_complexity(self) -> None:
         """Complex build/review tasks use thinking; routing and summaries do not."""
         assert thinking_for_task(ModelTask.INTENT_ROUTING) is False
@@ -90,5 +95,6 @@ class TestTaskDefaultTier:
             ModelTask.GATE_EXPLANATION,
             ModelTask.FINAL_REVIEW,
             ModelTask.FAILURE_DIAGNOSIS,
+            ModelTask.SIMULATION_BRIEFING,
         }
         assert max_tasks == expected

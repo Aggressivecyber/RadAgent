@@ -202,6 +202,7 @@ agent_core/
   revision/            isolated revision sandboxes and acceptance checks
   response/            non-pipeline response handling
   schemas/             shared cross-module schemas
+  space_radiation/     AP8/AE8 trapped-radiation source packaging
   storage/             SQLite workspace metadata repository
   tools/               web search and Geant4 build/run wrappers
   tui/                 Textual terminal frontend
@@ -246,6 +247,7 @@ Module responsibilities and links:
 | `agent_core.observability` | Writes job-scoped events, redacted artifacts, and failure bundles. | model gateway, codegen, gates. | `config`. |
 | `agent_core.policies` | Ships static YAML policies, currently file-access zones used by validators. | package resources. | none. |
 | `agent_core.schemas` | Shared schema objects used across validators and simulation contracts. | validators, pipeline state helpers. | none. |
+| `agent_core.space_radiation` | Packages AP8/AE8 trapped-radiation environments into Geant4 source inputs. | planning, Geant4 source modeling. | `knowledge_base.space_radiation`. |
 | `agent_core.storage` | SQLite control-plane repository for projects, jobs, snapshots, events, artifacts, and chat. | app, chat, CLI/REPL. | `workspace`. |
 | `agent_core.tools` | External tool wrappers for web search, Geant4 build/run, and simulation contracts. | chat, context, gates, app. | `config`, `gates`. |
 | `agent_core.validators` | Shared patch/file/code/schema validators used by patching and gates. | patching, gates. | `schemas`. |

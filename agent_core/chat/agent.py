@@ -18,6 +18,7 @@ import logging
 from typing import Any
 
 from agent_core.chat.prompts import CHAT_SYSTEM_PROMPT
+from agent_core.space_radiation.ap8ae8_provider import is_orbit_radiation_request
 from agent_core.workspace.paths import STAGE_INPUT, STAGE_REPORT
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ class ChatAgent:
             web_results,
             jobs,
             workflow_context=workflow_context,
+            user_message=user_message,
         )
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
@@ -321,12 +323,16 @@ class ChatAgent:
         jobs: list[dict[str, Any]],
         *,
         workflow_context: dict[str, Any] | None = None,
+        user_message: str = "",
     ) -> str:
         """Assemble system prompt with retrieved context."""
         parts = [CHAT_SYSTEM_PROMPT]
 
         if workflow_context:
             parts.append("### 当前工作流状态\n" + _format_workflow_context(workflow_context))
+
+        if is_orbit_radiation_request(user_message):
+            parts.append("### 本地 AP8/AE8 空间辐照上下文\n" + _format_ap8ae8_context())
 
         if rag_results:
             lines = []
@@ -385,4 +391,33 @@ def _format_workflow_context(context: dict[str, Any]) -> str:
     evidence = context.get("evidence")
     if evidence:
         lines.append("evidence: " + json.dumps(evidence, ensure_ascii=False))
+    memory = context.get("memory")
+    if memory:
+        compact_memory = []
+        for item in memory[:8]:
+            if not isinstance(item, dict):
+                continue
+            compact_memory.append(
+                {
+                    "source": item.get("source", ""),
+                    "key": item.get("key", ""),
+                    "summary": item.get("summary", ""),
+                    "payload": item.get("payload", {}),
+                }
+            )
+        if compact_memory:
+            lines.append("memory: " + json.dumps(compact_memory, ensure_ascii=False))
     return "\n".join(lines)
+
+
+def _format_ap8ae8_context() -> str:
+    """Return compact local AP8/AE8 guidance for orbit-radiation copilot turns."""
+    return (
+        "本地 AP8/AE8 数据扩展用于 trapped proton/electron belt Geant4 源项。"
+        "需要 particle(proton/electron)、solar_period(min/max)、flux_mode、TLE 或 "
+        "geodetic samples 或 L-shell/B/B0、目标/屏蔽/scoring/events。altitude/inclination "
+        "只能作为轨道描述，不能单独转换为 AP8/AE8 源项；缺少 TLE、geodetic samples 或 "
+        "L-shell/B/B0 时应追问。运行环境使用 aep8/astropy/skyfield/sgp4 计算真实 AP8/AE8 "
+        "通量。AP8/AE8 是静态 trapped-belt 经验模型，不是动态空间天气模型、solar proton "
+        "event 或 GCR 模型。"
+    )

@@ -1,21 +1,26 @@
 from __future__ import annotations
 
+import inspect
 import shlex
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from agent_core.app import RadAgentAppService
+from agent_core.app import JobStatus, RadAgentAppService
 from agent_core.tui.adapters import (
     event_to_row,
     render_header,
     render_markdown_row,
     render_row,
+    render_startup_status,
+    render_task_context,
     row_css_class,
     status_to_header,
 )
 from agent_core.tui.commands import CommandParseError, parse_command
+from agent_core.tui.controller import ControllerAction, TUIController
+from agent_core.tui.i18n import DEFAULT_LANGUAGE, label, language_name, parse_language
 from agent_core.tui.models import TimelineRow
 
 
@@ -51,19 +56,19 @@ class _TextualModules:
 
 _THEMES: dict[str, _Theme] = {
     "radagent": _Theme(
-        screen_bg="#0b0f14",
-        surface_bg="#0f151c",
-        row_bg="#141c25",
-        composer_bg="#111923",
-        header_bg="#d6b56d",
-        header_fg="#11161d",
-        border="#253342",
-        focus="#d6b56d",
-        text="#d8dee9",
-        muted="#78889a",
-        success="#a6d189",
-        running="#6fb6ff",
-        warning="#f0c674",
+        screen_bg="#120f14",
+        surface_bg="#1a1620",
+        row_bg="#241c2b",
+        composer_bg="#211924",
+        header_bg="#c986a8",
+        header_fg="#140f14",
+        border="#8d6aa3",
+        focus="#c58a55",
+        text="#eee4ec",
+        muted="#a896ad",
+        success="#d39abc",
+        running="#ad8fc8",
+        warning="#c58a55",
         error="#ff8a9a",
     ),
     "slate": _Theme(
@@ -99,6 +104,8 @@ _THEMES: dict[str, _Theme] = {
         error="#ffffff",
     ),
 }
+_THEME_NAMES = tuple(_THEMES)
+_OPTION_ROWS = ("language", "theme")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -154,6 +161,13 @@ def _usage() -> str:
     )
 
 
+def _show_event_in_timeline(event: Any) -> bool:
+    """Return whether a service event belongs in the main user timeline."""
+    return getattr(event, "event_type", "") not in {
+        "intent_classified",
+    }
+
+
 def _css_for_theme(theme: _Theme) -> str:
     return f"""
         Screen {{
@@ -169,11 +183,36 @@ def _css_for_theme(theme: _Theme) -> str:
             text-style: bold;
         }}
 
+        #workbench {{
+            height: 1fr;
+            padding: 1 2;
+            border: heavy {theme.border};
+            background: {theme.surface_bg};
+        }}
+
+        #main-split {{
+            height: 1fr;
+        }}
+
+        #conversation-pane {{
+            height: 1fr;
+            width: 1fr;
+            padding: 0 1 0 0;
+        }}
+
         #timeline {{
             height: 1fr;
-            padding: 1 2 0 2;
-            border: solid {theme.border};
+            padding: 0 0 1 0;
             background: {theme.surface_bg};
+        }}
+
+        #task-context {{
+            width: 34;
+            height: 1fr;
+            padding: 1;
+            border: heavy {theme.border};
+            background: {theme.composer_bg};
+            color: {theme.text};
         }}
 
         .row {{
@@ -189,7 +228,8 @@ def _css_for_theme(theme: _Theme) -> str:
 
         .role-agent {{
             background: {theme.composer_bg};
-            color: {theme.text};
+            color: {theme.success};
+            text-style: bold;
         }}
 
         .role-run,
@@ -225,26 +265,27 @@ def _css_for_theme(theme: _Theme) -> str:
         }}
 
         #composer {{
-            height: 3;
-            padding: 0 2;
-            background: {theme.screen_bg};
-            border-top: solid {theme.border};
+            height: 4;
+            padding: 1 0 0 0;
+            background: {theme.surface_bg};
         }}
 
         #prompt {{
+            height: 3;
             width: 1fr;
             background: {theme.composer_bg};
             color: {theme.text};
-            border: solid {theme.border};
+            border: heavy {theme.border};
         }}
 
         #prompt:focus {{
-            border: solid {theme.focus};
+            border: heavy {theme.focus};
         }}
 
         #footer {{
             height: 1;
             padding: 0 2;
+            margin-top: 1;
             color: {theme.muted};
             background: {theme.screen_bg};
         }}
@@ -253,10 +294,11 @@ def _css_for_theme(theme: _Theme) -> str:
             dock: right;
             width: 46;
             padding: 1;
-            border: solid {theme.focus};
+            border: heavy {theme.focus};
             background: {theme.composer_bg};
             color: {theme.text};
             display: none;
+            text-style: bold;
         }}
 
         #inspector.visible {{
@@ -267,9 +309,12 @@ def _css_for_theme(theme: _Theme) -> str:
 
 def create_app_class(*, theme: str = "radagent") -> type[Any]:
     """Create the Textual app class after optional dependencies are available."""
+    from textual.binding import Binding
+
     textual = _load_textual()
     textual_app = textual.app
     horizontal = textual.containers.Horizontal
+    vertical = textual.containers.Vertical
     vertical_scroll = textual.containers.VerticalScroll
     input_widget = textual.widgets.Input
     markdown = textual.widgets.Markdown
@@ -280,15 +325,22 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
         """Terminal-native RadAgent workbench."""
 
         TITLE = "RadAgent"
+        ENABLE_COMMAND_PALETTE = False
         CSS = css
         BINDINGS = [
-            ("ctrl+l", "focus_composer", "Input"),
-            ("ctrl+p", "show_jobs", "Jobs"),
-            ("ctrl+i", "toggle_inspector", "Inspect"),
-            ("ctrl+o", "show_artifacts", "Artifacts"),
-            ("escape", "close_inspector", "Close"),
-            ("f1", "show_help", "Help"),
-            ("ctrl+c", "interrupt_or_quit", "Stop"),
+            Binding("ctrl+l", "focus_composer", "Input"),
+            Binding("ctrl+p", "show_options", "Options"),
+            Binding("ctrl+i", "toggle_inspector", "Inspect"),
+            Binding("ctrl+t", "show_trace", "Trace"),
+            Binding("ctrl+o", "show_artifacts", "Artifacts"),
+            Binding("up", "options_previous", show=False, priority=True),
+            Binding("down", "options_next", show=False, priority=True),
+            Binding("left", "options_decrement", show=False, priority=True),
+            Binding("right", "options_increment", show=False, priority=True),
+            Binding("enter", "options_apply", show=False, priority=True),
+            Binding("escape", "close_inspector", "Close"),
+            Binding("f1", "show_help", "Help"),
+            Binding("ctrl+c", "interrupt_or_quit", "Stop"),
         ]
 
         def __init__(
@@ -299,27 +351,45 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
         ) -> None:
             super().__init__()
             self.service = service or RadAgentAppService(execution_mode=execution_mode)
+            self.controller = TUIController(self.service)
             self._busy = False
             self._operation_worker: Any = None
+            self._controller_worker: Any = None
+            self._controller_thinking_id = ""
             self._rows: list[TimelineRow] = []
+            self._row_widgets: dict[str, Any] = {}
+            self._trace_snippets: list[str] = []
+            self._language = DEFAULT_LANGUAGE
+            self._theme_name = theme
+            self._options_open = False
+            self._options_selected = 0
+            self._options_draft_language = self._language
+            self._options_draft_theme = self._theme_name
 
         def compose(self) -> Any:
             yield static("", id="header")
-            yield vertical_scroll(id="timeline")
-            with horizontal(id="composer"):
-                yield input_widget(
-                    placeholder="Ask RadAgent, or run: /run <simulation request>",
-                    id="prompt",
-                )
-            yield static(
-                "Ctrl+L input  Ctrl+P jobs  Ctrl+I inspect  Ctrl+O artifacts  F1 help  Ctrl+C stop",
-                id="footer",
-            )
-            yield static("", id="inspector")
+            with vertical(id="workbench"):
+                with horizontal(id="main-split"):
+                    with vertical(id="conversation-pane"):
+                        yield vertical_scroll(id="timeline")
+                        with horizontal(id="composer"):
+                            yield input_widget(
+                                placeholder=label("prompt.placeholder", self._language),
+                                id="prompt",
+                            )
+                    yield static("", id="task-context", markup=False)
+            yield static("", id="footer")
+            yield static("", id="inspector", markup=False)
 
         def on_mount(self) -> None:
             self._refresh_header()
-            self._add_system_row("RadAgent TUI ready", "Type a message or /run <request>.")
+            self._refresh_footer()
+            self._refresh_task_context()
+            self._add_system_row(
+                label("ready.title", self._language),
+                self._startup_summary(),
+                kind="brand",
+            )
             self.run_worker(self._listen_events(), name="radagent-events", exclusive=False)
             self.action_focus_composer()
 
@@ -327,6 +397,7 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
             async for event in self.service.subscribe_events():
                 self._add_event_row(event)
                 self._refresh_header()
+                self._refresh_task_context()
 
         async def on_input_submitted(self, event: Any) -> None:
             text = event.value.strip()
@@ -334,6 +405,10 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
             await self._dispatch_text(text)
 
         async def _dispatch_text(self, text: str) -> None:
+            if not text.startswith("/") and text != "?":
+                await self._dispatch_controller_text(text)
+                return
+
             try:
                 command = parse_command(text)
             except CommandParseError as exc:
@@ -360,6 +435,7 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                         self._add_system_row("Resume failed", str(exc), status="error")
                     else:
                         self._refresh_header()
+                        self._refresh_task_context()
                 case "jobs":
                     self._show_jobs()
                 case "artifacts":
@@ -379,6 +455,8 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                         self._update_model_config(command.args)
                     else:
                         self._show_model_config()
+                case "options":
+                    self._show_options(command.args)
                 case "logs":
                     self._show_logs()
                 case "projects":
@@ -409,6 +487,56 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                 case _:
                     self._add_system_row("Command error", f"Unhandled command: {command.name}")
 
+        async def _dispatch_controller_text(self, text: str) -> None:
+            if self._busy:
+                self._add_system_row("Busy", "Wait for the current operation to finish.", "warning")
+                return
+            if self._controller_worker is not None:
+                self._add_system_row(
+                    "Copliot busy",
+                    (
+                        "Copliot is still responding. Commands such as /options "
+                        "and /logs remain available."
+                    ),
+                    "warning",
+                )
+                return
+            thinking_id = self._add_thinking_row() if text.strip() else ""
+            self._controller_thinking_id = thinking_id
+            self._controller_worker = self.run_worker(
+                self._run_controller_text(text, thinking_id),
+                name="radagent-controller",
+                exclusive=True,
+                group="radagent-controller",
+            )
+            self._refresh_header()
+
+        async def _run_controller_text(self, text: str, thinking_id: str) -> None:
+            try:
+                result = await self.controller.handle_text(text)
+            except Exception as exc:
+                self._finish_thinking_row(thinking_id, status="error", summary=str(exc))
+                self._add_system_row("Copliot failed", str(exc), "error")
+                return
+            finally:
+                self._controller_worker = None
+                self._controller_thinking_id = ""
+                self._refresh_header()
+
+            self._apply_controller_result(result, thinking_id)
+
+        def _apply_controller_result(self, result: Any, thinking_id: str) -> None:
+            self._finish_thinking_row(thinking_id)
+            if result.action == ControllerAction.SHOW_BRIEFING:
+                self._add_briefing_row(result.briefing)
+                self._refresh_task_context()
+                return
+            if result.action == ControllerAction.START_OPERATION:
+                self._start_operation(result.operation)
+                return
+            self._add_system_row(result.title or "Message", result.summary, result.status)
+            self._refresh_task_context()
+
         def _start_operation(self, operation: Any) -> None:
             if self._busy:
                 operation.close()
@@ -416,6 +544,7 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                 return
             self._busy = True
             self._refresh_header()
+            self._refresh_task_context()
             self._operation_worker = self.run_worker(
                 self._run_operation(operation),
                 name="radagent-operation",
@@ -432,8 +561,12 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                 self._busy = False
                 self._operation_worker = None
                 self._refresh_header()
+                self._refresh_task_context()
 
         def _add_event_row(self, event: Any) -> None:
+            self._remember_trace(getattr(event, "payload", {}))
+            if not _show_event_in_timeline(event):
+                return
             self._append_row(event_to_row(event))
 
         def _add_system_row(
@@ -441,15 +574,121 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
             title: str,
             summary: str = "",
             status: str = "info",
+            kind: str = "system",
         ) -> None:
             row = TimelineRow(
                 id=f"system:{len(self._rows)}",
-                kind="system",
+                kind=kind,
                 status=status,
                 title=title,
                 summary=summary,
             )
             self._append_row(row)
+
+        def _add_thinking_row(self) -> str:
+            row = TimelineRow(
+                id=f"thinking:{len(self._rows)}",
+                kind="thinking",
+                status="running",
+                title="Copliot",
+                summary=self._t("thinking.analyzing"),
+            )
+            self._append_row(row)
+            return row.id
+
+        def _finish_thinking_row(
+            self,
+            row_id: str,
+            *,
+            status: str = "success",
+            summary: str | None = None,
+        ) -> None:
+            if not row_id:
+                return
+            for index, row in enumerate(self._rows):
+                if row.id != row_id:
+                    continue
+                updated = replace(
+                    row,
+                    status=status,
+                    summary=summary if summary is not None else self._t("thinking.done"),
+                )
+                self._rows[index] = updated
+                widget = self._row_widgets.get(row_id)
+                if widget is not None and hasattr(widget, "update"):
+                    widget.update(render_row(updated))
+                return
+
+        def _add_briefing_row(self, briefing: Any) -> None:
+            self._remember_briefing_trace(briefing)
+            lines = [
+                str(getattr(briefing, "understanding", "")),
+            ]
+            ready = bool(getattr(briefing, "ready_for_approval", False))
+            next_question = getattr(briefing, "next_question", None)
+            questions = list(getattr(briefing, "questions", []) or [])
+            recommendations = list(getattr(briefing, "recommendations", []) or [])
+            missing = list(getattr(briefing, "missing_critical_fields", []) or [])
+            assumptions = list(getattr(briefing, "assumptions", []) or [])
+            risks = list(getattr(briefing, "risks", []) or [])
+            question_text = str(_briefing_value(next_question, "question", "") or "")
+            choices = list(_briefing_value(next_question, "choices", []) or [])
+            if question_text:
+                lines.extend(["", "Question:", question_text])
+                lines.extend(f"{index}. {choice}" for index, choice in enumerate(choices, start=1))
+            elif questions:
+                lines.extend(["", "Question:", f"- {questions[0]}"])
+            if recommendations:
+                lines.extend(
+                    ["", "Recommendations:", *[f"- {item}" for item in recommendations[:8]]]
+                )
+            if missing and (ready or not question_text):
+                lines.extend(["", "Missing:", *[f"- {item}" for item in missing[:8]]])
+            if assumptions and ready:
+                lines.extend(["", "Assumptions:", *[f"- {item}" for item in assumptions[:8]]])
+            if risks and ready:
+                lines.extend(["", "Risks:", *[f"- {item}" for item in risks[:8]]])
+            if ready:
+                summary = (
+                    briefing.summary_text()
+                    if hasattr(briefing, "summary_text")
+                    else str(getattr(briefing, "final_query", ""))
+                )
+                lines.extend(
+                    [
+                        "",
+                        "Approval required:",
+                        summary,
+                        "",
+                        "输入 确定/批准 启动，输入 修改:<意见> 继续打磨，输入 取消 放弃。",
+                    ]
+                )
+            row = TimelineRow(
+                id=f"briefing:{len(self._rows)}",
+                kind="confirmation",
+                status="success" if getattr(briefing, "ready_for_approval", False) else "warning",
+                title="Simulation briefing",
+                summary="\n".join(line for line in lines if line is not None),
+                payload={
+                    "final_query": getattr(briefing, "final_query", ""),
+                    "ready_for_approval": getattr(briefing, "ready_for_approval", False),
+                },
+            )
+            self._append_row(row)
+
+        def _remember_briefing_trace(self, briefing: Any) -> None:
+            lines: list[str] = []
+            hidden = list(getattr(briefing, "hidden_questions", []) or [])
+            assumptions = list(getattr(briefing, "assumptions", []) or [])
+            risks = list(getattr(briefing, "risks", []) or [])
+            if hidden:
+                lines.extend(["Hidden questions:", *[f"- {item}" for item in hidden[:12]]])
+            if assumptions:
+                lines.extend(["Assumptions:", *[f"- {item}" for item in assumptions[:12]]])
+            if risks:
+                lines.extend(["Risks:", *[f"- {item}" for item in risks[:12]]])
+            if lines:
+                self._trace_snippets.append("\n".join(lines))
 
         def _append_row(self, row: TimelineRow) -> None:
             self._rows.append(row)
@@ -460,8 +699,9 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     classes=row_css_class(row),
                 )
             else:
-                widget = static(render_row(row), classes=row_css_class(row))
+                widget = static(render_row(row), classes=row_css_class(row), markup=False)
             timeline.mount(widget)
+            self._row_widgets[row.id] = widget
             scroll_end = getattr(timeline, "scroll_end", None)
             if callable(scroll_end):
                 scroll_end(animate=False)
@@ -472,10 +712,49 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
             except Exception:
                 project = "default"
             header = status_to_header(self.service.get_status(), project=project)
-            busy = "  busy" if self._busy else ""
+            busy = "  busy" if self._busy or self._controller_worker is not None else ""
             self.query_one("#header", static).update(render_header(header) + busy)
 
-        def _show_panel(self, title: str, lines: list[str]) -> None:
+        def _refresh_footer(self) -> None:
+            self.query_one("#footer", static).update(label("footer", self._language))
+            prompt = self.query_one("#prompt", input_widget)
+            prompt.placeholder = label("prompt.placeholder", self._language)
+
+        def _refresh_task_context(self) -> None:
+            status = self._status_with_controller_usage()
+            self.query_one("#task-context", static).update(
+                render_task_context(status, language=self._language)
+            )
+
+        def _status_with_controller_usage(self) -> JobStatus:
+            status = self.service.get_status()
+            usage = getattr(self.controller, "latest_copilot_context_usage", {})
+            if not usage:
+                return status
+            state = dict(status.state)
+            state.setdefault("copilot_context_usage", usage)
+            return status.model_copy(update={"state": state})
+
+        def _startup_summary(self) -> str:
+            try:
+                startup = self.service.get_startup_status()
+            except Exception:
+                return label("brand.ready", self._language)
+            return render_startup_status(startup)
+
+        def _t(self, key: str) -> str:
+            return label(key, self._language)
+
+        def _show_panel(
+            self,
+            title: str,
+            lines: list[str],
+            *,
+            options_panel: bool = False,
+        ) -> None:
+            if not options_panel:
+                self._options_open = False
+                self.refresh_bindings()
             body = "\n".join([title, "", *lines])
             inspector = self.query_one("#inspector", static)
             inspector.update(body)
@@ -484,21 +763,21 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
         def _show_jobs(self) -> None:
             jobs = self.service.list_jobs(include_all_projects=True)
             if not jobs:
-                self._show_panel("Jobs", ["No jobs found."])
+                self._show_panel(self._t("jobs.title"), [self._t("jobs.empty")])
                 return
             lines = [
                 f"{job.get('status', 'unknown'):10} {job.get('job_id', '')}"
                 for job in jobs[:30]
             ]
-            self._show_panel("Jobs", lines)
+            self._show_panel(self._t("jobs.title"), lines)
 
         def _show_artifacts(self) -> None:
             artifacts = self.service.list_artifacts()
             if not artifacts:
-                self._show_panel("Artifacts", ["No artifacts for the active job."])
+                self._show_panel(self._t("artifacts.title"), [self._t("artifacts.empty")])
                 return
             lines = [f"{item.kind or item.stage:18} {item.path}" for item in artifacts[:30]]
-            self._show_panel("Artifacts", lines)
+            self._show_panel(self._t("artifacts.title"), lines)
 
         def _show_artifact(self, path: str) -> None:
             artifact = self.service.read_artifact(path, max_chars=8000)
@@ -649,7 +928,7 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                         f"  key: {tier.api_key_env} ({key_status})",
                         (
                             f"  tokens: {tier.max_tokens}  timeout: {tier.timeout_s}s  "
-                            f"thinking: {thinking}"
+                            f"window: {tier.context_window_tokens}  thinking: {thinking}"
                         ),
                     ]
                 )
@@ -678,6 +957,19 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
             ]
             self._show_panel("Logs", lines)
 
+        def _show_trace(self) -> None:
+            if not self._trace_snippets:
+                self._show_panel("Model Trace", ["No model trace has been reported yet."])
+                return
+            self._show_panel("Model Trace", self._trace_snippets[-20:])
+
+        def _remember_trace(self, payload: Any) -> None:
+            if not isinstance(payload, dict):
+                return
+            trace = str(payload.get("reasoning_content") or "").strip()
+            if trace:
+                self._trace_snippets.append(trace)
+
         def _show_projects(self) -> None:
             projects = self.service.list_projects()
             lines = [
@@ -704,11 +996,117 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                 f"mode: {status.run_mode}",
                 f"confirmation: {'yes' if status.needs_confirmation else 'no'}",
             ]
-            self._show_panel("Status", lines)
+            self._show_panel(self._t("status.title"), lines)
+
+        def _show_options(self, args: str = "") -> None:
+            if args:
+                try:
+                    self._apply_options_argument(args)
+                except ValueError as exc:
+                    self._add_system_row("Command error", str(exc), status="warning")
+                    return
+                self._add_system_row(self._t("options.updated"), args.strip(), "success")
+            self._open_options()
+
+        def _apply_options_argument(self, args: str) -> None:
+            value = args.strip()
+            normalized = value.lower()
+            if normalized.startswith("theme="):
+                normalized = normalized.partition("=")[2].strip()
+            if normalized in _THEMES:
+                self._apply_theme(normalized)
+                return
+            self._language = parse_language(value)
+            self._refresh_footer()
+            self._refresh_task_context()
+
+        def _open_options(self) -> None:
+            self._options_open = True
+            self._options_selected = 0
+            self._options_draft_language = self._language
+            self._options_draft_theme = self._theme_name
+            self.refresh_bindings()
+            self._render_options_panel()
+
+        def _render_options_panel(self) -> None:
+            lines = [
+                self._option_line(
+                    0,
+                    self._t("options.language"),
+                    language_name(self._options_draft_language),
+                ),
+                self._option_line(
+                    1,
+                    self._t("options.theme"),
+                    f"{self._options_draft_theme}  ({' | '.join(_THEME_NAMES)})",
+                ),
+                "",
+                self._t("options.controls"),
+                self._t("options.context_window"),
+                "",
+                self._t("options.ctrl_o"),
+                self._t("options.jobs"),
+                self._t("options.logs"),
+            ]
+            self._show_panel(self._t("options.title"), lines, options_panel=True)
+
+        def _option_line(self, index: int, title: str, value: str) -> str:
+            cursor = ">" if self._options_selected == index else " "
+            return f"{cursor} {title:<10} {value}"
+
+        def _change_option_selection(self, delta: int) -> None:
+            self._options_selected = (self._options_selected + delta) % len(_OPTION_ROWS)
+            self._render_options_panel()
+
+        def _change_option_value(self, delta: int) -> None:
+            option = _OPTION_ROWS[self._options_selected]
+            if option == "language":
+                languages = list(type(self._language))
+                index = languages.index(self._options_draft_language)
+                self._options_draft_language = languages[(index + delta) % len(languages)]
+            elif option == "theme":
+                index = _THEME_NAMES.index(self._options_draft_theme)
+                self._options_draft_theme = _THEME_NAMES[(index + delta) % len(_THEME_NAMES)]
+            self._render_options_panel()
+
+        def _apply_options_draft(self) -> None:
+            updates: list[str] = []
+            if self._language != self._options_draft_language:
+                self._language = self._options_draft_language
+                self._refresh_footer()
+                self._refresh_task_context()
+                updates.append(language_name(self._language))
+            if self._theme_name != self._options_draft_theme:
+                self._apply_theme(self._options_draft_theme)
+                updates.append(self._theme_name)
+            self._options_open = False
+            self.refresh_bindings()
+            self.query_one("#inspector", static).remove_class("visible")
+            self.action_focus_composer()
+            self._add_system_row(
+                self._t("options.updated"),
+                ", ".join(updates) if updates else self._t("options.current"),
+                "success",
+            )
+
+        def _apply_theme(self, theme_name: str) -> None:
+            self._theme_name = theme_name
+            new_css = _css_for_theme(_THEMES[theme_name])
+            self.__class__.CSS = new_css
+            try:
+                app_path = inspect.getfile(self.__class__)
+            except (TypeError, OSError):
+                app_path = ""
+            self.stylesheet.add_source(
+                new_css,
+                read_from=(app_path, f"{self.__class__.__name__}.CSS"),
+                is_default_css=False,
+            )
+            self.refresh_css(animate=False)
 
         def _show_help(self) -> None:
             self._show_panel(
-                "Commands",
+                self._t("commands.title"),
                 [
                     "/run <query>",
                     "/chat <message>",
@@ -724,6 +1122,7 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
                     "/logs",
                     "/build",
                     "/simulate [events]",
+                    "/options [en|zh]",
                     "/projects",
                     "/project <slug-or-id>",
                     "/revise <request>",
@@ -748,23 +1147,67 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
         def action_toggle_inspector(self) -> None:
             inspector = self.query_one("#inspector", static)
             if "visible" in inspector.classes:
+                self._options_open = False
+                self.refresh_bindings()
                 inspector.remove_class("visible")
             else:
                 self._show_status()
 
         def action_close_inspector(self) -> None:
+            self._options_open = False
+            self.refresh_bindings()
             self.query_one("#inspector", static).remove_class("visible")
 
         def action_show_help(self) -> None:
             self._show_help()
 
+        def action_show_options(self) -> None:
+            self._show_options()
+
+        def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+            if action.startswith("options_"):
+                return self._options_open
+            return True
+
+        def action_options_previous(self) -> None:
+            self._change_option_selection(-1)
+
+        def action_options_next(self) -> None:
+            self._change_option_selection(1)
+
+        def action_options_decrement(self) -> None:
+            self._change_option_value(-1)
+
+        def action_options_increment(self) -> None:
+            self._change_option_value(1)
+
+        def action_options_apply(self) -> None:
+            self._apply_options_draft()
+
+        def action_show_trace(self) -> None:
+            self._show_trace()
+
         def action_interrupt_or_quit(self) -> None:
+            if self._controller_worker is not None:
+                self._controller_worker.cancel()
+                self._controller_worker = None
+                self._finish_thinking_row(
+                    self._controller_thinking_id,
+                    status="warning",
+                    summary="Copliot response was cancelled.",
+                )
+                self._controller_thinking_id = ""
+                self._add_system_row("Interrupted", "Copliot response was cancelled.", "warning")
+                self._refresh_header()
+                self._refresh_task_context()
+                return
             if self._operation_worker is not None:
                 self._operation_worker.cancel()
                 self._operation_worker = None
                 self._busy = False
                 self._add_system_row("Interrupted", "Current operation was cancelled.", "warning")
                 self._refresh_header()
+                self._refresh_task_context()
                 return
             self.exit()
 
@@ -787,11 +1230,23 @@ def _parse_model_config_args(args: str) -> dict[str, Any]:
         "lite_tokens": "lite_max_tokens",
         "pro_tokens": "pro_max_tokens",
         "max_tokens": "max_max_tokens",
+        "lite_window": "lite_context_window_tokens",
+        "pro_window": "pro_context_window_tokens",
+        "max_window": "max_context_window_tokens",
         "lite_timeout": "lite_timeout_s",
         "pro_timeout": "pro_timeout_s",
         "max_timeout": "max_timeout_s",
     }
-    integer_fields = {"lite_max_tokens", "pro_max_tokens", "max_max_tokens"}
+    integer_fields = {
+        "lite_max_tokens",
+        "max_max_tokens",
+        "pro_max_tokens",
+    }
+    context_window_fields = {
+        "lite_context_window_tokens",
+        "max_context_window_tokens",
+        "pro_context_window_tokens",
+    }
     float_fields = {"lite_timeout_s", "pro_timeout_s", "max_timeout_s"}
     parsed: dict[str, Any] = {}
 
@@ -805,13 +1260,42 @@ def _parse_model_config_args(args: str) -> dict[str, Any]:
         normalized = aliases.get(key.strip().lower())
         if not normalized:
             raise ValueError(f"Unknown model config field: {key}")
-        if normalized in integer_fields:
+        if normalized in context_window_fields:
+            parsed[normalized] = _parse_context_window(value)
+        elif normalized in integer_fields:
             parsed[normalized] = int(value)
         elif normalized in float_fields:
             parsed[normalized] = float(value)
         else:
             parsed[normalized] = value
     return parsed
+
+
+_CONTEXT_WINDOW_OPTIONS = {
+    "100k": 100_000,
+    "200k": 200_000,
+    "500k": 500_000,
+    "1m": 1_000_000,
+}
+
+
+def _parse_context_window(value: str) -> int:
+    normalized = value.strip().lower().replace("_", "")
+    if normalized in _CONTEXT_WINDOW_OPTIONS:
+        return _CONTEXT_WINDOW_OPTIONS[normalized]
+    if normalized.endswith("k"):
+        number = normalized[:-1]
+        if number.isdigit() and int(number) > 0:
+            return int(number) * 1000
+    if normalized.isdigit() and int(normalized) > 0:
+        return int(normalized) * 1000
+    raise ValueError("Context window must use k units, for example: 100k, 200k, 750k, 1m")
+
+
+def _briefing_value(value: Any, key: str, default: Any = "") -> Any:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
 
 
 def _load_textual() -> _TextualModules:

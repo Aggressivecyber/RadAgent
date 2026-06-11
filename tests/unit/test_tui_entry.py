@@ -42,3 +42,31 @@ def test_tui_model_config_arg_parser() -> None:
         "pro_model": "mimo-v2.5-pro",
         "max_max_tokens": 12000,
     }
+
+
+def test_tui_model_config_arg_parser_accepts_common_context_windows() -> None:
+    from agent_core.tui.app import _parse_model_config_args
+
+    parsed = _parse_model_config_args("lite_window=100k pro_window=500k max_window=1m")
+
+    assert parsed == {
+        "lite_context_window_tokens": 100_000,
+        "pro_context_window_tokens": 500_000,
+        "max_context_window_tokens": 1_000_000,
+    }
+
+
+def test_tui_model_config_arg_parser_rejects_unlisted_context_window() -> None:
+    from agent_core.tui.app import _parse_model_config_args
+
+    parsed = _parse_model_config_args("max_window=128k")
+
+    assert parsed == {"max_context_window_tokens": 128_000}
+
+
+def test_tui_model_config_arg_parser_treats_bare_custom_window_as_k_units() -> None:
+    from agent_core.tui.app import _parse_model_config_args
+
+    parsed = _parse_model_config_args("max_window=750")
+
+    assert parsed == {"max_context_window_tokens": 750_000}

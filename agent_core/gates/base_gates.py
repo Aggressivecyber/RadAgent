@@ -94,21 +94,35 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     # Gate 1: Task Spec Schema
     sv = SchemaValidator()
     ts_valid, ts_errors = sv.validate_task_spec(task_spec)
+    external_valid, external_errors, external_paths, external_checks = (
+        _validate_external_sources(task_spec)
+    )
+    gate1_valid = ts_valid and external_valid
+    gate1_passed = ["schema valid"] if ts_valid else []
+    if external_checks and external_valid:
+        gate1_passed.append("external source artifacts valid")
+    gate1_failed = []
+    gate1_failed.extend(ts_errors if not ts_valid else [])
+    gate1_failed.extend(external_errors if not external_valid else [])
     gate_results.append(
         {
             "gate_id": 1,
             "name": gate_name(1),
-            "status": "pass" if ts_valid else "fail",
+            "status": "pass" if gate1_valid else "fail",
             "checked_items": [
-                {"item": "task_spec schema validation", "result": "pass" if ts_valid else "fail"},
+                {
+                    "item": "task_spec schema validation",
+                    "result": "pass" if ts_valid else "fail",
+                },
                 {"item": "required fields present", "result": "pass" if ts_valid else "fail"},
+                *external_checks,
             ],
-            "passed_items": ["schema valid"] if ts_valid else [],
-            "failed_items": ts_errors if not ts_valid else [],
+            "passed_items": gate1_passed,
+            "failed_items": gate1_failed,
             "warnings": [],
             "evidence": [],
-            "file_paths": [],
-            "message": "; ".join(ts_errors) if ts_errors else "Task spec schema valid",
+            "file_paths": external_paths,
+            "message": "; ".join(gate1_failed) if gate1_failed else "Task spec schema valid",
         }
     )
 
@@ -539,3 +553,37 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
         "skipped_gates": skipped,
         "failed_gates": failed,
     }
+
+
+def _validate_external_sources(
+    task_spec: dict[str, Any],
+) -> tuple[bool, list[str], list[str], list[dict[str, str]]]:
+    """Validate declared external source artifacts after TaskSpec schema checks."""
+    sources = task_spec.get("external_sources")
+    if not sources:
+        return True, [], [], []
+    if not isinstance(sources, list):
+        return False, ["external_sources must be a list"], [], []
+
+    errors: list[str] = []
+    file_paths: list[str] = []
+    checked: list[dict[str, str]] = []
+    for index, source in enumerate(sources):
+        if not isinstance(source, dict):
+            continue
+        source_id = str(source.get("source_id") or f"external_sources[{index}]")
+        status = str(source.get("status") or "")
+        raw_artifacts = source.get("artifact_paths") or []
+        artifact_paths = raw_artifacts if isinstance(raw_artifacts, list) else []
+        if status == "ready" and not artifact_paths:
+            errors.append(f"ready external source {source_id} has no artifact_paths")
+        for artifact in artifact_paths:
+            path = Path(str(artifact))
+            item = f"external source artifact {path}"
+            if path.is_file():
+                checked.append({"item": item, "result": "pass"})
+                file_paths.append(str(path))
+            else:
+                checked.append({"item": item, "result": "fail"})
+                errors.append(f"Missing external source artifact: {path}")
+    return not errors, errors, file_paths, checked

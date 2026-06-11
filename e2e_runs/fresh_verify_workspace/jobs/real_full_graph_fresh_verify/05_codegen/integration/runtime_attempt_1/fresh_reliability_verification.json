@@ -1,0 +1,42 @@
+{
+  "fresh_runtime_attempt": "/home/rylan/RadAgent/e2e_runs/fresh_verify_workspace/jobs/real_full_graph_fresh_verify/05_codegen/integration/runtime_attempt_1",
+  "passed": false,
+  "failed_checks": [
+    {
+      "name": "provenance_physics_matches_macro",
+      "detail": "QGSP_BIC"
+    }
+  ],
+  "metrics": {
+    "missing_outputs": [],
+    "events_requested": 1000,
+    "event_table_rows": 1000,
+    "event_table_nonzero_rows": 999,
+    "edep_3d_rows": 1000,
+    "edep_3d_nonzero_rows": 999,
+    "edep_3d_positive_sum": 702.964374500001,
+    "dose_3d_rows": 1000,
+    "dose_3d_nonzero_rows": 999,
+    "dose_3d_positive_sum": 2.416895058000001e-07
+  },
+  "summary": {
+    "total_events": 1000,
+    "events_requested": 1000,
+    "total_edep_MeV": 702.9644,
+    "total_dose_Gy": 2.416895e-07,
+    "avg_edep_MeV_per_event": 0.7029644,
+    "avg_dose_Gy_per_event": 2.416895e-10,
+    "job_id": "real_full_graph_fresh_verify",
+    "smoke_success": true,
+    "smoke_process_success": true
+  },
+  "provenance": {
+    "tool": "Geant4",
+    "version": "11.3",
+    "timestamp": "2026-06-10T23:36:27",
+    "physics_list": "QGSP_BIC",
+    "detector": "RadAgent Silicon Detector",
+    "scoring": "energy_dose_3d"
+  },
+  "check_count": 30
+}

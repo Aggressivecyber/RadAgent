@@ -1,17 +1,17 @@
-"""Intelligent job naming via model gateway summarization.
+"""Job ID helpers.
 
-Generates human-readable title suffixes for job IDs by calling the
-model gateway (lite tier) to summarize user input. Falls back to a simple
-slug derived from the first few English words when the LLM is unavailable.
+Generated job IDs avoid semantic title suffixes so workspace directory names
+remain compact and predictable.
 
-Job ID format: ``job_{uuid8}__{title_slug}``
-Example: ``job_a1b2c3__proton_detector_sim``
+Job ID format: ``job_{uuid8}__{YYYYMMDD_HHMMSS}``
+Example: ``job_a1b2c3d4__20260611_150405``
 """
 
 from __future__ import annotations
 
 import re
 import uuid
+from datetime import datetime
 
 _MAX_TITLE_LEN = 60
 
@@ -109,27 +109,25 @@ def _fallback_slug(user_query: str) -> str:
 
 
 async def build_job_id(base_id: str, user_query: str) -> str:
-    """Build a complete job ID with an optional human-readable title suffix.
+    """Build a complete job ID with a creation-time suffix.
 
     If *base_id* is non-empty (user provided via ``--job-id``), it is
-    returned unchanged. Otherwise a new UUID-based ID is generated and
-    a title suffix derived from *user_query* is appended.
+    returned unchanged. Otherwise a new UUID-based ID is generated with a
+    timestamp suffix using local 24-hour time. *user_query* is accepted for
+    backward compatibility with existing call sites and is not used for
+    semantic directory naming.
 
     Args:
         base_id: User-supplied job ID override (empty string if none).
         user_query: The user's natural language simulation request.
 
     Returns:
-        A job ID like ``job_a1b2c3__proton_detector_sim``, or the
+        A job ID like ``job_a1b2c3d4__20260611_150405``, or the
         unchanged *base_id* if one was provided.
     """
     if base_id:
         return base_id
 
     uuid_part = f"job_{uuid.uuid4().hex[:8]}"
-    title = await generate_job_title(user_query)
-
-    if not title:
-        return uuid_part
-
-    return f"{uuid_part}__{title}"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{uuid_part}__{timestamp}"

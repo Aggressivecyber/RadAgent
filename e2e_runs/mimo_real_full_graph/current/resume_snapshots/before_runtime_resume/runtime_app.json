@@ -1,0 +1,10 @@
+{
+  "module_name": "runtime_app",
+  "status": "failed",
+  "generated_files": [],
+  "repair_attempts": [],
+  "errors": [
+    "Invalid JSON response: Expecting value: line 1 column 1 (char 0)"
+  ],
+  "warnings": []
+}

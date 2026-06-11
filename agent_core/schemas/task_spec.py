@@ -129,6 +129,53 @@ class CircuitSpec(BaseModel):
     )
 
 
+class ExternalSourceDerivedOutput(BaseModel):
+    """Artifact derived from an external environment/source package."""
+
+    kind: str = Field(description="Derived output kind, e.g. geant4_source_spectrum")
+    path: str = Field(description="Filesystem path to the derived artifact")
+    consumer: str = Field(description="Primary downstream consumer")
+
+
+class ExternalSourceSpec(BaseModel):
+    """External simulation input source shared across planning, modeling, gates, and copilot."""
+
+    source_id: str = Field(description="Stable source identifier referenced by particles")
+    source_type: str = Field(description="Source category, e.g. environment")
+    domain: str = Field(description="Domain such as space_radiation")
+    provider: str = Field(description="Provider adapter name, e.g. ap8ae8")
+    model: str = Field(description="Provider model name")
+    status: str = Field(default="ready", description="Source readiness status")
+    artifact_paths: list[str] = Field(
+        default_factory=list,
+        description="Artifacts that must be present for this source to be usable",
+    )
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Normalized provider parameters used to derive the source",
+    )
+    provenance: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Dataset and adapter provenance",
+    )
+    derived_outputs: list[ExternalSourceDerivedOutput] = Field(
+        default_factory=list,
+        description="Structured derived outputs consumed by later stages",
+    )
+    limitations: list[str] = Field(
+        default_factory=list,
+        description="Known limitations of the external source model",
+    )
+    consumers: list[str] = Field(
+        default_factory=list,
+        description="Pipeline components expected to consume this source",
+    )
+    evidence: list[str] = Field(
+        default_factory=list,
+        description="Human-readable source evidence copied into copilot/gates",
+    )
+
+
 _VALID_OUTPUTS: frozenset[str] = frozenset(
     {
         "dose_map",
@@ -198,6 +245,28 @@ class TaskSpec(BaseModel):
                             "relative_weight": 0.3,
                         },
                     ],
+                    "external_sources": [
+                        {
+                            "source_id": "leo_trapped_protons",
+                            "source_type": "environment",
+                            "domain": "space_radiation",
+                            "provider": "ap8ae8",
+                            "model": "AP8MIN",
+                            "status": "ready",
+                            "artifact_paths": ["inputs/ap8min_spectrum.csv"],
+                            "parameters": {"l_shell": 2.0, "bb0": 1.05},
+                            "provenance": {"dataset_id": "nasa-radbelt-aep8"},
+                            "derived_outputs": [
+                                {
+                                    "kind": "geant4_source_spectrum",
+                                    "path": "inputs/ap8min_spectrum.csv",
+                                    "consumer": "g4_modeling",
+                                }
+                            ],
+                            "limitations": ["AP8/AE8 is a static trapped-belt model"],
+                            "consumers": ["g4_modeling", "g4_codegen", "gates", "copilot"],
+                        }
+                    ],
                     "target": {
                         "material": "Silicon",
                         "size_um": [100.0, 100.0, 50.0],
@@ -237,6 +306,14 @@ class TaskSpec(BaseModel):
         description=(
             "Composite radiation field components. When provided, each entry "
             "becomes one Geant4 source and takes precedence over particle."
+        ),
+    )
+    external_sources: list[ExternalSourceSpec] | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "External environment/source packages shared by G4 modeling, codegen, "
+            "gates, and copilot."
         ),
     )
     target: TargetSpec | None = Field(

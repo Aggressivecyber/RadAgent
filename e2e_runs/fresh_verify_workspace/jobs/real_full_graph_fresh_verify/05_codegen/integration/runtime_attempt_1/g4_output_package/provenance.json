@@ -1,0 +1,8 @@
+{
+  "tool": "Geant4",
+  "version": "11.3",
+  "timestamp": "2026-06-10T23:36:27",
+  "physics_list": "QGSP_BIC",
+  "detector": "RadAgent Silicon Detector",
+  "scoring": "energy_dose_3d"
+}

@@ -38,9 +38,9 @@ async def source_definition_node(state: RadiationAgentState) -> dict[str, Any]:
             particle,
             index=index,
             default_z_offset=z_offset,
-            EnergySpec=EnergySpec,
-            BeamProfile=BeamProfile,
-            SourceSpec=SourceSpec,
+            energy_spec_cls=EnergySpec,
+            beam_profile_cls=BeamProfile,
+            source_spec_cls=SourceSpec,
         )
         for index, particle in enumerate(particles)
     ]
@@ -99,9 +99,9 @@ def _source_from_particle(
     *,
     index: int,
     default_z_offset: float,
-    EnergySpec: Any,
-    BeamProfile: Any,
-    SourceSpec: Any,
+    energy_spec_cls: Any,
+    beam_profile_cls: Any,
+    source_spec_cls: Any,
 ) -> Any:
     """Build one SourceSpec from a task particle/source component."""
     particle_type = particle.get("type", "proton")
@@ -137,7 +137,7 @@ def _source_from_particle(
         or ("primary_source" if index == 0 else f"source_{index + 1}")
     )
 
-    energy = EnergySpec(
+    energy = energy_spec_cls(
         value=energy_value,
         unit=energy_unit,
         distribution=energy_distribution,
@@ -145,7 +145,7 @@ def _source_from_particle(
         spectrum_file=spectrum_file,
     )
 
-    beam = BeamProfile(
+    beam = beam_profile_cls(
         position=position,
         direction=direction,
         sigma_position_um=particle.get("sigma_position_um"),
@@ -156,7 +156,17 @@ def _source_from_particle(
         surface_size=particle.get("surface_size"),
     )
 
-    return SourceSpec(
+    source_evidence = particle.get("source_evidence")
+    if not isinstance(source_evidence, list) or not source_evidence:
+        source_evidence = [
+            f"task_spec.particles[{index}]: "
+            f"source_id={source_id}, particle={particle_type}, "
+            f"energy={energy_value} {energy_unit}, distribution={energy_distribution}, "
+            f"generator={generator_type}, position={position}, direction={direction}, "
+            f"angular_distribution={angular_distribution}"
+        ]
+
+    return source_spec_cls(
         source_id=source_id,
         particle_type=particle_type,
         energy=energy,
@@ -164,13 +174,7 @@ def _source_from_particle(
         generator_type=generator_type,
         events=events,
         relative_weight=particle.get("relative_weight"),
-        source_evidence=[
-            f"task_spec.particles[{index}]: "
-            f"source_id={source_id}, particle={particle_type}, "
-            f"energy={energy_value} {energy_unit}, distribution={energy_distribution}, "
-            f"generator={generator_type}, position={position}, direction={direction}, "
-            f"angular_distribution={angular_distribution}"
-        ],
+        source_evidence=[str(item) for item in source_evidence],
     )
 
 

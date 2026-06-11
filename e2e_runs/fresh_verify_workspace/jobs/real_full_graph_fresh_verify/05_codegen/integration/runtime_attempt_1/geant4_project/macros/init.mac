@@ -1,0 +1,14 @@
+/run/initialize
+
+# Visualization
+/vis/open OGL
+/vis/viewer/set/viewpointThetaPhi 45 45
+/vis/viewer/set/style wireframe
+/vis/drawVolume
+/vis/scene/add/axes 0 0 0 10 cm
+
+# Physics cuts
+/run/setCut 1 mm
+/run/verbose 1
+/event/verbose 0
+/tracking/verbose 0

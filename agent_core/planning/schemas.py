@@ -12,6 +12,7 @@ class TaskPlanningInput(TypedDict, total=False):
     user_query: str
     context_report_path: str
     evidence_map_path: str
+    copilot_briefing: dict[str, Any]
 
 
 class TaskPlanningOutput(TypedDict, total=False):
@@ -29,6 +30,7 @@ class TaskPlanningState(TypedDict, total=False):
     user_query: str
     context_report_path: str
     evidence_map_path: str
+    copilot_briefing: dict[str, Any]
 
     # Parsed task
     task_spec: dict[str, Any]

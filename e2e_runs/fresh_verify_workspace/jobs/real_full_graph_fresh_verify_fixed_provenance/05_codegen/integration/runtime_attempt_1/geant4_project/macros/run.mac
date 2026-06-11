@@ -1,0 +1,10 @@
+/run/initialize
+
+# Beam configuration: 100 MeV proton beam
+/gun/particle proton
+/gun/energy 100 MeV
+/gun/position 0 0 -80.0 mm
+/gun/direction 0 0 1
+
+# Run 10 events for smoke test
+/run/beamOn 1000

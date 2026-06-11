@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from agent_core.app import JobStatus, RadAgentEvent
+from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.tui.models import HeaderState, TimelineRow
 
 _EVENT_TITLES = {
@@ -16,8 +18,8 @@ _EVENT_TITLES = {
     "human_confirmation_required": "Needs confirmation",
     "human_confirmation_submitted": "Confirmation submitted",
     "copilot_started": "User",
-    "copilot_finished": "Copilot",
-    "copilot_failed": "Copilot failed",
+    "copilot_finished": "Copliot",
+    "copilot_failed": "Copliot failed",
     "build_started": "Build started",
     "build_finished": "Build finished",
     "simulation_started": "Simulation started",
@@ -85,12 +87,16 @@ def row_status_marker(status: str) -> str:
 
 def render_row(row: TimelineRow) -> str:
     """Render a compact one-line timeline row for Textual Static widgets."""
+    if row.kind == "brand":
+        return row.summary
     role = row_role_label(row)
     marker = row_status_marker(row.status)
     if row.kind == "user_message":
         return f"{role:<7} {row.summary}"
     if row.kind == "assistant_message":
         return f"{role:<7} {row.title}"
+    if row.kind == "thinking":
+        return f"{role:<7} {marker:<4} {row.summary}"
     summary = f"  {row.summary}" if row.summary else ""
     return f"{role:<7} {marker:<4} {row.title}{summary}"
 
@@ -104,11 +110,12 @@ def render_markdown_row(row: TimelineRow) -> str:
 def row_role_label(row: TimelineRow) -> str:
     """Return a short role label for timeline display."""
     return {
-        "assistant_message": "AGENT",
+        "assistant_message": "Copliot",
         "confirmation": "REVIEW",
         "error": "ERROR",
         "phase": "RUN",
         "system": "SYSTEM",
+        "thinking": "Copliot",
         "tool": "TOOL",
         "user_message": "USER",
     }.get(row.kind, "EVENT")
@@ -122,6 +129,7 @@ def row_css_class(row: TimelineRow) -> str:
         "error": "role-error",
         "phase": "role-run",
         "system": "role-system",
+        "thinking": "role-agent",
         "tool": "role-tool",
         "user_message": "role-user",
     }.get(row.kind, "role-event")
@@ -137,6 +145,54 @@ def render_header(header: HeaderState) -> str:
         f"RadAgent  project/{header.project}  {job}  "
         f"status:{header.status}  phase:{phase}  mode:{header.run_mode}{confirm}"
     )
+
+
+def render_startup_status(status: Any) -> str:
+    """Render the compact startup status frame."""
+    tools = _mapping(status, "tools", {})
+    models = _mapping(status, "models", {})
+    project = _value(status, "project_slug", "default")
+    workspace = _value(status, "workspace_root", "")
+    lines = [
+        "RadAgent",
+        f"project {project}  workspace {workspace or 'unset'}",
+        "",
+        _tool_status_line(tools.get("geant4"), "Geant4"),
+        _tool_status_line(tools.get("tcad"), "TCAD"),
+        _tool_status_line(tools.get("ngspice"), "ngspice"),
+        "",
+        "Models",
+    ]
+    for tier_name in ("lite", "pro", "max"):
+        model = models.get(tier_name)
+        if model is None:
+            lines.append(f"{tier_name:<5} missing")
+            continue
+        key_status = "key" if _value(model, "api_key_configured", False) else "no-key"
+        thinking = " think" if _value(model, "thinking_default", False) else ""
+        lines.append(
+            f"{tier_name:<5} {_value(model, 'model_name', 'unset')}  {key_status}{thinking}"
+        )
+    return "\n".join(lines)
+
+
+def render_task_context(status: JobStatus, *, language: Any = "en") -> str:
+    """Render the right-side task summary and adjacent workflow steps."""
+    lines = [
+        "Task",
+        f"job   {status.job_id or 'no-job'}",
+    ]
+    summary = _summary_for_language(
+        status.state.get("task_summary_short"),
+        language=language,
+    )
+    if summary:
+        lines.append(summary)
+    context_usage = _context_usage_line(status.state.get("copilot_context_usage"))
+    if context_usage:
+        lines.extend(["", context_usage])
+    lines.extend(["", "Workflow", *_workflow_step_lines(status)])
+    return "\n".join(lines)
 
 
 def _kind_for_event(event_type: str) -> str:
@@ -180,6 +236,115 @@ def _summary_for_event(event: RadAgentEvent) -> str:
     if event.payload:
         return ", ".join(sorted(event.payload.keys())[:4])
     return ""
+
+
+def _tool_status_line(tool: Any, fallback_label: str) -> str:
+    if tool is None:
+        return f"{fallback_label:<8} missing"
+    label = _value(tool, "label", fallback_label)
+    configured = bool(_value(tool, "configured", False))
+    available = bool(_value(tool, "available", False))
+    state = "ready" if available else "config" if configured else "missing"
+    path = str(_value(tool, "path", "") or _value(tool, "detail", "") or "")
+    return f"{label:<8} {state:<7} {_shorten_middle(path, 32)}".rstrip()
+
+
+def _summary_for_language(value: Any, *, language: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    selected = getattr(language, "value", str(language))
+    key = "zh" if selected == "zh" else "en"
+    summary = str(value.get(key) or value.get("en") or value.get("zh") or "").strip()
+    return summary[:50]
+
+
+def _workflow_step_lines(status: JobStatus) -> list[str]:
+    index = _current_phase_index(status)
+    previous_index = index - 1 if index > 0 else None
+    next_index = index + 1 if index + 1 < len(PIPELINE_PHASES) else None
+    current_marker = "run" if status.status in {"running", "paused"} else "wait"
+    return [
+        _workflow_line("prev", previous_index, "ok"),
+        _workflow_line("now", index, current_marker),
+        _workflow_line("next", next_index, "wait"),
+    ]
+
+
+def _current_phase_index(status: JobStatus) -> int:
+    if status.current_phase in PIPELINE_PHASES:
+        return PIPELINE_PHASES.index(status.current_phase)
+    return max(0, min(int(status.current_phase_idx), len(PIPELINE_PHASES) - 1))
+
+
+def _workflow_line(prefix: str, index: int | None, marker: str) -> str:
+    label = (
+        _PHASE_LABELS.get(PIPELINE_PHASES[index], PIPELINE_PHASES[index])
+        if index is not None
+        else "-"
+    )
+    return f"{prefix:<5} {label:<20} {marker}".rstrip()
+
+
+def _context_usage_line(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    ratio = _float_value(value.get("history_usage_ratio"))
+    percent = max(0, min(999, round(ratio * 100)))
+    state = str(value.get("state") or ("compacted" if value.get("compacted") else "normal"))
+    cycle = int(value.get("cycle") or 0)
+    window = _format_window_k(value.get("context_window_tokens"))
+    if state == "compacting":
+        return f"Copliot context compacting cycle {cycle} {window}".strip()
+    bar = _progress_bar(ratio)
+    suffix = f"cycle {cycle}" if cycle else "normal"
+    if state == "compacted":
+        suffix = f"cycle {cycle} compacted".strip()
+    return f"Copliot context {bar} {percent}% {suffix} {window}".strip()
+
+
+def _progress_bar(ratio: float, *, width: int = 10) -> str:
+    filled = max(0, min(width, round(ratio * width)))
+    return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
+
+
+def _float_value(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _format_window_k(value: Any) -> str:
+    try:
+        tokens = int(value)
+    except (TypeError, ValueError):
+        return ""
+    if tokens <= 0:
+        return ""
+    if tokens % 1_000_000 == 0:
+        return f"{tokens // 1_000_000}m"
+    return f"{tokens // 1000}k"
+
+
+def _mapping(value: Any, key: str, default: Any) -> Any:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _value(value: Any, key: str, default: Any = "") -> Any:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _shorten_middle(value: str, max_len: int) -> str:
+    if len(value) <= max_len:
+        return value
+    keep = max_len - 3
+    front = keep // 2
+    back = keep - front
+    return f"{value[:front]}...{value[-back:]}"
 
 
 def _row_id(event: RadAgentEvent) -> str:

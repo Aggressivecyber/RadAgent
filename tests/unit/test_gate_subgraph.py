@@ -91,6 +91,135 @@ class TestRunBaseGates:
             if g["gate_id"] in (7, 9):
                 assert g["status"] != "pass", f"Gate {g['gate_id']} auto-passed in acceptance mode"
 
+    async def test_gate1_validates_external_source_artifacts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gate 1 should treat simulation input sources as part of the task contract."""
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
+        job_dir = workspace / "jobs" / "external_source_ok"
+        gate_dir = job_dir / STAGE_GATE_VALIDATION
+        gate_dir.mkdir(parents=True)
+        spectrum_path = job_dir / "02_task_plan" / "space_radiation" / "ap8.csv"
+        spectrum_path.parent.mkdir(parents=True)
+        spectrum_path.write_text("energy_MeV,flux_cm-2_s-1_MeV-1\n1,42\n", encoding="utf-8")
+
+        state = {
+            "job_id": "external_source_ok",
+            "execution_mode": "strict",
+            "context_decision": "allow_rag",
+            "task_spec": {
+                "simulation_scope": ["geant4"],
+                "particles": [
+                    {
+                        "source_id": "ap8_orbit_protons",
+                        "type": "proton",
+                        "energy_MeV": 1.0,
+                        "energy_distribution": "spectrum",
+                        "spectrum_file": str(spectrum_path),
+                        "direction": [0.0, 0.0, -1.0],
+                        "generator_type": "gps",
+                        "events": 1000,
+                    }
+                ],
+                "external_sources": [
+                    {
+                        "source_id": "ap8_orbit_protons",
+                        "source_type": "environment",
+                        "domain": "space_radiation",
+                        "provider": "ap8ae8",
+                        "model": "AP8MIN",
+                        "status": "ready",
+                        "artifact_paths": [str(spectrum_path)],
+                        "parameters": {"l_shell": 2.0, "bb0": 1.05},
+                        "provenance": {"dataset_id": "nasa-radbelt-aep8"},
+                        "derived_outputs": [
+                            {
+                                "kind": "geant4_source_spectrum",
+                                "path": str(spectrum_path),
+                                "consumer": "g4_modeling",
+                            }
+                        ],
+                        "limitations": ["trapped belt static model"],
+                        "consumers": [
+                            "task_planning",
+                            "g4_modeling",
+                            "g4_codegen",
+                            "gates",
+                            "copilot",
+                        ],
+                    }
+                ],
+            },
+            "g4_model_ir": {},
+            "generated_code_dir": str(tmp_path / "noexist"),
+            "gate_results": [],
+            "skipped_gates": [],
+            "failed_gates": [],
+        }
+
+        result = await run_base_gates(state)
+
+        gate1 = [g for g in result["gate_results"] if g["gate_id"] == 1][0]
+        assert gate1["status"] == "pass"
+        assert "external source artifacts valid" in gate1["passed_items"]
+        assert str(spectrum_path) in gate1["file_paths"]
+
+    async def test_gate1_fails_when_external_source_artifact_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ready external source must not pass if its declared artifact is absent."""
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
+        (workspace / "jobs" / "external_source_missing" / STAGE_GATE_VALIDATION).mkdir(
+            parents=True
+        )
+        missing_path = workspace / "jobs" / "external_source_missing" / "missing.csv"
+
+        state = {
+            "job_id": "external_source_missing",
+            "execution_mode": "strict",
+            "context_decision": "allow_rag",
+            "task_spec": {
+                "simulation_scope": ["geant4"],
+                "external_sources": [
+                    {
+                        "source_id": "ap8_orbit_protons",
+                        "source_type": "environment",
+                        "domain": "space_radiation",
+                        "provider": "ap8ae8",
+                        "model": "AP8MIN",
+                        "status": "ready",
+                        "artifact_paths": [str(missing_path)],
+                        "parameters": {"l_shell": 2.0, "bb0": 1.05},
+                        "provenance": {"dataset_id": "nasa-radbelt-aep8"},
+                        "derived_outputs": [
+                            {
+                                "kind": "geant4_source_spectrum",
+                                "path": str(missing_path),
+                                "consumer": "g4_modeling",
+                            }
+                        ],
+                        "limitations": [],
+                        "consumers": ["gates"],
+                    }
+                ],
+            },
+            "g4_model_ir": {},
+            "generated_code_dir": str(tmp_path / "noexist"),
+            "gate_results": [],
+            "skipped_gates": [],
+            "failed_gates": [],
+        }
+
+        result = await run_base_gates(state)
+
+        gate1 = [g for g in result["gate_results"] if g["gate_id"] == 1][0]
+        assert gate1["status"] == "fail"
+        assert any(str(missing_path) in item for item in gate1["failed_items"])
+
 
 class TestRunG4ModelingGates:
     async def test_no_model_ir_skips(self) -> None:
