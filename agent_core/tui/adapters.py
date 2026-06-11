@@ -165,6 +165,8 @@ def render_startup_status(status: Any) -> str:
     project = _value(status, "project_slug", "default")
     workspace = _value(status, "workspace_root", "")
     lines = [
+        "RadAgent",
+        "",
         "Workspace",
         f"{'Project':<13}{project}",
         f"{'Directory':<13}{workspace or 'unset'}",
@@ -207,7 +209,7 @@ def render_task_context(status: JobStatus, *, language: Any = "en") -> str:
     phase = (
         _PHASE_LABELS.get(status.current_phase, status.current_phase.replace("_", " ").title())
         if status.current_phase
-        else "waiting"
+        else "completed" if status.status == "completed" else "waiting"
     )
     lines = [
         "Task",

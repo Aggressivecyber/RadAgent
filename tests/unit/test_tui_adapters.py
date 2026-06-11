@@ -347,6 +347,38 @@ def test_artifacts_and_jobs_tables_are_productized() -> None:
     assert "completed" in jobs_table
 
 
+def test_artifacts_table_preserves_semantic_status_values() -> None:
+    artifacts = [
+        {
+            "kind": "log",
+            "path": "./runs/job-001/geant4.log",
+            "size_bytes": 18_000,
+            "status": "generating",
+        },
+        {
+            "kind": "report",
+            "path": "./runs/job-001/summary.md",
+            "size_bytes": 8_000,
+            "status": "outdated",
+        },
+        {
+            "kind": "plot",
+            "path": "./runs/job-001/energy.png",
+            "size_bytes": 0,
+            "status": "failed",
+        },
+    ]
+
+    rendered = render_artifacts_table(artifacts)
+
+    assert "log       geant4.log" in rendered
+    assert "generating" in rendered
+    assert "report    summary.md" in rendered
+    assert "outdated" in rendered
+    assert "plot      energy.png" in rendered
+    assert "failed" in rendered
+
+
 def test_job_detail_renders_resume_retry_and_output_location() -> None:
     rendered = render_job_detail(
         {

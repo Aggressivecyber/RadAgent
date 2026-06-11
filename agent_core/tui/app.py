@@ -132,6 +132,69 @@ _DEMO_PROFILES = {
     "neutron-ct": "Neutron CT reconstruction",
     "electron-dose": "Electron dose deposition",
 }
+_DEMO_STEPS = (
+    ("preparing", "prepare_workspace", []),
+    ("checking", "context", ["prepare_workspace"]),
+    ("generating", "g4_codegen", ["prepare_workspace", "context", "task_planning", "g4_modeling"]),
+    (
+        "running",
+        "gate",
+        [
+            "prepare_workspace",
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "human_confirmation",
+            "g4_codegen",
+            "patch",
+        ],
+    ),
+    (
+        "analyzing",
+        "artifact",
+        [
+            "prepare_workspace",
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "human_confirmation",
+            "g4_codegen",
+            "patch",
+            "gate",
+        ],
+    ),
+    (
+        "reporting",
+        "report",
+        [
+            "prepare_workspace",
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "human_confirmation",
+            "g4_codegen",
+            "patch",
+            "gate",
+            "artifact",
+        ],
+    ),
+    (
+        "completed",
+        "",
+        [
+            "prepare_workspace",
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "human_confirmation",
+            "g4_codegen",
+            "patch",
+            "gate",
+            "artifact",
+            "report",
+        ],
+    ),
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -401,6 +464,9 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._history_index: int | None = None
             self._composer_mode = "ASK"
             self._demo_status: JobStatus | None = None
+            self._demo_profile = ""
+            self._demo_title = ""
+            self._demo_step_index = 0
 
         def compose(self) -> Any:
             yield static("", id="header")
@@ -438,7 +504,6 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
         async def on_input_submitted(self, event: Any) -> None:
             text = event.value.strip()
             event.input.value = ""
-            self._remember_command_history(text)
             self._history_index = None
             self._refresh_footer()
             await self._dispatch_text(text)
@@ -452,6 +517,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._refresh_footer()
 
         async def _dispatch_text(self, text: str) -> None:
+            self._remember_command_history(text.strip())
             if not text.startswith("/") and text != "?":
                 if self._composer_mode == "RUN":
                     await self._dispatch_text(f"/run {text}")
@@ -1198,22 +1264,48 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     ).splitlines(),
                 )
                 return
-            self._demo_status = JobStatus(
+            self._demo_profile = selected
+            self._demo_title = title
+            self._demo_step_index = 0
+            self._demo_status = self._build_demo_status()
+            for summary in (
+                "Preparing workspace",
+                "Checking tools",
+                "Generating macro",
+                "Running simulation",
+                "Analyzing output",
+                "Generating report",
+            ):
+                self._add_system_row("Demo", summary, "running")
+            self._refresh_header()
+            self._refresh_task_context()
+
+        def _advance_demo_step(self) -> None:
+            if not self._demo_profile:
+                return
+            self._demo_step_index = min(self._demo_step_index + 1, len(_DEMO_STEPS) - 1)
+            self._demo_status = self._build_demo_status()
+            self._refresh_header()
+            self._refresh_task_context()
+
+        def _build_demo_status(self) -> JobStatus:
+            state, phase, completed = _DEMO_STEPS[self._demo_step_index]
+            phase_idx = 0
+            if phase:
+                from agent_core.pipeline import PIPELINE_PHASES
+
+                phase_idx = PIPELINE_PHASES.index(phase)
+            else:
+                phase_idx = len(completed)
+            selected = self._demo_profile
+            title = self._demo_title
+            return JobStatus(
                 job_id=f"demo-{selected}",
                 user_query=title,
-                status="running",
-                current_phase="artifact",
-                current_phase_idx=8,
-                completed_phases=[
-                    "prepare_workspace",
-                    "context",
-                    "task_planning",
-                    "g4_modeling",
-                    "human_confirmation",
-                    "g4_codegen",
-                    "patch",
-                    "gate",
-                ],
+                status=state,
+                current_phase=phase,
+                current_phase_idx=phase_idx,
+                completed_phases=list(completed),
                 execution_mode=self.service.execution_mode,
                 run_mode="demo",
                 workspace_root=str(self.service.workspace.root),
@@ -1246,17 +1338,6 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     },
                 },
             )
-            for summary in (
-                "Preparing workspace",
-                "Checking tools",
-                "Generating macro",
-                "Running simulation",
-                "Analyzing output",
-                "Generating report",
-            ):
-                self._add_system_row("Demo", summary, "running")
-            self._refresh_header()
-            self._refresh_task_context()
 
         def _show_options(self, args: str = "") -> None:
             if args:

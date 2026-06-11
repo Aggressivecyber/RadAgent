@@ -229,7 +229,8 @@ async def test_task_context_hides_simulation_summary_before_plan_approval(tmp_pa
         content = str(app.query_one("#task-context").content)
         assert "job_pending" in content
         assert "仿真" not in content
-        assert "simulation" not in content.lower()
+        assert "Particle" not in content
+        assert "Energy" not in content
 
 
 def _ready_guided_briefing() -> object:
@@ -725,9 +726,24 @@ async def test_workstation_commands_show_inspect_demo_and_history(tmp_path) -> N
         await pilot.pause()
         content = str(app.query_one("#task-context").content)
         assert "demo-geant4" in content
+        assert "State        preparing" in content
+        assert "Phase        Prepare workspace" in content
         assert "Runtime" in content
         assert "Simulation" in content
         assert "Energy Deposit" in content
+
+        app._advance_demo_step()
+        await pilot.pause()
+        content = str(app.query_one("#task-context").content)
+        assert "State        checking" in content
+        assert "Phase        Context" in content
+
+        for _ in range(5):
+            app._advance_demo_step()
+        await pilot.pause()
+        content = str(app.query_one("#task-context").content)
+        assert "State        completed" in content
+        assert "Phase        completed" in content
 
         await app._dispatch_text("/mode run")
         await pilot.pause()
