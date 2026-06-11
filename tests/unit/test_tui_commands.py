@@ -55,9 +55,17 @@ def test_workstation_commands_are_parsed() -> None:
     assert parse_command("/report").name == "report"
     assert parse_command("/demo geant4").name == "demo"
     assert parse_command("/mode run").name == "mode"
+    assert parse_command("/job job-001").name == "job"
+    assert parse_command("/retry job-002").name == "retry"
 
     with pytest.raises(CommandParseError, match="Usage: /demo"):
         parse_command("/demo")
+
+    with pytest.raises(CommandParseError, match="Usage: /job"):
+        parse_command("/job")
+
+    with pytest.raises(CommandParseError, match="Usage: /retry"):
+        parse_command("/retry")
 
     with pytest.raises(CommandParseError, match="ask, run, cmd, inspect, artifact, config"):
         parse_command("/mode unknown")
@@ -76,6 +84,7 @@ def test_command_suggestions_return_stable_palette_entries() -> None:
     assert command_suggestions("/re") == [
         "/report    Generate or preview the active report",
         "/resume    Resume a saved job",
+        "/retry     Retry a saved job",
         "/revise    Request a revision for the active job",
         "/revisions List saved revisions",
     ]

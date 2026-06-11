@@ -199,6 +199,7 @@ class RadAgentAppService:
 
         tcad_tool_paths = [
             software.tcad_sde_bin,
+            software.tcad_sdevice_bin,
             software.tcad_svisual_bin,
             software.tcad_swb_bin,
             software.tcad_inspect_bin,
@@ -216,6 +217,7 @@ class RadAgentAppService:
         tcad_detail = (
             f"dir={software.tcad_install_dir or 'unset'}; "
             f"sde={_status_word(_path_is_executable(software.tcad_sde_bin))}; "
+            f"sdevice={_status_word(_path_is_executable(software.tcad_sdevice_bin))}; "
             f"svisual={_status_word(_path_is_executable(software.tcad_svisual_bin))}; "
             f"swb={_status_word(_path_is_executable(software.tcad_swb_bin))}"
         )
@@ -908,6 +910,10 @@ class RadAgentAppService:
     def list_jobs(self, *, include_all_projects: bool = False) -> list[dict[str, Any]]:
         self.store.import_existing_jobs()
         return self.store.list_jobs(include_all_projects=include_all_projects)
+
+    def get_job(self, job_id: str) -> dict[str, Any] | None:
+        self.store.import_existing_jobs()
+        return self.store.get_job(job_id)
 
     def list_projects(self) -> list[dict[str, Any]]:
         return self.store.list_projects()

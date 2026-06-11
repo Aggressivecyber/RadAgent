@@ -311,6 +311,31 @@ def render_jobs_table(jobs: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def render_job_detail(job: dict[str, Any] | None) -> str:
+    """Render one job as a resumable session detail panel."""
+    if not job:
+        return render_error_state(
+            "Job not found.",
+            suggestions=["Run /jobs", "Check the job id", "Use /resume <job_id>"],
+        )
+    job_id = str(job.get("job_id", ""))
+    lines = [
+        "Job Detail",
+        "",
+        f"{'Name':<13}{job.get('user_query') or job.get('name') or '-'}",
+        f"{'Status':<13}{job.get('status', 'unknown')}",
+        f"{'Created':<13}{job.get('created_at', '')}",
+        f"{'Phase':<13}{job.get('current_phase') or 'idle'}",
+        f"{'Mode':<13}{job.get('run_mode') or job.get('execution_mode') or 'strict'}",
+    ]
+    if job.get("job_workspace"):
+        lines.append(f"{'Output':<13}{job['job_workspace']}")
+    if job.get("error_summary"):
+        lines.append(f"{'Error':<13}{job['error_summary']}")
+    lines.extend(["", "Commands", f"/resume {job_id}", f"/retry {job_id}", f"/open {job_id}"])
+    return "\n".join(lines)
+
+
 def render_error_state(title: str, *, suggestions: list[str] | None = None) -> str:
     """Render an actionable error state with next steps."""
     lines = ["ERROR", title]

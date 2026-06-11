@@ -7,6 +7,7 @@ from agent_core.tui.adapters import (
     render_command_palette,
     render_error_state,
     render_header,
+    render_job_detail,
     render_jobs_table,
     render_markdown_row,
     render_row,
@@ -344,6 +345,32 @@ def test_artifacts_and_jobs_tables_are_productized() -> None:
     assert "ID        Name" in jobs_table
     assert "job-001   electron_aluminum_test" in jobs_table
     assert "completed" in jobs_table
+
+
+def test_job_detail_renders_resume_retry_and_output_location() -> None:
+    rendered = render_job_detail(
+        {
+            "job_id": "job-001",
+            "user_query": "electron_aluminum_test",
+            "status": "failed",
+            "created_at": "2026-06-11 12:40",
+            "current_phase": "gate",
+            "run_mode": "strict",
+            "execution_mode": "strict",
+            "job_workspace": "./simulation_workspace/jobs/job-001",
+            "error_summary": "macro syntax error",
+        }
+    )
+
+    assert "Job Detail" in rendered
+    assert "Name         electron_aluminum_test" in rendered
+    assert "Status       failed" in rendered
+    assert "Created      2026-06-11 12:40" in rendered
+    assert "Phase        gate" in rendered
+    assert "Output       ./simulation_workspace/jobs/job-001" in rendered
+    assert "Error        macro syntax error" in rendered
+    assert "/resume job-001" in rendered
+    assert "/retry job-001" in rendered
 
 
 def test_error_state_and_command_palette_are_actionable() -> None:

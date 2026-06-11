@@ -138,6 +138,7 @@ def test_startup_status_reports_tools_and_models_without_secrets(tmp_path, monke
     monkeypatch.setenv("RADAGENT_API_KEY", "secret-value")
     monkeypatch.setenv("NGSPICE_BIN", "/usr/bin/ngspice")
     monkeypatch.setenv("TCAD_INSTALL_DIR", "/opt/synopsys/tcad")
+    monkeypatch.setenv("TCAD_SDEVICE_BIN", "/opt/synopsys/tcad/bin/sdevice")
 
     service = RadAgentAppService(workspace_root=tmp_path)
     status = service.get_startup_status()
@@ -145,6 +146,7 @@ def test_startup_status_reports_tools_and_models_without_secrets(tmp_path, monke
     assert status.product_name == "RadAgent"
     assert status.tools["geant4"].label == "Geant4"
     assert status.tools["tcad"].configured is True
+    assert "sdevice=" in status.tools["tcad"].detail
     assert status.tools["ngspice"].path == "/usr/bin/ngspice"
     assert status.models["lite"].model_name == "lite-test"
     assert status.models["pro"].model_name == "pro-test"

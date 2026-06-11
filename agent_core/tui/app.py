@@ -14,6 +14,7 @@ from agent_core.tui.adapters import (
     render_command_palette,
     render_error_state,
     render_header,
+    render_job_detail,
     render_jobs_table,
     render_markdown_row,
     render_row,
@@ -501,6 +502,10 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                         self._refresh_task_context()
                 case "jobs":
                     self._show_jobs()
+                case "job":
+                    self._show_job(command.args)
+                case "retry":
+                    self._retry_job(command.args)
                 case "artifacts":
                     self._show_artifacts()
                 case "artifact":
@@ -851,6 +856,26 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             jobs = self.service.list_jobs(include_all_projects=True)
             rendered = render_jobs_table(jobs)
             self._show_panel(self._t("jobs.title"), rendered.splitlines()[2:])
+
+        def _show_job(self, job_id: str) -> None:
+            job = self.service.get_job(job_id)
+            rendered = render_job_detail(job)
+            self._show_panel("Job Detail", rendered.splitlines()[2:])
+
+        def _retry_job(self, job_id: str) -> None:
+            try:
+                self.service.resume_job(job_id)
+            except Exception as exc:
+                self._show_panel(
+                    "Retry",
+                    render_error_state(
+                        f"Cannot retry job: {job_id}",
+                        suggestions=[str(exc), "Run /jobs", "Check the job id"],
+                    ).splitlines(),
+                )
+                return
+            self._demo_status = None
+            self._start_operation(self.service.run_until_blocked())
 
         def _show_artifacts(self) -> None:
             artifacts = self.service.list_artifacts()
@@ -1350,7 +1375,9 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     "/run <query>",
                     "/chat <message>",
                     "/jobs",
+                    "/job <job_id>",
                     "/resume <job_id>",
+                    "/retry <job_id>",
                     "/check",
                     "/artifacts",
                     "/artifact <path>",

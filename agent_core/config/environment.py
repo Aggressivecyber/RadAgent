@@ -154,6 +154,7 @@ class SoftwareEnvironment:
     tcad_install_dir: str
     tcad_docker_container: str
     tcad_sde_bin: str
+    tcad_sdevice_bin: str
     tcad_svisual_bin: str
     tcad_swb_bin: str
     tcad_inspect_bin: str
@@ -289,6 +290,7 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
         tcad_install_dir=_path_env("TCAD_INSTALL_DIR", _env("STROOT", "")),
         tcad_docker_container=_env("TCAD_DOCKER_CONTAINER", "tcad-sentaurus"),
         tcad_sde_bin=_path_env("TCAD_SDE_BIN", _which("sde")),
+        tcad_sdevice_bin=_path_env("TCAD_SDEVICE_BIN", _which("sdevice")),
         tcad_svisual_bin=_path_env("TCAD_SVISUAL_BIN", _which("svisual")),
         tcad_swb_bin=_path_env("TCAD_SWB_BIN", _which("swb")),
         tcad_inspect_bin=_path_env("TCAD_INSPECT_BIN", _which("inspect")),
