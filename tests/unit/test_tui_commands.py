@@ -54,6 +54,7 @@ def test_workstation_commands_are_parsed() -> None:
     assert parse_command("/open report").name == "open"
     assert parse_command("/report").name == "report"
     assert parse_command("/demo geant4").name == "demo"
+    assert parse_command("/history electron").name == "history"
     assert parse_command("/mode run").name == "mode"
     assert parse_command("/job job-001").name == "job"
     assert parse_command("/retry job-002").name == "retry"

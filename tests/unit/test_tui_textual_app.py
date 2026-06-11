@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from agent_core.app import CopilotResponse, JobStatus, RadAgentAppService
+from agent_core.app import ArtifactContent, ArtifactSummary, CopilotResponse, JobStatus, RadAgentAppService
 from agent_core.intent.schemas import IntentResult
 from agent_core.tui.app import _THEMES, _css_for_theme, create_app_class
 
@@ -732,19 +732,6 @@ async def test_workstation_commands_show_inspect_demo_and_history(tmp_path) -> N
         assert "Simulation" in content
         assert "Energy Deposit" in content
 
-        app._advance_demo_step()
-        await pilot.pause()
-        content = str(app.query_one("#task-context").content)
-        assert "State        checking" in content
-        assert "Phase        Context" in content
-
-        for _ in range(5):
-            app._advance_demo_step()
-        await pilot.pause()
-        content = str(app.query_one("#task-context").content)
-        assert "State        completed" in content
-        assert "Phase        completed" in content
-
         await app._dispatch_text("/mode run")
         await pilot.pause()
         footer = app.query_one("#footer")
@@ -760,3 +747,65 @@ async def test_workstation_commands_show_inspect_demo_and_history(tmp_path) -> N
         assert "Command History" in str(inspector.content)
         assert "/help" in str(inspector.content)
         assert "/artifacts" in str(inspector.content)
+
+
+@pytest.mark.asyncio
+async def test_demo_autoplays_to_completed_state(tmp_path) -> None:
+    app_cls = create_app_class()
+    app = app_cls(service=RadAgentAppService(workspace_root=tmp_path))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text("/demo geant4")
+        for _ in range(12):
+            await pilot.pause(0.1)
+
+        content = str(app.query_one("#task-context").content)
+        assert "demo-geant4" in content
+        assert "State        completed" in content
+        assert "Phase        completed" in content
+
+
+@pytest.mark.asyncio
+async def test_history_search_and_binary_artifact_preview(tmp_path) -> None:
+    class _ArtifactService(RadAgentAppService):
+        def list_artifacts(self, job_id: str | None = None) -> list[ArtifactSummary]:
+            return [
+                ArtifactSummary(
+                    job_id="job_1",
+                    kind="plot",
+                    path=str(tmp_path / "energy_deposit.png"),
+                    size_bytes=320_000,
+                )
+            ]
+
+        def read_artifact(self, path: str, *, max_chars: int = 200_000) -> ArtifactContent:
+            return ArtifactContent(
+                path=path,
+                exists=True,
+                kind="binary",
+                size_bytes=320_000,
+            )
+
+    app_cls = create_app_class()
+    app = app_cls(service=_ArtifactService(workspace_root=tmp_path))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text("/run electron dose")
+        await app._dispatch_text("/check")
+        await app._dispatch_text("/history electron")
+        await pilot.pause()
+        inspector = app.query_one("#inspector")
+        assert "Command History" in str(inspector.content)
+        assert "/run electron dose" in str(inspector.content)
+        assert "/check" not in str(inspector.content)
+
+        await app._dispatch_text("/open energy")
+        await pilot.pause()
+        inspector = app.query_one("#inspector")
+        assert "Preview not available in terminal" in str(inspector.content)
+        assert "energy_deposit.png" in str(inspector.content)
+        assert "320000 bytes" in str(inspector.content)

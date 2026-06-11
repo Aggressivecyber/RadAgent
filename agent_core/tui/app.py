@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import shlex
 import sys
@@ -467,6 +468,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._demo_profile = ""
             self._demo_title = ""
             self._demo_step_index = 0
+            self._demo_worker: Any = None
 
         def compose(self) -> Any:
             yield static("", id="header")
@@ -556,6 +558,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     self._show_tool_inspect()
                 case "status":
                     self._show_status()
+                case "history":
+                    self._show_history(command.args)
                 case "step":
                     self._start_operation(self.service.step())
                 case "resume":
@@ -962,7 +966,11 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             if artifact.kind == "binary":
                 self._show_panel(
                     "Artifact",
-                    [f"Binary file: {artifact.path}", f"{artifact.size_bytes} bytes"],
+                    [
+                        "Preview not available in terminal",
+                        f"Path: {artifact.path}",
+                        f"{artifact.size_bytes} bytes",
+                    ],
                 )
                 return
             content = artifact.text
@@ -1268,6 +1276,14 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._demo_title = title
             self._demo_step_index = 0
             self._demo_status = self._build_demo_status()
+            if self._demo_worker is not None:
+                self._demo_worker.cancel()
+            self._demo_worker = self.run_worker(
+                self._play_demo_steps(),
+                name="radagent-demo",
+                exclusive=True,
+                group="radagent-demo",
+            )
             for summary in (
                 "Preparing workspace",
                 "Checking tools",
@@ -1279,6 +1295,12 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 self._add_system_row("Demo", summary, "running")
             self._refresh_header()
             self._refresh_task_context()
+
+        async def _play_demo_steps(self) -> None:
+            while self._demo_profile and self._demo_step_index < len(_DEMO_STEPS) - 1:
+                await asyncio.sleep(0.05)
+                self._advance_demo_step()
+            self._demo_worker = None
 
         def _advance_demo_step(self) -> None:
             if not self._demo_profile:
@@ -1546,7 +1568,14 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._show_trace()
 
         def action_show_history(self) -> None:
-            lines = self._command_history[-20:] or ["No command history yet."]
+            self._show_history("")
+
+        def _show_history(self, query: str = "") -> None:
+            normalized = query.strip().lower()
+            history = self._command_history
+            if normalized:
+                history = [item for item in history if normalized in item.lower()]
+            lines = history[-20:] or ["No command history yet."]
             self._show_panel("Command History", lines)
 
         def _remember_command_history(self, text: str) -> None:
