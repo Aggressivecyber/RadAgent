@@ -55,56 +55,61 @@ class _TextualModules:
 
 
 _THEMES: dict[str, _Theme] = {
-    "radagent": _Theme(
-        screen_bg="#120f14",
-        surface_bg="#1a1620",
-        row_bg="#241c2b",
-        composer_bg="#211924",
-        header_bg="#c986a8",
-        header_fg="#140f14",
-        border="#8d6aa3",
-        focus="#c58a55",
-        text="#eee4ec",
-        muted="#a896ad",
-        success="#d39abc",
-        running="#ad8fc8",
-        warning="#c58a55",
-        error="#ff8a9a",
+    "slate-workstation": _Theme(
+        screen_bg="#0F1117",
+        surface_bg="#151821",
+        row_bg="#151821",
+        composer_bg="#10131A",
+        header_bg="#151821",
+        header_fg="#D8DEE9",
+        border="#2A2F3A",
+        focus="#C792EA",
+        text="#D8DEE9",
+        muted="#8B93A6",
+        success="#7FD1A0",
+        running="#56B6C2",
+        warning="#EBCB8B",
+        error="#F07178",
     ),
-    "slate": _Theme(
-        screen_bg="#090d10",
-        surface_bg="#10171b",
-        row_bg="#162126",
-        composer_bg="#121a1f",
-        header_bg="#86c5b7",
-        header_fg="#08100f",
-        border="#2c3c43",
-        focus="#86c5b7",
-        text="#dce5e4",
-        muted="#80949a",
-        success="#9bd49a",
-        running="#8ab7ff",
-        warning="#e5c07b",
-        error="#ef8f8f",
+    "neon-lab": _Theme(
+        screen_bg="#070A12",
+        surface_bg="#10131D",
+        row_bg="#141A28",
+        composer_bg="#0C1018",
+        header_bg="#10131D",
+        header_fg="#E6EAF2",
+        border="#293044",
+        focus="#C792EA",
+        text="#E6EAF2",
+        muted="#8791A8",
+        success="#7FD1A0",
+        running="#56B6C2",
+        warning="#EBCB8B",
+        error="#F07178",
     ),
-    "mono": _Theme(
-        screen_bg="#0c0c0c",
-        surface_bg="#121212",
-        row_bg="#1a1a1a",
-        composer_bg="#161616",
-        header_bg="#e6e6e6",
-        header_fg="#111111",
-        border="#3a3a3a",
-        focus="#ffffff",
-        text="#e2e2e2",
-        muted="#8a8a8a",
-        success="#cfcfcf",
-        running="#f0f0f0",
-        warning="#dddddd",
-        error="#ffffff",
+    "minimal-terminal": _Theme(
+        screen_bg="#0C0D0F",
+        surface_bg="#111214",
+        row_bg="#151619",
+        composer_bg="#0F1012",
+        header_bg="#111214",
+        header_fg="#DADDE3",
+        border="#2B2D33",
+        focus="#DADDE3",
+        text="#DADDE3",
+        muted="#858B96",
+        success="#A8D5BA",
+        running="#B7C4D6",
+        warning="#D8C58A",
+        error="#E28C8C",
     ),
 }
 _THEME_NAMES = tuple(_THEMES)
+_THEME_ALIASES = {
+    "radagent": "neon-lab",
+    "slate": "slate-workstation",
+    "mono": "minimal-terminal",
+}
 _OPTION_ROWS = ("language", "theme")
 
 
@@ -115,20 +120,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(_usage())
         return 0
     execution_mode = "strict"
-    theme_name = "radagent"
+    theme_name = "slate-workstation"
     try:
         execution_mode = _option_value(argv, "--mode", execution_mode)
-        theme_name = _option_value(argv, "--theme", theme_name)
+        theme_name = _normalize_theme_name(_option_value(argv, "--theme", theme_name))
     except ValueError:
         print(_usage(), file=sys.stderr)
         return 2
     if execution_mode not in {"strict", "test", "acceptance", "production"}:
         print(_usage(), file=sys.stderr)
         return 2
-    if theme_name not in _THEMES:
-        print(_usage(), file=sys.stderr)
-        return 2
-
     try:
         app_cls = create_app_class(theme=theme_name)
     except TextualNotInstalledError:
@@ -157,8 +158,16 @@ def _option_value(argv: Sequence[str], name: str, default: str) -> str:
 def _usage() -> str:
     return (
         "Usage: radagent-tui [--mode strict|test|acceptance|production] "
-        "[--theme radagent|slate|mono]"
+        "[--theme slate-workstation|neon-lab|minimal-terminal]"
     )
+
+
+def _normalize_theme_name(value: str) -> str:
+    normalized = value.strip().lower()
+    normalized = _THEME_ALIASES.get(normalized, normalized)
+    if normalized not in _THEMES:
+        raise ValueError(value)
+    return normalized
 
 
 def _show_event_in_timeline(event: Any) -> bool:
@@ -186,7 +195,7 @@ def _css_for_theme(theme: _Theme) -> str:
         #workbench {{
             height: 1fr;
             padding: 1 2;
-            border: heavy {theme.border};
+            border: solid {theme.border};
             background: {theme.surface_bg};
         }}
 
@@ -210,7 +219,7 @@ def _css_for_theme(theme: _Theme) -> str:
             width: 34;
             height: 1fr;
             padding: 1;
-            border: heavy {theme.border};
+            border: solid {theme.border};
             background: {theme.composer_bg};
             color: {theme.text};
         }}
@@ -275,11 +284,11 @@ def _css_for_theme(theme: _Theme) -> str:
             width: 1fr;
             background: {theme.composer_bg};
             color: {theme.text};
-            border: heavy {theme.border};
+            border: solid {theme.border};
         }}
 
         #prompt:focus {{
-            border: heavy {theme.focus};
+            border: solid {theme.focus};
         }}
 
         #footer {{
@@ -294,7 +303,7 @@ def _css_for_theme(theme: _Theme) -> str:
             dock: right;
             width: 46;
             padding: 1;
-            border: heavy {theme.focus};
+            border: solid {theme.focus};
             background: {theme.composer_bg};
             color: {theme.text};
             display: none;
@@ -307,10 +316,11 @@ def _css_for_theme(theme: _Theme) -> str:
     """
 
 
-def create_app_class(*, theme: str = "radagent") -> type[Any]:
+def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
     """Create the Textual app class after optional dependencies are available."""
     from textual.binding import Binding
 
+    theme = _normalize_theme_name(theme)
     textual = _load_textual()
     textual_app = textual.app
     horizontal = textual.containers.Horizontal
@@ -1013,8 +1023,12 @@ def create_app_class(*, theme: str = "radagent") -> type[Any]:
             normalized = value.lower()
             if normalized.startswith("theme="):
                 normalized = normalized.partition("=")[2].strip()
-            if normalized in _THEMES:
-                self._apply_theme(normalized)
+            try:
+                theme_name = _normalize_theme_name(normalized)
+            except ValueError:
+                theme_name = ""
+            if theme_name:
+                self._apply_theme(theme_name)
                 return
             self._language = parse_language(value)
             self._refresh_footer()

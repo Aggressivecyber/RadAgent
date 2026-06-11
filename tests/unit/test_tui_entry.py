@@ -15,7 +15,7 @@ def test_tui_main_help_does_not_start_app(capsys) -> None:
     assert main(["--help"]) == 0
 
     output = capsys.readouterr().out
-    assert "--theme radagent|slate|mono" in output
+    assert "--theme slate-workstation|neon-lab|minimal-terminal" in output
 
 
 def test_tui_main_rejects_unknown_theme(capsys) -> None:
@@ -24,7 +24,25 @@ def test_tui_main_rejects_unknown_theme(capsys) -> None:
     assert main(["--theme", "unknown"]) == 2
 
     error = capsys.readouterr().err
-    assert "--theme radagent|slate|mono" in error
+    assert "--theme slate-workstation|neon-lab|minimal-terminal" in error
+
+
+def test_default_theme_uses_slate_workstation_tokens_and_weak_borders() -> None:
+    from agent_core.tui.app import _THEMES, _css_for_theme
+
+    theme = _THEMES["slate-workstation"]
+    css = _css_for_theme(theme)
+
+    assert theme.screen_bg == "#0F1117"
+    assert theme.surface_bg == "#151821"
+    assert theme.composer_bg == "#10131A"
+    assert theme.header_bg == "#151821"
+    assert theme.header_fg == "#D8DEE9"
+    assert theme.focus == "#C792EA"
+    assert theme.border == "#2A2F3A"
+    assert "border: solid #2A2F3A" in css
+    assert "border: heavy" not in css
+    assert "border-top" not in css
 
 
 def test_tui_model_config_arg_parser() -> None:

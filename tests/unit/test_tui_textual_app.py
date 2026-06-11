@@ -73,14 +73,19 @@ async def test_textual_app_mounts_and_opens_help(tmp_path) -> None:
         assert app.query("Markdown")
 
 
-def test_default_theme_uses_pink_purple_with_orange_accent() -> None:
-    theme = _THEMES["radagent"]
+def test_default_theme_uses_slate_workstation_tokens_and_weak_borders() -> None:
+    theme = _THEMES["slate-workstation"]
     css = _css_for_theme(theme)
 
-    assert theme.header_bg == "#c986a8"
-    assert theme.focus == "#c58a55"
-    assert theme.border == "#8d6aa3"
-    assert "border: heavy #8d6aa3" in css
+    assert theme.screen_bg == "#0F1117"
+    assert theme.surface_bg == "#151821"
+    assert theme.composer_bg == "#10131A"
+    assert theme.header_bg == "#151821"
+    assert theme.header_fg == "#D8DEE9"
+    assert theme.focus == "#C792EA"
+    assert theme.border == "#2A2F3A"
+    assert "border: solid #2A2F3A" in css
+    assert "border: heavy" not in css
     assert "border-top" not in css
 
 
@@ -180,9 +185,14 @@ async def test_task_context_marks_workflow_and_language_specific_summary(tmp_pat
         assert "job_he3" in content
         assert "He3 tube thermal-neutron efficiency" in content
         assert "He3管热中子探测效率仿真" not in content
-        assert "prev  Task planning" in content
-        assert "now   G4 modeling" in content
-        assert "next  Human confirmation" in content
+        assert "Task" in content
+        assert "Job          job_he3" in content
+        assert "State        running" in content
+        assert "Phase        G4 modeling" in content
+        assert "Workflow" in content
+        assert "✓ Previous    Task planning" in content
+        assert "● Current     G4 modeling" in content
+        assert "○ Next        Human confirmation" in content
 
         await app._dispatch_text("/options zh")
         await pilot.pause()
@@ -412,9 +422,9 @@ async def test_ctrl_p_opens_selectable_options_panel(tmp_path) -> None:
         assert ">" in str(inspector.content)
         assert "Language" in str(inspector.content)
         assert "Theme" in str(inspector.content)
-        assert "radagent" in str(inspector.content)
-        assert "slate" in str(inspector.content)
-        assert "mono" in str(inspector.content)
+        assert "slate-workstation" in str(inspector.content)
+        assert "neon-lab" in str(inspector.content)
+        assert "minimal-terminal" in str(inspector.content)
         assert "Logs" in str(inspector.content)
         assert "100k" in str(inspector.content)
         assert "200k" in str(inspector.content)
@@ -436,14 +446,14 @@ async def test_options_panel_keyboard_updates_theme_and_language(tmp_path) -> No
         await pilot.press("enter")
         await pilot.pause()
 
-        assert app._theme_name == "slate"
+        assert app._theme_name == "neon-lab"
         assert "visible" not in app.query_one("#inspector").classes
 
         await pilot.press("ctrl+p")
         await pilot.pause()
         inspector = app.query_one("#inspector")
         assert "Theme" in str(inspector.content)
-        assert "slate" in str(inspector.content)
+        assert "neon-lab" in str(inspector.content)
 
         await pilot.press("right")
         await pilot.press("enter")

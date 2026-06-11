@@ -6,6 +6,7 @@ from agent_core.tui.adapters import (
     render_header,
     render_markdown_row,
     render_row,
+    render_startup_status,
     render_task_context,
     status_to_header,
 )
@@ -99,7 +100,11 @@ def test_task_context_renders_copliot_context_usage_bar() -> None:
 
     rendered = render_task_context(status)
 
-    assert "Copliot context" in rendered
+    assert "Context" in rendered
+    assert "Usage        [########--] 76%" in rendered
+    assert "Mode         normal" in rendered
+    assert "Window       200k" in rendered
+    assert "Copliot context" not in rendered
     assert "[########--]" in rendered
     assert "76%" in rendered
     assert "cycle 2" in rendered
@@ -123,7 +128,71 @@ def test_task_context_renders_context_compacting_state() -> None:
 
     rendered = render_task_context(status)
 
-    assert "Copliot context" in rendered
+    assert "Context" in rendered
     assert "compacting" in rendered
     assert "cycle 3" in rendered
     assert "500k" in rendered
+
+
+def test_startup_status_renders_workstation_sections_and_semantic_tool_states() -> None:
+    status = {
+        "project_slug": "default",
+        "workspace_root": "/tmp/simulation_workspace",
+        "tools": {
+            "geant4": {
+                "label": "Geant4",
+                "configured": True,
+                "available": True,
+                "path": "/usr/local/bin/geant4-config",
+                "detail": "config=/usr/local/bin/geant4-config",
+            },
+            "tcad": {
+                "label": "TCAD",
+                "configured": True,
+                "available": False,
+                "path": "",
+                "detail": "dir=unset; sde=ok; svisual=ok; swb=missing",
+            },
+            "ngspice": {
+                "label": "ngspice",
+                "configured": False,
+                "available": False,
+                "path": "",
+                "detail": "set NGSPICE_BIN",
+            },
+        },
+        "models": {
+            "lite": {
+                "model_name": "mimo-v2.5",
+                "api_key_configured": True,
+                "thinking_default": False,
+            },
+            "pro": {
+                "model_name": "mimo-v2.5-pro",
+                "api_key_configured": True,
+                "thinking_default": True,
+            },
+            "max": {
+                "model_name": "mimo-v2.5-pro",
+                "api_key_configured": False,
+                "thinking_default": True,
+            },
+        },
+    }
+
+    rendered = render_startup_status(status)
+
+    assert "Workspace" in rendered
+    assert "Project      default" in rendered
+    assert "Directory    /tmp/simulation_workspace" in rendered
+    assert "Environment" in rendered
+    assert "Tool        Status      Path / Note" in rendered
+    assert "Geant4      READY" in rendered
+    assert "TCAD        PARTIAL" in rendered
+    assert "ngspice     MISSING" in rendered
+    assert "Models" in rendered
+    assert "Profile     Model" in rendered
+    assert "lite        mimo-v2.5" in rendered
+    assert "pro         mimo-v2.5-pro" in rendered
+    assert "System Log" in rendered
+    assert "[OK]      Workspace initialized" in rendered

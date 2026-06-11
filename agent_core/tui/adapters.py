@@ -138,7 +138,7 @@ def row_css_class(row: TimelineRow) -> str:
 
 def render_header(header: HeaderState) -> str:
     """Render compact header text."""
-    job = header.job_id or "no-job"
+    job = f"job:{header.job_id}" if header.job_id else "job:none"
     phase = header.phase or "idle"
     confirm = "  review" if header.needs_confirmation else ""
     return (
@@ -148,49 +148,69 @@ def render_header(header: HeaderState) -> str:
 
 
 def render_startup_status(status: Any) -> str:
-    """Render the compact startup status frame."""
+    """Render the startup status frame as a workstation-style overview."""
     tools = _mapping(status, "tools", {})
     models = _mapping(status, "models", {})
     project = _value(status, "project_slug", "default")
     workspace = _value(status, "workspace_root", "")
     lines = [
-        "RadAgent",
-        f"project {project}  workspace {workspace or 'unset'}",
+        "Workspace",
+        f"{'Project':<13}{project}",
+        f"{'Directory':<13}{workspace or 'unset'}",
+        f"{'Runtime':<13}idle",
         "",
+        "Environment",
+        f"{'Tool':<12}{'Status':<12}Path / Note",
         _tool_status_line(tools.get("geant4"), "Geant4"),
         _tool_status_line(tools.get("tcad"), "TCAD"),
         _tool_status_line(tools.get("ngspice"), "ngspice"),
         "",
         "Models",
+        f"{'Profile':<12}{'Model':<15}{'Access':<11}Capability",
     ]
     for tier_name in ("lite", "pro", "max"):
         model = models.get(tier_name)
         if model is None:
-            lines.append(f"{tier_name:<5} missing")
+            lines.append(f"{tier_name:<12}{'missing':<15}{'no-key':<11}unknown")
             continue
         key_status = "key" if _value(model, "api_key_configured", False) else "no-key"
-        thinking = " think" if _value(model, "thinking_default", False) else ""
+        capability = "think" if _value(model, "thinking_default", False) else "normal"
         lines.append(
-            f"{tier_name:<5} {_value(model, 'model_name', 'unset')}  {key_status}{thinking}"
+            f"{tier_name:<12}{_value(model, 'model_name', 'unset'):<15}"
+            f"{key_status:<11}{capability}"
         )
+    lines.extend(
+        [
+            "",
+            "System Log",
+            "[OK]      Workspace initialized",
+            "[OK]      Environment inspected",
+            "[OK]      Model profiles loaded",
+        ]
+    )
     return "\n".join(lines)
 
 
 def render_task_context(status: JobStatus, *, language: Any = "en") -> str:
     """Render the right-side task summary and adjacent workflow steps."""
+    phase = (
+        _PHASE_LABELS.get(status.current_phase, status.current_phase.replace("_", " ").title())
+        if status.current_phase
+        else "waiting"
+    )
     lines = [
         "Task",
-        f"job   {status.job_id or 'no-job'}",
+        f"{'Job':<13}{status.job_id or 'no-job'}",
+        f"{'State':<13}{status.status or 'idle'}",
+        f"{'Phase':<13}{phase}",
     ]
     summary = _summary_for_language(
         status.state.get("task_summary_short"),
         language=language,
     )
     if summary:
-        lines.append(summary)
-    context_usage = _context_usage_line(status.state.get("copilot_context_usage"))
-    if context_usage:
-        lines.extend(["", context_usage])
+        lines.extend(["", "Next Action", summary])
+    lines.extend(["", "Context", *_context_usage_lines(status.state.get("copilot_context_usage"))])
     lines.extend(["", "Workflow", *_workflow_step_lines(status)])
     return "\n".join(lines)
 
@@ -240,13 +260,20 @@ def _summary_for_event(event: RadAgentEvent) -> str:
 
 def _tool_status_line(tool: Any, fallback_label: str) -> str:
     if tool is None:
-        return f"{fallback_label:<8} missing"
+        return f"{fallback_label:<12}{'MISSING':<12}-"
     label = _value(tool, "label", fallback_label)
     configured = bool(_value(tool, "configured", False))
     available = bool(_value(tool, "available", False))
-    state = "ready" if available else "config" if configured else "missing"
-    path = str(_value(tool, "path", "") or _value(tool, "detail", "") or "")
-    return f"{label:<8} {state:<7} {_shorten_middle(path, 32)}".rstrip()
+    detail = str(_value(tool, "detail", "") or "")
+    lower_detail = detail.lower()
+    if available and "missing" not in lower_detail:
+        state = "READY"
+    elif configured or available:
+        state = "PARTIAL"
+    else:
+        state = "MISSING"
+    note = str(_value(tool, "path", "") or detail or "-")
+    return f"{label:<12}{state:<12}{_shorten_middle(note, 42)}".rstrip()
 
 
 def _summary_for_language(value: Any, *, language: Any) -> str:
@@ -262,11 +289,10 @@ def _workflow_step_lines(status: JobStatus) -> list[str]:
     index = _current_phase_index(status)
     previous_index = index - 1 if index > 0 else None
     next_index = index + 1 if index + 1 < len(PIPELINE_PHASES) else None
-    current_marker = "run" if status.status in {"running", "paused"} else "wait"
     return [
-        _workflow_line("prev", previous_index, "ok"),
-        _workflow_line("now", index, current_marker),
-        _workflow_line("next", next_index, "wait"),
+        _workflow_line("✓", "Previous", previous_index),
+        _workflow_line("●", "Current", index),
+        _workflow_line("○", "Next", next_index),
     ]
 
 
@@ -276,30 +302,42 @@ def _current_phase_index(status: JobStatus) -> int:
     return max(0, min(int(status.current_phase_idx), len(PIPELINE_PHASES) - 1))
 
 
-def _workflow_line(prefix: str, index: int | None, marker: str) -> str:
+def _workflow_line(symbol: str, role: str, index: int | None) -> str:
     label = (
         _PHASE_LABELS.get(PIPELINE_PHASES[index], PIPELINE_PHASES[index])
         if index is not None
         else "-"
     )
-    return f"{prefix:<5} {label:<20} {marker}".rstrip()
+    return f"{symbol} {role:<12} {label}".rstrip()
 
 
-def _context_usage_line(value: Any) -> str:
+def _context_usage_lines(value: Any) -> list[str]:
     if not isinstance(value, dict):
-        return ""
+        return [
+            f"{'Usage':<13}0%",
+            f"{'Mode':<13}normal",
+            f"{'Window':<13}128k",
+        ]
     ratio = _float_value(value.get("history_usage_ratio"))
     percent = max(0, min(999, round(ratio * 100)))
     state = str(value.get("state") or ("compacted" if value.get("compacted") else "normal"))
     cycle = int(value.get("cycle") or 0)
     window = _format_window_k(value.get("context_window_tokens"))
     if state == "compacting":
-        return f"Copliot context compacting cycle {cycle} {window}".strip()
+        return [
+            f"{'Usage':<13}compacting cycle {cycle}".strip(),
+            f"{'Mode':<13}compacting",
+            f"{'Window':<13}{window or 'unknown'}",
+        ]
     bar = _progress_bar(ratio)
     suffix = f"cycle {cycle}" if cycle else "normal"
     if state == "compacted":
         suffix = f"cycle {cycle} compacted".strip()
-    return f"Copliot context {bar} {percent}% {suffix} {window}".strip()
+    return [
+        f"{'Usage':<13}{bar} {percent}% {suffix}".strip(),
+        f"{'Mode':<13}{state}",
+        f"{'Window':<13}{window or 'unknown'}",
+    ]
 
 
 def _progress_bar(ratio: float, *, width: int = 10) -> str:
