@@ -7,7 +7,7 @@ from agent_core.agent_tools.selection import select_agent_tool_calls
 from langchain_core.messages import ToolMessage
 
 
-def test_orbit_radiation_tool_is_registered_for_copliot() -> None:
+def test_orbit_radiation_tool_is_registered_for_copilot() -> None:
     registry = get_agent_tool_registry()
 
     tool = registry.get("orbit_radiation_ap8ae8_query")

@@ -129,8 +129,8 @@ _LABELS: dict[str, dict[TUILanguage, str]] = {
         TUILanguage.CHINESE: "分析仿真需求...",
     },
     "thinking.done": {
-        TUILanguage.ENGLISH: "Copliot response ready.",
-        TUILanguage.CHINESE: "Copliot 回复已就绪。",
+        TUILanguage.ENGLISH: "Copilot response ready.",
+        TUILanguage.CHINESE: "Copilot 回复已就绪。",
     },
 }
 

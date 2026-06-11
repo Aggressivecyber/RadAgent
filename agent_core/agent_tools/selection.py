@@ -1,4 +1,4 @@
-"""Tool-call selection for Copliot until model-native tool calls are enabled."""
+"""Tool-call selection for Copilot until model-native tool calls are enabled."""
 
 from __future__ import annotations
 

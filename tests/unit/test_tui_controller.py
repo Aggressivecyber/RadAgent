@@ -255,7 +255,7 @@ async def test_guided_question_choice_number_is_resolved_before_next_briefing() 
 
 
 @pytest.mark.asyncio
-async def test_controller_tracks_latest_copliot_context_usage() -> None:
+async def test_controller_tracks_latest_copilot_context_usage() -> None:
     service = _GuidedQuestionService()
     controller = TUIController(service)
 

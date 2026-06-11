@@ -302,7 +302,7 @@ async def test_slow_briefing_shows_pending_row_before_model_returns(tmp_path) ->
 
 
 @pytest.mark.asyncio
-async def test_commands_remain_usable_while_copliot_response_is_pending(tmp_path) -> None:
+async def test_commands_remain_usable_while_copilot_response_is_pending(tmp_path) -> None:
     started = asyncio.Event()
     release = asyncio.Event()
 
@@ -547,10 +547,10 @@ async def test_plain_chat_keeps_routing_events_out_of_main_timeline(tmp_path) ->
             finished = self._emit(
                 "copilot_finished",
                 status="success",
-                summary="我是 Copliot。",
-                payload={"message": "我是 Copliot。"},
+                summary="我是 Copilot。",
+                payload={"message": "我是 Copilot。"},
             )
-            return CopilotResponse(message="我是 Copliot。", events=[started, finished])
+            return CopilotResponse(message="我是 Copilot。", events=[started, finished])
 
     service = _FakeChatService(workspace_root=tmp_path)
     app_cls = create_app_class()
@@ -568,7 +568,7 @@ async def test_plain_chat_keeps_routing_events_out_of_main_timeline(tmp_path) ->
         assert "Intent" not in rendered_rows
         assert any(row.kind == "user_message" and row.summary == "你是谁" for row in app._rows)
         assert any(
-            row.kind == "assistant_message" and row.summary == "我是 Copliot。"
+            row.kind == "assistant_message" and row.summary == "我是 Copilot。"
             for row in app._rows
         )
 
@@ -580,7 +580,7 @@ async def test_plain_chat_keeps_routing_events_out_of_main_timeline(tmp_path) ->
 
 
 @pytest.mark.asyncio
-async def test_controller_failure_uses_copliot_display_name(tmp_path) -> None:
+async def test_controller_failure_uses_copilot_display_name(tmp_path) -> None:
     class _BrokenController:
         async def handle_text(self, text: str) -> object:
             raise RuntimeError("offline")
@@ -595,7 +595,7 @@ async def test_controller_failure_uses_copliot_display_name(tmp_path) -> None:
         await app._dispatch_text("hello")
         await pilot.pause()
 
-        assert app._rows[-1].title == "Copliot failed"
+        assert app._rows[-1].title == "Copilot failed"
 
 
 @pytest.mark.asyncio

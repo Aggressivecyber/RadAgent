@@ -54,7 +54,7 @@ def test_event_to_row_uses_full_chat_payload() -> None:
 
     assert row.kind == "assistant_message"
     assert row.summary == full_message
-    assert render_markdown_row(row) == f"**Copliot**\n\n{full_message}"
+    assert render_markdown_row(row) == f"**Copilot**\n\n{full_message}"
 
 
 def test_brand_row_renders_without_status_prefix() -> None:
@@ -89,7 +89,7 @@ def test_status_to_header_renders_confirmation_state() -> None:
     assert "job_1" in render_header(header)
 
 
-def test_task_context_renders_copliot_context_usage_bar() -> None:
+def test_task_context_renders_copilot_context_usage_bar() -> None:
     status = JobStatus(
         job_id="job_1",
         status="idle",
@@ -110,7 +110,7 @@ def test_task_context_renders_copliot_context_usage_bar() -> None:
     assert "Usage        [########--] 76%" in rendered
     assert "Mode         normal" in rendered
     assert "Window       200k" in rendered
-    assert "Copliot context" not in rendered
+    assert "Copilot context" not in rendered
     assert "[########--]" in rendered
     assert "76%" in rendered
     assert "cycle 2" in rendered

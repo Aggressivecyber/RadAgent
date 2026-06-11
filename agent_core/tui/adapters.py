@@ -20,8 +20,8 @@ _EVENT_TITLES = {
     "human_confirmation_required": "Needs confirmation",
     "human_confirmation_submitted": "Confirmation submitted",
     "copilot_started": "User",
-    "copilot_finished": "Copliot",
-    "copilot_failed": "Copliot failed",
+    "copilot_finished": "Copilot",
+    "copilot_failed": "Copilot failed",
     "build_started": "Build started",
     "build_finished": "Build finished",
     "simulation_started": "Simulation started",
@@ -121,12 +121,12 @@ def render_markdown_row(row: TimelineRow) -> str:
 def row_role_label(row: TimelineRow) -> str:
     """Return a short role label for timeline display."""
     return {
-        "assistant_message": "Copliot",
+        "assistant_message": "Copilot",
         "confirmation": "REVIEW",
         "error": "ERROR",
         "phase": "RUN",
         "system": "SYSTEM",
-        "thinking": "Copliot",
+        "thinking": "Copilot",
         "tool": "TOOL",
         "user_message": "USER",
     }.get(row.kind, "EVENT")

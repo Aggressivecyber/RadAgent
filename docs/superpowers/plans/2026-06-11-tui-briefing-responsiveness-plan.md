@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make startup status explicit, keep the current simulation task visible in a right-side context frame, make slow simulation briefing feel alive, expose a collapsed model trace, ask one guided question at a time, compact historical briefing memory with the lite model when it exceeds 75% of the configured Copliot context window, and keep job workspace names compact with a UUID plus creation timestamp.
+**Goal:** Make startup status explicit, keep the current simulation task visible in a right-side context frame, make slow simulation briefing feel alive, expose a collapsed model trace, ask one guided question at a time, compact historical briefing memory with the lite model when it exceeds 75% of the configured Copilot context window, and keep job workspace names compact with a UUID plus creation timestamp.
 
-**Architecture:** The TUI owns visible interaction state: startup status frame, right-side task context, Copliot context usage bar, workflow step rail, pending rows, spinner text, trace inspector, and shortcut handling. `RadAgentAppService` owns frontend-safe runtime/model status so UI code never probes secrets or tools ad hoc. `TUIController` remains the workflow state machine for intent, briefing, approval, latest context-window usage, and compact state. `SimulationBriefingPlanner` returns a guided briefing schema and uses lite `CONTEXT_SUMMARY` to compact older historical briefing memory before MAX calls once estimated usage exceeds 75% of the selected context window.
+**Architecture:** The TUI owns visible interaction state: startup status frame, right-side task context, Copilot context usage bar, workflow step rail, pending rows, spinner text, trace inspector, and shortcut handling. `RadAgentAppService` owns frontend-safe runtime/model status so UI code never probes secrets or tools ad hoc. `TUIController` remains the workflow state machine for intent, briefing, approval, latest context-window usage, and compact state. `SimulationBriefingPlanner` returns a guided briefing schema and uses lite `CONTEXT_SUMMARY` to compact older historical briefing memory before MAX calls once estimated usage exceeds 75% of the selected context window.
 
 **Tech Stack:** Python async, Textual pilot tests, Pydantic schemas, `ModelGateway`, existing `RadAgentAppService` event stream.
 
@@ -590,7 +590,7 @@ Expected: FAIL because no `thinking` row is appended until `brief_simulation` re
 
 - [ ] **Step 3: Implement minimal pending-row support**
 
-Add `kind="thinking"` rendering in `adapters.py`, then change `_dispatch_controller_text` in `app.py` so plain text immediately appends a running row and starts a worker. Use a fixed spinner label such as `"[run] Copliot analyzing..."`; update the same row or replace it when the controller result returns. Reserve the spinner width so layout does not shift.
+Add `kind="thinking"` rendering in `adapters.py`, then change `_dispatch_controller_text` in `app.py` so plain text immediately appends a running row and starts a worker. Use a fixed spinner label such as `"[run] Copilot analyzing..."`; update the same row or replace it when the controller result returns. Reserve the spinner width so layout does not shift.
 
 - [ ] **Step 4: Verify**
 
@@ -733,15 +733,15 @@ Add `BriefingContextCompactor` in `briefing.py`. It compacts only historical bri
 }
 ```
 
-Trigger compaction when estimated historical briefing memory tokens exceed 75% of the selected Copliot context window. Context windows come from model configuration (`context_window_tokens`) and support common options `100k`, `200k`, `500k`, `1m`, plus custom values expressed in `k` units such as `750k` or bare `750` meaning `750k`. Keep the latest 4 historical turns uncompressed.
+Trigger compaction when estimated historical briefing memory tokens exceed 75% of the selected Copilot context window. Context windows come from model configuration (`context_window_tokens`) and support common options `100k`, `200k`, `500k`, `1m`, plus custom values expressed in `k` units such as `750k` or bare `750` meaning `750k`. Keep the latest 4 historical turns uncompressed.
 
 - [ ] **Step 3: Preserve compact state and usage status**
 
-Store compacted memory in `PendingBrief`. Include it in `briefing_context()` so approved jobs retain the decision trail without sending the full transcript to future model calls. Store `context_window_stats` as `state["copilot_context_usage"]`. The right-side status frame renders a looping Copliot context bar:
+Store compacted memory in `PendingBrief`. Include it in `briefing_context()` so approved jobs retain the decision trail without sending the full transcript to future model calls. Store `context_window_stats` as `state["copilot_context_usage"]`. The right-side status frame renders a looping Copilot context bar:
 
 ```text
-Copliot context [########--] 76% cycle 2 200k
-Copliot context compacting cycle 3 500k
+Copilot context [########--] 76% cycle 2 200k
+Copilot context compacting cycle 3 500k
 ```
 
 When a compaction cycle is running, show `compacting`. After completion, return to normal usage display for the next cycle while incrementing `cycle`.
@@ -786,4 +786,4 @@ Expected: all pass.
 
 - [ ] **Step 3: Manual smoke**
 
-Launch `radagent-tui`, verify the first screen contains the RadAgent status frame with Geant4/TCAD/ngspice/model rows, verify the right-side frame shows `Task`, `Copliot context`, and `Workflow`, type `我想要 he3 管仿真`, verify the task frame shows only the id before approval, approve the plan, verify the lite-generated <=50-character language-specific simulation summary appears under the job id with adjacent workflow steps, verify a pending row appears immediately, `Ctrl+T` opens the trace panel, and the first briefing response asks one guided question instead of dumping every missing field. Verify `/options` shows context window options `100k`, `200k`, `500k`, `1m`, and notes custom values use `k`.
+Launch `radagent-tui`, verify the first screen contains the RadAgent status frame with Geant4/TCAD/ngspice/model rows, verify the right-side frame shows `Task`, `Copilot context`, and `Workflow`, type `我想要 he3 管仿真`, verify the task frame shows only the id before approval, approve the plan, verify the lite-generated <=50-character language-specific simulation summary appears under the job id with adjacent workflow steps, verify a pending row appears immediately, `Ctrl+T` opens the trace panel, and the first briefing response asks one guided question instead of dumping every missing field. Verify `/options` shows context window options `100k`, `200k`, `500k`, `1m`, and notes custom values use `k`.

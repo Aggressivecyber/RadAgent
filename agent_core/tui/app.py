@@ -637,9 +637,9 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 return
             if self._controller_worker is not None:
                 self._add_system_row(
-                    "Copliot busy",
+                    "Copilot busy",
                     (
-                        "Copliot is still responding. Commands such as /options "
+                        "Copilot is still responding. Commands such as /options "
                         "and /logs remain available."
                     ),
                     "warning",
@@ -660,7 +660,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 result = await self.controller.handle_text(text)
             except Exception as exc:
                 self._finish_thinking_row(thinking_id, status="error", summary=str(exc))
-                self._add_system_row("Copliot failed", str(exc), "error")
+                self._add_system_row("Copilot failed", str(exc), "error")
                 return
             finally:
                 self._controller_worker = None
@@ -734,7 +734,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 id=f"thinking:{len(self._rows)}",
                 kind="thinking",
                 status="running",
-                title="Copliot",
+                title="Copilot",
                 summary=self._t("thinking.analyzing"),
             )
             self._append_row(row)
@@ -1604,10 +1604,10 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 self._finish_thinking_row(
                     self._controller_thinking_id,
                     status="warning",
-                    summary="Copliot response was cancelled.",
+                    summary="Copilot response was cancelled.",
                 )
                 self._controller_thinking_id = ""
-                self._add_system_row("Interrupted", "Copliot response was cancelled.", "warning")
+                self._add_system_row("Interrupted", "Copilot response was cancelled.", "warning")
                 self._refresh_header()
                 self._refresh_task_context()
                 return

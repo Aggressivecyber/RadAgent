@@ -1,4 +1,4 @@
-"""Read-only orbit-radiation query helper for Copliot chat turns."""
+"""Read-only orbit-radiation query helper for Copilot chat turns."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ FluxMode = Literal["integral", "differential"]
 def query_orbit_radiation(message: str) -> dict[str, Any] | None:
     """Return local AP8/AE8 query diagnostics for an orbit-radiation question.
 
-    The chat tool is intentionally read-only: it validates what Copliot already
+    The chat tool is intentionally read-only: it validates what Copilot already
     knows, selects the AP8/AE8 model when possible, and reports missing inputs.
     Spectrum generation still happens later in task planning after human approval.
     """

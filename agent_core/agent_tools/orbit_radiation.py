@@ -1,4 +1,4 @@
-"""Orbit-radiation tools exposed to Copliot."""
+"""Orbit-radiation tools exposed to Copilot."""
 
 from __future__ import annotations
 
