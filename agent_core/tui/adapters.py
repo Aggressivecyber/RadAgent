@@ -435,7 +435,14 @@ def _workflow_step_lines(status: JobStatus) -> list[str]:
         if virtual_key == "parse_request":
             symbol = "✓" if status.job_id or status.user_query else "●"
         elif current in phase_set:
-            symbol = "●"
+            if status.status in {"failed", "error"}:
+                symbol = "×"
+            elif status.needs_confirmation:
+                symbol = "!"
+            elif _float_value(status.state.get("retry_count")) > 0:
+                symbol = "↻"
+            else:
+                symbol = "●"
         elif phase_set and phase_set.issubset(completed):
             symbol = "✓"
         else:

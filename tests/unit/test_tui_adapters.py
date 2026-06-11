@@ -198,6 +198,56 @@ def test_task_context_renders_runtime_monitor_simulation_summary_and_ascii_chart
     assert "██████████" in rendered
 
 
+def test_workflow_renders_warning_failure_and_retry_markers() -> None:
+    warning = render_task_context(
+        JobStatus(
+            job_id="job_review",
+            status="paused",
+            current_phase="human_confirmation",
+            current_phase_idx=4,
+            completed_phases=["prepare_workspace", "context", "task_planning"],
+            needs_confirmation=True,
+        )
+    )
+    failed = render_task_context(
+        JobStatus(
+            job_id="job_failed",
+            status="failed",
+            current_phase="gate",
+            current_phase_idx=7,
+            completed_phases=[
+                "prepare_workspace",
+                "context",
+                "task_planning",
+                "g4_modeling",
+                "human_confirmation",
+                "g4_codegen",
+                "patch",
+            ],
+        )
+    )
+    retrying = render_task_context(
+        JobStatus(
+            job_id="job_retry",
+            status="running",
+            current_phase="g4_codegen",
+            current_phase_idx=5,
+            completed_phases=[
+                "prepare_workspace",
+                "context",
+                "task_planning",
+                "g4_modeling",
+                "human_confirmation",
+            ],
+            state={"retry_count": 1},
+        )
+    )
+
+    assert "! Plan simulation" in warning
+    assert "× Run checks / tools" in failed
+    assert "↻ Generate macro / script" in retrying
+
+
 def test_startup_status_renders_workstation_sections_and_semantic_tool_states() -> None:
     status = {
         "project_slug": "default",
