@@ -9,10 +9,12 @@ class CommandParseError(ValueError):
 
 _ALIASES = {
     "?": "help",
+    "artifact-browser": "artifacts",
+    "check-tools": "check",
     "q": "exit",
     "quit": "exit",
     "sim": "simulate",
-    "status": "inspect",
+    "status": "status",
     "log": "logs",
     "option": "options",
     "opts": "options",
@@ -21,38 +23,63 @@ _ALIASES = {
     "config": "options",
 }
 
-_KNOWN_COMMANDS = {
-    "artifact",
-    "artifacts",
-    "build",
-    "chat",
-    "confirm",
-    "credibility",
-    "exit",
-    "gates",
-    "help",
-    "inspect",
-    "jobs",
-    "logs",
-    "memory",
-    "model",
-    "options",
-    "project",
-    "projects",
-    "accept-revision",
-    "reject-revision",
-    "revision",
-    "revisions",
-    "revise",
-    "resume",
-    "run",
-    "simulate",
-    "step",
+_COMMAND_DESCRIPTIONS = {
+    "run": "Create and run a simulation task",
+    "check": "Inspect Geant4 / TCAD / ngspice",
+    "open": "Open artifacts or preview a named output",
+    "report": "Generate or preview the active report",
+    "demo": "Play a safe demo workflow",
+    "help": "Show command help",
+    "jobs": "Browse saved jobs",
+    "artifacts": "Browse logs, reports, plots, and outputs",
+    "inspect": "Open tool inspection details",
+    "status": "Show active job status",
+    "mode": "Switch composer mode",
+    "resume": "Resume a saved job",
+    "revise": "Request a revision for the active job",
+    "revisions": "List saved revisions",
+    "artifact": "Preview one artifact path",
+    "build": "Build generated code",
+    "chat": "Ask RadAgent directly",
+    "confirm": "Open confirmation review",
+    "credibility": "Open credibility report",
+    "exit": "Exit the TUI",
+    "gates": "Open gate results",
+    "logs": "Open service event log",
+    "memory": "Open workflow memory",
+    "model": "View or update model settings",
+    "options": "Open language/theme options",
+    "project": "Switch project",
+    "projects": "List projects",
+    "accept-revision": "Accept a saved revision",
+    "reject-revision": "Reject a saved revision",
+    "revision": "Open one revision",
+    "simulate": "Run the generated simulator",
+    "step": "Run the next pipeline phase",
 }
+_KNOWN_COMMANDS = set(_COMMAND_DESCRIPTIONS)
+_PALETTE_ORDER = (
+    "run",
+    "check",
+    "open",
+    "report",
+    "demo",
+    "help",
+    "jobs",
+    "artifacts",
+    "inspect",
+    "status",
+    "mode",
+    "resume",
+    "revise",
+    "revisions",
+)
+_MODES = frozenset({"ask", "run", "cmd", "inspect", "artifact", "config"})
 
 _REQUIRES_ARGS = {
     "artifact": "Usage: /artifact <path>",
     "chat": "Usage: /chat <message>",
+    "demo": "Usage: /demo <geant4|tcad|ngspice|neutron-ct|electron-dose>",
     "project": "Usage: /project <slug-or-id>",
     "accept-revision": "Usage: /accept-revision <revision_id>",
     "reject-revision": "Usage: /reject-revision <revision_id>",
@@ -88,6 +115,12 @@ def parse_command(text: str) -> Command:
         raise CommandParseError(f"Unknown command: /{name}")
     if name in _REQUIRES_ARGS and not args:
         raise CommandParseError(_REQUIRES_ARGS[name])
+    if name == "mode":
+        selected = args.lower()
+        if selected not in _MODES:
+            raise CommandParseError(
+                "Usage: /mode <ask, run, cmd, inspect, artifact, config>"
+            )
     if name == "simulate" and args:
         try:
             events = int(args)
@@ -97,3 +130,28 @@ def parse_command(text: str) -> Command:
             raise CommandParseError("Simulation event count must be positive.")
 
     return Command(name=name, args=args, raw=text)
+
+
+def command_suggestions(prefix: str, *, limit: int = 12) -> list[str]:
+    """Return stable command-palette entries for the composer prefix."""
+    normalized = prefix.strip().lower()
+    if normalized.startswith("/"):
+        normalized = normalized[1:]
+    matches: list[str] = []
+    for name in _PALETTE_ORDER:
+        if normalized and not name.startswith(normalized):
+            continue
+        matches.append(f"/{name:<9} {_COMMAND_DESCRIPTIONS[name]}")
+        if len(matches) >= limit:
+            break
+    return matches
+
+
+def input_mode_for_text(text: str) -> str:
+    """Return the visible composer mode label for the current text."""
+    stripped = text.strip()
+    if stripped.startswith("/run"):
+        return "RUN"
+    if stripped.startswith("/"):
+        return "CMD"
+    return "ASK"

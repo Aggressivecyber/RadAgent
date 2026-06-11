@@ -3,11 +3,16 @@ from __future__ import annotations
 from agent_core.app import JobStatus, RadAgentEvent
 from agent_core.tui.adapters import (
     event_to_row,
+    render_artifacts_table,
+    render_command_palette,
+    render_error_state,
     render_header,
+    render_jobs_table,
     render_markdown_row,
     render_row,
     render_startup_status,
     render_task_context,
+    render_tool_inspect,
     status_to_header,
 )
 from agent_core.tui.i18n import RADAGENT_BRAND_MARK
@@ -134,6 +139,64 @@ def test_task_context_renders_context_compacting_state() -> None:
     assert "500k" in rendered
 
 
+def test_task_context_renders_runtime_monitor_simulation_summary_and_ascii_chart() -> None:
+    status = JobStatus(
+        job_id="job_electron",
+        status="running",
+        current_phase="artifact",
+        current_phase_idx=8,
+        completed_phases=[
+            "prepare_workspace",
+            "context",
+            "task_planning",
+            "g4_modeling",
+            "human_confirmation",
+            "g4_codegen",
+            "patch",
+            "gate",
+        ],
+        state={
+            "runtime_monitor": {
+                "cpu_percent": 18,
+                "memory_gb": 2.1,
+                "disk_free_gb": 42,
+                "events_done": 32000,
+                "events_total": 100000,
+                "speed": "1200 evt/s",
+            },
+            "simulation_summary": {
+                "Particle": "electron",
+                "Energy": "7 MeV",
+                "Target": "aluminum",
+                "Thickness": "10 cm",
+                "Detector": "silicon",
+                "Events": "100000",
+            },
+            "ascii_chart": {
+                "title": "Energy Deposit",
+                "bins": [
+                    ("0 cm", 1.0),
+                    ("2 cm", 0.8),
+                    ("4 cm", 0.5),
+                    ("6 cm", 0.2),
+                ],
+            },
+        },
+    )
+
+    rendered = render_task_context(status)
+
+    assert "Runtime" in rendered
+    assert "CPU          18%" in rendered
+    assert "Events       32000 / 100000" in rendered
+    assert "Simulation" in rendered
+    assert "Particle     electron" in rendered
+    assert "Energy       7 MeV" in rendered
+    assert "Energy Deposit" in rendered
+    assert "0 cm" in rendered
+    assert "██████████" in rendered
+
+
 def test_startup_status_renders_workstation_sections_and_semantic_tool_states() -> None:
     status = {
         "project_slug": "default",
@@ -196,3 +259,105 @@ def test_startup_status_renders_workstation_sections_and_semantic_tool_states() 
     assert "pro         mimo-v2.5-pro" in rendered
     assert "System Log" in rendered
     assert "[OK]      Workspace initialized" in rendered
+
+
+def test_tool_inspect_renders_versions_license_and_fix_suggestions() -> None:
+    status = {
+        "tools": {
+            "geant4": {
+                "label": "Geant4",
+                "configured": True,
+                "available": True,
+                "path": "/opt/geant4/bin/geant4-config",
+                "detail": "version=11.2.1; data=found",
+            },
+            "tcad": {
+                "label": "TCAD",
+                "configured": True,
+                "available": False,
+                "path": "",
+                "detail": "sde=ok; sdevice=ok; swb=missing; license=unknown",
+            },
+            "ngspice": {
+                "label": "ngspice",
+                "configured": True,
+                "available": True,
+                "path": "/usr/local/bin/ngspice",
+                "detail": "version=41",
+            },
+        }
+    }
+
+    rendered = render_tool_inspect(status)
+
+    assert "Tool Inspect" in rendered
+    assert "Geant4" in rendered
+    assert "Status       READY" in rendered
+    assert "Version      11.2.1" in rendered
+    assert "TCAD" in rendered
+    assert "Status       PARTIAL" in rendered
+    assert "SWB          MISSING" in rendered
+    assert "License      UNKNOWN" in rendered
+    assert "Fix Suggestion" in rendered
+    assert "Add swb to PATH" in rendered
+
+
+def test_artifacts_and_jobs_tables_are_productized() -> None:
+    artifacts = [
+        {
+            "kind": "macro",
+            "path": "./runs/job-001/run.mac",
+            "size_bytes": 2100,
+            "stage": "g4",
+        },
+        {
+            "kind": "plot",
+            "path": "./runs/job-001/energy_deposit.png",
+            "size_bytes": 320_000,
+            "stage": "report",
+        },
+    ]
+    jobs = [
+        {
+            "job_id": "job-001",
+            "user_query": "electron_aluminum_test",
+            "status": "completed",
+            "updated_at": "12:40",
+        },
+        {
+            "job_id": "job-002",
+            "user_query": "proton_silicon_detector",
+            "status": "failed",
+            "updated_at": "13:10",
+        },
+    ]
+
+    artifact_table = render_artifacts_table(artifacts)
+    jobs_table = render_jobs_table(jobs)
+
+    assert "Type      Name" in artifact_table
+    assert "macro     run.mac" in artifact_table
+    assert "plot      energy_deposit.png" in artifact_table
+    assert "320.0 KB" in artifact_table
+    assert "Status" in artifact_table
+    assert "Jobs" in jobs_table
+    assert "ID        Name" in jobs_table
+    assert "job-001   electron_aluminum_test" in jobs_table
+    assert "completed" in jobs_table
+
+
+def test_error_state_and_command_palette_are_actionable() -> None:
+    rendered = render_error_state(
+        "Geant4 config not found",
+        suggestions=["Check GEANT4_DIR", "Source geant4.sh", "Run /check geant4"],
+    )
+
+    assert "ERROR" in rendered
+    assert "Geant4 config not found" in rendered
+    assert "Suggestion:" in rendered
+    assert "1. Check GEANT4_DIR" in rendered
+
+    palette = render_command_palette("/ch")
+    assert "Command Palette" in palette
+    assert "/check" in palette
+    assert "Inspect Geant4 / TCAD / ngspice" in palette

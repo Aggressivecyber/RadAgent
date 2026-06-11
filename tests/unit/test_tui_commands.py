@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import pytest
-from agent_core.tui.commands import CommandParseError, parse_command
+from agent_core.tui.commands import (
+    CommandParseError,
+    command_suggestions,
+    input_mode_for_text,
+    parse_command,
+)
 
 
 def test_plain_text_defaults_to_chat() -> None:
@@ -32,6 +37,8 @@ def test_aliases() -> None:
     assert parse_command("?").name == "help"
     assert parse_command("/q").name == "exit"
     assert parse_command("/sim 5").name == "simulate"
+    assert parse_command("/status").name == "status"
+    assert parse_command("/check").name == "check"
 
 
 def test_options_command_accepts_optional_language_and_settings_alias() -> None:
@@ -41,3 +48,40 @@ def test_options_command_accepts_optional_language_and_settings_alias() -> None:
     command = parse_command("/options zh")
     assert command.name == "options"
     assert command.args == "zh"
+
+
+def test_workstation_commands_are_parsed() -> None:
+    assert parse_command("/open report").name == "open"
+    assert parse_command("/report").name == "report"
+    assert parse_command("/demo geant4").name == "demo"
+    assert parse_command("/mode run").name == "mode"
+
+    with pytest.raises(CommandParseError, match="Usage: /demo"):
+        parse_command("/demo")
+
+    with pytest.raises(CommandParseError, match="ask, run, cmd, inspect, artifact, config"):
+        parse_command("/mode unknown")
+
+
+def test_command_suggestions_return_stable_palette_entries() -> None:
+    suggestions = command_suggestions("/")
+
+    assert suggestions[0].startswith("/run")
+    assert any(item.startswith("/check") for item in suggestions)
+    assert any(item.startswith("/open") for item in suggestions)
+    assert any(item.startswith("/report") for item in suggestions)
+    assert any(item.startswith("/demo") for item in suggestions)
+    assert len(suggestions) <= 12
+
+    assert command_suggestions("/re") == [
+        "/report    Generate or preview the active report",
+        "/resume    Resume a saved job",
+        "/revise    Request a revision for the active job",
+        "/revisions List saved revisions",
+    ]
+
+
+def test_input_mode_for_text_distinguishes_ask_run_and_command() -> None:
+    assert input_mode_for_text("Explain current workspace") == "ASK"
+    assert input_mode_for_text("/check tools") == "CMD"
+    assert input_mode_for_text("/run 7 MeV electron through aluminum") == "RUN"

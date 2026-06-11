@@ -10,15 +10,20 @@ from typing import Any
 from agent_core.app import JobStatus, RadAgentAppService
 from agent_core.tui.adapters import (
     event_to_row,
+    render_artifacts_table,
+    render_command_palette,
+    render_error_state,
     render_header,
+    render_jobs_table,
     render_markdown_row,
     render_row,
     render_startup_status,
     render_task_context,
+    render_tool_inspect,
     row_css_class,
     status_to_header,
 )
-from agent_core.tui.commands import CommandParseError, parse_command
+from agent_core.tui.commands import CommandParseError, input_mode_for_text, parse_command
 from agent_core.tui.controller import ControllerAction, TUIController
 from agent_core.tui.i18n import DEFAULT_LANGUAGE, label, language_name, parse_language
 from agent_core.tui.models import TimelineRow
@@ -111,6 +116,21 @@ _THEME_ALIASES = {
     "mono": "minimal-terminal",
 }
 _OPTION_ROWS = ("language", "theme")
+_COMPOSER_MODES = {
+    "ask": "ASK",
+    "run": "RUN",
+    "cmd": "CMD",
+    "inspect": "INSPECT",
+    "artifact": "ARTIFACT",
+    "config": "CONFIG",
+}
+_DEMO_PROFILES = {
+    "geant4": "Geant4 detector validation",
+    "tcad": "TCAD device sweep",
+    "ngspice": "ngspice circuit run",
+    "neutron-ct": "Neutron CT reconstruction",
+    "electron-dose": "Electron dose deposition",
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -343,11 +363,12 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             Binding("ctrl+i", "toggle_inspector", "Inspect"),
             Binding("ctrl+t", "show_trace", "Trace"),
             Binding("ctrl+o", "show_artifacts", "Artifacts"),
-            Binding("up", "options_previous", show=False, priority=True),
-            Binding("down", "options_next", show=False, priority=True),
+            Binding("up", "history_previous", show=False, priority=True),
+            Binding("down", "history_next", show=False, priority=True),
             Binding("left", "options_decrement", show=False, priority=True),
             Binding("right", "options_increment", show=False, priority=True),
             Binding("enter", "options_apply", show=False, priority=True),
+            Binding("ctrl+r", "show_history", "History"),
             Binding("escape", "close_inspector", "Close"),
             Binding("f1", "show_help", "Help"),
             Binding("ctrl+c", "interrupt_or_quit", "Stop"),
@@ -375,6 +396,10 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._options_selected = 0
             self._options_draft_language = self._language
             self._options_draft_theme = self._theme_name
+            self._command_history: list[str] = []
+            self._history_index: int | None = None
+            self._composer_mode = "ASK"
+            self._demo_status: JobStatus | None = None
 
         def compose(self) -> Any:
             yield static("", id="header")
@@ -412,10 +437,33 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
         async def on_input_submitted(self, event: Any) -> None:
             text = event.value.strip()
             event.input.value = ""
+            self._remember_command_history(text)
+            self._history_index = None
+            self._refresh_footer()
             await self._dispatch_text(text)
+
+        def on_input_changed(self, event: Any) -> None:
+            text = str(event.value)
+            if text.strip().startswith("/") or self._composer_mode in {"ASK", "CMD"}:
+                self._composer_mode = input_mode_for_text(text)
+            if text.strip().startswith("/") and len(text.strip()) <= 20:
+                self._show_panel("Command Palette", render_command_palette(text).splitlines()[2:])
+            self._refresh_footer()
 
         async def _dispatch_text(self, text: str) -> None:
             if not text.startswith("/") and text != "?":
+                if self._composer_mode == "RUN":
+                    await self._dispatch_text(f"/run {text}")
+                    return
+                if self._composer_mode == "INSPECT":
+                    self._show_tool_inspect()
+                    return
+                if self._composer_mode == "ARTIFACT":
+                    self._open_artifact_or_collection(text)
+                    return
+                if self._composer_mode == "CONFIG":
+                    self._show_options(text)
+                    return
                 await self._dispatch_controller_text(text)
                 return
 
@@ -429,6 +477,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 case "chat":
                     self._start_operation(self.service.chat(command.args))
                 case "run":
+                    self._demo_status = None
                     self._start_operation(
                         self.service.start_job(
                             command.args,
@@ -436,6 +485,10 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                             auto_continue=True,
                         )
                     )
+                case "check" | "inspect":
+                    self._show_tool_inspect()
+                case "status":
+                    self._show_status()
                 case "step":
                     self._start_operation(self.service.step())
                 case "resume":
@@ -452,6 +505,12 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     self._show_artifacts()
                 case "artifact":
                     self._show_artifact(command.args)
+                case "open":
+                    self._open_artifact_or_collection(command.args)
+                case "report":
+                    self._show_report()
+                case "demo":
+                    self._start_demo(command.args)
                 case "gates":
                     self._show_gates()
                 case "memory":
@@ -488,8 +547,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 case "simulate":
                     events = int(command.args) if command.args else 1000
                     self._start_operation(self.service.run_simulation(events=events))
-                case "inspect":
-                    self._show_status()
+                case "mode":
+                    self._set_composer_mode(command.args)
                 case "help":
                     self._show_help()
                 case "exit":
@@ -726,9 +785,12 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self.query_one("#header", static).update(render_header(header) + busy)
 
         def _refresh_footer(self) -> None:
-            self.query_one("#footer", static).update(label("footer", self._language))
+            mode = self._composer_mode
+            self.query_one("#footer", static).update(
+                f"{mode}  {label('footer', self._language)}"
+            )
             prompt = self.query_one("#prompt", input_widget)
-            prompt.placeholder = label("prompt.placeholder", self._language)
+            prompt.placeholder = self._prompt_placeholder()
 
         def _refresh_task_context(self) -> None:
             status = self._status_with_controller_usage()
@@ -737,6 +799,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             )
 
         def _status_with_controller_usage(self) -> JobStatus:
+            if self._demo_status is not None:
+                return self._demo_status
             status = self.service.get_status()
             usage = getattr(self.controller, "latest_copilot_context_usage", {})
             if not usage:
@@ -751,6 +815,19 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             except Exception:
                 return label("brand.ready", self._language)
             return render_startup_status(startup)
+
+        def _prompt_placeholder(self) -> str:
+            if self._composer_mode == "RUN":
+                return "RUN > Describe a simulation request"
+            if self._composer_mode == "CMD":
+                return "CMD > /run /check /open /report /help"
+            if self._composer_mode == "INSPECT":
+                return "INSPECT > /check tools"
+            if self._composer_mode == "ARTIFACT":
+                return "ARTIFACT > /artifacts or /open report"
+            if self._composer_mode == "CONFIG":
+                return "CONFIG > /options or /model key=value"
+            return label("prompt.placeholder", self._language)
 
         def _t(self, key: str) -> str:
             return label(key, self._language)
@@ -772,27 +849,24 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
 
         def _show_jobs(self) -> None:
             jobs = self.service.list_jobs(include_all_projects=True)
-            if not jobs:
-                self._show_panel(self._t("jobs.title"), [self._t("jobs.empty")])
-                return
-            lines = [
-                f"{job.get('status', 'unknown'):10} {job.get('job_id', '')}"
-                for job in jobs[:30]
-            ]
-            self._show_panel(self._t("jobs.title"), lines)
+            rendered = render_jobs_table(jobs)
+            self._show_panel(self._t("jobs.title"), rendered.splitlines()[2:])
 
         def _show_artifacts(self) -> None:
             artifacts = self.service.list_artifacts()
-            if not artifacts:
-                self._show_panel(self._t("artifacts.title"), [self._t("artifacts.empty")])
-                return
-            lines = [f"{item.kind or item.stage:18} {item.path}" for item in artifacts[:30]]
-            self._show_panel(self._t("artifacts.title"), lines)
+            rendered = render_artifacts_table(list(artifacts))
+            self._show_panel(self._t("artifacts.title"), rendered.splitlines()[2:])
 
         def _show_artifact(self, path: str) -> None:
             artifact = self.service.read_artifact(path, max_chars=8000)
             if not artifact.exists:
-                self._show_panel("Artifact", [f"Missing: {path}"])
+                self._show_panel(
+                    "Artifact",
+                    render_error_state(
+                        f"Artifact not found: {path}",
+                        suggestions=["Run /artifacts", "Check the active job", "Run /open report"],
+                    ).splitlines(),
+                )
                 return
             if artifact.kind == "binary":
                 self._show_panel(
@@ -804,6 +878,58 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             if artifact.truncated:
                 content += "\n\n[truncated]"
             self._show_panel("Artifact", content.splitlines()[:200])
+
+        def _open_artifact_or_collection(self, value: str) -> None:
+            target = value.strip()
+            if not target:
+                self._show_artifacts()
+                return
+            artifacts = self.service.list_artifacts()
+            match = next(
+                (
+                    item
+                    for item in artifacts
+                    if target.lower() in (item.kind or "").lower()
+                    or target.lower() in item.path.lower()
+                ),
+                None,
+            )
+            if match is None:
+                self._show_panel(
+                    "Open",
+                    render_error_state(
+                        f"No artifact matches: {target}",
+                        suggestions=["Run /artifacts", "Use /artifact <path>", "Run /report"],
+                    ).splitlines(),
+                )
+                return
+            self._show_artifact(match.path)
+
+        def _show_report(self) -> None:
+            artifacts = self.service.list_artifacts()
+            report = next(
+                (
+                    item
+                    for item in artifacts
+                    if "report" in (item.kind or "").lower()
+                    or item.path.lower().endswith((".md", ".html", ".pdf"))
+                ),
+                None,
+            )
+            if report is None:
+                self._show_panel(
+                    "Report",
+                    render_error_state(
+                        "No report artifact is available.",
+                        suggestions=[
+                            "Run /step until report generation",
+                            "Run /artifacts",
+                            "Run /demo geant4 for a safe preview",
+                        ],
+                    ).splitlines(),
+                )
+                return
+            self._show_artifact(report.path)
 
         def _show_gates(self) -> None:
             gates = self.service.get_gate_results()
@@ -1008,6 +1134,105 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             ]
             self._show_panel(self._t("status.title"), lines)
 
+        def _show_tool_inspect(self) -> None:
+            try:
+                startup = self.service.get_startup_status()
+            except Exception as exc:
+                self._show_panel(
+                    "Tool Inspect",
+                    render_error_state(
+                        "Unable to inspect runtime tools.",
+                        suggestions=[str(exc), "Check environment settings", "Run /logs"],
+                    ).splitlines(),
+                )
+                return
+            rendered = render_tool_inspect(startup)
+            self._show_panel("Tool Inspect", rendered.splitlines()[2:])
+
+        def _set_composer_mode(self, value: str) -> None:
+            selected = value.strip().lower()
+            self._composer_mode = _COMPOSER_MODES[selected]
+            self._refresh_footer()
+            self._add_system_row("Mode", self._composer_mode, "success")
+
+        def _start_demo(self, profile: str) -> None:
+            selected = profile.strip().lower()
+            title = _DEMO_PROFILES.get(selected)
+            if title is None:
+                self._show_panel(
+                    "Demo Mode",
+                    render_error_state(
+                        f"Unknown demo profile: {profile}",
+                        suggestions=[
+                            "/demo geant4",
+                            "/demo tcad",
+                            "/demo ngspice",
+                            "/demo neutron-ct",
+                            "/demo electron-dose",
+                        ],
+                    ).splitlines(),
+                )
+                return
+            self._demo_status = JobStatus(
+                job_id=f"demo-{selected}",
+                user_query=title,
+                status="running",
+                current_phase="artifact",
+                current_phase_idx=8,
+                completed_phases=[
+                    "prepare_workspace",
+                    "context",
+                    "task_planning",
+                    "g4_modeling",
+                    "human_confirmation",
+                    "g4_codegen",
+                    "patch",
+                    "gate",
+                ],
+                execution_mode=self.service.execution_mode,
+                run_mode="demo",
+                workspace_root=str(self.service.workspace.root),
+                state={
+                    "task_summary_short": {"en": title, "zh": title},
+                    "runtime_monitor": {
+                        "cpu_percent": 18,
+                        "memory_gb": 2.1,
+                        "disk_free_gb": 42,
+                        "events_done": 32000,
+                        "events_total": 100000,
+                        "speed": "1200 evt/s",
+                    },
+                    "simulation_summary": {
+                        "Particle": "electron" if "electron" in selected else "neutron",
+                        "Energy": "7 MeV" if "electron" in selected else "thermal",
+                        "Target": "aluminum" if "electron" in selected else "silicon",
+                        "Detector": "silicon",
+                        "Events": "100000",
+                    },
+                    "ascii_chart": {
+                        "title": "Energy Deposit",
+                        "bins": [
+                            ("0 cm", 1.0),
+                            ("2 cm", 0.8),
+                            ("4 cm", 0.5),
+                            ("6 cm", 0.2),
+                            ("8 cm", 0.05),
+                        ],
+                    },
+                },
+            )
+            for summary in (
+                "Preparing workspace",
+                "Checking tools",
+                "Generating macro",
+                "Running simulation",
+                "Analyzing output",
+                "Generating report",
+            ):
+                self._add_system_row("Demo", summary, "running")
+            self._refresh_header()
+            self._refresh_task_context()
+
         def _show_options(self, args: str = "") -> None:
             if args:
                 try:
@@ -1126,8 +1351,13 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     "/chat <message>",
                     "/jobs",
                     "/resume <job_id>",
+                    "/check",
                     "/artifacts",
                     "/artifact <path>",
+                    "/open [artifact|report]",
+                    "/report",
+                    "/demo <geant4|tcad|ngspice|neutron-ct|electron-dose>",
+                    "/mode <ask|run|cmd|inspect|artifact|config>",
                     "/gates",
                     "/memory",
                     "/confirm",
@@ -1165,7 +1395,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 self.refresh_bindings()
                 inspector.remove_class("visible")
             else:
-                self._show_status()
+                self._show_tool_inspect()
 
         def action_close_inspector(self) -> None:
             self._options_open = False
@@ -1183,11 +1413,17 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 return self._options_open
             return True
 
-        def action_options_previous(self) -> None:
-            self._change_option_selection(-1)
+        def action_history_previous(self) -> None:
+            if self._options_open:
+                self._change_option_selection(-1)
+                return
+            self._apply_history_delta(-1)
 
-        def action_options_next(self) -> None:
-            self._change_option_selection(1)
+        def action_history_next(self) -> None:
+            if self._options_open:
+                self._change_option_selection(1)
+                return
+            self._apply_history_delta(1)
 
         def action_options_decrement(self) -> None:
             self._change_option_value(-1)
@@ -1200,6 +1436,29 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
 
         def action_show_trace(self) -> None:
             self._show_trace()
+
+        def action_show_history(self) -> None:
+            lines = self._command_history[-20:] or ["No command history yet."]
+            self._show_panel("Command History", lines)
+
+        def _remember_command_history(self, text: str) -> None:
+            if not text:
+                return
+            if self._command_history and self._command_history[-1] == text:
+                return
+            self._command_history.append(text)
+
+        def _apply_history_delta(self, delta: int) -> None:
+            if not self._command_history:
+                return
+            if self._history_index is None:
+                self._history_index = len(self._command_history)
+            self._history_index = max(
+                0,
+                min(len(self._command_history) - 1, self._history_index + delta),
+            )
+            prompt = self.query_one("#prompt", input_widget)
+            prompt.value = self._command_history[self._history_index]
 
         def action_interrupt_or_quit(self) -> None:
             if self._controller_worker is not None:

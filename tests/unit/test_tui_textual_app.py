@@ -190,9 +190,11 @@ async def test_task_context_marks_workflow_and_language_specific_summary(tmp_pat
         assert "State        running" in content
         assert "Phase        G4 modeling" in content
         assert "Workflow" in content
-        assert "✓ Previous    Task planning" in content
-        assert "● Current     G4 modeling" in content
-        assert "○ Next        Human confirmation" in content
+        assert "✓ Parse request" in content
+        assert "✓ Prepare workspace" in content
+        assert "✓ Load context" in content
+        assert "● Plan simulation" in content
+        assert "○ Generate macro / script" in content
 
         await app._dispatch_text("/options zh")
         await pilot.pause()
@@ -703,3 +705,42 @@ async def test_textual_plain_simulation_request_uses_briefing_before_start() -> 
             "requires_human_approval"
         ]
         assert service.started[0]["reset_chat"] is False
+
+
+@pytest.mark.asyncio
+async def test_workstation_commands_show_inspect_demo_and_history(tmp_path) -> None:
+    app_cls = create_app_class()
+    app = app_cls(service=RadAgentAppService(workspace_root=tmp_path))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text("/check")
+        await pilot.pause()
+        inspector = app.query_one("#inspector")
+        assert "Tool Inspect" in str(inspector.content)
+        assert "Geant4" in str(inspector.content)
+
+        await app._dispatch_text("/demo geant4")
+        await pilot.pause()
+        content = str(app.query_one("#task-context").content)
+        assert "demo-geant4" in content
+        assert "Runtime" in content
+        assert "Simulation" in content
+        assert "Energy Deposit" in content
+
+        await app._dispatch_text("/mode run")
+        await pilot.pause()
+        footer = app.query_one("#footer")
+        prompt = app.query_one("#prompt")
+        assert "RUN" in str(footer.content)
+        assert "RUN >" in str(prompt.placeholder)
+
+        await app._dispatch_text("/help")
+        await app._dispatch_text("/artifacts")
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+        inspector = app.query_one("#inspector")
+        assert "Command History" in str(inspector.content)
+        assert "/help" in str(inspector.content)
+        assert "/artifacts" in str(inspector.content)

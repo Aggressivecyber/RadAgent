@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from agent_core.app import JobStatus, RadAgentEvent
 from agent_core.pipeline import PIPELINE_PHASES
+from agent_core.tui.commands import command_suggestions
 from agent_core.tui.models import HeaderState, TimelineRow
 
 _EVENT_TITLES = {
@@ -40,6 +42,15 @@ _PHASE_LABELS = {
     "artifact": "Artifacts",
     "report": "Report",
 }
+_STANDARD_WORKFLOW = (
+    ("parse_request", "Parse request", ()),
+    ("prepare_workspace", "Prepare workspace", ("prepare_workspace",)),
+    ("load_context", "Load context", ("context",)),
+    ("plan_simulation", "Plan simulation", ("task_planning", "g4_modeling", "human_confirmation")),
+    ("generate_macro", "Generate macro / script", ("g4_codegen", "patch")),
+    ("run_tools", "Run checks / tools", ("gate", "artifact")),
+    ("generate_report", "Generate report", ("report",)),
+)
 
 
 def event_to_row(event: RadAgentEvent) -> TimelineRow:
@@ -211,7 +222,110 @@ def render_task_context(status: JobStatus, *, language: Any = "en") -> str:
     if summary:
         lines.extend(["", "Next Action", summary])
     lines.extend(["", "Context", *_context_usage_lines(status.state.get("copilot_context_usage"))])
+    runtime_lines = _runtime_monitor_lines(status.state.get("runtime_monitor"))
+    if runtime_lines:
+        lines.extend(["", "Runtime", *runtime_lines])
+    simulation_lines = _simulation_summary_lines(status.state.get("simulation_summary"))
+    if simulation_lines:
+        lines.extend(["", "Simulation", *simulation_lines])
+    chart_lines = _ascii_chart_lines(status.state.get("ascii_chart"))
+    if chart_lines:
+        lines.extend(["", *chart_lines])
     lines.extend(["", "Workflow", *_workflow_step_lines(status)])
+    return "\n".join(lines)
+
+
+def render_tool_inspect(status: Any) -> str:
+    """Render detailed runtime tool status for the Inspect panel."""
+    tools = _mapping(status, "tools", {})
+    lines = ["Tool Inspect"]
+    suggestions: list[str] = []
+    for key, fallback in (("geant4", "Geant4"), ("tcad", "TCAD"), ("ngspice", "ngspice")):
+        tool = tools.get(key)
+        label = str(_value(tool, "label", fallback) if tool is not None else fallback)
+        detail = str(_value(tool, "detail", "") if tool is not None else "")
+        fields = _detail_fields(detail)
+        state = _tool_state(tool)
+        lines.extend(["", label, f"{'Status':<13}{state}"])
+        version = fields.get("version")
+        if version:
+            lines.append(f"{'Version':<13}{version}")
+        path = str(_value(tool, "path", "") if tool is not None else "")
+        if path:
+            lines.append(f"{'Path':<13}{path}")
+        if key == "geant4":
+            data = fields.get("data")
+            if data:
+                lines.append(f"{'Data':<13}{data.upper()}")
+        if key == "tcad":
+            for field, title in (
+                ("sde", "SDE"),
+                ("sdevice", "SDEVICE"),
+                ("svisual", "SVISUAL"),
+                ("swb", "SWB"),
+            ):
+                if field in fields:
+                    lines.append(f"{title:<13}{_status_label(fields[field])}")
+            if "license" in fields:
+                lines.append(f"{'License':<13}{fields['license'].upper()}")
+            if fields.get("swb", "").lower() == "missing":
+                suggestions.append("Add swb to PATH")
+            if fields.get("license", "").lower() in {"unknown", "missing", "unset"}:
+                suggestions.append("Check license server")
+        if state == "MISSING":
+            suggestions.append(f"Configure {label}")
+    if suggestions:
+        lines.extend(["", "Fix Suggestion"])
+        for item in dict.fromkeys(suggestions):
+            lines.append(f"- {item}")
+    return "\n".join(lines)
+
+
+def render_artifacts_table(artifacts: list[Any]) -> str:
+    """Render artifact summaries as a compact product table."""
+    lines = ["Artifacts", "", f"{'Type':<10}{'Name':<24}{'Size':<11}Status"]
+    if not artifacts:
+        lines.append("No artifacts for the active job.")
+        return "\n".join(lines)
+    for item in artifacts[:30]:
+        kind = str(_value(item, "kind", "") or _value(item, "stage", "") or "file")
+        path = str(_value(item, "path", ""))
+        size = _format_bytes(_value(item, "size_bytes", 0))
+        status = str(_value(item, "status", "") or "ready")
+        lines.append(f"{kind:<10}{Path(path).name:<24}{size:<11}{status}")
+    return "\n".join(lines)
+
+
+def render_jobs_table(jobs: list[dict[str, Any]]) -> str:
+    """Render saved jobs as a compact session-management table."""
+    lines = ["Jobs", "", f"{'ID':<10}{'Name':<29}{'Status':<12}Time"]
+    if not jobs:
+        lines.append("No jobs found.")
+        return "\n".join(lines)
+    for job in jobs[:30]:
+        job_id = str(job.get("job_id", ""))
+        name = _clip_table_text(str(job.get("user_query") or job.get("name") or "-"), 28)
+        status = str(job.get("status", "unknown"))
+        time = str(job.get("updated_at") or job.get("created_at") or "")
+        lines.append(f"{job_id:<10}{name:<29}{status:<12}{time}")
+    return "\n".join(lines)
+
+
+def render_error_state(title: str, *, suggestions: list[str] | None = None) -> str:
+    """Render an actionable error state with next steps."""
+    lines = ["ERROR", title]
+    if suggestions:
+        lines.extend(["", "Suggestion:"])
+        for index, suggestion in enumerate(suggestions, start=1):
+            lines.append(f"{index}. {suggestion}")
+    return "\n".join(lines)
+
+
+def render_command_palette(prefix: str) -> str:
+    """Render slash-command suggestions for the composer."""
+    suggestions = command_suggestions(prefix)
+    lines = ["Command Palette", ""]
+    lines.extend(suggestions or ["No matching commands."])
     return "\n".join(lines)
 
 
@@ -286,14 +400,21 @@ def _summary_for_language(value: Any, *, language: Any) -> str:
 
 
 def _workflow_step_lines(status: JobStatus) -> list[str]:
-    index = _current_phase_index(status)
-    previous_index = index - 1 if index > 0 else None
-    next_index = index + 1 if index + 1 < len(PIPELINE_PHASES) else None
-    return [
-        _workflow_line("✓", "Previous", previous_index),
-        _workflow_line("●", "Current", index),
-        _workflow_line("○", "Next", next_index),
-    ]
+    current = status.current_phase if status.current_phase in PIPELINE_PHASES else ""
+    completed = set(status.completed_phases)
+    lines: list[str] = []
+    for virtual_key, label, phases in _STANDARD_WORKFLOW:
+        phase_set = set(phases)
+        if virtual_key == "parse_request":
+            symbol = "✓" if status.job_id or status.user_query else "●"
+        elif current in phase_set:
+            symbol = "●"
+        elif phase_set and phase_set.issubset(completed):
+            symbol = "✓"
+        else:
+            symbol = "○"
+        lines.append(f"{symbol} {label}")
+    return lines
 
 
 def _current_phase_index(status: JobStatus) -> int:
@@ -309,6 +430,51 @@ def _workflow_line(symbol: str, role: str, index: int | None) -> str:
         else "-"
     )
     return f"{symbol} {role:<12} {label}".rstrip()
+
+
+def _runtime_monitor_lines(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    lines: list[str] = []
+    if "cpu_percent" in value:
+        lines.append(f"{'CPU':<13}{value['cpu_percent']}%")
+    if "memory_gb" in value:
+        lines.append(f"{'Memory':<13}{value['memory_gb']} GB")
+    if "disk_free_gb" in value:
+        lines.append(f"{'Disk':<13}{value['disk_free_gb']} GB free")
+    if "events_done" in value or "events_total" in value:
+        done = value.get("events_done", 0)
+        total = value.get("events_total", "?")
+        lines.append(f"{'Events':<13}{done} / {total}")
+    if "speed" in value:
+        lines.append(f"{'Speed':<13}{value['speed']}")
+    return lines
+
+
+def _simulation_summary_lines(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    lines: list[str] = []
+    for key in ("Particle", "Energy", "Target", "Thickness", "Detector", "Events"):
+        if key in value:
+            lines.append(f"{key:<13}{value[key]}")
+    return lines
+
+
+def _ascii_chart_lines(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    title = str(value.get("title") or "Chart")
+    bins = value.get("bins")
+    if not isinstance(bins, list):
+        return []
+    lines = [title]
+    for label, raw_ratio in bins[:8]:
+        ratio = max(0.0, min(1.0, _float_value(raw_ratio)))
+        filled = max(1, round(ratio * 10)) if ratio > 0 else 0
+        bar = "█" * filled
+        lines.append(f"{str(label):<6}{bar}")
+    return lines
 
 
 def _context_usage_lines(value: Any) -> list[str]:
@@ -362,6 +528,57 @@ def _format_window_k(value: Any) -> str:
     if tokens % 1_000_000 == 0:
         return f"{tokens // 1_000_000}m"
     return f"{tokens // 1000}k"
+
+
+def _detail_fields(detail: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for item in detail.split(";"):
+        key, sep, value = item.strip().partition("=")
+        if sep:
+            fields[key.strip().lower()] = value.strip()
+    return fields
+
+
+def _tool_state(tool: Any) -> str:
+    if tool is None:
+        return "MISSING"
+    configured = bool(_value(tool, "configured", False))
+    available = bool(_value(tool, "available", False))
+    detail = str(_value(tool, "detail", "")).lower()
+    if available and "missing" not in detail:
+        return "READY"
+    if configured or available:
+        return "PARTIAL"
+    return "MISSING"
+
+
+def _status_label(value: str) -> str:
+    lowered = value.lower()
+    if lowered in {"ok", "ready", "found"}:
+        return "READY"
+    if lowered in {"missing", "failed"}:
+        return "MISSING"
+    if lowered in {"unknown", "unset"}:
+        return lowered.upper()
+    return value.upper()
+
+
+def _format_bytes(value: Any) -> str:
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        size = 0.0
+    if size >= 1_000_000:
+        return f"{size / 1_000_000:.1f} MB"
+    if size >= 1_000:
+        return f"{size / 1_000:.1f} KB"
+    return f"{int(size)} B"
+
+
+def _clip_table_text(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: max(0, limit - 1)] + "…"
 
 
 def _mapping(value: Any, key: str, default: Any) -> Any:
