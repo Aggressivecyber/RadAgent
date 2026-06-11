@@ -342,17 +342,21 @@ def get_gate_validation_subgraph_spec() -> SubgraphSpec:
     return SubgraphSpec(
         name="gate_validation_subgraph",
         display_name="Gate Validation 子图",
-        description="20 道门禁检查 (4 nodes, 线性)",
+        description="21 道门禁检查 (6 nodes, 线性)",
         nodes=(
             NodeSpec("load_gate_inputs", "加载门禁输入", "io", is_entry=True),
             NodeSpec("run_base_gates", "基础门禁 0-11", "gate"),
             NodeSpec("run_g4_modeling_gates", "G4 门禁 A-H", "gate"),
+            NodeSpec("run_credibility_gate", "可信度门禁 20", "gate"),
+            NodeSpec("run_visual_review_gate", "可视化验收 21", "gate"),
             NodeSpec("finalize_gate_results", "汇总结果", "gate"),
         ),
         edges=(
             EdgeSpec("load_gate_inputs", "run_base_gates"),
             EdgeSpec("run_base_gates", "run_g4_modeling_gates"),
-            EdgeSpec("run_g4_modeling_gates", "finalize_gate_results"),
+            EdgeSpec("run_g4_modeling_gates", "run_credibility_gate"),
+            EdgeSpec("run_credibility_gate", "run_visual_review_gate"),
+            EdgeSpec("run_visual_review_gate", "finalize_gate_results"),
             EdgeSpec("finalize_gate_results", "END"),
         ),
     )

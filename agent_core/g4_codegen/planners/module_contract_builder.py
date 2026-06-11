@@ -84,8 +84,8 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "output into a runnable application",
             "Generate run/event/stepping actions and output manager with real event "
             "rows and scoring artifacts",
-            "Generate main.cc, CMakeLists.txt, run.mac, and init.mac from the "
-            "actual generated interfaces",
+            "Generate main.cc, CMakeLists.txt, run.mac, init.mac, init_vis.mac, "
+            "vis.mac, and gui.mac from the actual generated interfaces",
             "Configure CMake for Geant4 UI/Vis/Qt support so the executable can "
             "open the Geant4 interactive UI",
             "Follow the Geant4 B1-style launch contract: no script argument opens "
@@ -112,6 +112,9 @@ MODULE_DEFINITIONS: dict[str, dict[str, Any]] = {
             "CMakeLists.txt",
             "macros/run.mac",
             "macros/init.mac",
+            "macros/init_vis.mac",
+            "macros/vis.mac",
+            "macros/gui.mac",
         ],
         "required_symbols": [
             "OutputManager",

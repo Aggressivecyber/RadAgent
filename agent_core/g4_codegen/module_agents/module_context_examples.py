@@ -88,6 +88,9 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "main.cc",
             "macros/run.mac",
             "macros/init.mac",
+            "macros/init_vis.mac",
+            "macros/vis.mac",
+            "macros/gui.mac",
         ],
         "primary_symbols": [
             "OutputManager",
@@ -111,7 +114,10 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "CMake must include every generated source file needed by the final "
             "application and enable Geant4 UI/Vis/Qt support.",
             "main.cc should follow the B1 launch pattern: argc == 1 starts "
-            "UIExecutive, otherwise execute argv[1] as a macro.",
+            "UIExecutive and executes macros/init_vis.mac, otherwise execute argv[1] "
+            "as a batch macro.",
+            "Generate B2-style vis.mac trajectories/hits and optional gui.mac viewer "
+            "buttons for the native visual workbench.",
         ],
     },
 }

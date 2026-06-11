@@ -5,9 +5,13 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
 from agent_core.g4_codegen.physics_quality_reviewer import run_physics_quality_reviewer
-from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
+from agent_core.models.schemas import (
+    ModelCallResult,
+    ModelProvider,
+    ModelTask,
+    ModelTier,
+)
 
 
 @pytest.mark.asyncio

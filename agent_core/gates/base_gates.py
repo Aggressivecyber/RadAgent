@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_core.gates.output_quality import REQUIRED_G4_OUTPUTS, inspect_g4_output_quality
+from agent_core.tools.geant4_workbench import SELF_CHECK_EVENTS
 from agent_core.validators.code_structure_validator import CodeStructureValidator
 from agent_core.validators.schema_validator import SchemaValidator
 from agent_core.workspace.io import get_job_dir, get_output_dir
@@ -40,6 +41,7 @@ GATE_NAMES: dict[int, str] = {
     18: "G4-G No Magic Number",
     19: "G4-H Human Confirmation",
     20: "Credibility/Plausibility Assessment",
+    21: "G4 Visual Review",
 }
 
 
@@ -306,7 +308,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
                 str(code_dir),
                 job_id=job_id,
                 output_dir=str(output_dir),
-                events=10,
+                events=SELF_CHECK_EVENTS,
             )
             build_valid = build_result.get("success", False)
             g6_msg = (
@@ -381,7 +383,11 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             smoke_result = data if isinstance(data, dict) else {}
         except json.JSONDecodeError:
             smoke_result = {}
-    output_quality = inspect_g4_output_quality(output_dir, smoke_result=smoke_result)
+    output_quality = inspect_g4_output_quality(
+        output_dir,
+        smoke_result=smoke_result,
+        expected_events=SELF_CHECK_EVENTS,
+    )
 
     # Gate 8: Data Contract
     if output_dir.is_dir():
@@ -545,7 +551,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
 
     # Collect failed gate names
     for g in gate_results:
-        if g.get("status") in ("fail", "block"):
+        if g.get("status") in ("fail", "block", "blocked"):
             failed.append(g.get("name", f"Gate {g.get('gate_id')}"))
 
     return {

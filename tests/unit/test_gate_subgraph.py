@@ -28,6 +28,7 @@ class TestGateNames:
         assert _gate_name(17) == "G4-F Code Module Boundary"
         assert _gate_name(18) == "G4-G No Magic Number"
         assert _gate_name(19) == "G4-H Human Confirmation"
+        assert _gate_name(21) == "G4 Visual Review"
 
     def test_unknown_gate(self) -> None:
         assert _gate_name(99) == "Gate 99"

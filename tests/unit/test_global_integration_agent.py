@@ -304,7 +304,8 @@ def test_global_integration_wires_scoring_volume_and_avoids_duplicate_step_scori
                     '#include "SensitiveDetector.hh"\n'
                     "void DetectorConstruction::AttachSensitiveDetectors()\n"
                     "{\n"
-                    '    G4LogicalVolume* si_lv = fPlacementManager->GetLogicalVolume("silicon_detector");\n'
+                    "    G4LogicalVolume* si_lv = fPlacementManager->GetLogicalVolume("
+                    '"silicon_detector");\n'
                     '    auto* sd = new SensitiveDetector("SensitiveDetector", "SiliconHits");\n'
                     "    G4SDManager::GetSDMpointer()->AddNewDetector(sd);\n"
                     "    SetSensitiveDetector(si_lv, sd);\n"
@@ -350,7 +351,8 @@ def test_global_integration_wires_scoring_volume_and_avoids_duplicate_step_scori
                     "  }\n"
                     "  G4double edep = step->GetTotalEnergyDeposit();\n"
                     "  ScoringManager::Instance().RecordEnergyDeposit(edep);\n"
-                    "  OutputManager::Instance()->Record3DHit(step->GetPreStepPoint()->GetPosition(), edep / MeV);\n"
+                    "  OutputManager::Instance()->Record3DHit("
+                    "step->GetPreStepPoint()->GetPosition(), edep / MeV);\n"
                     "}\n"
                 ),
                 "zone": "green",
@@ -562,10 +564,13 @@ def test_global_integration_normalizes_real_g4_ir_units_and_run_events() -> None
                     '#include "DetectorConstruction.hh"\n'
                     "void DetectorConstruction::BuildGeometry() {\n"
                     "  const G4double world_hx = 100.0 * cm;\n"
-                    "  G4Box* si_solid = new G4Box(\"SiliconDetector\", 10.0 * cm, 10.0 * cm, 0.25 * cm);\n"
-                    "  G4Box* oxide_solid = new G4Box(\"OxideLayer\", 10.0 * cm, 10.0 * cm, 0.01 * cm);\n"
+                    '  G4Box* si_solid = new G4Box("SiliconDetector", '
+                    "10.0 * cm, 10.0 * cm, 0.25 * cm);\n"
+                    '  G4Box* oxide_solid = new G4Box("OxideLayer", '
+                    "10.0 * cm, 10.0 * cm, 0.01 * cm);\n"
                     "  G4ThreeVector(0.0, 0.0, 0.27 * cm);\n"
-                    "  G4Box* al_solid = new G4Box(\"AluminumShield\", 15.0 * cm, 15.0 * cm, 0.5 * cm);\n"
+                    '  G4Box* al_solid = new G4Box("AluminumShield", '
+                    "15.0 * cm, 15.0 * cm, 0.5 * cm);\n"
                     "  G4ThreeVector(0.0, 0.0, -10.0 * cm);\n"
                     "}\n"
                 ),
@@ -1489,6 +1494,66 @@ def test_global_integration_runtime_gate_ignores_magic_number_style(tmp_path) ->
 
     assert gate["status"] == "pass"
     assert gate["errors"] == []
+
+
+@pytest.mark.asyncio
+async def test_integration_runtime_gate_uses_1000_event_self_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    seen: dict[str, Any] = {}
+
+    class FakeRunner:
+        geant4_available = True
+
+        async def smoke_test(
+            self,
+            project_dir: str,
+            *,
+            job_id: str = "unknown",
+            output_dir: str | None = None,
+            events: int = 10,
+        ) -> dict[str, Any]:
+            seen["events"] = events
+            assert events == 1000
+            out = Path(str(output_dir))
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "g4_summary.json").write_text(
+                json.dumps({"job_id": job_id, "events_requested": events}),
+                encoding="utf-8",
+            )
+            (out / "provenance.json").write_text(
+                json.dumps({"job_id": job_id, "source": "program"}),
+                encoding="utf-8",
+            )
+            (out / "event_table.csv").write_text(
+                "EventID,edep_MeV,dose_Gy\n"
+                + "\n".join(f"{i},1.0,0.01" for i in range(events))
+                + "\n",
+                encoding="utf-8",
+            )
+            (out / "edep_3d.csv").write_text("x,y,z,edep_MeV\n0,0,0,1.0\n", encoding="utf-8")
+            (out / "dose_3d.csv").write_text("x,y,z,dose_Gy\n0,0,0,0.01\n", encoding="utf-8")
+            return {
+                "success": True,
+                "cmake_configure_result": {"success": True},
+                "build_result": {"success": True},
+                "unit_test_result": {"success": True},
+                "warnings": [],
+            }
+
+    monkeypatch.setattr("agent_core.tools.geant4_runner.Geant4Runner", FakeRunner)
+
+    gate = await gia._run_integration_runtime_gate(
+        job_id="runtime_gate_1000",
+        proposed_patch=_patch(),
+        attempt=1,
+    )
+
+    assert seen["events"] == 1000
+    assert gate["status"] == "pass"
+    assert gate["expected_events"] == 1000
 
 
 def test_global_integration_runtime_gate_rejects_empty_zero_smoke_outputs(tmp_path) -> None:

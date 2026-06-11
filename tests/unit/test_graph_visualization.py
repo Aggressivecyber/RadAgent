@@ -84,7 +84,7 @@ class TestSubgraphTopology:
             ("g4_modeling", 14),
             ("human_confirmation", 6),
             ("g4_codegen", 18),
-            ("gate_validation", 4),
+            ("gate_validation", 6),
             ("patch", 3),
             ("artifact", 3),
             ("report", 1),
@@ -166,8 +166,9 @@ class TestSubgraphTopology:
         specs = get_all_subgraph_specs()
         gate = specs["gate_validation"]
 
-        assert "20 道门禁" in gate.description
+        assert "21 道门禁" in gate.description
         assert any(node.label == "G4 门禁 A-H" for node in gate.nodes)
+        assert any(node.label == "可视化验收 21" for node in gate.nodes)
 
     def test_nine_subgraphs_total(self) -> None:
         assert len(get_all_subgraph_specs()) == 9

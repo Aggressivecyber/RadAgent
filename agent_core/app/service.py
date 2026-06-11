@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,8 @@ from agent_core.app.schemas import (
     RuntimeToolStatus,
     SimulationResult,
     StartupStatusView,
+    VisualizationWorkbenchResult,
+    VisualReviewResult,
 )
 from agent_core.config.environment import (
     DEFAULT_ENV_PATH,
@@ -847,6 +850,7 @@ class RadAgentAppService:
         current_phase = ""
         if self.current_phase_idx < len(PIPELINE_PHASES):
             current_phase = PIPELINE_PHASES[self.current_phase_idx]
+        visual_review_blocked = self._has_blocked_visual_review_gate()
         key_statuses = {
             key: self.state.get(key)
             for key in (
@@ -857,6 +861,7 @@ class RadAgentAppService:
                 "validation_status",
                 "artifact_status",
                 "confirmation_status",
+                "visual_review_status",
                 "termination_reason",
             )
             if self.state.get(key) is not None
@@ -865,6 +870,10 @@ class RadAgentAppService:
         if self.state.get("job_id"):
             status = "completed" if self.current_phase_idx >= len(PIPELINE_PHASES) else "running"
             if self.state.get("confirmation_status") == "pending":
+                status = "paused"
+            if self.state.get("visual_review_status") in {"pending", "rejected"}:
+                status = "paused"
+            if visual_review_blocked:
                 status = "paused"
         return JobStatus(
             job_id=str(self.state.get("job_id", "")),
@@ -878,9 +887,18 @@ class RadAgentAppService:
             workspace_root=str(self.state.get("workspace_root", self.workspace.root)),
             job_workspace=str(self.state.get("job_workspace", "")),
             needs_confirmation=bool(self.state.get("human_confirmation_required"))
-            or self.state.get("confirmation_status") == "pending",
+            or self.state.get("confirmation_status") == "pending"
+            or self.state.get("visual_review_status") in {"pending", "rejected"}
+            or visual_review_blocked,
             key_statuses=key_statuses,
             state=dict(self.state),
+        )
+
+    def _has_blocked_visual_review_gate(self) -> bool:
+        gate_results = self.get_gate_results()
+        return any(
+            gate.get("gate_id") == 21 and gate.get("status") in {"block", "blocked"}
+            for gate in gate_results
         )
 
     def resume_job(self, job_id: str) -> JobStatus:
@@ -1291,6 +1309,114 @@ class RadAgentAppService:
             "simulation_finished" if result.success else "simulation_failed",
             status="success" if result.success else "error",
             summary=result.output_dir if result.success else result.errors,
+            payload=result.model_dump(),
+        )
+        return result
+
+    async def prepare_visualization_workbench(
+        self,
+        *,
+        events: int = 100,
+        launch: bool = False,
+    ) -> VisualizationWorkbenchResult:
+        """Prepare native Geant4 visual workbench macros and launch metadata."""
+        if events <= 0:
+            raise ValueError("Workbench event count must be positive.")
+        code_dir = str(self.state.get("generated_code_dir", ""))
+        if not code_dir or not Path(code_dir).exists():
+            raise RuntimeError("No generated code directory in current state.")
+        executable = str(self.state.get("_executable_path", ""))
+        if not executable or not Path(executable).exists():
+            raise RuntimeError("No built executable in current state.")
+
+        from agent_core.tools.geant4_workbench import prepare_visual_workbench
+
+        self._emit(
+            "visualization_workbench_started",
+            status="running",
+            summary=f"{events} events",
+            payload={"events": events, "executable": executable},
+        )
+        try:
+            metadata = prepare_visual_workbench(
+                code_dir,
+                executable=executable,
+                events=events,
+            )
+        except Exception as exc:
+            result = VisualizationWorkbenchResult(success=False, errors=str(exc))
+            self._emit(
+                "visualization_workbench_failed",
+                status="error",
+                summary=result.errors,
+                payload=result.model_dump(),
+            )
+            return result
+
+        launched = False
+        pid: int | None = None
+        if launch:
+            env = dict(os.environ)
+            env.update(metadata.get("environment", {}))
+            try:
+                proc = subprocess.Popen(
+                    list(metadata["launch_command"]),
+                    cwd=str(metadata["working_dir"]),
+                    env=env,
+                    start_new_session=True,
+                )
+            except OSError as exc:
+                result = VisualizationWorkbenchResult(
+                    success=False,
+                    errors=str(exc),
+                    **metadata,
+                )
+                self._emit(
+                    "visualization_workbench_failed",
+                    status="error",
+                    summary=result.errors,
+                    payload=result.model_dump(),
+                )
+                return result
+            launched = True
+            pid = proc.pid
+
+        result = VisualizationWorkbenchResult(
+            success=True,
+            launched=launched,
+            pid=pid,
+            **metadata,
+        )
+        self.state["visual_workbench"] = result.model_dump()
+        self.state["visual_review_status"] = "pending"
+        self.state["visual_review_blocking"] = True
+        self._emit(
+            "visualization_workbench_ready",
+            status="success",
+            summary=result.executable,
+            payload=result.model_dump(),
+        )
+        return result
+
+    def record_visual_verdict(
+        self,
+        *,
+        approved: bool,
+        notes: str = "",
+    ) -> VisualReviewResult:
+        """Record the blocking human visual-review verdict for the active job."""
+        status = "approved" if approved else "rejected"
+        clean_notes = " ".join(notes.split()).strip()
+        if not approved and not clean_notes:
+            raise ValueError("Rejection notes are required.")
+        result = VisualReviewResult(status=status, blocking=True, notes=clean_notes)
+        self.state["visual_review_status"] = status
+        self.state["visual_review_notes"] = clean_notes
+        self.state["visual_review_blocking"] = True
+        self._emit(
+            f"visualization_review_{status}",
+            status="success" if approved else "warning",
+            summary=clean_notes or status,
             payload=result.model_dump(),
         )
         return result

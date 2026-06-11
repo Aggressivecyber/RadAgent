@@ -21,6 +21,7 @@ _ALIASES = {
     "setting": "options",
     "settings": "options",
     "config": "options",
+    "visualize": "workbench",
 }
 
 _COMMAND_DESCRIPTIONS = {
@@ -58,6 +59,9 @@ _COMMAND_DESCRIPTIONS = {
     "reject-revision": "Reject a saved revision",
     "revision": "Open one revision",
     "simulate": "Run the generated simulator",
+    "visual-approve": "Approve G4 visual review",
+    "visual-reject": "Reject G4 visual review",
+    "workbench": "Open the G4 visual workbench",
     "step": "Run the next pipeline phase",
 }
 _KNOWN_COMMANDS = set(_COMMAND_DESCRIPTIONS)
@@ -77,6 +81,7 @@ _PALETTE_ORDER = (
     "mode",
     "resume",
     "retry",
+    "workbench",
     "revise",
     "revisions",
 )
@@ -95,6 +100,7 @@ _REQUIRES_ARGS = {
     "resume": "Usage: /resume <job_id>",
     "retry": "Usage: /retry <job_id>",
     "run": "Usage: /run <simulation request>",
+    "visual-reject": "Usage: /visual-reject <reason>",
 }
 
 
@@ -136,6 +142,13 @@ def parse_command(text: str) -> Command:
             raise CommandParseError("Usage: /simulate [positive event count]") from exc
         if events <= 0:
             raise CommandParseError("Simulation event count must be positive.")
+    if name == "workbench" and args:
+        try:
+            events = int(args)
+        except ValueError as exc:
+            raise CommandParseError("Usage: /workbench [positive event count]") from exc
+        if events <= 0:
+            raise CommandParseError("Workbench event count must be positive.")
 
     return Command(name=name, args=args, raw=text)
 

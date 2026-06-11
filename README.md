@@ -218,6 +218,7 @@ Key packages:
 
 ```text
 agent_core/
+  agent_tools/         reusable agent tool registry, selection, and execution helpers
   app/                 UI-neutral service layer and Pydantic response schemas
   artifacts/           artifact collection graph, manifests, and schemas
   chat/                workflow-aware copilot with RAG/web/job context
@@ -265,6 +266,7 @@ Module responsibilities and links:
 
 | Module | Role | Upstream callers | Downstream dependencies |
 | --- | --- | --- | --- |
+| `agent_core.agent_tools` | Registers and executes reusable tools exposed to agent loops. | model gateway tool-call flows, future agents. | `space_radiation`, LangChain tool interfaces. |
 | `agent_core.app` | Stable facade for frontends, model settings, copilot, job/artifact/build/simulation/revision operations. | TUI, future web/API frontends. | `chat`, `config`, `graph`, `models`, `storage`, `tools`, `workspace`, `workflow`, `revision`. |
 | `agent_core.chat` | Workflow-aware copilot with RAG, web search, and workspace/job context. | `app`, REPL, response nodes. | `context`, `models`, `storage`, `tools`, `workspace`. |
 | `agent_core.config` | Environment, run-mode, external tool, concurrency, and workspace configuration. | Most runtime packages. | `models.schemas`, `workspace.paths`. |

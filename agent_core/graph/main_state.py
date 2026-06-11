@@ -98,6 +98,9 @@ class RadAgentMainState(TypedDict, total=False):
     validation_status: str  # "passed" | "failed" | "blocked"
     failed_gates: list[str]
     skipped_gates: list[str]
+    visual_review_status: str  # "pending" | "approved" | "rejected"
+    visual_review_notes: str
+    visual_review_blocking: bool
 
     # ── Artifact Subgraph outputs ──
     review_artifact_dir: str

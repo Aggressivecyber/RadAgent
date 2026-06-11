@@ -64,6 +64,33 @@ def test_output_quality_accepts_populated_nonzero_outputs(tmp_path: Path) -> Non
     assert report.metrics["dose_3d_nonzero_rows"] == 2
 
 
+def test_output_quality_rejects_outputs_below_expected_event_count(tmp_path: Path) -> None:
+    _write_json(tmp_path / "g4_summary.json", {"job_id": "job", "events_requested": 10})
+    _write_json(tmp_path / "provenance.json", {"job_id": "job"})
+    (tmp_path / "event_table.csv").write_text(
+        "EventID,edep_MeV,dose_Gy\n" + "\n".join(f"{i},1.0,0.01" for i in range(10)) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "edep_3d.csv").write_text(
+        "x,y,z,edep_MeV\n0,0,0,1.0\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "dose_3d.csv").write_text(
+        "x,y,z,dose_Gy\n0,0,0,0.01\n",
+        encoding="utf-8",
+    )
+
+    report = inspect_g4_output_quality(
+        tmp_path,
+        smoke_result={"success": True, "errors": ""},
+        expected_events=1000,
+    )
+
+    assert not report.passed
+    assert report.metrics["expected_events"] == 1000
+    assert any("expected 1000" in error for error in report.errors)
+
+
 def test_output_quality_accepts_unit_suffixed_mesh_coordinates(tmp_path: Path) -> None:
     (tmp_path / "g4_summary.json").write_text('{"events_requested": 1}', encoding="utf-8")
     (tmp_path / "provenance.json").write_text("{}", encoding="utf-8")

@@ -486,6 +486,9 @@ def _make_gate_subgraph_node() -> Any:
                 "task_spec_path": state.get("task_spec_path", ""),
                 "context_decision": state.get("context_decision", ""),
                 "retry_count": state.get("retry_count", 0),
+                "visual_review_status": state.get("visual_review_status", ""),
+                "visual_review_notes": state.get("visual_review_notes", ""),
+                "visual_review_blocking": state.get("visual_review_blocking", True),
             }
         )
         new_retry = state.get("retry_count", 0) + (

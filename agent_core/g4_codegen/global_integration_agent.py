@@ -20,6 +20,7 @@ from agent_core.gates.output_quality import REQUIRED_G4_OUTPUTS, inspect_g4_outp
 from agent_core.models.gateway import _safe_parse_json, get_model_gateway
 from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
 from agent_core.observability import record_event
+from agent_core.tools.geant4_workbench import SELF_CHECK_EVENTS
 from agent_core.workspace.io import get_job_dir
 from agent_core.workspace.paths import GEANT4_PROJECT_DIRNAME, STAGE_CODEGEN
 
@@ -70,7 +71,8 @@ proposed_patch 修改生成工程文件。
    find_package(Geant4 REQUIRED ui_all vis_all) 或目标环境等效写法。
 2. main.cc 必须使用各模块真实 public 接口；不要凭类名猜构造函数或方法签名。
    main.cc 必须参考 Geant4 B1 运行契约：不传宏脚本参数时创建 G4UIExecutive 和
-   G4VisExecutive 并启动交互 UI/Qt 可视化 session；传入脚本参数时通过
+   G4VisExecutive 并启动交互 UI/Qt 可视化 session；交互模式应执行
+   macros/init_vis.mac，并在 GUI session 中执行 macros/gui.mac；传入脚本参数时通过
    G4UImanager 执行 "/control/execute " + argv[1] 的 batch 模式。
 3. PhysicsListFactoryWrapper 如果只是工厂 wrapper，就调用 CreatePhysicsList() 并把返回的
    G4VUserPhysicsList* 交给 G4RunManager；不要把 wrapper 对象本身交给 SetUserInitialization。
@@ -113,6 +115,12 @@ proposed_patch 修改生成工程文件。
     logVol->SetSensitiveDetector(this)。不要在 Initialize() 之后才 attach，否则
     SensitiveDetector::Initialize 可能不会创建 fHitsCollection，ProcessHits 会在
     fHitsCollection->insert(hit) 处 Segmentation fault。
+13. 可视化工作台文件必须保留：macros/init_vis.mac、macros/vis.mac、macros/gui.mac。
+    init.mac 可以作为 init_vis.mac 的兼容别名；run.mac 必须保持 batch/self-check 职责，
+    不要混入 /vis 命令。vis.mac 默认绘制 geometry、axes、smooth trajectories、hits，
+    accumulate，并用于 100-event human visual review。所有 LogicalVolume 应有显式
+    G4VisAttributes：world 隐藏，容器线框/低 alpha，target/sensitive/scoring 实体高可见，
+    shielding 半透明实体。
 
 返回格式：
 {
@@ -1250,13 +1258,14 @@ async def _run_integration_runtime_gate(
             str(project_dir),
             job_id=job_id,
             output_dir=str(output_dir),
-            events=10,
+            events=SELF_CHECK_EVENTS,
         )
         gate = _summarize_runtime_gate_result(
             result=result,
             attempt=attempt,
             project_dir=project_dir,
             output_dir=output_dir,
+            expected_events=SELF_CHECK_EVENTS,
         )
     except Exception as exc:
         gate = {
@@ -1264,6 +1273,7 @@ async def _run_integration_runtime_gate(
             "attempt": attempt,
             "project_dir": str(project_dir),
             "output_dir": str(output_dir),
+            "expected_events": SELF_CHECK_EVENTS,
             "errors": [str(exc)],
             "warnings": [],
             "artifacts": [],
@@ -1293,6 +1303,7 @@ def _summarize_runtime_gate_result(
     attempt: int,
     project_dir: Path,
     output_dir: Path,
+    expected_events: int | None = None,
 ) -> dict[str, Any]:
     required_outputs = list(REQUIRED_G4_OUTPUTS)
     missing_outputs = [name for name in required_outputs if not (output_dir / name).is_file()]
@@ -1344,6 +1355,7 @@ def _summarize_runtime_gate_result(
         "attempt": attempt,
         "project_dir": str(project_dir),
         "output_dir": str(output_dir),
+        "expected_events": expected_events,
         "errors": errors,
         "warnings": warnings,
         "missing_outputs": missing_outputs,
@@ -2166,7 +2178,10 @@ def _postprocess_hit_no_magic_numbers(content: str) -> str:
             content = content.replace(marker, marker + "\n\n" + constants, 1)
         else:
             content = constants + content
-    content = content.replace("circle.SetScreenSize(5.);", "circle.SetScreenSize(kHitMarkerScreenSize);")
+    content = content.replace(
+        "circle.SetScreenSize(5.);",
+        "circle.SetScreenSize(kHitMarkerScreenSize);",
+    )
     content = content.replace("std::setw(7)", "std::setw(kHitPrintWidth)")
     return content
 

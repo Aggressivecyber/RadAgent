@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 from agent_core.app import PIPELINE_PHASES, RadAgentAppService
 from agent_core.models.schemas import ModelTier
-from agent_core.workspace.paths import STAGE_INPUT
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION, STAGE_INPUT
 from pydantic import ValidationError
 
 
@@ -195,6 +196,67 @@ def test_service_rejects_provider_in_frontend_model_config(tmp_path) -> None:
 
     with pytest.raises(ValidationError):
         service.update_model_config({"provider": "mock"})
+
+
+@pytest.mark.asyncio
+async def test_service_prepares_visualization_workbench_and_records_blocking_verdict(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    events = []
+    service = RadAgentAppService(workspace_root=tmp_path, event_callback=events.append)
+    project_dir = tmp_path / "jobs" / "job_visual" / "06_patch" / "geant4_project"
+    executable = project_dir / "build" / "sim"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    executable.chmod(0o755)
+    service.state = {
+        "job_id": "job_visual",
+        "generated_code_dir": str(project_dir),
+        "_executable_path": str(executable),
+    }
+    monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+
+    workbench = await service.prepare_visualization_workbench(events=100)
+    rejected = service.record_visual_verdict(approved=False, notes="target offset wrong")
+    approved = service.record_visual_verdict(approved=True)
+
+    assert workbench.success is True
+    assert workbench.events == 100
+    assert Path(workbench.init_macro).is_file()
+    assert Path(workbench.vis_macro).is_file()
+    assert workbench.environment["QT_QPA_PLATFORM"] == "xcb"
+    assert service.state["visual_review_status"] == "approved"
+    assert rejected.status == "rejected"
+    assert rejected.blocking is True
+    assert approved.status == "approved"
+    assert [event.event_type for event in events][-3:] == [
+        "visualization_workbench_ready",
+        "visualization_review_rejected",
+        "visualization_review_approved",
+    ]
+
+
+def test_service_status_pauses_on_blocked_visual_review_gate(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_id = "job_visual_blocked"
+    gate_dir = tmp_path / "jobs" / job_id / STAGE_GATE_VALIDATION
+    gate_dir.mkdir(parents=True)
+    gate_path = gate_dir / "gate_results.json"
+    gate_path.write_text(
+        '[{"gate_id": 21, "name": "G4 Visual Review", "status": "blocked"}]',
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "gate_results_path": str(gate_path),
+        "validation_status": "blocked",
+    }
+
+    status = service.get_status()
+
+    assert status.status == "paused"
+    assert status.needs_confirmation is True
 
 
 @pytest.mark.asyncio

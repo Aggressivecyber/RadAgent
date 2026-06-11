@@ -18,6 +18,7 @@ venv/
 
 # Ruff cache
 .ruff_cache/
+.superpowers/
 
 # Testing
 .pytest_cache/

@@ -29,19 +29,25 @@ def _attempt_dirs(tmp_path: Path, job_id: str = "runtime_audit") -> tuple[Path, 
     return attempt_dir, project_dir, output_dir
 
 
-def _global_report(project_dir: Path, output_dir: Path, status: str = "pass") -> dict[str, Any]:
+def _global_report(
+    project_dir: Path,
+    output_dir: Path,
+    status: str = "pass",
+    expected_events: int | None = None,
+) -> dict[str, Any]:
+    gate: dict[str, Any] = {
+        "attempt": 1,
+        "status": status,
+        "project_dir": str(project_dir),
+        "output_dir": str(output_dir),
+        "build_result": {"success": True},
+        "cmake_configure_result": {"success": True},
+    }
+    if expected_events is not None:
+        gate["expected_events"] = expected_events
     return {
         "status": "passed",
-        "runtime_gate_attempts": [
-            {
-                "attempt": 1,
-                "status": status,
-                "project_dir": str(project_dir),
-                "output_dir": str(output_dir),
-                "build_result": {"success": True},
-                "cmake_configure_result": {"success": True},
-            }
-        ],
+        "runtime_gate_attempts": [gate],
     }
 
 
@@ -207,6 +213,40 @@ def test_event_table_reports_non_numeric_values(
     warnings = facts["event_table"]["warnings"]
     assert "column edep_MeV has 1 non-numeric value(s)" in warnings
     assert "column dose_Gy has 1 non-numeric value(s)" in warnings
+
+
+def test_runtime_facts_reject_event_count_below_runtime_gate_expectation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    _, project_dir, output_dir = _attempt_dirs(tmp_path)
+    (project_dir / "macros").mkdir()
+    (project_dir / "macros" / "run.mac").write_text("/run/beamOn 10\n", encoding="utf-8")
+    _write_json(output_dir / "smoke_simulation_result.json", {"success": True, "errors": ""})
+    _write_json(output_dir / "g4_summary.json", {"job_id": "runtime_audit", "events_requested": 10})
+    _write_json(output_dir / "provenance.json", {"job_id": "runtime_audit", "source": "program"})
+    (output_dir / "event_table.csv").write_text(
+        "EventID,edep_MeV,dose_Gy\n" + "\n".join(f"{i},1.0,0.01" for i in range(10)) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / "edep_3d.csv").write_text(
+        "x,y,z,edep_MeV\n0,0,0,1.0\n",
+        encoding="utf-8",
+    )
+    (output_dir / "dose_3d.csv").write_text(
+        "x,y,z,dose_Gy\n0,0,0,0.01\n",
+        encoding="utf-8",
+    )
+
+    facts = collect_runtime_execution_facts(
+        job_id="runtime_audit",
+        global_integration_report=_global_report(project_dir, output_dir, expected_events=1000),
+    )
+
+    assert facts["data_trustworthy"] is False
+    assert facts["expected_events"] == 1000
+    assert any("expected 1000 events" in error for error in facts["blocking_errors"])
 
 
 def test_runtime_audit_observation_includes_artifact_paths() -> None:

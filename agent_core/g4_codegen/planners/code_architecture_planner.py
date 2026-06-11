@@ -119,7 +119,7 @@ def plan_code_architecture(
     file_structure: dict[str, list[str]] = {
         "include": [c["header"] for c in classes],
         "src": [c["source"] for c in classes] + ["main.cc"],
-        "macros": ["run.mac", "init.mac"],
+        "macros": ["run.mac", "init.mac", "init_vis.mac", "vis.mac", "gui.mac"],
         "root": ["CMakeLists.txt"],
     }
 

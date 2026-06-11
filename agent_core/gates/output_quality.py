@@ -45,6 +45,7 @@ def inspect_g4_output_quality(
     output_dir: Path,
     *,
     smoke_result: dict[str, Any] | None = None,
+    expected_events: int | None = None,
 ) -> OutputQualityReport:
     """Validate that output artifacts contain useful smoke-simulation data."""
 
@@ -59,11 +60,22 @@ def inspect_g4_output_quality(
         report.errors.append(f"Missing output contract files: {', '.join(missing)}")
 
     summary = _read_json(output_dir / "g4_summary.json")
-    expected_events = _positive_int(summary.get("events_requested"))
-    if expected_events is not None:
-        report.metrics["events_requested"] = expected_events
+    summary_events = _positive_int(summary.get("events_requested"))
+    if summary_events is not None:
+        report.metrics["events_requested"] = summary_events
+    required_events = _positive_int(expected_events) or summary_events
+    if required_events is not None:
+        report.metrics["expected_events"] = required_events
+    if (
+        expected_events is not None
+        and summary_events is not None
+        and summary_events != expected_events
+    ):
+        report.errors.append(
+            f"g4_summary.json records {summary_events} events; expected {expected_events}"
+        )
 
-    _inspect_event_table(output_dir / "event_table.csv", expected_events, report)
+    _inspect_event_table(output_dir / "event_table.csv", required_events, report)
     _inspect_quantity_csv(output_dir / "edep_3d.csv", "edep_MeV", report)
     _inspect_quantity_csv(output_dir / "dose_3d.csv", "dose_Gy", report)
     _inspect_smoke_errors(smoke_result, report)

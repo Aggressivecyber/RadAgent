@@ -151,7 +151,8 @@ class TestMockCodegenReturnsModuleResult:
             malformed_result.error = None
             malformed_result.content = (
                 '{"module_name":"runtime_app","status":"generated",'
-                '"generated_files":[{"path":"main.cc","new_content":"int main()\\  { return 0; }"}]}'
+                '"generated_files":[{"path":"main.cc","new_content":'
+                '"int main()\\  { return 0; }"}]}'
             )
             malformed_result.parsed_json = None
 

@@ -158,6 +158,7 @@ def collect_runtime_execution_facts(
     smoke = _read_json(output_dir / "smoke_simulation_result.json")
     summary = _read_json(output_dir / "g4_summary.json")
     provenance = _read_json(output_dir / "provenance.json")
+    expected_events = _positive_int(latest_gate.get("expected_events"))
     output_quality = inspect_g4_output_quality(output_dir, smoke_result=smoke)
     output_event_stats = _inspect_event_table(output_dir / "event_table.csv")
     build_event_stats = _inspect_event_table(project_dir / "build" / "event_table.csv")
@@ -178,6 +179,7 @@ def collect_runtime_execution_facts(
 
     blocking_errors: list[str] = []
     warnings: list[str] = []
+    event_count_errors: list[str] = []
 
     if not latest_gate:
         blocking_errors.append("No runtime gate attempt was recorded")
@@ -220,6 +222,30 @@ def collect_runtime_execution_facts(
         )
 
     events_requested = _positive_int(summary.get("events_requested"))
+    if expected_events is not None:
+        if macro_events is not None and macro_events != expected_events:
+            event_count_errors.append(
+                f"run.mac requests {macro_events} events; expected {expected_events} events"
+            )
+        if events_requested is not None and events_requested != expected_events:
+            event_count_errors.append(
+                "g4_summary.json records "
+                f"{events_requested} events; expected {expected_events} events"
+            )
+        if output_event_stats["row_count"] and output_event_stats["row_count"] != expected_events:
+            event_count_errors.append(
+                "event_table.csv row count is "
+                f"{output_event_stats['row_count']}; expected {expected_events} events"
+            )
+        if events_requested is None:
+            event_count_errors.append(
+                f"g4_summary.json missing events_requested; expected {expected_events} events"
+            )
+        if macro_events is None:
+            event_count_errors.append(
+                f"run.mac missing /run/beamOn; expected {expected_events} events"
+            )
+    blocking_errors.extend(event_count_errors)
     if macro_events and events_requested and macro_events != events_requested:
         blocking_errors.append(
             f"run.mac requests {macro_events} events but g4_summary.json records {events_requested}"
@@ -256,6 +282,7 @@ def collect_runtime_execution_facts(
         and not output_event_stats["errors"]
         and not build_event_stats["errors"]
         and not misplaced_outputs
+        and not event_count_errors
     )
 
     artifact_paths = [
@@ -290,6 +317,7 @@ def collect_runtime_execution_facts(
         "runtime_error_patterns": runtime_error_patterns,
         "macro_beam_on_events": macro_events,
         "build_macro_beam_on_events": build_macro_events,
+        "expected_events": expected_events,
         "events_requested": events_requested,
         "smoke_result": _trim_json_value(smoke, max_chars=8_000),
         "g4_summary": _trim_json_value(summary, max_chars=4_000),

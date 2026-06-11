@@ -622,6 +622,26 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 case "simulate":
                     events = int(command.args) if command.args else 1000
                     self._start_operation(self.service.run_simulation(events=events))
+                case "workbench":
+                    events = int(command.args) if command.args else 100
+                    self._start_operation(
+                        self.service.prepare_visualization_workbench(events=events, launch=True)
+                    )
+                case "visual-approve":
+                    result = self.service.record_visual_verdict(approved=True)
+                    self._add_system_row("Visual review", result.status, "success")
+                    self._refresh_task_context()
+                case "visual-reject":
+                    try:
+                        result = self.service.record_visual_verdict(
+                            approved=False,
+                            notes=command.args,
+                        )
+                    except Exception as exc:
+                        self._add_system_row("Visual review failed", str(exc), "error")
+                    else:
+                        self._add_system_row("Visual review", result.notes, "warning")
+                        self._refresh_task_context()
                 case "mode":
                     self._set_composer_mode(command.args)
                 case "help":
@@ -1496,6 +1516,9 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     "/logs",
                     "/build",
                     "/simulate [events]",
+                    "/workbench [events]",
+                    "/visual-approve",
+                    "/visual-reject <reason>",
                     "/options [en|zh]",
                     "/projects",
                     "/project <slug-or-id>",

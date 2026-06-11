@@ -28,6 +28,20 @@ def test_simulate_validates_positive_count() -> None:
         parse_command("/simulate 0")
 
 
+def test_visual_workbench_commands_are_parsed_and_validated() -> None:
+    assert parse_command("/workbench").name == "workbench"
+    assert parse_command("/workbench 100").args == "100"
+    assert parse_command("/visual-approve").name == "visual-approve"
+    reject = parse_command("/visual-reject target offset wrong")
+    assert reject.name == "visual-reject"
+    assert reject.args == "target offset wrong"
+
+    with pytest.raises(CommandParseError, match="positive"):
+        parse_command("/workbench 0")
+    with pytest.raises(CommandParseError, match="Usage: /visual-reject"):
+        parse_command("/visual-reject")
+
+
 def test_unknown_command_is_rejected() -> None:
     with pytest.raises(CommandParseError, match="Unknown command"):
         parse_command("/banana")

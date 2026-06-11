@@ -167,7 +167,9 @@ class Geant4Runner:
             }
 
         unit = await self._run_ctest(build_dir, _output_dir)
-        macro_path = Path(project_dir) / "macros" / "run.mac"
+        from agent_core.tools.geant4_workbench import prepare_self_check_macro
+
+        macro_path = prepare_self_check_macro(project_dir, events=events)
         sim = await self.simulate(
             bld["executable_path"],
             macro=str(macro_path) if macro_path.is_file() else None,

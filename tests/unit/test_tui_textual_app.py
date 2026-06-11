@@ -3,7 +3,13 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from agent_core.app import ArtifactContent, ArtifactSummary, CopilotResponse, JobStatus, RadAgentAppService
+from agent_core.app import (
+    ArtifactContent,
+    ArtifactSummary,
+    CopilotResponse,
+    JobStatus,
+    RadAgentAppService,
+)
 from agent_core.intent.schemas import IntentResult
 from agent_core.tui.app import _THEMES, _css_for_theme, create_app_class
 
