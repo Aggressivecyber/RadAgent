@@ -108,6 +108,43 @@ Useful commands:
 /chat <message>       ask the workflow-aware copilot
 ```
 
+### Professional TUI Workstation
+
+RadAgent also ships a Textual terminal workstation:
+
+```bash
+radagent-tui
+radagent-tui --theme slate-workstation
+radagent-tui --theme neon-lab
+radagent-tui --theme minimal-terminal
+```
+
+The TUI uses a fixed workstation layout: global status bar, transcript timeline,
+right-side Task/Context/Runtime/Workflow panel, bottom command composer, and
+drawer-style inspectors. Useful commands and shortcuts:
+
+```text
+/run <query>          create and run a simulation task
+/check                inspect Geant4 / TCAD / ngspice paths and status
+/artifacts            browse logs, reports, plots, and output files
+/open [name]          preview a matching artifact or output collection
+/report               preview the active report artifact
+/jobs                 list saved jobs
+/job <job_id>         show job detail, output path, and resume/retry commands
+/resume <job_id>      restore the latest persisted job snapshot
+/retry <job_id>       resume a job and continue execution
+/demo geant4          play a safe Geant4 demo workflow without relying on tools
+/mode run             switch the composer into simulation-run input mode
+/options              switch language/theme and context-window options
+
+Ctrl+L input  Ctrl+P options  Ctrl+I inspect  Ctrl+T trace
+Ctrl+O artifacts  Ctrl+R history  F1 help  Ctrl+C stop
+```
+
+The default `slate-workstation` theme follows a restrained research workstation
+palette: dark gray panels, weak borders, semantic ready/warning/error colors,
+and purple only for focused or brand accents.
+
 ### Application Service Layer
 
 `agent_core.app.service.RadAgentAppService` is a UI-neutral facade for TUI, web,
