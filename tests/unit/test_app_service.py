@@ -88,6 +88,7 @@ async def test_chat_emits_events_without_ui_dependency(tmp_path, monkeypatch) ->
     agent = AsyncMock()
     long_answer = "x" * 300
     agent.chat.return_value = long_answer
+    agent.last_tool_results = [{"tool": "orbit_radiation_ap8ae8_query", "success": True}]
     service._chat_agent = agent
 
     response = await service.chat("question")
@@ -100,6 +101,7 @@ async def test_chat_emits_events_without_ui_dependency(tmp_path, monkeypatch) ->
     assert response.events[0].payload["message"] == "question"
     assert len(response.events[1].summary) == 120
     assert response.events[1].payload["message"] == long_answer
+    assert response.events[1].payload["tool_results"] == agent.last_tool_results
     agent.chat.assert_awaited_once()
     args, kwargs = agent.chat.await_args
     assert args == ("question",)

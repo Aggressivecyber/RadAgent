@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock
 
+import pytest
 from agent_core.app.schemas import JobStatus
 from agent_core.chat.agent import ChatAgent, _format_workflow_context
+from agent_core.models.schemas import ModelProfile, ModelProvider, ModelTier
 from agent_core.workflow.context import build_workflow_context
 
 
@@ -52,6 +55,71 @@ def test_chat_prompt_injects_ap8ae8_context_for_orbit_radiation_request() -> Non
     assert "geodetic samples" in prompt
     assert "aep8/astropy/skyfield/sgp4" in prompt
     assert "不是动态空间天气模型" in prompt
+
+
+def test_chat_prompt_injects_agent_tool_results() -> None:
+    agent = ChatAgent()
+
+    prompt = agent._build_system_prompt(
+        [],
+        [],
+        [],
+        workflow_context={"status": "idle"},
+        user_message="查询 AP8 质子 solar min L=2.0 B/B0=1.05 的轨道辐照",
+        tool_results=[
+            {
+                "tool": "orbit_radiation_ap8ae8_query",
+                "success": True,
+                "payload": {
+                    "ready": True,
+                    "model": "AP8MIN",
+                    "request": {"particle": "proton", "l_shell": 2.0, "bb0": 1.05},
+                },
+            }
+        ],
+    )
+
+    assert "### Agent 工具调用结果" in prompt
+    assert "orbit_radiation_ap8ae8_query" in prompt
+    assert '"ready": true' in prompt
+    assert '"model": "AP8MIN"' in prompt
+    assert '"particle": "proton"' in prompt
+    assert '"l_shell": 2.0' in prompt
+    assert '"bb0": 1.05' in prompt
+
+
+@pytest.mark.asyncio
+async def test_chat_calls_agent_tools_for_orbit_radiation_question(monkeypatch) -> None:
+    agent = ChatAgent()
+    agent._search_rag = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    agent._search_web = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    agent._get_recent_jobs_async = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    profile = ModelProfile(
+        tier=ModelTier.LITE,
+        provider=ModelProvider.MOCK,
+        model_name="mock-lite",
+    )
+    captured: dict[str, str] = {}
+
+    async def fake_chat(_profile, messages):
+        captured["system_prompt"] = messages[0]["content"]
+        return "需要确认 AP8 参数。"
+
+    agent._load_model_profiles = lambda: {ModelTier.LITE: profile}  # type: ignore[method-assign]
+    agent._call_multi_turn_chat = fake_chat  # type: ignore[method-assign]
+
+    response = await agent.chat("仿真 500km 太阳同步轨道的空间辐照")
+
+    prompt = captured["system_prompt"]
+    assert response == "需要确认 AP8 参数。"
+    assert "### Agent 工具调用结果" in prompt
+    assert "orbit_radiation_ap8ae8_query" in prompt
+    assert '"ready": false' in prompt
+    assert '"missing_fields"' in prompt
+    assert '"particle"' in prompt
+    assert '"solar_period"' in prompt
+    assert '"l_shell"' in prompt
+    assert '"bb0"' in prompt
 
 
 def test_chat_prompt_does_not_inject_ap8ae8_context_for_plain_beam_request() -> None:

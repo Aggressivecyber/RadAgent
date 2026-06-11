@@ -38,6 +38,7 @@ class ChatAgent:
 
     def __init__(self) -> None:
         self.history: list[dict[str, str]] = []
+        self.last_tool_results: list[dict[str, Any]] = []
         self._rag: Any = None  # RAGClient | None
         self._rag_initialized = False
         self._web: Any = None  # WebSearchTool | None
@@ -56,19 +57,19 @@ class ChatAgent:
         Searches RAG + web for context, gathers job history,
         then calls the LLM with full conversation history.
         """
-        from agent_core.models.client import call_multi_turn_chat
-        from agent_core.models.config import load_model_profiles
         from agent_core.models.schemas import ModelTier
 
-        profiles = load_model_profiles()
+        profiles = self._load_model_profiles()
         profile = profiles[ModelTier.LITE]
 
         # Gather context (RAG + web + jobs) in parallel
-        rag_results, web_results, jobs = await asyncio.gather(
+        rag_results, web_results, jobs, tool_results = await asyncio.gather(
             self._search_rag(user_message),
             self._search_web(user_message),
             self._get_recent_jobs_async(),
+            self._run_agent_tools(user_message),
         )
+        self.last_tool_results = tool_results
 
         # Build messages array
         system_prompt = self._build_system_prompt(
@@ -77,6 +78,7 @@ class ChatAgent:
             jobs,
             workflow_context=workflow_context,
             user_message=user_message,
+            tool_results=tool_results,
         )
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
@@ -87,7 +89,7 @@ class ChatAgent:
 
         # Call LLM
         try:
-            response = await call_multi_turn_chat(profile, messages)
+            response = await self._call_multi_turn_chat(profile, messages)
         except Exception as exc:
             logger.exception("Chat agent LLM call failed")
             return f"[对话服务暂时不可用: {exc}]"
@@ -101,6 +103,23 @@ class ChatAgent:
     def reset(self) -> None:
         """Clear conversation history (called when a new job starts)."""
         self.history.clear()
+        self.last_tool_results = []
+
+    def _load_model_profiles(self) -> dict[Any, Any]:
+        """Load model profiles; kept as a seam for tests and alternate runtimes."""
+        from agent_core.models.config import load_model_profiles
+
+        return load_model_profiles()
+
+    async def _call_multi_turn_chat(
+        self,
+        profile: Any,
+        messages: list[dict[str, str]],
+    ) -> str:
+        """Call the configured multi-turn chat model."""
+        from agent_core.models.client import call_multi_turn_chat
+
+        return await call_multi_turn_chat(profile, messages)
 
     # ── RAG search ──────────────────────────────────────────────────
 
@@ -266,6 +285,22 @@ class ChatAgent:
         """Get summaries of recent jobs (runs in executor to avoid blocking)."""
         return await asyncio.to_thread(self._get_recent_jobs)
 
+    async def _run_agent_tools(self, user_message: str) -> list[dict[str, Any]]:
+        """Run read-only agent tools selected for this chat turn."""
+        try:
+            from agent_core.agent_tools import run_agent_tools
+
+            return await run_agent_tools(user_message)
+        except Exception as exc:
+            logger.warning("Agent tool execution failed: %s", exc)
+            return [
+                {
+                    "tool": "agent_tools",
+                    "success": False,
+                    "payload": {"error": str(exc)},
+                }
+            ]
+
     def _get_recent_jobs(self) -> list[dict[str, Any]]:
         """Synchronous job listing."""
         try:
@@ -324,6 +359,7 @@ class ChatAgent:
         *,
         workflow_context: dict[str, Any] | None = None,
         user_message: str = "",
+        tool_results: list[dict[str, Any]] | None = None,
     ) -> str:
         """Assemble system prompt with retrieved context."""
         parts = [CHAT_SYSTEM_PROMPT]
@@ -333,6 +369,9 @@ class ChatAgent:
 
         if is_orbit_radiation_request(user_message):
             parts.append("### 本地 AP8/AE8 空间辐照上下文\n" + _format_ap8ae8_context())
+
+        if tool_results:
+            parts.append("### Agent 工具调用结果\n" + _format_tool_results(tool_results))
 
         if rag_results:
             lines = []
@@ -408,6 +447,22 @@ def _format_workflow_context(context: dict[str, Any]) -> str:
         if compact_memory:
             lines.append("memory: " + json.dumps(compact_memory, ensure_ascii=False))
     return "\n".join(lines)
+
+
+def _format_tool_results(tool_results: list[dict[str, Any]]) -> str:
+    """Format executed agent tool results for the chat model."""
+    compact: list[dict[str, Any]] = []
+    for result in tool_results[:8]:
+        if not isinstance(result, dict):
+            continue
+        compact.append(
+            {
+                "tool": result.get("tool", ""),
+                "success": result.get("success", False),
+                "payload": result.get("payload", {}),
+            }
+        )
+    return json.dumps(compact, ensure_ascii=False, indent=2)
 
 
 def _format_ap8ae8_context() -> str:

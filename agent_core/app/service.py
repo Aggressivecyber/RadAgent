@@ -446,7 +446,10 @@ class RadAgentAppService:
             "copilot_finished",
             status="success",
             summary=response[:120],
-            payload={"message": response},
+            payload={
+                "message": response,
+                "tool_results": getattr(agent, "last_tool_results", []),
+            },
         )
         return CopilotResponse(
             message=response,
