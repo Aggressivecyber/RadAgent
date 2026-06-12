@@ -205,9 +205,17 @@ def _reconstruct_patch_from_project(
     original_patch: dict[str, Any],
 ) -> dict[str, Any]:
     """Read back every file the model may have edited into a fresh patch."""
+    # Never carry build/runtime artifacts between attempts: a stale
+    # build/CMakeCache.txt records the PREVIOUS attempt's absolute source
+    # path, so cmake refuses to configure the next attempt ("CMakeCache.txt
+    # is different than the directory where it was created"). That breaks
+    # the repair loop's ability to iterate. Only source files travel onward.
+    artifact_segments = {"build", "smoke_output", "CMakeFiles", ".cache"}
     changed: list[dict[str, Any]] = []
     for path in sorted(p for p in project_dir.rglob("*") if p.is_file()):
         rel = path.relative_to(project_dir).as_posix()
+        if any(part in artifact_segments for part in rel.split("/")):
+            continue
         try:
             content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
