@@ -80,6 +80,16 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "Sanity invariant: a smoke run with at least one particle through a sensitive "
             "volume MUST produce non-zero total edep. If event_table.csv is all zeros, the "
             "scoring wiring is broken — re-check the lifetime + key rules above.",
+            "Region pitfall (GeomMgt0002 crash): do NOT create a custom G4Region rooted at "
+            "the world logical volume — Geant4 already makes the world the root of "
+            "DefaultRegionForTheWorld, and a volume cannot be root for two regions. For "
+            "region-based scoring, register non-world scoring volumes only, or reuse the "
+            "default region / cuts instead of making new regions for the world.",
+            "Overlap pitfall (Geom0003 crash): every daughter volume must lie FULLY inside "
+            "its mother. G4Box takes HALF-lengths (pass full/2). The placement-time "
+            "CheckOverlaps can pass while /run/initialize still flags an overlap, so verify "
+            "containment arithmetically: daughter center +/- half-lengths must be within the "
+            "mother's bounds in every axis.",
         ],
     },
     "beam_physics": {
