@@ -188,3 +188,29 @@ session's gate renumbering and remain open.
    separate follow-up (they weaken confidence in the gate suite but are
    unrelated to physics correctness).
 
+## Validation Outcome (2026-06-13, direct codegen subgraph on job_cbb4f07a IR)
+
+Committed (on top of the agentic upgrade), all addressing concrete observed
+failure modes:
+
+- `21ae439` zero-edep: output_quality flags all-zero event_table + examples
+  prescribe ScoringManager constructor lifetime / SD-componentId / dose units /
+  voxel registration. **The constructor pattern is now RELIABLY adopted by the
+  model (confirmed across multiple fresh runs).**
+- `f1c594d` repair patch reconstruction excludes `build/` so a stale
+  CMakeCache.txt no longer poisons the next runtime_attempt.
+- `963dabb` agent-loop opt-in `max_stalls`+`stall_nudge`; agentic_repair uses
+  max_stalls=3 so the model can't abandon the task with a text-only answer.
+- `4950715` simulation_core examples warn about GeomMgt0002 (region) and
+  Geom0003 (overlap) geometry crashes.
+- `aacb6a8` agentic repair turn budget 32→48 (the audit showed the agent was
+  converging but exhausted 32 turns before clearing compile+runtime).
+- `a2178c0` beam_physics examples warn about BeamPhys001 particle-table timing.
+
+Open frontier: each fresh codegen run still trips a DIFFERENT LLM-variance
+runtime error before producing edep (run1 overlap, run2 region+signatures,
+run3 particle-table). The per-pitfall example guidance above covers all three
+observed; each NEW pitfall that surfaces should be added the same way. The
+more permanent fix is deterministic scaffolding for the mechanical
+PGA/region/geometry setup so the model only writes the physics-specific parts.
+
