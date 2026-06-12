@@ -115,6 +115,15 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "Use IR source particle, energy, direction, position, and units exactly.",
             "Choose physics and production cuts based on the requested "
             "particle/material/scoring fidelity.",
+            "Particle-table timing pitfall (BeamPhys001 crash): the particle "
+            "table is NOT populated when PrimaryGeneratorAction is constructed, "
+            "so G4ParticleTable::FindParticle(\"electron\") in the constructor "
+            "returns null and aborts with 'Particle not found'. Resolve the "
+            "particle via its Definition() singleton (e.g. "
+            "G4Electron::ElectronDefinition(), G4Proton::Proton(), "
+            "G4Gamma::GammaDefinition()) which is always available, or look it "
+            "up lazily in GeneratePrimaries() — never rely on FindParticle in "
+            "the constructor without a Definition() fallback.",
         ],
     },
     "runtime_app": {
