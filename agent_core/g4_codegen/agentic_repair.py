@@ -128,7 +128,7 @@ async def run_agentic_repair(
             )
         return None
 
-    budget = max_turns or int(__import__("os").getenv("RADAGENT_AGENTIC_MAX_TURNS", "32"))
+    budget = max_turns or int(__import__("os").getenv("RADAGENT_AGENTIC_MAX_TURNS", "48"))
 
     loop_result = await run_agent_loop(
         gateway=gateway,
