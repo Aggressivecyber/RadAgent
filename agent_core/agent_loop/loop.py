@@ -53,6 +53,8 @@ async def run_agent_loop(
     stop_hook: StopHook | None = None,
     nudge_hook: NudgeHook | None = None,
     metadata: dict[str, Any] | None = None,
+    max_stalls: int = 0,
+    stall_nudge: str | None = None,
 ) -> AgentLoopResult:
     """Run the tool-calling loop and return the final state + audit trail."""
     messages: list[dict[str, Any]] = [
@@ -61,6 +63,7 @@ async def run_agent_loop(
     ]
     tool_audit: list[dict[str, Any]] = []
     base_meta = dict(metadata or {})
+    stalls = 0
 
     for turn in range(max_turns):
         res: ModelCallResult = await gateway.call(
@@ -86,6 +89,17 @@ async def run_agent_loop(
         messages.append(_assistant_message(res))
 
         if not res.tool_calls:
+            # The model produced a response with no tool call. For
+            # task-oriented loops (e.g. agentic repair) this usually means the
+            # model gave up instead of fixing the error. When a stall budget is
+            # configured, inject a forceful nudge and keep going rather than
+            # abandoning the task on the first text-only response.
+            if stalls < max_stalls and stall_nudge:
+                stalls += 1
+                messages.append(
+                    {"role": "user", "content": stall_nudge}
+                )
+                continue
             return AgentLoopResult(
                 content=res.content,
                 stop_reason="natural" if res.content.strip() else "empty",

@@ -147,6 +147,15 @@ async def run_agentic_repair(
             "agentic_attempt": attempt_index,
             "enable_thinking": False,
         },
+        max_stalls=3,
+        stall_nudge=(
+            "You stopped without calling a tool. The simulation still does not "
+            "pass — the task is NOT done. Pick the file responsible for the "
+            "current error, call edit_file (or write_file) to apply the minimal "
+            "fix, then call build_project (and run_smoke) to verify. If you are "
+            "unsure of the exact change, make your best single attempt and let "
+            "the build output guide the next step. Do not answer with text only."
+        ),
     )
 
     # Read back the final project files the model left behind.

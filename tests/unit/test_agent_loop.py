@@ -206,6 +206,39 @@ async def test_loop_survives_tool_exception() -> None:
 
 
 @pytest.mark.asyncio
+async def test_loop_stall_nudge_retries_text_only_responses() -> None:
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir)
+    # Model keeps emitting text-only (no tool call) — a stall. With a stall
+    # budget of 2 the loop injects the nudge twice before giving up, mirroring
+    # how agentic_repair must keep iterating instead of abandoning the task.
+    script = [
+        _result(content="I'm thinking about it."),
+        _result(content="Still unsure."),
+        _result(content="I really can't decide."),
+    ]
+    gw = _FakeGateway(script)
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="fix it",
+        toolkit=toolkit,
+        max_turns=10,
+        max_stalls=2,
+        stall_nudge="You must call a tool now.",
+    )
+    assert result.stop_reason == "natural"
+    assert gw.calls == 3  # initial + 2 nudged retries
+    nudge_msgs = [
+        m for m in result.messages
+        if m.get("role") == "user" and "must call a tool" in m.get("content", "")
+    ]
+    assert len(nudge_msgs) == 2
+
+
+@pytest.mark.asyncio
 @pytest.mark.skipif(
     not os.getenv("RADAGENT_API_KEY"),
     reason="requires real mimo API to verify native tool round-trip",
