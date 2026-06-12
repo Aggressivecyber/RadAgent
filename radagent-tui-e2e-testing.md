@@ -119,3 +119,72 @@ If runtime_app still writes one file per turn and hits max_turns, check:
   in one response are allowed.
 - Whether runtime_cpp should increase only `RADAGENT_MODULE_AGENT_MAX_TURNS`
   for this module, before considering more file-group splits.
+
+## Zero-Energy-Deposition Bug (FOUND + FIXED, 2026-06-13)
+
+Auditing the previously-"completed" e2e job `job_cbb4f07a__20260612_072455`
+against the 7 completion criteria revealed it was a **false success**: the
+TUI reported `completed`, but `logs/failure_bundle.json` showed
+`status: failed, phase: gate_validation` with "edep_3d.csv has no non-zero
+edep_MeV bins". The generated Geant4 code **built and smoke-ran cleanly but
+deposited zero energy** (`total_edep_MeV: 0.0`, event_table.csv all zero).
+
+Root cause is a Geant4 initialization-order bug in the codegen output:
+
+- The generated `DetectorConstruction` created
+  `fScoringManager = new ScoringManager()` inside `ConstructSDandField()`.
+- Geant4 calls `ActionInitialization::Build()` **BEFORE**
+  `ConstructSDandField()`, so `detCon->GetScoringManager()` returned NULL at
+  Build() time.
+- `EventAction` and `SteppingAction` therefore held a NULL ScoringManager.
+  `SensitiveDetector` still recorded (it received the pointer via
+  `SetScoringManager` in ConstructSDandField), but the EndOfEvent read path was
+  dead — per-event edep was never aggregated. Confirmed by instrument prints:
+  `[DBG-REC]` fired 74× with correct edep values, `[DBG-EOE]` fired 0×.
+
+Correct pattern the codegen must emit (validated: rebuild + smoke of the
+patched job project gave `total_edep_MeV = 7.2` for 5×1 MeV electrons):
+
+- Create the `ScoringManager` in the `DetectorConstruction` **constructor**
+  (guaranteed before Build()), delete it in the destructor. Region
+  registration + SD attachment stay in `ConstructSDandField()` where logical
+  volumes exist.
+- `SensitiveDetector` must record under its **componentId** (set via
+  `SetComponentId`), matching `ScoringManager::RegisterRegionScoring`. Never
+  use `this->GetName()` as the scoring key.
+- Dose units: `dose_Gy = edep_MeV * 1.602176634e-13 / mass_kg`. `* MeV` is NOT
+  joules — Geant4's internal energy unit is MeV.
+- Register voxel scoring per scored component (IR voxel size in um), or
+  edep_3d/dose_3d are empty and the Data Contract gate fails "no non-zero bins".
+
+Fixes landed in this session (output_quality.py + module_context_examples.py
++ a regression test in test_g4_output_quality.py):
+
+- `inspect_g4_output_quality._inspect_event_table` now emits an ERROR when
+  every event row is zero-edep, with a root-cause hint. This makes `run_smoke`
+  fail (not false-pass) and feeds `agentic_repair` a clear "scoring wiring is
+  broken" signal — directly aligned with the raw-feedback principle.
+- `module_context_examples.py` simulation_core + runtime_app examples/notes
+  now prescribe the correct ScoringManager lifetime, SD-componentId contract,
+  dose units, and voxel registration.
+
+Pre-existing (NOT caused by these fixes, verified by revert): 3 failing unit
+tests in `test_architecture_invariants.py` and
+`test_g4_modeling_gates_codegen_files.py` (gate 18 returns 'warning' not
+'fail'; artifact_manifest lacks gate_summary). These are from the prior
+session's gate renumbering and remain open.
+
+## Updated Next Steps
+
+1. Commit the staged agentic upgrade + false-success fix + the zero-edep
+   fixes above.
+2. Start a fresh full TUI e2e. With the false-success fix it can no longer
+   report a lying `completed`; with the zero-edep fixes the codegen should now
+   produce non-zero edep. Verify the 7 completion criteria, not the TUI badge.
+3. If the fresh e2e still shows zero edep, the agentic_repair loop should now
+   receive the new "no non-zero edep_MeV rows" feedback and self-correct;
+   watch that it converges rather than burning max_turns.
+4. Consider fixing the 3 pre-existing gate-invariant test failures as a
+   separate follow-up (they weaken confidence in the gate suite but are
+   unrelated to physics correctness).
+

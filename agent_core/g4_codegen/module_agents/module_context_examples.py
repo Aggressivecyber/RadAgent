@@ -29,15 +29,33 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "ScoringManager",
         ],
         "example": (
+            "// CRITICAL lifetime rule: ScoringManager MUST be owned by the\n"
+            "// DetectorConstruction and created in its CONSTRUCTOR, NOT in\n"
+            "// ConstructSDandField(). Geant4 calls ActionInitialization::Build()\n"
+            "// BEFORE ConstructSDandField(), so Build() must be able to fetch an\n"
+            "// already-constructed, non-null ScoringManager for EventAction and\n"
+            "// SteppingAction. If you `new` it inside ConstructSDandField(), those\n"
+            "// actions get a null pointer and EVERY event records zero edep.\n"
             "class DetectorConstruction : public G4VUserDetectorConstruction {\n"
             "public:\n"
-            "  G4VPhysicalVolume* Construct() override;\n"
-            "  void ConstructSDandField() override;\n"
-            "  G4LogicalVolume* GetScoringVolume(const G4String& name) const;\n"
+            "  DetectorConstruction() : fScoringManager(new ScoringManager()) {}\n"
+            "  G4VPhysicalVolume* Construct() override;        // build geometry only\n"
+            "  void ConstructSDandField() override;            // register regions + attach SDs\n"
+            "  ScoringManager* GetScoringManager() const { return fScoringManager; }\n"
+            "private:\n"
+            "  ScoringManager* fScoringManager;  // constructed here, deleted in dtor\n"
             "};\n"
+            "// SensitiveDetector records under its componentId (set via SetComponentId),\n"
+            "// which MUST match the key passed to ScoringManager::RegisterRegionScoring.\n"
+            "// Never use this->GetName() as the scoring key.\n"
             "class ScoringManager {\n"
             "public:\n"
-            "  void RecordEnergyDeposit(G4int eventId, G4double edep, G4double dose);\n"
+            "  void RegisterRegionScoring(const G4String& componentId, G4LogicalVolume*);\n"
+            "  void RegisterVoxelScoring(const G4String& componentId, G4LogicalVolume*,\n"
+            "                            const std::array<G4double,3>& voxelSize_um);\n"
+            "  void RecordEnergyDeposit(const G4String& componentId, G4double edep_MeV,\n"
+            "                           const G4ThreeVector& position);\n"
+            "  void EndOfEvent(const G4String& componentId, G4double& edep, G4double& dose);\n"
             "};\n"
         ),
         "notes": [
@@ -45,6 +63,23 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "scoring interfaces together.",
             "Attach sensitive detectors to actual logical volumes from DetectorConstruction.",
             "Keep scoring records and dose calculations tied to real geometry/material quantities.",
+            "ScoringManager lifetime: construct it in the DetectorConstruction constructor "
+            "(and delete in the destructor). RegisterRegionScoring/RegisterVoxelScoring and "
+            "SD attachment happen in ConstructSDandField() where logical volumes exist. "
+            "ActionInitialization::Build() runs BEFORE ConstructSDandField, so the instance "
+            "must already exist for EventAction/SteppingAction to receive a non-null pointer.",
+            "Scoring key contract: every RecordEnergyDeposit call (from both SensitiveDetector "
+            "and SteppingAction) MUST use the componentId that RegisterRegionScoring used. "
+            "Give SensitiveDetector a SetComponentId() and use it — never this->GetName().",
+            "Dose units: dose_Gy = edep_MeV * 1.602176634e-13 (J/MeV) / mass_kg. "
+            "G4LogicalVolume::GetMass() returns kg. Do NOT treat `edep_MeV * MeV` as joules — "
+            "Geant4's internal energy unit is MeV, so `* MeV` leaves the value in MeV.",
+            "Register voxel scoring for every component that needs a 3D dose/edep map, using "
+            "the IR voxel size in um. Without RegisterVoxelScoring, edep_3d.csv/dose_3d.csv "
+            "are empty and the data-contract gate fails on 'no non-zero bins'.",
+            "Sanity invariant: a smoke run with at least one particle through a sensitive "
+            "volume MUST produce non-zero total edep. If event_table.csv is all zeros, the "
+            "scoring wiring is broken — re-check the lifetime + key rules above.",
         ],
     },
     "beam_physics": {
@@ -111,6 +146,15 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "Read upstream summaries and use the actual generated class constructors and methods.",
             "Wire OutputManager through RunAction/EventAction/SteppingAction so "
             "event rows are real.",
+            "ActionInitialization::Build() must obtain the ScoringManager from the "
+            "DetectorConstruction (via GetScoringManager()) and pass the SAME pointer "
+            "to RunAction, EventAction, and SteppingAction. This is only safe because "
+            "DetectorConstruction creates its ScoringManager in its constructor; do not "
+            "rely on ConstructSDandField() having run at Build() time.",
+            "At EndOfEvent, EventAction iterates ScoringManager::GetRegionScorings() and "
+            "calls EndOfEvent(componentId) per region to pull per-event (edep, dose); a "
+            "non-null ScoringManager with zero regions means ConstructSDandField did not "
+            "register any region — that is a bug.",
             "CMake must include every generated source file needed by the final "
             "application and enable Geant4 UI/Vis/Qt support.",
             "main.cc should follow the B1 launch pattern: argc == 1 starts "

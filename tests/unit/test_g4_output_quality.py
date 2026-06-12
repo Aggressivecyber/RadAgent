@@ -112,6 +112,34 @@ def test_output_quality_accepts_unit_suffixed_mesh_coordinates(tmp_path: Path) -
     assert report.passed
 
 
+def test_output_quality_rejects_all_zero_event_table_edep(tmp_path: Path) -> None:
+    """Rows present but every edep is zero — the init-order / scoring-wiring canary.
+
+    Reproduces the job_cbb4f07a false-success shape: event_table.csv has real
+    rows yet all energy is zero because the scoring pointer was never wired.
+    The 3D meshes are populated so the ONLY failure is the all-zero event table,
+    isolating the new check.
+    """
+    _write_json(tmp_path / "g4_summary.json", {"job_id": "job", "events_requested": 5})
+    _write_json(tmp_path / "provenance.json", {"job_id": "job"})
+    (tmp_path / "event_table.csv").write_text(
+        "EventID,edep_MeV,dose_Gy\n" + "\n".join(f"{i},0.0,0.0" for i in range(5)) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "edep_3d.csv").write_text("x,y,z,edep_MeV\n0,0,0,1.0\n", encoding="utf-8")
+    (tmp_path / "dose_3d.csv").write_text("x,y,z,dose_Gy\n0,0,0,0.01\n", encoding="utf-8")
+
+    report = inspect_g4_output_quality(tmp_path, smoke_result={"success": True, "errors": ""})
+
+    assert not report.passed
+    assert report.metrics["event_table_nonzero_rows"] == 0
+    joined = " ".join(report.errors)
+    assert "no non-zero edep_MeV rows" in joined
+    # Root-cause hint must steer the model at the actual fix.
+    assert "CONSTRUCTOR" in joined
+    assert "componentId" in joined
+
+
 def test_output_quality_rejects_geant4_command_not_found_stderr(tmp_path: Path) -> None:
     (tmp_path / "g4_summary.json").write_text('{"events_requested": 1}', encoding="utf-8")
     (tmp_path / "provenance.json").write_text("{}", encoding="utf-8")

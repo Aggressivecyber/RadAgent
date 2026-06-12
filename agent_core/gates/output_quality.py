@@ -157,6 +157,21 @@ def _inspect_event_table(
         if edep > 0.0 or dose > 0.0:
             nonzero_events += 1
     report.metrics["event_table_nonzero_rows"] = nonzero_events
+    if nonzero_events == 0:
+        # The canary for physics actually being scored. A zero-edep event table
+        # almost always means the scoring/output wiring is broken (not a build
+        # bug), so give the model an actionable root-cause hint rather than a
+        # generic message.
+        report.errors.append(
+            "event_table.csv has no non-zero edep_MeV rows — energy is not being "
+            "scored into any region. Verify: (1) the ScoringManager is created in "
+            "the DetectorConstruction CONSTRUCTOR, not in ConstructSDandField() "
+            "(ActionInitialization::Build() runs before ConstructSDandField and "
+            "must fetch a non-null ScoringManager for EventAction/SteppingAction); "
+            "(2) the sensitive detector records under its componentId, matching "
+            "ScoringManager::RegisterRegionScoring; (3) the primary particle "
+            "actually intersects a sensitive volume."
+        )
 
 
 def _inspect_quantity_csv(path: Path, quantity: str, report: OutputQualityReport) -> None:
