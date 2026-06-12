@@ -94,7 +94,7 @@ async def build_project(project_dir: Path, *, threads: int = 4) -> dict[str, Any
     return {
         "ok": bool(build.get("success")),
         "stage": "build",
-        "output": _tail(raw),
+        "output": _known_fix_hints(_tail(raw)),
         "executable_path": build.get("executable_path"),
     }
 
@@ -104,6 +104,52 @@ def _tail(text: str, *, max_chars: int = 8000) -> str:
     if len(text) <= max_chars:
         return text
     return "..." + text[-(max_chars - 3):]
+
+
+# Classic Geant4 runtime/compile errors whose fix is deterministic and
+# well-known. Appending the fix to the raw feedback lets the repair agent
+# apply it directly instead of re-deriving it every run — this is what makes
+# the loop converge on LLM-variance errors that rotate across runs.
+_KNOWN_GEANT4_FIXES: tuple[tuple[str, str], ...] = (
+    (
+        "Particle '", " not found in particle table",
+        "PARTICLE-TABLE FIX: G4ParticleTable is not populated when "
+        "PrimaryGeneratorAction is constructed, so FindParticle(name) returns "
+        "null and aborts. Resolve the particle via its Definition() singleton "
+        "(G4Electron::ElectronDefinition(), G4Proton::Proton(), "
+        "G4Gamma::GammaDefinition()) which is always available, or look it up "
+        "lazily inside GeneratePrimaries(). Never rely on FindParticle in the "
+        "constructor without a Definition() fallback.",
+    ),
+    (
+        "GeomMgt0002", "already set as",
+        "REGION FIX: a logical volume cannot be the root of two regions. The "
+        "world LV is already the root of DefaultRegionForTheWorld, so do NOT "
+        "create a custom G4Region rooted at the world. Remove that region "
+        "creation, or register only non-world scoring volumes / reuse the "
+        "default region.",
+    ),
+    (
+        "Geom0003", "Volume overlap detected",
+        "OVERLAP FIX: a daughter volume is not fully inside its mother. G4Box "
+        "takes HALF-lengths (pass full_dimension/2). Verify arithmetically "
+        "that daughter center +/- half-length lies within the mother's bounds "
+        "on every axis; fix the placement coordinates or the dimensions.",
+    ),
+)
+
+
+def _known_fix_hints(raw_output: str) -> str:
+    """Append deterministic fixes for classic Geant4 errors found in the output."""
+    if not raw_output:
+        return raw_output
+    hints: list[str] = []
+    for sig_a, sig_b, fix in _KNOWN_GEANT4_FIXES:
+        if sig_a in raw_output and sig_b in raw_output:
+            hints.append(fix)
+    if not hints:
+        return raw_output
+    return raw_output.rstrip() + "\n\n[KNOWN-FIX HINTS]\n" + "\n\n".join(hints) + "\n"
 
 
 async def run_smoke(project_dir: Path, *, events: int = 5, job_id: str = "agentic") -> dict[str, Any]:
@@ -139,7 +185,7 @@ async def run_smoke(project_dir: Path, *, events: int = 5, job_id: str = "agenti
     return {
         "ok": bool(result.get("success")) and quality.passed,
         "stage": "smoke",
-        "output": _tail(combined),
+        "output": _known_fix_hints(_tail(combined)),
         "details": {
             "events_requested": result.get("events_requested"),
             "build_success": result.get("build_success"),

@@ -47,3 +47,27 @@ async def test_run_smoke_requires_output_contract_files(
     assert result["stage"] == "smoke"
     assert "Missing output contract files" in result["output"]
     assert result["details"]["output_quality"]["status"] == "fail"
+
+
+def test_known_fix_hints_append_for_classic_geant4_errors() -> None:
+    """The repair agent should see the deterministic fix, not just the raw error."""
+    from agent_core.dev_tools.shell import _known_fix_hints
+
+    particle = _known_fix_hints(
+        "*** G4Exception : BeamPhys001\nParticle 'electron' not found in particle table."
+    )
+    assert "PARTICLE-TABLE FIX" in particle
+    assert "ElectronDefinition" in particle
+
+    overlap = _known_fix_hints("*** G4Exception : Geom0003\nVolume overlap detected")
+    assert "OVERLAP FIX" in overlap
+    assert "HALF-lengths" in overlap
+
+    region = _known_fix_hints(
+        "*** G4Exception : GeomMgt0002\nalready set as root for region <r>"
+    )
+    assert "REGION FIX" in region
+
+    # Unrelated output passes through unchanged; empty stays empty.
+    assert _known_fix_hints("undefined reference to foo") == "undefined reference to foo"
+    assert _known_fix_hints("") == ""
