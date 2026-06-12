@@ -126,6 +126,58 @@ class TestGeometryTreeCompleteness:
         assert not passed
         assert any("No components" in e for e in errors)
 
+    def test_box_components_require_complete_dimensions(self):
+        """Box geometry must carry dx/dy/dz before code generation."""
+        from agent_core.g4_modeling.schemas.geometry_interface_spec import GeometryInterfaceSpec
+        from agent_core.g4_modeling.schemas.physics_spec import PhysicsSpec
+        from agent_core.g4_modeling.schemas.scoring_spec import ScoringSpec
+        from agent_core.g4_modeling.schemas.source_spec import BeamProfile, EnergySpec, SourceSpec
+
+        incomplete_sensor = _child("sensor")
+        incomplete_sensor.dimensions = {"dz": 10.0}
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            components=[_world(), incomplete_sensor],
+            materials=[_mat("air"), _mat("silicon")],
+            interfaces=[
+                GeometryInterfaceSpec(
+                    interface_id="world_sensor",
+                    component_a="world",
+                    component_b="sensor",
+                    relationship="contains",
+                ),
+            ],
+            sources=[
+                SourceSpec(
+                    source_id="electron_src",
+                    particle_type="electron",
+                    energy=EnergySpec(value=1.0),
+                    beam=BeamProfile(position=[0.0, 0.0, -100.0], direction=[0.0, 0.0, 1.0]),
+                    source_evidence=["user_spec"],
+                )
+            ],
+            physics=PhysicsSpec(
+                physics_list="FTFP_BERT",
+                selection_reasoning="Standard physics for electron test",
+                source_evidence=["doc"],
+            ),
+            scoring=[
+                ScoringSpec(
+                    scoring_id="edep_score",
+                    scoring_type="region",
+                    quantities=["edep_MeV"],
+                    source_evidence=["user_spec"],
+                )
+            ],
+        )
+
+        validator = ModelCompletenessValidator()
+        passed, errors = validator.validate(ir)
+
+        assert not passed
+        assert any("sensor" in error and "dx" in error and "dy" in error for error in errors)
+
     def test_orphan_component_detected(self):
         """Child referencing non-existent mother should be flagged."""
         ir = G4ModelIR(

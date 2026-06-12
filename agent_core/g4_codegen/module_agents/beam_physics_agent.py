@@ -23,7 +23,7 @@ BEAM_PHYSICS_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 beam_physics 编码 A
 4. 对剂量/能量沉积或小尺寸探测器场景，必须考虑 production cuts、range cuts、step limiter
    或用户 limits；如果不需要，也要在 risk_notes 中解释。
 5. 使用 G4SystemOfUnits.hh 中的单位常量，保持 IR global_units 的语义。
-6. 只返回 JSON，不得输出 Markdown fence。
+6. 必须用 write_file 写文件；写完全部 owned files 后回复 DONE，不得输出 Markdown fence。
 """
 
 

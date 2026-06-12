@@ -116,6 +116,77 @@ def _normalize_context_usage(value: Any) -> dict[str, Any]:
     return {key: value[key] for key in allowed if key in value}
 
 
+def _looks_like_copilot_simulation_start(message: str) -> bool:
+    text = message.strip().lower()
+    if not text:
+        return False
+    blocked_question_markers = (
+        "?",
+        "？",
+        "为什么",
+        "如何",
+        "怎么",
+        "解释",
+        "说明",
+        "what",
+        "why",
+        "how",
+        "explain",
+    )
+    if any(marker in text for marker in blocked_question_markers):
+        return False
+
+    start_markers = (
+        "/run",
+        "建立",
+        "创建",
+        "生成",
+        "运行",
+        "设计",
+        "启动",
+        "开始",
+        "build",
+        "create",
+        "generate",
+        "run",
+        "design",
+        "start",
+    )
+    simulation_markers = (
+        "geant4",
+        "仿真",
+        "模拟",
+        "simulation",
+        "simulate",
+        "粒子",
+        "质子",
+        "电子",
+        "中子",
+        "探测器",
+        "detector",
+    )
+    objective_markers = (
+        "观察",
+        "计算",
+        "评估",
+        "能量沉积",
+        "剂量",
+        "轨迹",
+        "响应",
+        "observe",
+        "calculate",
+        "evaluate",
+        "deposit",
+        "dose",
+        "trajectory",
+        "response",
+    )
+    has_start = any(marker in text for marker in start_markers)
+    has_simulation = any(marker in text for marker in simulation_markers)
+    has_objective = any(marker in text for marker in objective_markers)
+    return has_simulation and (has_start or has_objective)
+
+
 class RadAgentAppService:
     """UI-neutral facade for REPL, TUI, web, or API frontends.
 
@@ -495,6 +566,14 @@ class RadAgentAppService:
 
     def _safe_copilot_command(self, message: str) -> dict[str, Any] | None:
         stripped = message.strip().lower()
+        if _looks_like_copilot_simulation_start(message):
+            return {
+                "name": "start_simulation_briefing",
+                "args": {"query": message.strip()},
+                "risk": "write",
+                "status": "pending_confirmation",
+                "summary": "Prepare simulation briefing",
+            }
         aliases = {
             "/status": "status",
             "status": "status",
@@ -528,6 +607,12 @@ class RadAgentAppService:
 
     def _execute_safe_copilot_command(self, command: dict[str, Any]) -> str:
         name = command.get("name", "")
+        if name == "start_simulation_briefing":
+            query = str(command.get("args", {}).get("query", "")).strip()
+            return (
+                "我可以把这条请求整理成受控仿真任务。请确认后进入仿真简报流程："
+                f"{query}"
+            )
         if name == "status":
             status = self.get_status()
             return (
@@ -612,6 +697,11 @@ class RadAgentAppService:
             self.state["copilot_briefing"] = self._approved_briefing_context(
                 briefing_context
             )
+            self.state["raw_human_response"] = {
+                "user_decision": "approve",
+                "edits": [],
+                "user_notes": "Approved before pipeline start through RadAgent briefing.",
+            }
             summary = _normalize_task_summary_short(
                 briefing_context.get("task_summary_short")
             )
@@ -660,7 +750,11 @@ class RadAgentAppService:
             result = await self.run_phase(phase)
             if not result.success:
                 return result.status
-            if phase == "g4_modeling" and self.state.get("human_confirmation_required"):
+            if (
+                phase == "g4_modeling"
+                and self.state.get("human_confirmation_required")
+                and not self.state.get("raw_human_response")
+            ):
                 self._emit(
                     "human_confirmation_required",
                     status="warning",
@@ -705,6 +799,8 @@ class RadAgentAppService:
                 nodes = self._get_subgraph_nodes()
                 result = await nodes[phase](self.state)
         except Exception as exc:
+            self._set_termination_reason(str(exc))
+            self._persist_phase_state(phase, status_override="failed")
             failed = self._emit(
                 "phase_failed",
                 status="error",
@@ -721,6 +817,24 @@ class RadAgentAppService:
 
         if result:
             self.state = {**self.state, **result}
+        failure_reason = self._phase_failure_reason(phase)
+        if failure_reason:
+            self._set_termination_reason(failure_reason)
+            self._persist_phase_state(phase, status_override="failed")
+            failed = self._emit(
+                "phase_failed",
+                status="error",
+                phase=phase,
+                summary=failure_reason,
+                payload=result or {},
+            )
+            return PhaseResult(
+                phase=phase,
+                success=False,
+                state_delta=result or {},
+                status=self.get_status(),
+                events=[started, failed],
+            )
         if phase not in self.completed_phases:
             self.completed_phases.append(phase)
         self.current_phase_idx = PIPELINE_PHASES.index(phase) + 1
@@ -770,6 +884,33 @@ class RadAgentAppService:
             self._subgraph_nodes = build_subgraph_nodes()
         return self._subgraph_nodes
 
+    def _phase_failure_reason(self, phase: str) -> str:
+        """Return a blocking phase-level failure reason, or empty string."""
+        expectations = {
+            "task_planning": ("task_planning_status", {"passed"}),
+            "g4_modeling": ("g4_modeling_status", {"passed"}),
+            "g4_codegen": ("g4_codegen_status", {"passed"}),
+            "patch": ("patch_status", {"applied"}),
+            "gate": ("validation_status", {"passed"}),
+            "artifact": ("artifact_status", {"collected"}),
+        }
+        expectation = expectations.get(phase)
+        if expectation is None:
+            return ""
+        key, accepted = expectation
+        if key not in self.state:
+            return ""
+        value = str(self.state.get(key, "") or "")
+        if value in accepted:
+            return ""
+        return f"{key.removesuffix('_status')} status is {value or 'missing'}"
+
+    def _set_termination_reason(self, reason: str) -> None:
+        self.state["termination_reason"] = reason
+        errors = self.state.setdefault("errors", [])
+        if isinstance(errors, list) and reason and reason not in errors:
+            errors.append(reason)
+
     async def _exec_prepare_workspace(self) -> dict[str, Any]:
         from agent_core.naming import build_job_id
 
@@ -811,11 +952,11 @@ class RadAgentAppService:
             "current_node": "prepare_workspace",
         }
 
-    def _persist_phase_state(self, phase: str) -> None:
+    def _persist_phase_state(self, phase: str, *, status_override: str | None = None) -> None:
         job_id = str(self.state.get("job_id", ""))
         if not job_id:
             return
-        status = "completed" if phase == "report" else "running"
+        status = status_override or ("completed" if phase == "report" else "running")
         if self.state.get("confirmation_status") == "pending":
             status = "paused"
         self.store.save_state_snapshot(
@@ -875,6 +1016,8 @@ class RadAgentAppService:
                 status = "paused"
             if visual_review_blocked:
                 status = "paused"
+            if self.state.get("termination_reason"):
+                status = "failed"
         return JobStatus(
             job_id=str(self.state.get("job_id", "")),
             user_query=str(self.state.get("user_query", "")),

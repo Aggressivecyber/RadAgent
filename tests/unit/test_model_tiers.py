@@ -62,10 +62,10 @@ class TestTaskDefaultTier:
         """Failure diagnosis should use MAX tier."""
         assert tier_for_task(ModelTask.FAILURE_DIAGNOSIS) == ModelTier.MAX
 
-    def test_simulation_briefing_uses_max(self) -> None:
-        """Interactive simulation briefing should use the strongest model tier."""
-        assert tier_for_task(ModelTask.SIMULATION_BRIEFING) == ModelTier.MAX
-        assert thinking_for_task(ModelTask.SIMULATION_BRIEFING) is True
+    def test_simulation_briefing_uses_lite(self) -> None:
+        """Interactive simulation briefing should be a fast Lite extraction."""
+        assert tier_for_task(ModelTask.SIMULATION_BRIEFING) == ModelTier.LITE
+        assert thinking_for_task(ModelTask.SIMULATION_BRIEFING) is False
 
     def test_thinking_defaults_match_task_complexity(self) -> None:
         """Complex build/review tasks use thinking; routing and summaries do not."""
@@ -85,6 +85,7 @@ class TestTaskDefaultTier:
             ModelTask.SIMPLE_EXTRACTION,
             ModelTask.CONTEXT_SUMMARY,
             ModelTask.CREDIBILITY_ASSESSMENT,
+            ModelTask.SIMULATION_BRIEFING,
         }
         assert lite_tasks == expected
 
@@ -95,6 +96,5 @@ class TestTaskDefaultTier:
             ModelTask.GATE_EXPLANATION,
             ModelTask.FINAL_REVIEW,
             ModelTask.FAILURE_DIAGNOSIS,
-            ModelTask.SIMULATION_BRIEFING,
         }
         assert max_tasks == expected

@@ -26,6 +26,28 @@ class ModelCompletenessValidator:
             non_world = [c for c in model_ir.components if c.component_type != "world"]
             if not non_world:
                 errors.append("Only world volume defined — no geometry components")
+            for comp in model_ir.components:
+                if comp.geometry_type == "box":
+                    missing = [
+                        axis
+                        for axis in ("dx", "dy", "dz")
+                        if axis not in comp.dimensions
+                    ]
+                    invalid = [
+                        axis
+                        for axis in ("dx", "dy", "dz")
+                        if axis in comp.dimensions and comp.dimensions[axis] <= 0
+                    ]
+                    if missing:
+                        errors.append(
+                            f"Box component '{comp.component_id}' missing dimensions: "
+                            f"{', '.join(missing)}"
+                        )
+                    if invalid:
+                        errors.append(
+                            f"Box component '{comp.component_id}' has non-positive "
+                            f"dimensions: {', '.join(invalid)}"
+                        )
 
         # Materials
         if not model_ir.materials:

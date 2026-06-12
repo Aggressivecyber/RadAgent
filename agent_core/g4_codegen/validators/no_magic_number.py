@@ -15,13 +15,49 @@ from typing import Any
 _NUMERIC_RE = re.compile(r"(\d+\.?\d*)")
 
 # Known safe values that are NOT magic numbers
-SAFE_VALUES = {"0", "1", "-1", "2", "0.0", "1.0", "2.0", "0.5", "360", "180", "100"}
+SAFE_VALUES = {
+    "0",
+    "1",
+    "-1",
+    "2",
+    "0.",
+    "1.",
+    "2.",
+    "0.0",
+    "1.0",
+    "2.0",
+    "0.5",
+    "360",
+    "180",
+    "100",
+}
 
 # CLHEP unit suffixes that make a number acceptable
-CLHEP_UNITS = {"mm", "cm", "m", "km", "MeV", "keV", "GeV", "eV", "g", "mg", "deg", "rad", "ns", "s"}
+CLHEP_UNITS = {
+    "nm",
+    "um",
+    "mm",
+    "cm",
+    "m",
+    "km",
+    "MeV",
+    "keV",
+    "GeV",
+    "eV",
+    "g",
+    "mg",
+    "deg",
+    "rad",
+    "ns",
+    "s",
+    "Gy",
+    "gray",
+}
 
 # Keywords indicating constant definitions (allowed)
 CONST_KEYWORDS = {"const", "constexpr", "define", "enum", "static const"}
+
+PRESENTATION_CONTEXTS = ("G4Colour", "G4VisAttributes", "SetScreenSize", "std::setw")
 
 
 def check_magic_numbers(code: str, module_id: str = "?") -> tuple[bool, list[str]]:
@@ -44,9 +80,14 @@ def check_magic_numbers(code: str, module_id: str = "?") -> tuple[bool, list[str
         if stripped.startswith("*") or stripped.startswith("/*"):
             continue
 
+        if any(token in stripped for token in PRESENTATION_CONTEXTS):
+            continue
+
         # Skip lines that are constant definitions
         if any(kw in stripped for kw in CONST_KEYWORDS):
             continue
+
+        stripped = _strip_inline_comment(stripped)
 
         # Find all numeric literals
         for match in re.finditer(r"(\d+\.?\d*)", stripped):
@@ -99,3 +140,18 @@ def validate_no_magic_numbers(modules: list[dict[str, Any]]) -> tuple[bool, list
             all_violations.extend(violations)
 
     return all_clean, all_violations
+
+
+def _strip_inline_comment(line: str) -> str:
+    in_string = False
+    escaped = False
+    for index, char in enumerate(line):
+        if char == "\\" and in_string:
+            escaped = not escaped
+            continue
+        if char == '"' and not escaped:
+            in_string = not in_string
+        escaped = False
+        if not in_string and line[index : index + 2] == "//":
+            return line[:index].rstrip()
+    return line

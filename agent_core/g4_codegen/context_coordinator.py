@@ -13,8 +13,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from agent_core.models.gateway import _safe_parse_json, get_model_gateway
-from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
 from agent_core.observability import record_event
 from agent_core.workspace.io import get_job_dir
 from agent_core.workspace.paths import STAGE_CODEGEN
@@ -65,10 +63,11 @@ async def coordinate_generated_context(
     target_modules: list[str] | None = None,
     coordinator_name: str = "context_coordinator",
 ) -> dict[str, Any]:
-    """Summarize generated code with the lite/context-summary model.
+    """Summarize generated code deterministically for later agents.
 
-    Falls back to deterministic summaries if the lite model is unavailable,
-    returns invalid JSON, or the configured provider is mock.
+    Earlier versions sent the deterministic summaries back through a Lite model,
+    but the prompt grew with generated C++ and added a slow non-essential call.
+    The regex/file manifest already contains the API facts later agents need.
     """
 
     files = _collect_generated_files(module_results)
@@ -78,72 +77,8 @@ async def coordinate_generated_context(
         module_contracts=module_contracts or {},
         target_modules=target_modules or [],
     )
-    if not files:
-        _persist_coordination(job_id, coordinator_name, deterministic)
-        return deterministic
-
-    gateway = get_model_gateway()
-    if _is_mock_gateway(gateway):
-        _persist_coordination(job_id, coordinator_name, deterministic)
-        return deterministic
-
-    prompt_payload = {
-        "job_id": job_id,
-        "target_modules": target_modules or [],
-        "module_contracts": _trim_jsonable(module_contracts or {}, 20_000),
-        "generated_code_manifest": deterministic["generated_code_lookup_manifest"],
-        "deterministic_file_summaries": deterministic["file_summaries"],
-        "instruction": (
-            "Summarize generated module interfaces and coordination risks. "
-            "Do not ask to read full code; the generated_code_lookup manifest is "
-            "only for later code-writing agents."
-        ),
-    }
-    result = await gateway.call(
-        task=ModelTask.CONTEXT_SUMMARY,
-        tier=ModelTier.LITE,
-        system_prompt=CONTEXT_COORDINATOR_SYSTEM_PROMPT,
-        user_prompt=json.dumps(prompt_payload, indent=2, ensure_ascii=False)[:60_000],
-        response_format="json",
-        max_tokens=8192,
-        metadata={
-            "job_id": job_id,
-            "module_name": coordinator_name,
-            "coordinator": True,
-            "enable_thinking": False,
-        },
-    )
-    if result.error:
-        deterministic["warnings"].append(f"lite context coordinator failed: {result.error}")
-        _persist_coordination(job_id, coordinator_name, deterministic)
-        return deterministic
-
-    data = result.parsed_json or _safe_parse_json(result.content) or {}
-    if not isinstance(data, dict):
-        deterministic["warnings"].append("lite context coordinator returned invalid JSON")
-        _persist_coordination(job_id, coordinator_name, deterministic)
-        return deterministic
-
-    coordinated = dict(deterministic)
-    coordinated["status"] = str(data.get("status") or "ok")
-    for key in (
-        "module_summaries",
-        "cross_module_contracts",
-        "runtime_contract_notes",
-        "recommended_code_reads",
-    ):
-        if key in data:
-            coordinated[key] = data[key]
-    coordinated["warnings"] = _string_list(data.get("warnings", [])) + deterministic.get(
-        "warnings", []
-    )
-    coordinated["summary_model"] = {
-        "tier": result.tier.value,
-        "model_name": result.model_name,
-        "latency_ms": result.latency_ms,
-    }
-    _persist_coordination(job_id, coordinator_name, coordinated)
-    return coordinated
+    _persist_coordination(job_id, coordinator_name, deterministic)
+    return deterministic
 
 
 def lookup_generated_code_snippets(
@@ -277,7 +212,7 @@ def _deterministic_coordination(
         }
     return {
         "status": "ok",
-        "coordinator": "deterministic+lite",
+        "coordinator": "deterministic",
         "target_modules": target_modules,
         "module_summaries": module_summaries,
         "file_summaries": file_summaries,
@@ -472,11 +407,6 @@ def _persist_coordination(job_id: str, coordinator_name: str, data: dict[str, An
         artifacts=[{"path": str(path)}],
         warnings=_string_list(data.get("warnings", [])),
     )
-
-
-def _is_mock_gateway(gateway: Any) -> bool:
-    profile = getattr(gateway, "profiles", {}).get(ModelTier.LITE)
-    return getattr(profile, "provider", None) == ModelProvider.MOCK
 
 
 def _trim_jsonable(value: Any, max_chars: int) -> Any:

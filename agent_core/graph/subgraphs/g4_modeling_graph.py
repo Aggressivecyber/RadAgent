@@ -16,7 +16,7 @@ Flow:
     → physics_list
     → sensitive_detector
     → scoring_design
-    → model_ir_validation (retry geometry_decomposition on errors)
+    → model_ir_validation (persist failed IR on errors)
     → model_review_report
     → persist_model_ir
 """
@@ -57,10 +57,7 @@ def _route_after_model_ir_validation(state: G4ModelingSubgraphState) -> str:
     errors = state.get("model_ir_errors", [])
     if not errors:
         return "model_review_report_node"
-    retry_count = state.get("retry_count", 0)
-    if retry_count >= 3:
-        return "persist_model_ir"  # Will mark as failed
-    return "geometry_decomposition_node"  # Retry
+    return "persist_model_ir"  # Will mark as failed
 
 
 def build_g4_modeling_subgraph() -> StateGraph:
@@ -112,13 +109,14 @@ def build_g4_modeling_subgraph() -> StateGraph:
     graph.add_edge("sensitive_detector_node", "scoring_design_node")
     graph.add_edge("scoring_design_node", "model_ir_validation_node")
 
-    # Validation: pass → review, fail → retry or terminate
+    # Validation: pass → review, fail → persist failed IR.
+    # The modeling nodes are deterministic after the Lite draft; looping back
+    # without new feedback only repeats the same validation failure.
     graph.add_conditional_edges(
         "model_ir_validation_node",
         _route_after_model_ir_validation,
         {
             "model_review_report_node": "model_review_report_node",
-            "geometry_decomposition_node": "geometry_decomposition_node",
             "persist_model_ir": "persist_model_ir",
         },
     )

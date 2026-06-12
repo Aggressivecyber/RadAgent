@@ -138,14 +138,19 @@ class TestSubgraphTopology:
             assert edge.source in node_ids, f"Cond edge source {edge.source} not in nodes"
             assert edge.target in node_ids, f"Cond edge target {edge.target} not in nodes"
 
-    def test_g4_modeling_has_retry_loop(self) -> None:
+    def test_g4_modeling_validation_errors_stop_without_internal_retry(self) -> None:
         specs = get_all_subgraph_specs()
         modeling = specs["g4_modeling"]
         retry_edges = [e for e in modeling.conditional_edges if e.style == "retry"]
-        assert len(retry_edges) >= 1
-        # Validation can loop back to geometry_decomposition
-        targets = {e.target for e in retry_edges}
-        assert "geometry_decomposition_node" in targets
+        assert retry_edges == []
+
+        validation_error_edges = [
+            e
+            for e in modeling.conditional_edges
+            if e.source == "model_ir_validation_node" and e.style == "block"
+        ]
+        assert len(validation_error_edges) == 1
+        assert validation_error_edges[0].target == "persist_model_ir"
 
     def test_task_planning_has_retry_loop(self) -> None:
         specs = get_all_subgraph_specs()

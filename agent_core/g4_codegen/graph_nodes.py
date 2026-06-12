@@ -177,6 +177,7 @@ async def context_coordinator_node(
 async def run_module_agent_node(
     state: G4CodegenSubgraphState,
     module_name: str,
+    layer_name: str = "",
 ) -> dict[str, Any]:
     """Run a specific module agent.
 
@@ -187,6 +188,20 @@ async def run_module_agent_node(
     module_contexts = state.get("module_contexts", {})
     ctx = module_contexts.get(module_name, {})
     job_id = state.get("job_id", "unknown")
+
+    record_event(
+        job_id=job_id,
+        event_type="module_agent_start",
+        status="running",
+        phase="g4_codegen",
+        layer=layer_name,
+        module_name=module_name,
+        summary=f"Starting {module_name} module agent",
+        metrics={
+            "has_module_context": bool(ctx),
+            "completed_module_count": len(state.get("module_results", {})),
+        },
+    )
 
     # Build summaries from completed modules so this agent knows
     # what has already been generated.
@@ -215,7 +230,20 @@ async def run_module_agent_node(
 
     # Import and run the appropriate agent
     agent_fn = _get_agent_function(module_name)
-    result = await agent_fn(ctx)
+    try:
+        result = await agent_fn(ctx)
+    except Exception as exc:
+        record_event(
+            job_id=job_id,
+            event_type="module_agent_failed",
+            status="failed",
+            phase="g4_codegen",
+            layer=layer_name,
+            module_name=module_name,
+            summary=f"{module_name} module agent failed before returning a result",
+            errors=[str(exc)],
+        )
+        raise
 
     # Save result
     save_module_result(result, job_id)
@@ -353,16 +381,13 @@ async def run_module_layer_node(
     layer_name: str,
     module_names: list[str],
 ) -> dict[str, Any]:
-    """Run a layer of module pipelines concurrently."""
-    from agent_core.config.environment import resolve_safe_concurrency
+    """Run a layer of module agents STRICTLY SEQUENTIALLY.
 
+    Each module writes its files into the shared module workspace before the next
+    module starts, so every later agent reads the earlier modules' real headers
+    and aligns cross-module APIs exactly. No information gap, no parallel guessing.
+    """
     layer_started = time.monotonic()
-    max_concurrency = resolve_safe_concurrency(
-        len(module_names),
-        override_env="RADAGENT_G4_MODULE_MAX_CONCURRENCY",
-        hard_cap=4,
-        memory_per_worker_gb=2.0,
-    )
     record_event(
         job_id=state.get("job_id", "unknown"),
         event_type="module_layer_start",
@@ -370,27 +395,36 @@ async def run_module_layer_node(
         phase="g4_codegen",
         layer=layer_name,
         summary=f"Starting module layer {layer_name}",
-        metrics={"module_count": len(module_names), "max_concurrency": max_concurrency},
+        metrics={"module_count": len(module_names), "sequential": True},
         details={"modules": module_names},
     )
-    semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def _run_one(module_name: str) -> dict[str, Any]:
-        async with semaphore:
-            local_state: dict[str, Any] = dict(state)
-            agent_update = await run_module_agent_node(local_state, module_name)
-            agent_update["current_node"] = f"run_{layer_name}"
-            return agent_update
-
-    module_updates = await asyncio.gather(*[_run_one(module_name) for module_name in module_names])
     combined: dict[str, Any] = {
         "current_node": f"run_{layer_name}",
         "module_results": dict(state.get("module_results", {})),
+        "module_contexts": dict(state.get("module_contexts", {})),
         "codegen_errors": list(state.get("codegen_errors", [])),
         "codegen_warnings": list(state.get("codegen_warnings", [])),
     }
-    for update in module_updates:
-        _merge_update(combined, update)
+
+    module_updates: list[dict[str, Any]] = []
+    for module_name in module_names:
+        # Thread accumulating results into the state each subsequent module sees,
+        # so its existing_generated_file_summaries reflect prior modules' output.
+        local_state: dict[str, Any] = dict(state)
+        local_state["module_results"] = dict(combined["module_results"])
+        local_state["module_contexts"] = dict(combined["module_contexts"])
+        local_state["codegen_errors"] = list(combined["codegen_errors"])
+        local_state["codegen_warnings"] = list(combined["codegen_warnings"])
+        agent_update = await run_module_agent_node(
+            local_state,
+            module_name,
+            layer_name=layer_name,
+        )
+        agent_update["current_node"] = f"run_{layer_name}"
+        module_updates.append(agent_update)
+        _merge_update(combined, agent_update)
+
     combined["current_node"] = f"run_{layer_name}"
     layer_errors = [
         error
@@ -407,7 +441,7 @@ async def run_module_layer_node(
         duration_ms=(time.monotonic() - layer_started) * 1000,
         metrics={
             "module_count": len(module_names),
-            "max_concurrency": max_concurrency,
+            "sequential": True,
             "error_count": len(layer_errors),
         },
         errors=layer_errors,
@@ -553,6 +587,7 @@ async def global_integration_agent_node(
     repaired_patch, report = await run_global_integration_agent(
         state.get("proposed_patch", {}),
         job_id=job_id,
+        g4_model_ir=state.get("g4_model_ir", {}),
         module_results=state.get("module_results", {}),
         module_contracts=state.get("module_contracts", {}),
         module_contexts=state.get("module_contexts", {}),
@@ -629,6 +664,7 @@ async def runtime_execution_audit_node(
     repair_patch, repair_report = await run_global_integration_agent(
         state.get("proposed_patch", {}),
         job_id=job_id,
+        g4_model_ir=state.get("g4_model_ir", {}),
         module_results=state.get("module_results", {}),
         module_contracts=state.get("module_contracts", {}),
         module_contexts=state.get("module_contexts", {}),
@@ -711,6 +747,7 @@ async def physics_quality_review_node(
     repair_patch, repair_report = await run_global_integration_agent(
         proposed_patch,
         job_id=job_id,
+        g4_model_ir=state.get("g4_model_ir", {}),
         module_results=state.get("module_results", {}),
         module_contracts=state.get("module_contracts", {}),
         module_contexts=state.get("module_contexts", {}),

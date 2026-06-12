@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from agent_core.g4_codegen.module_agents.base import run_module_agent
-from agent_core.g4_codegen.schemas import ModuleAgentResult
+from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult
 
 RUNTIME_APP_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 runtime_app 编码 Agent。
 
@@ -41,7 +42,9 @@ G4 自带交互 UI/Qt 可视化页面；传入宏脚本路径时进入 batch 模
    如果 ui->IsGUI() 则执行 macros/gui.mac，然后启动 session；
    argc > 1 时执行 "/control/execute " + argv[1]。
 11. 宏文件职责必须分离：
-   - run.mac 是 batch self-check/production-style 宏，不写 /vis 命令，默认 /run/beamOn 1000；
+   - run.mac 是 batch self-check/production-style 宏，不写 /vis 命令；/run/beamOn 后的事件数
+     必须使用任务请求或 G4ModelIR 源项中的 source.events / num_events / requested_events，
+     不得为了默认自检硬编码成 1000；
    - init_vis.mac 设置 verbose/saveHistory，执行 /run/initialize，然后
      /control/execute macros/vis.mac；
    - init.mac 可作为 init_vis.mac 的兼容别名；
@@ -56,16 +59,152 @@ G4 自带交互 UI/Qt 可视化页面；传入宏脚本路径时进入 batch 模
 14. run.mac/init.mac/init_vis.mac/vis.mac/gui.mac 不得隐藏 Geant4 命令错误，
     参数单位必须合法；不要写目标环境不支持的
     scoring UI 命令。
-15. 只返回 JSON，不得输出 Markdown fence。
+15. 必须用 write_file 写文件；写完当前文件组所有 owned files 后回复 DONE，不得输出 Markdown fence。
+16. runtime_cpp 是一个较大的整体 wiring 任务。读取完必要上游头文件后，必须在同一轮尽量批量发出
+    OutputManager、ActionInitialization、RunAction、EventAction、SteppingAction、main.cc 和
+    CMakeLists.txt 的多个 write_file tool calls；不要每轮只写一个文件。
 """
+
+RUNTIME_APP_FILE_GROUPS = [
+    (
+        "runtime_cpp",
+        [
+            "include/OutputManager.hh",
+            "src/OutputManager.cc",
+            "include/ActionInitialization.hh",
+            "src/ActionInitialization.cc",
+            "include/RunAction.hh",
+            "src/RunAction.cc",
+            "include/EventAction.hh",
+            "src/EventAction.cc",
+            "include/SteppingAction.hh",
+            "src/SteppingAction.cc",
+            "main.cc",
+            "CMakeLists.txt",
+        ],
+        "生成 runtime C++ wiring、输出管理、main 和 CMake；不要生成宏文件。",
+    ),
+    (
+        "runtime_macros",
+        [
+            "macros/run.mac",
+            "macros/init.mac",
+            "macros/init_vis.mac",
+            "macros/vis.mac",
+            "macros/gui.mac",
+        ],
+        "只生成 Geant4 macro 文件；保持 batch run.mac 与可视化宏职责分离。",
+    ),
+]
 
 
 async def run_runtime_app_agent(
     module_context: dict[str, Any],
 ) -> ModuleAgentResult:
     """Run the coarse runtime application module agent."""
-    return await run_module_agent(
-        module_name="runtime_app",
-        module_context=module_context,
-        system_prompt=RUNTIME_APP_SYSTEM_PROMPT,
+    generated_by_path: dict[str, GeneratedModuleFile] = {}
+    warnings: list[str] = []
+    errors: list[str] = []
+    statuses: list[str] = []
+    prior_files: list[dict[str, Any]] = []
+
+    for group_name, output_files, group_goal in RUNTIME_APP_FILE_GROUPS:
+        group_context = _group_context(
+            module_context,
+            group_name=group_name,
+            output_files=output_files,
+            group_goal=group_goal,
+            prior_files=prior_files,
+        )
+        group_prompt = (
+            f"{RUNTIME_APP_SYSTEM_PROMPT}\n\n"
+            f"当前文件组：{group_name}\n"
+            f"当前目标：{group_goal}\n"
+            f"只生成这些文件：{', '.join(output_files)}\n"
+            "不要生成当前文件组之外的 runtime_app 文件；下一组会读取已生成接口摘要。"
+        )
+        result = await run_module_agent(
+            module_name="runtime_app",
+            module_context=group_context,
+            system_prompt=group_prompt,
+        )
+        statuses.append(result.status)
+        warnings.extend(result.warnings)
+        errors.extend(result.errors)
+        for file_entry in result.generated_files:
+            generated_by_path[file_entry.path] = file_entry
+        prior_files.extend(_prior_file_summaries(result.generated_files))
+
+    expected_paths = [path for _, paths, _ in RUNTIME_APP_FILE_GROUPS for path in paths]
+    missing = [path for path in expected_paths if path not in generated_by_path]
+    if missing:
+        errors.append(f"runtime_app missing generated files: {missing}")
+    status = (
+        "generated"
+        if not missing and all(s in {"generated", "repaired"} for s in statuses)
+        else "failed"
     )
+
+    return ModuleAgentResult(
+        module_name="runtime_app",
+        status=status,
+        generated_files=[
+            generated_by_path[path]
+            for path in expected_paths
+            if path in generated_by_path
+        ],
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def _group_context(
+    module_context: dict[str, Any],
+    *,
+    group_name: str,
+    output_files: list[str],
+    group_goal: str,
+    prior_files: list[dict[str, Any]],
+) -> dict[str, Any]:
+    ctx = deepcopy(module_context)
+    contract = dict(ctx.get("module_contract", {}))
+    contract["output_files"] = output_files
+    contract["responsibilities"] = list(contract.get("responsibilities", [])) + [
+        f"Current runtime_app file group: {group_name}",
+        group_goal,
+        (
+            "If runtime_app_file_group.prior_files is non-empty, those entries are "
+            "exact files/interfaces generated by earlier groups in this same module; "
+            "use them directly and do not reread those same-module files unless an "
+            "external dependency signature is missing."
+        ),
+    ]
+    ctx["module_contract"] = contract
+    ctx["runtime_app_file_group"] = {
+        "name": group_name,
+        "goal": group_goal,
+        "output_files": output_files,
+        "prior_files": prior_files,
+    }
+    ctx["agent_tool_policy"] = {"allow_read_file": group_name != "runtime_macros"}
+    return ctx
+
+
+def _prior_file_summaries(files: list[GeneratedModuleFile]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for file_entry in files:
+        content = file_entry.new_content
+        summaries.append(
+            {
+                "path": file_entry.path,
+                "module_name": file_entry.module_name,
+                "generated_by": file_entry.generated_by,
+                "header_or_interface_content": (
+                    content[:5000]
+                    if file_entry.path.startswith("include/")
+                    or file_entry.path in {"main.cc", "CMakeLists.txt"}
+                    else ""
+                ),
+            }
+        )
+    return summaries

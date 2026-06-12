@@ -8,6 +8,7 @@ TCAD/SPICE/full_chain are recorded as reserved.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,41 @@ _FULL_CHAIN_KEYWORDS = [
     "g4到tcad",
     "全流程",
 ]
+
+_ENERGY_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(MeV|keV|GeV|eV)\b", re.IGNORECASE)
+_EVENTS_RE = re.compile(
+    r"(?:run\s*)?(\d+)\s*(?:events?|histories|particles|事件|粒子)\b",
+    re.IGNORECASE,
+)
+_THICKNESS_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(mm|um|µm|μm|micron|microns|cm)\s*(?:thick|thickness|厚|厚度)",
+    re.IGNORECASE,
+)
+_UNIT_TO_UM = {
+    "um": 1.0,
+    "µm": 1.0,
+    "μm": 1.0,
+    "micron": 1.0,
+    "microns": 1.0,
+    "mm": 1000.0,
+    "cm": 10000.0,
+}
+_MATERIAL_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("silicon", "Silicon"),
+    ("硅", "Silicon"),
+    ("aluminum", "Aluminum"),
+    ("aluminium", "Aluminum"),
+    ("copper", "Copper"),
+    ("germanium", "Germanium"),
+    ("water", "Water"),
+)
+_OUTPUT_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("edep_3d", "energy deposition map"), "energy_deposition_map"),
+    (("total energy deposition", "energy deposition", "edep"), "energy_deposition"),
+    (("dose_3d", "dose map", "dose distribution"), "dose_distribution"),
+    (("event_table", "per event", "event data"), "event_data"),
+    (("hit", "hits"), "hit_data"),
+)
 
 
 def detect_scope(query: str) -> list[str]:
@@ -139,13 +175,27 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
     elif "electron" in query_lower or "电子" in user_query:
         particle = {"type": "electron", "pdg_code": 11}
 
-    # Parse energy
-    import re
+    energy_value, energy_unit = _parse_energy(user_query)
+    events = _parse_events(user_query)
+    target = _parse_target(user_query)
+    outputs = _parse_outputs(user_query)
+    metadata: dict[str, str] = {}
 
-    energy_match = re.search(r"(\d+(?:\.\d+)?)\s*(MeV|keV|GeV)", user_query)
-    energy_value = float(energy_match.group(1)) if energy_match else 10.0
-    energy_unit = energy_match.group(2) if energy_match else "MeV"
-
+    if particle:
+        particle = {
+            **particle,
+            "energy_MeV": energy_value,
+            "energy_unit": energy_unit,
+            "energy_distribution": "mono",
+            "direction": [0.0, 0.0, 1.0],
+        }
+        if events is not None:
+            particle["events"] = events
+    if target and target.pop("_assumed_lateral_extent", False):
+        metadata["target_lateral_extent_assumption"] = (
+            "Target thickness was user-specified; lateral slab dimensions were "
+            "sized conservatively for a minimal test geometry."
+        )
     task_spec: dict[str, Any] = {
         "job_id": job_id,
         "user_query": user_query,
@@ -154,6 +204,14 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
         "energy": {"value": energy_value, "unit": energy_unit},
         "modeling_mode": "realistic",
     }
+    if events is not None:
+        task_spec["events"] = events
+    if target:
+        task_spec["target"] = target
+    if outputs:
+        task_spec["outputs"] = outputs
+    if metadata:
+        task_spec["metadata"] = metadata
 
     ap8ae8_source = _ap8ae8_source_from_briefing(state, task_dir)
     if ap8ae8_source:
@@ -179,6 +237,79 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
         "simulation_scope": scope,
         "_parse_retry_count": retry_count,
     }
+
+
+def _parse_energy(user_query: str) -> tuple[float, str]:
+    match = _ENERGY_RE.search(user_query)
+    if not match:
+        return 10.0, "MeV"
+    unit = _canonical_energy_unit(match.group(2))
+    return float(match.group(1)), unit
+
+
+def _canonical_energy_unit(unit: str) -> str:
+    lowered = unit.lower()
+    if lowered == "kev":
+        return "keV"
+    if lowered == "gev":
+        return "GeV"
+    if lowered == "ev":
+        return "eV"
+    return "MeV"
+
+
+def _parse_events(user_query: str) -> int | None:
+    match = _EVENTS_RE.search(user_query)
+    return int(match.group(1)) if match else None
+
+
+def _parse_target(user_query: str) -> dict[str, Any] | None:
+    q = user_query.lower()
+    material = _detect_target_material(q)
+    if not material:
+        return None
+    if not any(marker in q for marker in ("slab", "detector", "target", "片", "探测器")):
+        return None
+
+    thickness_um = _parse_thickness_um(user_query)
+    if thickness_um is None:
+        return {
+            "material": material,
+            "geometry_type": "box",
+        }
+
+    lateral_um = max(10.0 * thickness_um, 10000.0)
+    return {
+        "material": material,
+        "geometry_type": "box",
+        "size_um": [lateral_um, lateral_um, thickness_um],
+        "_assumed_lateral_extent": True,
+    }
+
+
+def _detect_target_material(query_lower: str) -> str | None:
+    for keyword, material in _MATERIAL_KEYWORDS:
+        if keyword in query_lower:
+            return material
+    return None
+
+
+def _parse_thickness_um(user_query: str) -> float | None:
+    match = _THICKNESS_RE.search(user_query)
+    if not match:
+        return None
+    unit = match.group(2).lower()
+    factor = _UNIT_TO_UM.get(unit, 1.0)
+    return float(match.group(1)) * factor
+
+
+def _parse_outputs(user_query: str) -> list[str]:
+    q = user_query.lower()
+    outputs: list[str] = []
+    for keywords, output in _OUTPUT_KEYWORDS:
+        if any(keyword in q for keyword in keywords) and output not in outputs:
+            outputs.append(output)
+    return outputs
 
 
 def _space_radiation_plan(state: TaskPlanningState) -> dict[str, Any]:

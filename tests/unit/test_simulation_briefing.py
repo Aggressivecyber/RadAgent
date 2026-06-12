@@ -39,7 +39,7 @@ def _ready_briefing_payload() -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_briefing_planner_uses_max_json_call() -> None:
+async def test_briefing_planner_uses_single_lite_extraction_call() -> None:
     calls: list[dict[str, Any]] = []
 
     class _Gateway:
@@ -99,11 +99,12 @@ async def test_briefing_planner_uses_max_json_call() -> None:
     assert result.final_query.startswith("Build a Geant4")
     assert result.proposed_command is not None
     assert result.proposed_command.name == "start_job"
-    assert calls
-    assert calls[0]["task"] == ModelTask.SIMULATION_BRIEFING
-    assert calls[0]["tier"] == ModelTier.MAX
+    assert len(calls) == 1
+    assert calls[0]["task"] == ModelTask.SIMPLE_EXTRACTION
+    assert calls[0]["tier"] == ModelTier.LITE
     assert calls[0]["response_format"] == "json"
     assert calls[0]["metadata"]["module_name"] == "simulation_briefing"
+    assert calls[0]["metadata"]["enable_thinking"] is False
 
 
 @pytest.mark.asyncio
@@ -295,7 +296,7 @@ async def test_briefing_planner_recovers_json_from_raw_content() -> None:
 
 
 @pytest.mark.asyncio
-async def test_briefing_planner_repairs_non_json_model_response() -> None:
+async def test_briefing_planner_uses_local_ready_fallback_for_bad_lite_json() -> None:
     calls: list[dict[str, Any]] = []
 
     class _Gateway:
@@ -308,11 +309,7 @@ async def test_briefing_planner_repairs_non_json_model_response() -> None:
                 content = "I need more details before planning."
                 reasoning_content = ""
 
-            result = _Result()
-            if len(calls) == 2:
-                result.parsed_json = _ready_briefing_payload()
-                result.content = json.dumps(result.parsed_json)
-            return result
+            return _Result()
 
     planner = SimulationBriefingPlanner(gateway_factory=lambda: _Gateway())
 
@@ -323,20 +320,21 @@ async def test_briefing_planner_repairs_non_json_model_response() -> None:
     )
 
     assert result.ready_for_approval is True
-    assert len(calls) == 2
-    assert calls[1]["metadata"]["module_name"] == "simulation_briefing_repair"
-    assert calls[1]["tier"] == ModelTier.MAX
+    assert result.final_query == "能量分辨率研究 做n/gamma甄别"
+    assert result.proposed_command is not None
+    assert result.proposed_command.args["query"] == "能量分辨率研究 做n/gamma甄别"
+    assert len(calls) == 1
 
 
 @pytest.mark.asyncio
-async def test_briefing_planner_falls_back_to_guided_question_when_json_repair_fails() -> None:
+async def test_briefing_planner_uses_local_ready_fallback_when_lite_call_fails() -> None:
     class _Gateway:
         async def call(self, **kwargs: Any) -> Any:
             class _Result:
-                error = None
+                error = "connection failed"
                 parsed_json = None
                 content = ""
-                reasoning_content = "not structured json"
+                reasoning_content = ""
 
             return _Result()
 
@@ -348,10 +346,10 @@ async def test_briefing_planner_falls_back_to_guided_question_when_json_repair_f
         workflow_context={},
     )
 
-    assert result.ready_for_approval is False
-    assert result.next_question is not None
-    assert "补充" in result.next_question.question
-    assert result.missing_critical_fields
+    assert result.ready_for_approval is True
+    assert result.final_query == "能量分辨率研究 做n/gamma甄别"
+    assert result.approval_request is not None
+    assert result.approval_request.requires_human_approval is True
 
 
 @pytest.mark.asyncio
@@ -476,8 +474,8 @@ async def test_briefing_planner_compacts_long_context_with_lite_before_max() -> 
 
     assert calls[0]["task"] == ModelTask.CONTEXT_SUMMARY
     assert calls[0]["tier"] == ModelTier.LITE
-    assert calls[1]["task"] == ModelTask.SIMULATION_BRIEFING
-    assert calls[1]["tier"] == ModelTier.MAX
+    assert calls[1]["task"] == ModelTask.SIMPLE_EXTRACTION
+    assert calls[1]["tier"] == ModelTier.LITE
     assert result.compacted_briefing_memory["answered_fields"]["geometry"] == "tube"
     assert result.context_window_stats["compacted"] is True
     assert result.context_window_stats["state"] == "compacted"
@@ -532,7 +530,8 @@ async def test_briefing_planner_does_not_compact_history_below_window_threshold(
     )
 
     assert len(calls) == 1
-    assert calls[0]["task"] == ModelTask.SIMULATION_BRIEFING
+    assert calls[0]["task"] == ModelTask.SIMPLE_EXTRACTION
+    assert calls[0]["tier"] == ModelTier.LITE
     prompt = json.loads(calls[0]["user_prompt"])
     assert prompt["context_window_stats"]["compacted"] is False
     assert prompt["context_window_stats"]["state"] == "normal"

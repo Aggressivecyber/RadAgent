@@ -308,6 +308,28 @@ async def test_slow_briefing_shows_pending_row_before_model_returns(tmp_path) ->
 
 
 @pytest.mark.asyncio
+async def test_thinking_row_tick_animates_visible_content(tmp_path) -> None:
+    app_cls = create_app_class()
+    app = app_cls(service=RadAgentAppService(workspace_root=tmp_path))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        row_id = app._add_thinking_row()
+        widget = app._row_widgets[row_id]
+        before = str(widget.content)
+
+        app._tick_thinking_rows()
+        await pilot.pause()
+
+        after = str(widget.content)
+        row = next(row for row in app._rows if row.id == row_id)
+        assert before != after
+        assert row.payload.get("activity_frame")
+        assert "Analyzing" in after or "分析仿真需求" in after
+
+
+@pytest.mark.asyncio
 async def test_commands_remain_usable_while_copilot_response_is_pending(tmp_path) -> None:
     started = asyncio.Event()
     release = asyncio.Event()
@@ -439,6 +461,43 @@ async def test_ctrl_p_opens_selectable_options_panel(tmp_path) -> None:
         assert "200k" in str(inspector.content)
         assert "500k" in str(inspector.content)
         assert "1m" in str(inspector.content)
+        assert "Model" in str(inspector.content)
+        assert "/model url=" in str(inspector.content)
+        assert "lite=" in str(inspector.content)
+        assert "pro=" in str(inspector.content)
+        assert "max_window=" in str(inspector.content)
+
+
+@pytest.mark.asyncio
+async def test_model_command_updates_config_from_tui(tmp_path, monkeypatch) -> None:
+    env_file = tmp_path / ".env"
+    service = RadAgentAppService(workspace_root=tmp_path, env_path=env_file)
+    app_cls = create_app_class()
+    app = app_cls(service=service)
+    monkeypatch.delenv("RADAGENT_MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("RADAGENT_API_KEY", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_LITE", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_PRO", raising=False)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text(
+            "/model url=https://token-plan-cn.xiaomimimo.com/v1 "
+            "key=tp-test lite=mimo-lite pro=mimo-pro max_window=500k"
+        )
+        await pilot.pause()
+
+        inspector = app.query_one("#inspector")
+        text = env_file.read_text(encoding="utf-8")
+        assert "RADAGENT_MODEL_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1" in text
+        assert "RADAGENT_API_KEY=tp-test" in text
+        assert "RADAGENT_MODEL_LITE=mimo-lite" in text
+        assert "RADAGENT_MODEL_PRO=mimo-pro" in text
+        assert "RADAGENT_MAX_CONTEXT_WINDOW_TOKENS=500000" in text
+        assert "Model Config" in str(inspector.content)
+        assert "mimo-lite" in str(inspector.content)
+        assert "mimo-pro" in str(inspector.content)
 
 
 @pytest.mark.asyncio
@@ -470,6 +529,70 @@ async def test_options_panel_keyboard_updates_theme_and_language(tmp_path) -> No
 
         footer = app.query_one("#footer")
         assert "Ctrl+P 选项" in str(footer.content)
+
+
+@pytest.mark.asyncio
+async def test_options_panel_keyboard_updates_copilot_model(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "RADAGENT_MODEL_LITE=mimo-v2.5",
+                "RADAGENT_MODEL_PRO=mimo-v2.5-pro",
+                "RADAGENT_MODEL_MAX=mimo-v2.5-pro",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("RADAGENT_MODEL_LITE", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_PRO", raising=False)
+    monkeypatch.delenv("RADAGENT_MODEL_MAX", raising=False)
+    app_cls = create_app_class()
+    app = app_cls(service=RadAgentAppService(workspace_root=tmp_path, env_path=env_file))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await pilot.press("ctrl+p")
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("right")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        text = env_file.read_text(encoding="utf-8")
+        assert "RADAGENT_MODEL_PRO=mimo-v2.5" in text
+        assert "visible" not in app.query_one("#inspector").classes
+
+
+@pytest.mark.asyncio
+async def test_options_panel_keyboard_updates_copilot_context_window(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("RADAGENT_PRO_CONTEXT_WINDOW_TOKENS=100000\n", encoding="utf-8")
+    monkeypatch.delenv("RADAGENT_PRO_CONTEXT_WINDOW_TOKENS", raising=False)
+    app_cls = create_app_class()
+    app = app_cls(service=RadAgentAppService(workspace_root=tmp_path, env_path=env_file))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await pilot.press("ctrl+p")
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("right")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        text = env_file.read_text(encoding="utf-8")
+        assert "RADAGENT_PRO_CONTEXT_WINDOW_TOKENS=200000" in text
+        assert "visible" not in app.query_one("#inspector").classes
 
 
 @pytest.mark.asyncio
@@ -715,6 +838,58 @@ async def test_textual_plain_simulation_request_uses_briefing_before_start() -> 
 
 
 @pytest.mark.asyncio
+async def test_run_command_marks_simulation_as_preapproved_from_tui() -> None:
+    class _RunService(RadAgentAppService):
+        def __init__(self) -> None:
+            super().__init__(execution_mode="test")
+            self.started: list[dict] = []
+
+        async def start_job(
+            self,
+            query: str,
+            *,
+            run_mode: str = "strict",
+            auto_continue: bool = True,
+            briefing_context: dict | None = None,
+            reset_chat: bool = True,
+        ) -> object:
+            self.started.append(
+                {
+                    "query": query,
+                    "run_mode": run_mode,
+                    "briefing_context": briefing_context,
+                }
+            )
+            return self.get_status()
+
+    service = _RunService()
+    app_cls = create_app_class()
+    app = app_cls(service=service, execution_mode="test")
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text("/run electron dose")
+        await _wait_for_operation_idle(app, pilot)
+
+        assert service.started == [
+            {
+                "query": "electron dose",
+                "run_mode": "test",
+                "briefing_context": {
+                    "status": "approved",
+                    "understanding": "TUI run command was explicitly submitted.",
+                    "final_query": "electron dose",
+                    "approval_request": {
+                        "requires_human_approval": True,
+                        "summary": "Approved from RadAgent TUI.",
+                    },
+                },
+            }
+        ]
+
+
+@pytest.mark.asyncio
 async def test_workstation_commands_show_inspect_demo_and_history(tmp_path) -> None:
     app_cls = create_app_class()
     app = app_cls(service=RadAgentAppService(workspace_root=tmp_path))
@@ -729,7 +904,6 @@ async def test_workstation_commands_show_inspect_demo_and_history(tmp_path) -> N
         assert "Geant4" in str(inspector.content)
 
         await app._dispatch_text("/demo geant4")
-        await pilot.pause()
         content = str(app.query_one("#task-context").content)
         assert "demo-geant4" in content
         assert "State        preparing" in content
@@ -753,6 +927,68 @@ async def test_workstation_commands_show_inspect_demo_and_history(tmp_path) -> N
         assert "Command History" in str(inspector.content)
         assert "/help" in str(inspector.content)
         assert "/artifacts" in str(inspector.content)
+
+
+@pytest.mark.asyncio
+async def test_confirmation_approval_text_submits_active_human_confirmation(tmp_path) -> None:
+    class _ConfirmationService(RadAgentAppService):
+        def __init__(self) -> None:
+            super().__init__(workspace_root=tmp_path)
+            self.submitted: list[tuple[dict, bool]] = []
+
+        def get_status(self) -> JobStatus:
+            return JobStatus(
+                job_id="job_needs_confirmation",
+                status="paused",
+                current_phase="human_confirmation",
+                current_phase_idx=4,
+                completed_phases=[
+                    "prepare_workspace",
+                    "context",
+                    "task_planning",
+                    "g4_modeling",
+                ],
+                execution_mode="test",
+                run_mode="test",
+                workspace_root=str(tmp_path),
+                needs_confirmation=False,
+                state={"human_confirmation_required": False},
+            )
+
+        async def classify_intent(self, text: str) -> IntentResult:
+            raise AssertionError("confirmation approval should not route through copilot")
+
+        async def submit_confirmation(
+            self,
+            response: dict,
+            *,
+            auto_continue: bool = True,
+        ) -> JobStatus:
+            self.submitted.append((response, auto_continue))
+            return self.get_status()
+
+    service = _ConfirmationService()
+    app_cls = create_app_class()
+    app = app_cls(service=service)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text("确认")
+        await _wait_for_operation_idle(app, pilot)
+        await pilot.pause()
+
+        assert service.submitted == [
+            (
+                {
+                    "user_decision": "approve",
+                    "edits": [],
+                    "user_notes": "Approved from RadAgent TUI.",
+                },
+                True,
+            )
+        ]
+        assert any(row.title == "Confirmation submitted" for row in app._rows)
 
 
 @pytest.mark.asyncio

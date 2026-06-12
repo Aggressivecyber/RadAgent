@@ -32,6 +32,19 @@ async def physics_list_node(state: RadiationAgentState) -> dict[str, Any]:
 
     model_ir = G4ModelIR.model_validate(model_ir_dict)
 
+    if model_ir.physics is not None:
+        model_ir.ledger.add_entry(
+            node_name="physics_list_node",
+            action="validate",
+            target_id="physics",
+            description=f"Preserved drafted physics list: {model_ir.physics.physics_list}",
+            modified_fields=[],
+        )
+        return {
+            "g4_model_ir": model_ir.model_dump(mode="json"),
+            "current_node": "physics_list_node",
+        }
+
     # Gather context
     particle_type = "proton"
     energy = 10.0
@@ -96,7 +109,10 @@ async def physics_list_node(state: RadiationAgentState) -> dict[str, Any]:
 
         except Exception as exc:
             logger.warning("LLM physics selection failed: %s", exc)
-            physics = _default_physics_for_sources(model_ir.sources)
+            physics = _default_physics_for_sources(
+                model_ir.sources,
+                model_ir.evidence.physics if model_ir.evidence else [],
+            )
 
     model_ir.physics = physics
 
@@ -210,12 +226,16 @@ def _source_summary(sources: list[Any]) -> str:
     )
 
 
-def _default_physics_for_sources(sources: list[Any]) -> PhysicsSpec:
+def _default_physics_for_sources(
+    sources: list[Any],
+    physics_evidence: list[Any] | None = None,
+) -> PhysicsSpec:
     """Fallback physics selection that considers every source component."""
     if not sources:
-        return _default_physics("proton", 10.0, "MeV")
+        return _default_physics("proton", 10.0, "MeV", physics_evidence)
     particles = [str(source.particle_type).lower() for source in sources]
     summary = _source_summary(sources)
+    evidence_refs = _evidence_refs(physics_evidence)
     if any(particle == "neutron" for particle in particles):
         return PhysicsSpec(
             physics_list="QGSP_BIC_HP",
@@ -224,9 +244,8 @@ def _default_physics_for_sources(sources: list[Any]) -> PhysicsSpec:
                 f"QGSP_BIC_HP with NeutronHP is selected for all sources: {summary}."
             ),
             hp_neutron=True,
-            source_evidence=[
-                f"Default composite-source selection for {summary}",
-            ],
+            source_evidence=evidence_refs
+            or [f"radagent_physics_selection_policy: composite neutron field ({summary})"],
         )
     hadrons = {"proton", "neutron", "alpha", "deuteron", "triton", "ion"}
     if any(particle in hadrons for particle in particles):
@@ -236,15 +255,24 @@ def _default_physics_for_sources(sources: list[Any]) -> PhysicsSpec:
                 "Composite radiation field includes hadronic charged-particle "
                 f"transport, so QGSP_BIC is selected for sources: {summary}."
             ),
-            source_evidence=[
-                f"Default composite-source selection for {summary}",
-            ],
+            source_evidence=evidence_refs
+            or [f"radagent_physics_selection_policy: composite hadron field ({summary})"],
         )
     src = sources[0]
-    return _default_physics(src.particle_type, src.energy.value, src.energy.unit)
+    return _default_physics(
+        src.particle_type,
+        src.energy.value,
+        src.energy.unit,
+        physics_evidence,
+    )
 
 
-def _default_physics(particle_type: str, energy: float, energy_unit: str) -> PhysicsSpec:
+def _default_physics(
+    particle_type: str,
+    energy: float,
+    energy_unit: str,
+    physics_evidence: list[Any] | None = None,
+) -> PhysicsSpec:
     """Provide a reasonable default physics selection."""
     if particle_type.lower() in ("gamma", "e-", "e+", "electron", "positron"):
         if energy < 1.0 and energy_unit == "GeV":
@@ -276,8 +304,34 @@ def _default_physics(particle_type: str, energy: float, energy_unit: str) -> Phy
             f"for proton therapy energy ranges"
         )
 
+    evidence_refs = _evidence_refs(physics_evidence)
     return PhysicsSpec(
         physics_list=pl,
         selection_reasoning=reason,
-        source_evidence=[f"Default selection for {particle_type} at {energy} {energy_unit}"],
+        source_evidence=evidence_refs
+        or [
+            (
+                "radagent_physics_selection_policy: "
+                f"{particle_type} at {energy} {energy_unit}"
+            )
+        ],
     )
+
+
+def _evidence_refs(evidence_items: list[Any] | None) -> list[str]:
+    """Extract non-placeholder evidence references from an evidence pack."""
+    refs: list[str] = []
+    for item in evidence_items or []:
+        if not isinstance(item, dict):
+            continue
+        source_type = str(item.get("source_type") or item.get("doc_type") or "").strip()
+        source = str(item.get("source") or item.get("doc_id") or "").strip()
+        title = str(item.get("title") or "").strip()
+        ref = ": ".join(part for part in (source_type, source or title) if part)
+        if not ref:
+            continue
+        if "default" in ref.lower():
+            continue
+        if ref not in refs:
+            refs.append(ref)
+    return refs

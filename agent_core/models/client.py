@@ -134,6 +134,81 @@ async def call_multi_turn_chat(
     raise RuntimeError(f"Multi-turn chat failed after retries: {last_error}")
 
 
+async def call_openai_compatible_tools(
+    profile: ModelProfile,
+    req: ModelCallRequest,
+) -> dict[str, Any]:
+    """OpenAI-compatible call with native function calling (agentic loops).
+
+    Returns a dict with: content, usage, reasoning_content, tool_calls,
+    finish_reason. Uses ``req.messages`` when provided (full multi-turn),
+    otherwise falls back to the system/user pair.
+    """
+    if not profile.base_url:
+        raise RuntimeError(f"Missing base_url for model tier {profile.tier}")
+
+    if req.messages:
+        messages = [dict(m) for m in req.messages]
+    else:
+        messages = [
+            {"role": "system", "content": req.system_prompt},
+            {"role": "user", "content": req.user_prompt},
+        ]
+
+    payload: dict[str, Any] = {
+        "model": profile.model_name,
+        "messages": messages,
+        "temperature": req.temperature if req.temperature is not None else profile.temperature,
+    }
+    _apply_token_limit(payload, profile, req.max_tokens)
+    _apply_mimo_thinking(payload, profile, req)
+
+    if req.tools:
+        payload["tools"] = req.tools
+        if req.tool_choice is not None:
+            payload["tool_choice"] = req.tool_choice
+        else:
+            payload["tool_choice"] = "auto"
+
+    headers = _auth_headers(profile)
+    url = profile.base_url.rstrip("/") + "/chat/completions"
+
+    last_error: Exception | None = None
+    for _ in range(profile.max_retries + 1):
+        try:
+            async with httpx.AsyncClient(**_httpx_client_kwargs(profile)) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                choice = data["choices"][0]
+                message = choice["message"]
+                tool_calls = message.get("tool_calls") or []
+                # Normalize tool_calls so callers don't re-parse provider shapes.
+                normalized: list[dict[str, Any]] = []
+                for tc in tool_calls:
+                    if not isinstance(tc, dict):
+                        continue
+                    fn = tc.get("function") or {}
+                    normalized.append(
+                        {
+                            "id": tc.get("id", ""),
+                            "name": fn.get("name", ""),
+                            "arguments": fn.get("arguments", ""),
+                        }
+                    )
+                return {
+                    "content": str(message.get("content") or ""),
+                    "usage": data.get("usage", {}),
+                    "reasoning_content": str(message.get("reasoning_content") or ""),
+                    "tool_calls": normalized,
+                    "finish_reason": str(choice.get("finish_reason") or ""),
+                }
+        except Exception as exc:
+            last_error = exc
+
+    raise RuntimeError(f"Tools model call failed after retries: {last_error}")
+
+
 def _apply_token_limit(
     payload: dict[str, Any],
     profile: ModelProfile,

@@ -1,0 +1,176 @@
+"""Shell dev tools: run_bash (sandboxed), build_project, run_smoke.
+
+build_project / run_smoke wrap the hardened ``Geant4Runner`` so the model gets
+clean structured compile/runtime feedback. run_bash is a freeform fallback.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import shlex
+from pathlib import Path
+from typing import Any
+
+MAX_BASH_OUTPUT = 20_000
+DEFAULT_BASH_TIMEOUT = 120
+
+
+async def run_bash(project_dir: Path, command: str, *, timeout: int = DEFAULT_BASH_TIMEOUT) -> dict[str, Any]:
+    """Run a shell command in ``project_dir`` with timeout and captured output."""
+    if not str(command).strip():
+        return {"ok": False, "error": "Empty command."}
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            cwd=str(project_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError as exc:
+        return {"ok": False, "error": f"Failed to spawn: {exc}"}
+
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=max(1, int(timeout)))
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return {
+            "ok": False,
+            "error": f"Command timed out after {timeout}s.",
+            "exit_code": None,
+        }
+
+    return {
+        "ok": proc.returncode == 0,
+        "exit_code": proc.returncode,
+        "stdout": stdout.decode("utf-8", "replace")[:MAX_BASH_OUTPUT],
+        "stderr": stderr.decode("utf-8", "replace")[:MAX_BASH_OUTPUT],
+    }
+
+
+async def build_project(project_dir: Path, *, threads: int = 4) -> dict[str, Any]:
+    """cmake configure (only if needed) + incremental make.
+
+    Returns the COMPLETE raw compiler output (stdout+stderr, tail-capped) as
+    plain text — including gcc carets (``^~~~~``), ``note:`` suggestions, and
+    template context. This is exactly what a human reads from ``make``; do NOT
+    pre-filter it or the model loses the most useful diagnostics.
+    """
+    from agent_core.tools.geant4_runner import Geant4Runner
+
+    runner = Geant4Runner()
+    build_dir = project_dir / "build"
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    # Reuse build/ across calls for fast incremental makes, but wipe it if the
+    # cmake cache points at a different source dir (e.g. project relocated or a
+    # stale cache was copied in) — otherwise cmake refuses to build.
+    marker = build_dir / ".radagent_source"
+    source_key = str(project_dir.resolve())
+    stale_cache = (build_dir / "CMakeCache.txt").exists() and (
+        not marker.exists() or marker.read_text(encoding="utf-8").strip() != source_key
+    )
+    if stale_cache:
+        import shutil
+
+        shutil.rmtree(build_dir, ignore_errors=True)
+        build_dir.mkdir(parents=True, exist_ok=True)
+
+    needs_configure = not (build_dir / "CMakeCache.txt").exists()
+    if needs_configure:
+        cfg = await runner.configure(str(project_dir), str(build_dir))
+        marker.write_text(source_key, encoding="utf-8")
+        if not cfg.get("success"):
+            return {
+                "ok": False,
+                "stage": "configure",
+                "output": _tail(
+                    f"{cfg.get('cmake_output', '')}\n{cfg.get('errors', '')}"
+                ),
+            }
+
+    build = await runner.build(str(build_dir), threads=threads)
+    raw = f"{build.get('build_output', '')}\n{build.get('errors', '')}"
+    return {
+        "ok": bool(build.get("success")),
+        "stage": "build",
+        "output": _tail(raw),
+        "executable_path": build.get("executable_path"),
+    }
+
+
+def _tail(text: str, *, max_chars: int = 8000) -> str:
+    """Keep the END of compiler output — that's where errors + carets live."""
+    if len(text) <= max_chars:
+        return text
+    return "..." + text[-(max_chars - 3):]
+
+
+async def run_smoke(project_dir: Path, *, events: int = 5, job_id: str = "agentic") -> dict[str, Any]:
+    """Build then run a small smoke simulation end-to-end.
+
+    Returns the COMPLETE raw run output (stdout+stderr, tail-capped) so a
+    runtime crash (e.g. ``double free``, segfault) comes through with whatever
+    stack/abort text the executable emitted — the model needs this to fix
+    memory bugs, just like a developer reading a terminal.
+    """
+    from agent_core.gates.output_quality import inspect_g4_output_quality
+    from agent_core.tools.geant4_runner import Geant4Runner
+
+    runner = Geant4Runner()
+    output_dir = project_dir / "smoke_output"
+    result = await runner.smoke_test(
+        str(project_dir),
+        job_id=job_id,
+        output_dir=str(output_dir),
+        events=max(1, int(events)),
+    )
+    quality = inspect_g4_output_quality(
+        output_dir,
+        smoke_result=_smoke_result_for_quality(result),
+        expected_events=max(1, int(events)),
+    )
+    raw = _join_errors(result)
+    if quality.errors:
+        raw = "\n".join([raw, *quality.errors]).strip()
+    # Prefer the full run log when available; fall back to error fields.
+    run_log = result.get("run_log") or result.get("log") or ""
+    combined = f"{run_log}\n{raw}" if run_log else raw
+    return {
+        "ok": bool(result.get("success")) and quality.passed,
+        "stage": "smoke",
+        "output": _tail(combined),
+        "details": {
+            "events_requested": result.get("events_requested"),
+            "build_success": result.get("build_success"),
+            "run_success": result.get("run_success"),
+            "runtime_error_patterns": result.get("runtime_error_patterns"),
+            "output_dir": str(output_dir),
+            "output_quality": {
+                "status": "pass" if quality.passed else "fail",
+                "errors": quality.errors,
+                "warnings": quality.warnings,
+                "metrics": quality.metrics,
+            },
+        },
+    }
+
+
+def _join_errors(result: dict[str, Any]) -> str:
+    parts = []
+    for key in ("cmake_errors", "build_errors", "run_errors", "errors"):
+        value = result.get(key)
+        if isinstance(value, list):
+            parts.extend(str(x) for x in value)
+        elif value:
+            parts.append(str(value))
+    return "\n".join(parts)[:MAX_BASH_OUTPUT]
+
+
+def _smoke_result_for_quality(result: dict[str, Any]) -> dict[str, Any]:
+    errors = result.get("errors")
+    if not errors:
+        warnings = result.get("warnings")
+        if isinstance(warnings, list):
+            errors = "\n".join(str(item) for item in warnings if item)
+    return {"success": result.get("success"), "errors": errors or ""}

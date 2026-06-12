@@ -59,42 +59,193 @@ def test_global_integration_normalizes_new_file_metadata() -> None:
     assert entry["operation"] == "create_or_replace"
 
 
-def test_global_integration_model_context_remains_valid_json_when_over_budget() -> None:
-    oversized_project = {
-        "path": "src/Oversized.cc",
-        "new_content": "void f() {\n" + ("  // generated code keeps going\n" * 500),
-        "module_name": "simulation_core",
-        "generated_by": "simulation_core_module_agent",
-    }
-    context = {
-        "job_id": "json_budget",
-        "available_modules": ["simulation_core", "runtime_app"],
-        "project_files": [oversized_project],
-        "runtime_failure_context": {
-            "status": "fail",
-            "errors": ["BUILD_ERROR_SENTINEL: compile failed"],
-        },
-        "database_search": {},
-        "web_search": {},
-        "interface_contracts": {"huge": "x" * 4_000},
-        "module_contracts": {"huge": "y" * 4_000},
-        "module_context_summaries": {"huge": {"interface_context": "z" * 4_000}},
-        "integration_memory": {"previous_runtime_gate": {"errors": ["old failure"]}},
-        "write_contract": {"must_preserve_schema": True},
+def test_global_integration_rejects_candidate_paths_outside_auto_apply_policy() -> None:
+    candidate = {
+        "changed_files": [
+            {
+                "path": "build.sh",
+                "new_content": "#!/usr/bin/env bash\ncmake .\n",
+                "zone": "green",
+                "generated_by": "global_integration_agent",
+                "module_name": "runtime_app",
+            },
+            {
+                "path": "CMakePresets.json",
+                "new_content": "{}\n",
+                "zone": "green",
+                "generated_by": "global_integration_agent",
+                "module_name": "runtime_app",
+            },
+        ]
     }
 
-    text = gia._model_context_json(
-        context,
-        max_chars=2_000,
-        max_project_file_chars=20_000,
+    errors = gia._validate_candidate_patch_schema(_patch(), candidate)
+
+    assert any("build.sh" in error and "not allowed" in error for error in errors)
+    assert any("CMakePresets.json" in error and "not allowed" in error for error in errors)
+
+
+def test_runtime_failure_context_includes_compile_error_source_snippets(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "geant4_project"
+    source_path = project_dir / "src" / "SensitiveDetector.cc"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(
+        "\n".join(
+            [
+                '#include "SensitiveDetector.hh"',
+                "void SensitiveDetector::EndOfEvent(G4HCofThisEvent*)",
+                "{",
+                "  Hit* hitPtr = nullptr;",
+                "  hitPtr->Print();",
+                "}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    compiler_error = (
+        f"{source_path}:4:8: error: 'hitPtr' was not declared in this scope\n"
+        "    4 |   Hit* hitPtr = nullptr;\n"
+        "      |        ^~~~~~\n"
     )
 
-    parsed = json.loads(text)
-    assert parsed["runtime_failure_context"]["errors"] == [
-        "BUILD_ERROR_SENTINEL: compile failed"
-    ]
-    assert isinstance(parsed["project_files"], list)
-    assert len(text) <= 2_000
+    compact = gia._compact_runtime_failure_context(
+        {
+            "status": "fail",
+            "project_dir": str(project_dir),
+            "errors": [compiler_error],
+            "build_result": {"errors": compiler_error},
+            "output_summary": {"large_payload": "x" * 50_000},
+        }
+    )
+
+    snippets = compact["compile_error_contexts"]
+    assert snippets[0]["path"] == "src/SensitiveDetector.cc"
+    assert snippets[0]["line"] == 4
+    assert "hitPtr" in snippets[0]["diagnostic"]
+    assert "  Hit* hitPtr = nullptr;" in snippets[0]["source_excerpt"]
+    assert "void SensitiveDetector::EndOfEvent" in snippets[0]["source_excerpt"]
+
+
+def test_runtime_failure_context_reads_compile_errors_from_artifacts(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "geant4_project"
+    source_path = project_dir / "src" / "SensitiveDetector.cc"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(
+        '#include "SensitiveDetector.hh"\n'
+        "void SensitiveDetector::EndOfEvent(G4HCofThisEvent*)\n"
+        "{\n"
+        "  Hit* hitPtr = nullptr;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    runtime_gate = tmp_path / "runtime_gate_result.json"
+    runtime_gate.write_text(
+        json.dumps(
+            {
+                "status": "fail",
+                "errors": [
+                    f"{source_path}:4:8: error: 'hitPtr' was not declared in this scope"
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    compact = gia._compact_runtime_failure_context(
+        {
+            "status": "fail",
+            "project_dir": str(project_dir),
+            "artifacts": [{"path": str(runtime_gate)}],
+        }
+    )
+
+    snippets = compact["compile_error_contexts"]
+    assert snippets[0]["path"] == "src/SensitiveDetector.cc"
+    assert snippets[0]["line"] == 4
+    assert "Hit* hitPtr" in snippets[0]["source_excerpt"]
+
+
+def test_compile_error_context_includes_related_local_project_files(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "geant4_project"
+    source_path = project_dir / "src" / "Consumer.cc"
+    header_path = project_dir / "include" / "Widget.hh"
+    companion_header = project_dir / "include" / "Consumer.hh"
+    companion_source = project_dir / "src" / "Widget.cc"
+    source_path.parent.mkdir(parents=True)
+    header_path.parent.mkdir(parents=True)
+    source_path.write_text(
+        '#include "Consumer.hh"\n'
+        '#include "Widget.hh"\n'
+        "void Consumer::UseWidget()\n"
+        "{\n"
+        "  MissingWidgetType value;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    header_path.write_text(
+        "#pragma once\nclass Widget { public: void Touch(); };\n",
+        encoding="utf-8",
+    )
+    companion_header.write_text(
+        "#pragma once\nclass Consumer { public: void UseWidget(); };\n",
+        encoding="utf-8",
+    )
+    companion_source.write_text(
+        '#include "Widget.hh"\nvoid Widget::Touch() {}\n',
+        encoding="utf-8",
+    )
+    compiler_error = (
+        f"{source_path}:5:3: error: 'MissingWidgetType' was not declared in this scope\n"
+        "    5 |   MissingWidgetType value;\n"
+        "      |   ^~~~~~~~~~~~~~~~~\n"
+    )
+
+    compact = gia._compact_runtime_failure_context(
+        {
+            "status": "fail",
+            "project_dir": str(project_dir),
+            "errors": [compiler_error],
+        }
+    )
+
+    related = compact["compile_error_contexts"][0]["related_files"]
+    related_by_path = {item["path"]: item for item in related}
+    assert "include/Consumer.hh" in related_by_path
+    assert "include/Widget.hh" in related_by_path
+    assert "src/Widget.cc" in related_by_path
+    assert "class Widget" in related_by_path["include/Widget.hh"]["content_excerpt"]
+
+
+def test_integration_query_includes_runtime_compile_error_text() -> None:
+    query = gia._build_integration_query(
+        {
+            "project_files": [],
+            "runtime_failure_context": {
+                "errors": [
+                    "/tmp/geant4_project/src/Consumer.cc:5:3: error: MissingWidgetType"
+                ],
+                "build_result": {
+                    "errors": "src/Consumer.cc:5:3: error: MissingWidgetType"
+                },
+                "compile_error_contexts": [
+                    {
+                        "path": "src/Consumer.cc",
+                        "message": "MissingWidgetType was not declared",
+                    }
+                ],
+            },
+        }
+    )
+
+    assert "MissingWidgetType" in query
+    assert "src/Consumer.cc" in query
 
 
 def test_global_integration_qualifies_hit_type_in_sensitive_detector_patch() -> None:
@@ -554,7 +705,7 @@ def test_global_integration_aligns_run_macro_energy_to_primary_generator() -> No
     assert "/gun/energy 100 MeV" not in run_macro
 
 
-def test_global_integration_normalizes_real_g4_ir_units_and_run_events() -> None:
+def test_global_integration_normalizes_real_g4_ir_units_without_overriding_run_events() -> None:
     original_patch = {
         "changed_files": [
             {
@@ -655,7 +806,8 @@ def test_global_integration_normalizes_real_g4_ir_units_and_run_events() -> None
     assert "SetDefaultCutValue(0.1 * mm)" in physics
     assert "/gun/energy 10.0 MeV" in run_macro
     assert "/gun/position 0 0 -80.0 mm" in run_macro
-    assert "/run/beamOn 1000" in run_macro
+    assert "/run/beamOn 10" in run_macro
+    assert "/run/beamOn 1000" not in run_macro
 
 
 def test_global_integration_writes_summary_events_requested_from_total_events() -> None:
@@ -903,601 +1055,7 @@ async def _empty_evidence(_query: str) -> list[dict[str, Any]]:
 
 
 @pytest.mark.asyncio
-async def test_global_integration_agent_reads_modules_files_database_and_web(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    response = {
-        "status": "integrated",
-        "proposed_patch": {
-            "changed_files": [
-                {
-                    "path": "main.cc",
-                    "operation": "create_or_replace",
-                    "new_content": '#include "DetectorConstruction.hh"\nint main() { return 0; }\n',
-                    "zone": "green",
-                    "generated_by": "runtime_app_module_agent",
-                    "module_name": "runtime_app",
-                    "rationale": "wire detector header",
-                }
-            ]
-        },
-        "issues_fixed": [{"target": "main.cc", "message": "wired generated header"}],
-        "errors": [],
-    }
-    gateway = _Gateway(response)
-    codegen_dir = tmp_path / "jobs" / "global_integration_test" / STAGE_CODEGEN
-    codegen_dir.mkdir(parents=True)
-    (codegen_dir / "global_integration_agent_report.json").write_text(
-        json.dumps(
-            {
-                "status": "failed",
-                "errors": ["previous constructor mismatch"],
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _web_evidence,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_test",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        module_contracts={
-            "simulation_core": {"output_files": ["include/DetectorConstruction.hh"]},
-            "runtime_app": {"output_files": ["main.cc"]},
-        },
-    )
-
-    assert report["status"] == "passed"
-    assert report["changed_files"] == ["main.cc"]
-    assert report["capabilities_used"]["database_search"] is True
-    assert report["capabilities_used"]["web_search"] is True
-    files_by_path = {entry["path"]: entry for entry in repaired["changed_files"]}
-    assert set(files_by_path) == {"include/DetectorConstruction.hh", "main.cc"}
-    assert '#include "DetectorConstruction.hh"' in files_by_path["main.cc"]["new_content"]
-    prompt = gateway.prompts[0]
-    assert "available_modules" in prompt
-    assert "DetectorConstruction.hh" in prompt
-    assert "database_search" in prompt
-    assert "web_search" in prompt
-    assert "previous constructor mismatch" in prompt
-    context_path = (
-        Path(tmp_path)
-        / "jobs"
-        / "global_integration_test"
-        / STAGE_CODEGEN
-        / "integration"
-        / "global_integration_context.json"
-    )
-    assert context_path.is_file()
-
-
-@pytest.mark.asyncio
-async def test_global_integration_sends_large_initial_context_to_model(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    large_patch = _patch()
-    large_patch["changed_files"].append(
-        {
-            "path": "src/LargeGenerated.cc",
-            "operation": "create_or_replace",
-            "new_content": "int generated_value = 0;\n" * 4000,
-            "zone": "green",
-            "generated_by": "large_module_agent",
-            "module_name": "large",
-            "rationale": "force large initial integration context",
-        }
-    )
-    gateway = _Gateway({"status": "no_change", "proposed_patch": {"changed_files": []}})
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _web_evidence,
-    )
-    runtime_attempts: list[int] = []
-
-    async def runtime_gate(**kwargs: Any) -> dict[str, Any]:
-        attempt = int(kwargs["attempt"])
-        runtime_attempts.append(attempt)
-        return {
-            "status": "pass",
-            "attempt": attempt,
-            "errors": [],
-            "warnings": [],
-            "missing_outputs": [],
-        }
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
-        runtime_gate,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        large_patch,
-        job_id="global_integration_defer_initial",
-        module_results={"simulation_core": {}, "runtime_app": {}, "large": {}},
-        runtime_repair_rounds=1,
-    )
-
-    assert report["status"] == "passed"
-    assert "deferred_until_runtime_gate" not in report
-    assert runtime_attempts == [1]
-    assert len(gateway.prompts) == 1
-    assert "LargeGenerated.cc" in gateway.prompts[0]
-    assert report["runtime_gate_attempts"][0]["status"] == "pass"
-    assert "deferred_until_runtime_gate" not in repaired["metadata"]["global_integration_agent"]
-    assert repaired["metadata"]["final_runtime_gate"]["required"] is True
-
-
-@pytest.mark.asyncio
-async def test_large_initial_integration_uses_runtime_observation_for_repair(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    large_patch = _patch()
-    large_patch["changed_files"].append(
-        {
-            "path": "src/LargeGenerated.cc",
-            "operation": "create_or_replace",
-            "new_content": "int generated_value = 0;\n" * 4000,
-            "zone": "green",
-            "generated_by": "large_module_agent",
-            "module_name": "large",
-            "rationale": "force large initial integration context",
-        }
-    )
-    gateway = _SequenceGateway(
-        [
-            {
-                "status": "no_change",
-                "proposed_patch": {"changed_files": []},
-                "issues_fixed": [],
-                "errors": [],
-            },
-            {
-                "status": "integrated",
-                "proposed_patch": {
-                    "changed_files": [
-                        {"path": "main.cc", "new_content": "int main() { return 0; }\n"}
-                    ]
-                },
-                "issues_fixed": [
-                    {"target": "main.cc", "message": "repaired from runtime observation"}
-                ],
-                "errors": [],
-            }
-        ]
-    )
-    runtime_attempts: list[int] = []
-
-    async def runtime_gate(**kwargs: Any) -> dict[str, Any]:
-        attempt = int(kwargs["attempt"])
-        runtime_attempts.append(attempt)
-        if attempt == 1:
-            return {
-                "status": "fail",
-                "attempt": attempt,
-                "errors": ["BUILD_ERROR_SENTINEL: Hit must satisfy G4THitsCollection API"],
-                "warnings": [],
-                "missing_outputs": ["g4_summary.json"],
-            }
-        return {
-            "status": "pass",
-            "attempt": attempt,
-            "errors": [],
-            "warnings": [],
-            "missing_outputs": [],
-        }
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
-        runtime_gate,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        large_patch,
-        job_id="global_integration_defer_runtime_repair",
-        module_results={"simulation_core": {}, "runtime_app": {}, "large": {}},
-        runtime_repair_rounds=2,
-    )
-
-    assert report["status"] == "passed"
-    assert runtime_attempts == [1, 2]
-    assert len(gateway.prompts) == 2
-    assert "initial integration" in gateway.prompts[0]
-    assert "LargeGenerated.cc" in gateway.prompts[0]
-    assert "runtime repair round 1" in gateway.prompts[1]
-    assert "BUILD_ERROR_SENTINEL" in gateway.prompts[1]
-    main_entry = next(f for f in repaired["changed_files"] if f["path"] == "main.cc")
-    assert "return 0" in main_entry["new_content"]
-
-
-@pytest.mark.asyncio
-async def test_global_integration_agent_rejects_content_field(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    bad_patch = _patch()
-    bad_patch["changed_files"][0]["content"] = "forbidden"
-    response = {
-        "status": "integrated",
-        "proposed_patch": bad_patch,
-        "issues_fixed": [],
-        "errors": [],
-    }
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: _Gateway(response),
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_bad_schema",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-    )
-
-    assert repaired == _patch()
-    assert report["status"] == "failed"
-    assert any("content field is forbidden" in error for error in report["errors"])
-
-
-@pytest.mark.asyncio
-async def test_global_integration_agent_partial_patch_inherits_file_metadata(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    response = {
-        "status": "integrated",
-        "proposed_patch": {
-            "changed_files": [
-                {
-                    "path": "main.cc",
-                    "new_content": '#include "DetectorConstruction.hh"\nint main() { return 0; }\n',
-                }
-            ]
-        },
-        "issues_fixed": [{"target": "main.cc", "message": "minimal partial edit"}],
-        "errors": [],
-    }
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: _Gateway(response),
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_partial_metadata",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-    )
-
-    assert report["status"] == "passed"
-    main_entry = next(f for f in repaired["changed_files"] if f["path"] == "main.cc")
-    assert main_entry["zone"] == "green"
-    assert main_entry["generated_by"] == "runtime_app_module_agent"
-    assert main_entry["module_name"] == "runtime_app"
-
-
-@pytest.mark.asyncio
-async def test_global_integration_agent_continues_when_external_evidence_unavailable(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: _Gateway({"status": "no_change", "proposed_patch": _patch()}),
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-
-    _repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_no_evidence",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-    )
-
-    assert report["status"] == "passed"
-    assert any("evidence were unavailable" in item for item in report["warnings"])
-
-
-@pytest.mark.asyncio
-async def test_global_integration_accepts_empty_patch_for_no_change(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: _Gateway({"status": "no_change", "proposed_patch": {"changed_files": []}}),
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_no_change_empty_patch",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-    )
-
-    assert report["status"] == "passed"
-    assert report["changed_files"] == []
-    assert repaired["changed_files"] == _patch()["changed_files"]
-
-
-@pytest.mark.asyncio
-async def test_global_integration_prompt_keeps_files_and_runtime_observation_first(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    gateway = _Gateway({"status": "no_change", "proposed_patch": _patch()})
-    build_result = tmp_path / "build_result.json"
-    build_result.write_text(
-        json.dumps(
-            {
-                "success": False,
-                "errors": "BUILD_ERROR_SENTINEL: constructor mismatch",
-                "stderr": "DetectorConstruction.cc failed to compile",
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-
-    _repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_prompt_budget",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        runtime_failure_context={
-            "job_id": "global_integration_prompt_budget",
-            "status": "failed",
-            "phase": "gate_validation",
-            "errors": ["Missing C++ standard setting (CXX_STANDARD or c++17)"],
-            "details": {
-                "failed_gates": [
-                    {
-                        "gate_id": 6,
-                        "name": "Build/Parse",
-                        "status": "fail",
-                        "failed_items": ["Build failed"],
-                        "message": "Build failed",
-                        "file_paths": [str(build_result)],
-                    }
-                ]
-            },
-        },
-    )
-
-    assert report["status"] == "passed"
-    prompt = gateway.prompts[0]
-    assert '"project_files"' in prompt
-    assert '"runtime_failure_context"' in prompt
-    assert "class DetectorConstruction" in prompt
-    assert "BUILD_ERROR_SENTINEL" in prompt
-    assert "G4-G No Magic Number" not in gia.GLOBAL_INTEGRATION_SYSTEM_PROMPT
-    assert "No Magic Number" not in prompt
-    assert prompt.find('"runtime_failure_context"') < prompt.find('"project_files"')
-    assert gateway.call_kwargs[0]["max_tokens"] == gia.RUNTIME_REPAIR_MAX_TOKENS
-    assert gateway.call_kwargs[0]["metadata"]["enable_thinking"] is True
-
-
-@pytest.mark.asyncio
-async def test_initial_global_integration_timeout_continues_to_runtime_gate(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    gateway = _ErrorGateway(error="Model call timed out after 365.0s")
-    runtime_attempts: list[int] = []
-
-    async def runtime_gate(**kwargs: Any) -> dict[str, Any]:
-        attempt = int(kwargs["attempt"])
-        runtime_attempts.append(attempt)
-        return {
-            "status": "pass",
-            "attempt": attempt,
-            "errors": [],
-            "warnings": [],
-            "missing_outputs": [],
-        }
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
-        runtime_gate,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_initial_timeout_runtime_fallback",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        runtime_repair_rounds=1,
-    )
-
-    assert report["status"] == "passed"
-    assert report["errors"] == []
-    assert runtime_attempts == [1]
-    assert report["runtime_gate_attempts"][0]["status"] == "pass"
-    assert "Initial global integration model call failed" in report["warnings"][0]
-    assert report["llm_status"] == "initial_model_error_runtime_fallback"
-    assert repaired["metadata"]["global_integration_agent"]["runtime_gate_required"] is True
-    assert gateway.call_kwargs[0]["max_tokens"] == gia.INITIAL_INTEGRATION_MAX_TOKENS
-    assert gateway.call_kwargs[0]["metadata"]["enable_thinking"] is True
-
-
-@pytest.mark.asyncio
-async def test_runtime_observation_model_timeout_still_fails(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    gateway = _ErrorGateway(error="Model call timed out after 365.0s")
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-
-    _repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_runtime_timeout_still_fails",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        runtime_failure_context={"status": "fail", "errors": ["real build failed"]},
-        runtime_repair_rounds=1,
-    )
-
-    assert report["status"] == "failed"
-    assert report["runtime_gate_attempts"] == []
-    assert report["errors"] == [
-        "Global integration model call failed: Model call timed out after 365.0s"
-    ]
-    assert gateway.call_kwargs[0]["max_tokens"] == gia.RUNTIME_REPAIR_MAX_TOKENS
-    assert gateway.call_kwargs[0]["metadata"]["enable_thinking"] is True
-
-
-def test_global_integration_runtime_gate_ignores_magic_number_style(tmp_path) -> None:
-    project_dir = tmp_path / "geant4_project"
-    output_dir = tmp_path / "g4_output_package"
-    src_dir = project_dir / "src"
-    src_dir.mkdir(parents=True)
-    output_dir.mkdir()
-    (src_dir / "OutputManager.cc").write_text(
-        "#include <array>\n"
-        "void f() {\n"
-        "  std::array<int, 3> nBins = {10, 10, 10};\n"
-        "}\n",
-        encoding="utf-8",
-    )
-    (output_dir / "g4_summary.json").write_text(
-        json.dumps({"job_id": "style", "events_requested": 2}),
-        encoding="utf-8",
-    )
-    (output_dir / "provenance.json").write_text(
-        json.dumps({"job_id": "style"}),
-        encoding="utf-8",
-    )
-    (output_dir / "event_table.csv").write_text(
-        "EventID,edep_MeV,dose_Gy\n0,1.25,0.01\n1,0.50,0.004\n",
-        encoding="utf-8",
-    )
-    (output_dir / "edep_3d.csv").write_text(
-        "x,y,z,edep_MeV\n0,0,0,1.25\n1,0,0,0.50\n",
-        encoding="utf-8",
-    )
-    (output_dir / "dose_3d.csv").write_text(
-        "x,y,z,dose_Gy\n0,0,0,0.01\n1,0,0,0.004\n",
-        encoding="utf-8",
-    )
-    (output_dir / "smoke_simulation_result.json").write_text(
-        json.dumps({"success": True, "errors": ""}),
-        encoding="utf-8",
-    )
-
-    gate = gia._summarize_runtime_gate_result(
-        result={"success": True, "warnings": []},
-        attempt=1,
-        project_dir=project_dir,
-        output_dir=output_dir,
-    )
-
-    assert gate["status"] == "pass"
-    assert gate["errors"] == []
-
-
-@pytest.mark.asyncio
-async def test_integration_runtime_gate_uses_1000_event_self_check(
+async def test_integration_runtime_gate_uses_requested_ir_event_count(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1516,7 +1074,7 @@ async def test_integration_runtime_gate_uses_1000_event_self_check(
             events: int = 10,
         ) -> dict[str, Any]:
             seen["events"] = events
-            assert events == 1000
+            assert events == 5
             out = Path(str(output_dir))
             out.mkdir(parents=True, exist_ok=True)
             (out / "g4_summary.json").write_text(
@@ -1546,14 +1104,96 @@ async def test_integration_runtime_gate_uses_1000_event_self_check(
     monkeypatch.setattr("agent_core.tools.geant4_runner.Geant4Runner", FakeRunner)
 
     gate = await gia._run_integration_runtime_gate(
-        job_id="runtime_gate_1000",
+        job_id="runtime_gate_ir_events",
+        proposed_patch=_patch(),
+        attempt=1,
+        expected_events=5,
+    )
+
+    assert seen["events"] == 5
+    assert gate["status"] == "pass"
+    assert gate["expected_events"] == 5
+
+
+@pytest.mark.asyncio
+async def test_integration_runtime_gate_records_runner_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+
+    class FakeRunner:
+        geant4_available = True
+
+        async def smoke_test(
+            self,
+            project_dir: str,
+            *,
+            job_id: str = "unknown",
+            output_dir: str | None = None,
+            events: int = 10,
+        ) -> dict[str, Any]:
+            return {
+                "success": False,
+                "cmake_configure_result": {
+                    "success": False,
+                    "command": "cmake bad-relative-source",
+                    "errors": "configure failed",
+                },
+                "warnings": ["configure failed"],
+            }
+
+    monkeypatch.setattr("agent_core.tools.geant4_runner.Geant4Runner", FakeRunner)
+
+    gate = await gia._run_integration_runtime_gate(
+        job_id="runtime_gate_contract",
         proposed_patch=_patch(),
         attempt=1,
     )
 
-    assert seen["events"] == 1000
-    assert gate["status"] == "pass"
-    assert gate["expected_events"] == 1000
+    contract = gate["runner_contract"]
+    assert contract["runner"] == "Geant4Runner.smoke_test"
+    assert contract["events"] == 1000
+    assert Path(contract["project_dir_abs"]).is_absolute()
+    assert Path(contract["build_dir_abs"]).is_absolute()
+    assert contract["configure_command_shape"].startswith("cmake ")
+    assert "build.sh" in contract["forbidden_path_examples"]
+    assert "src/*.cc" in contract["allowed_path_patterns"]
+
+
+def test_global_integration_runtime_gate_rejects_event_count_mismatch(tmp_path) -> None:
+    project_dir = tmp_path / "geant4_project"
+    output_dir = tmp_path / "g4_output_package"
+    project_dir.mkdir()
+    output_dir.mkdir()
+    (output_dir / "g4_summary.json").write_text(
+        json.dumps({"job_id": "quality", "events_requested": 1000, "smoke_success": True}),
+        encoding="utf-8",
+    )
+    (output_dir / "event_table.csv").write_text(
+        "EventID,edep_MeV,dose_Gy\n"
+        + "\n".join(f"{i},1.0,0.01" for i in range(1000))
+        + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / "edep_3d.csv").write_text("x,y,z,edep_MeV\n0,0,0,1.0\n", encoding="utf-8")
+    (output_dir / "dose_3d.csv").write_text("x,y,z,dose_Gy\n0,0,0,0.01\n", encoding="utf-8")
+    (output_dir / "provenance.json").write_text('{"job_id":"quality"}\n', encoding="utf-8")
+    (output_dir / "smoke_simulation_result.json").write_text(
+        json.dumps({"success": True, "errors": ""}),
+        encoding="utf-8",
+    )
+
+    gate = gia._summarize_runtime_gate_result(
+        result={"success": True, "warnings": []},
+        attempt=1,
+        project_dir=project_dir,
+        output_dir=output_dir,
+        expected_events=5,
+    )
+
+    assert gate["status"] == "fail"
+    assert any("expected 5" in error for error in gate["errors"])
 
 
 def test_global_integration_runtime_gate_rejects_empty_zero_smoke_outputs(tmp_path) -> None:
@@ -1671,325 +1311,3 @@ async def test_global_integration_agent_mock_provider_keeps_patch_and_requires_r
     assert report["status"] == "passed"
     assert report["mock_provider_only"] is True
     assert repaired["metadata"]["global_integration_agent"]["runtime_gate_required"] is True
-
-
-@pytest.mark.asyncio
-async def test_global_integration_agent_reacts_to_runtime_gate_observation(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    responses = [
-        {
-            "status": "integrated",
-            "proposed_patch": {
-                "changed_files": [
-                    {"path": "main.cc", "new_content": "int main() { return 1; }\n"}
-                ]
-            },
-            "issues_fixed": [{"target": "main.cc", "message": "initial integration"}],
-            "errors": [],
-        },
-        {
-            "status": "integrated",
-            "proposed_patch": {
-                "changed_files": [
-                    {"path": "main.cc", "new_content": "int main() { return 0; }\n"}
-                ]
-            },
-            "issues_fixed": [{"target": "main.cc", "message": "fixed runtime failure"}],
-            "errors": [],
-        },
-    ]
-    gateway = _SequenceGateway(responses)
-    runtime_attempts: list[int] = []
-
-    async def runtime_gate(**kwargs: Any) -> dict[str, Any]:
-        attempt = int(kwargs["attempt"])
-        runtime_attempts.append(attempt)
-        if attempt == 1:
-            return {
-                "status": "fail",
-                "attempt": attempt,
-                "errors": ["compile failed: main.cc returned wrong wiring"],
-                "warnings": [],
-                "missing_outputs": ["g4_summary.json"],
-            }
-        return {
-            "status": "pass",
-            "attempt": attempt,
-            "errors": [],
-            "warnings": [],
-            "missing_outputs": [],
-        }
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
-        runtime_gate,
-    )
-
-    repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_react",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        runtime_repair_rounds=2,
-    )
-
-    assert report["status"] == "passed"
-    assert runtime_attempts == [1, 2]
-    assert len(gateway.prompts) == 2
-    assert "runtime repair round 1" in gateway.prompts[1]
-    assert "compile failed: main.cc returned wrong wiring" in gateway.prompts[1]
-    main_entry = next(f for f in repaired["changed_files"] if f["path"] == "main.cc")
-    assert "return 0" in main_entry["new_content"]
-
-
-@pytest.mark.asyncio
-async def test_global_integration_runtime_repair_uses_large_context_and_token_budget(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    large_patch = {
-        "changed_files": [
-            {
-                "path": "src/Large.cc",
-                "operation": "create_or_replace",
-                "new_content": "void f() {\n" + ("  // keep repair context visible\n" * 3_000),
-                "zone": "green",
-                "generated_by": "simulation_core_module_agent",
-                "module_name": "simulation_core",
-                "rationale": "test",
-            },
-            {
-                "path": "main.cc",
-                "operation": "create_or_replace",
-                "new_content": "int main() { return 0; }\n",
-                "zone": "runtime_app",
-                "generated_by": "runtime_app_module_agent",
-                "module_name": "runtime_app",
-                "rationale": "test",
-            },
-        ]
-    }
-    gateway = _Gateway(
-        {
-            "status": "integrated",
-            "proposed_patch": {
-                "changed_files": [
-                    {"path": "main.cc", "new_content": "int main() { return 0; }\n"}
-                ]
-            },
-            "issues_fixed": [],
-            "errors": [],
-        }
-    )
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-
-    _repaired, report = await run_global_integration_agent(
-        large_patch,
-        job_id="global_integration_large_repair_context",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        runtime_failure_context={"status": "fail", "errors": ["real build failed"]},
-    )
-
-    assert report["status"] == "passed"
-    assert gateway.call_kwargs[0]["max_tokens"] >= 65_536
-    assert len(gateway.prompts[0]) > 80_000
-
-
-@pytest.mark.asyncio
-async def test_global_integration_runtime_attempt_offset_resumes_after_existing_attempt(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    response = {
-        "status": "integrated",
-        "proposed_patch": {
-            "changed_files": [
-                {"path": "main.cc", "new_content": "int main() { return 0; }\n"}
-            ]
-        },
-        "issues_fixed": [{"target": "main.cc", "message": "resume from attempt 1"}],
-        "errors": [],
-    }
-    gateway = _Gateway(response)
-    runtime_attempts: list[int] = []
-
-    async def runtime_gate(**kwargs: Any) -> dict[str, Any]:
-        attempt = int(kwargs["attempt"])
-        runtime_attempts.append(attempt)
-        return {
-            "status": "pass",
-            "attempt": attempt,
-            "errors": [],
-            "warnings": [],
-            "missing_outputs": [],
-        }
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
-        runtime_gate,
-    )
-
-    _repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_resume_offset",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        runtime_failure_context={"status": "fail", "errors": ["attempt 1 failed"]},
-        runtime_repair_rounds=1,
-        runtime_attempt_offset=1,
-    )
-
-    assert report["status"] == "passed"
-    assert runtime_attempts == [2]
-    assert "runtime repair round 1" in gateway.prompts[0]
-    assert "attempt 1 failed" in gateway.prompts[0]
-
-
-@pytest.mark.asyncio
-async def test_global_integration_persists_repairing_state_before_retry_call(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    gateway = _InitialThenErrorGateway(
-        {
-            "status": "integrated",
-            "proposed_patch": {
-                "changed_files": [
-                    {"path": "main.cc", "new_content": "int main() { return 1; }\n"}
-                ]
-            },
-            "issues_fixed": [{"target": "main.cc", "message": "initial integration"}],
-            "errors": [],
-        },
-        error="network interrupted",
-    )
-    persisted_statuses: list[tuple[str, int]] = []
-    original_persist_report = gia._persist_report
-
-    def capture_report(report: dict[str, Any], job_id: str) -> None:
-        persisted_statuses.append(
-            (str(report.get("status")), len(report.get("runtime_gate_attempts", [])))
-        )
-        original_persist_report(report, job_id)
-
-    async def runtime_gate(**kwargs: Any) -> dict[str, Any]:
-        return {
-            "status": "fail",
-            "attempt": int(kwargs["attempt"]),
-            "errors": ["compile failed after initial patch"],
-            "warnings": [],
-            "missing_outputs": ["g4_summary.json"],
-        }
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
-        lambda: gateway,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_database",
-        _database_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._search_web",
-        _empty_evidence,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
-        runtime_gate,
-    )
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent._persist_report",
-        capture_report,
-    )
-
-    _repaired, report = await run_global_integration_agent(
-        _patch(),
-        job_id="global_integration_incremental_persist",
-        module_results={"simulation_core": {}, "runtime_app": {}},
-        runtime_repair_rounds=2,
-    )
-
-    assert report["status"] == "failed"
-    assert ("repairing", 1) in persisted_statuses
-    assert report["runtime_gate_attempts"][0]["errors"] == ["compile failed after initial patch"]
-    persisted_patch = json.loads(
-        (
-            tmp_path
-            / "jobs"
-            / "global_integration_incremental_persist"
-            / STAGE_CODEGEN
-            / "proposed_patch.json"
-        ).read_text(encoding="utf-8")
-    )
-    main_entry = next(f for f in persisted_patch["changed_files"] if f["path"] == "main.cc")
-    assert "return 1" in main_entry["new_content"]
-
-
-@pytest.mark.asyncio
-async def test_global_integration_node_uses_five_runtime_react_rounds(monkeypatch) -> None:
-    captured: dict[str, Any] = {}
-
-    async def fake_run_global_integration_agent(proposed_patch: dict[str, Any], **kwargs: Any):
-        captured.update(kwargs)
-        return proposed_patch, {"status": "passed", "errors": [], "issues_fixed": []}
-
-    monkeypatch.setattr(
-        "agent_core.g4_codegen.global_integration_agent.run_global_integration_agent",
-        fake_run_global_integration_agent,
-    )
-
-    result = await global_integration_agent_node(
-        {
-            "job_id": "node_rounds",
-            "proposed_patch": _patch(),
-            "module_results": {},
-            "module_contracts": {},
-            "module_contexts": {},
-            "interface_contracts": {},
-            "runtime_failure_context": {},
-            "codegen_errors": [],
-        }
-    )
-
-    assert captured["runtime_repair_rounds"] == GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS
-    assert result["global_integration_agent_report"]["status"] == "passed"

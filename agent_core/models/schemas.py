@@ -55,6 +55,13 @@ class ModelCallRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Native OpenAI-style function calling (agentic loops). When ``messages``
+    # is provided it replaces the system/user pair (full multi-turn control).
+    # When ``tools`` is provided the provider may return ``tool_calls`` instead
+    # of plain content.
+    messages: list[dict[str, Any]] | None = None
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: str | dict[str, Any] | None = None
 
 
 class ModelCallResult(BaseModel):
@@ -63,8 +70,10 @@ class ModelCallResult(BaseModel):
     provider: ModelProvider
     model_name: str
     content: str
-    parsed_json: dict[str, Any] | None = None
+    parsed_json: Any | None = None
     reasoning_content: str = ""
     usage: dict[str, Any] = Field(default_factory=dict)
     latency_ms: float | None = None
     error: str | None = None
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    finish_reason: str = ""

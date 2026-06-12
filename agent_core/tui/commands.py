@@ -9,6 +9,7 @@ class CommandParseError(ValueError):
 
 _ALIASES = {
     "?": "help",
+    "approval": "approve",
     "artifact-browser": "artifacts",
     "check-tools": "check",
     "q": "exit",
@@ -26,6 +27,7 @@ _ALIASES = {
 
 _COMMAND_DESCRIPTIONS = {
     "run": "Create and run a simulation task",
+    "approve": "Approve active human confirmation",
     "check": "Inspect Geant4 / TCAD / ngspice",
     "open": "Open artifacts or preview a named output",
     "report": "Generate or preview the active report",

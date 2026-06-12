@@ -36,12 +36,14 @@ async def test_gate_subgraph_receives_visual_review_state(
         {
             "job_id": "job_visual",
             "execution_mode": "strict",
+            "run_mode": "test",
             "visual_review_status": "approved",
             "visual_review_notes": "geometry inspected",
             "visual_review_blocking": True,
         }
     )
 
+    assert captured["run_mode"] == "test"
     assert captured["visual_review_status"] == "approved"
     assert captured["visual_review_notes"] == "geometry inspected"
     assert captured["visual_review_blocking"] is True

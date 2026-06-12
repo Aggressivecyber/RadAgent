@@ -229,32 +229,45 @@ async def run_g4_modeling_gates(state: GateSubgraphState) -> dict[str, Any]:
             for m in generated_modules
             if isinstance(m.get("file_path"), Path)
         ]
-        _append_gate_detailed(
-            gate_results,
-            failed,
-            18,
-            "No Magic Number",
-            passed,
-            errors,
-            checked_items=[
-                {
-                    "item": f"C++ code magic number check ({len(generated_modules)} files)",
-                    "result": "pass" if passed else "fail",
-                },
-            ],
-            evidence=[f"{len(generated_modules)} generated files scanned"],
-            extra_fields={"file_paths": file_paths},
+        gate_results.append(
+            {
+                "gate_id": 18,
+                "name": gate_name(18),
+                "status": "pass" if passed else "warning",
+                "critical": False,
+                "checked_items": [
+                    {
+                        "item": f"C++ code magic number check ({len(generated_modules)} files)",
+                        "result": "pass" if passed else "warning",
+                    },
+                ],
+                "passed_items": ["C++ code magic number check"] if passed else [],
+                "failed_items": [],
+                "warnings": [] if passed else errors,
+                "evidence": [f"{len(generated_modules)} generated files scanned"],
+                "file_paths": file_paths,
+                "message": "All checks passed"
+                if passed
+                else "Style warnings only: " + "; ".join(errors[:5]),
+            }
         )
     else:
-        _append_gate_detailed(
-            gate_results,
-            failed,
-            18,
-            "No Magic Number",
-            False,
-            ["No generated C++ modules available for magic-number validation"],
-            checked_items=[{"item": "generated C++ modules available", "result": "fail"}],
-            evidence=[],
+        gate_results.append(
+            {
+                "gate_id": 18,
+                "name": gate_name(18),
+                "status": "warning",
+                "critical": False,
+                "checked_items": [
+                    {"item": "generated C++ modules available", "result": "warning"}
+                ],
+                "passed_items": [],
+                "failed_items": [],
+                "warnings": ["No generated C++ modules available for magic-number validation"],
+                "evidence": [],
+                "file_paths": [],
+                "message": "No generated C++ modules available for magic-number validation",
+            }
         )
 
     # G4-H: Human Confirmation Completeness

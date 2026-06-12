@@ -56,6 +56,7 @@ class _Theme:
 @dataclass(frozen=True)
 class _TextualModules:
     app: Any
+    binding: Any
     compose_result: Any
     containers: Any
     widgets: Any
@@ -117,7 +118,15 @@ _THEME_ALIASES = {
     "slate": "slate-workstation",
     "mono": "minimal-terminal",
 }
-_OPTION_ROWS = ("language", "theme")
+_OPTION_ROWS = ("language", "theme", "copilot_model", "copilot_window")
+_COMMON_COPILOT_MODELS = (
+    "mimo-v2.5-pro",
+    "mimo-v2.5",
+    "mimo-v2.5-max",
+    "mimo-v2.5-lite",
+)
+_CONTEXT_WINDOW_SEQUENCE = (100_000, 200_000, 500_000, 1_000_000)
+_THINKING_FRAMES = ("[.  ]", "[.. ]", "[...]")
 _COMPOSER_MODES = {
     "ask": "ASK",
     "run": "RUN",
@@ -125,6 +134,23 @@ _COMPOSER_MODES = {
     "inspect": "INSPECT",
     "artifact": "ARTIFACT",
     "config": "CONFIG",
+}
+_CONFIRMATION_APPROVAL_TEXTS = {
+    "ok",
+    "yes",
+    "y",
+    "approve",
+    "approved",
+    "confirm",
+    "confirmed",
+    "start",
+    "go",
+    "确认",
+    "确定",
+    "批准",
+    "同意",
+    "启动",
+    "开始",
 }
 _DEMO_PROFILES = {
     "geant4": "Geant4 detector validation",
@@ -403,11 +429,10 @@ def _css_for_theme(theme: _Theme) -> str:
 
 def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
     """Create the Textual app class after optional dependencies are available."""
-    from textual.binding import Binding
-
     theme = _normalize_theme_name(theme)
     textual = _load_textual()
     textual_app = textual.app
+    binding = textual.binding
     horizontal = textual.containers.Horizontal
     vertical = textual.containers.Vertical
     vertical_scroll = textual.containers.VerticalScroll
@@ -423,20 +448,20 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
         ENABLE_COMMAND_PALETTE = False
         CSS = css
         BINDINGS = [
-            Binding("ctrl+l", "focus_composer", "Input"),
-            Binding("ctrl+p", "show_options", "Options"),
-            Binding("ctrl+i", "toggle_inspector", "Inspect"),
-            Binding("ctrl+t", "show_trace", "Trace"),
-            Binding("ctrl+o", "show_artifacts", "Artifacts"),
-            Binding("up", "history_previous", show=False, priority=True),
-            Binding("down", "history_next", show=False, priority=True),
-            Binding("left", "options_decrement", show=False, priority=True),
-            Binding("right", "options_increment", show=False, priority=True),
-            Binding("enter", "options_apply", show=False, priority=True),
-            Binding("ctrl+r", "show_history", "History"),
-            Binding("escape", "close_inspector", "Close"),
-            Binding("f1", "show_help", "Help"),
-            Binding("ctrl+c", "interrupt_or_quit", "Stop"),
+            binding("ctrl+l", "focus_composer", "Input"),
+            binding("ctrl+p", "show_options", "Options"),
+            binding("ctrl+i", "toggle_inspector", "Inspect"),
+            binding("ctrl+t", "show_trace", "Trace"),
+            binding("ctrl+o", "show_artifacts", "Artifacts"),
+            binding("up", "history_previous", show=False, priority=True),
+            binding("down", "history_next", show=False, priority=True),
+            binding("left", "options_decrement", show=False, priority=True),
+            binding("right", "options_increment", show=False, priority=True),
+            binding("enter", "options_apply", show=False, priority=True),
+            binding("ctrl+r", "show_history", "History"),
+            binding("escape", "close_inspector", "Close"),
+            binding("f1", "show_help", "Help"),
+            binding("ctrl+c", "interrupt_or_quit", "Stop"),
         ]
 
         def __init__(
@@ -452,6 +477,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._operation_worker: Any = None
             self._controller_worker: Any = None
             self._controller_thinking_id = ""
+            self._thinking_frame_index = 0
             self._rows: list[TimelineRow] = []
             self._row_widgets: dict[str, Any] = {}
             self._trace_snippets: list[str] = []
@@ -461,6 +487,11 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._options_selected = 0
             self._options_draft_language = self._language
             self._options_draft_theme = self._theme_name
+            self._options_model_candidates = list(_COMMON_COPILOT_MODELS)
+            self._options_original_copilot_model = _COMMON_COPILOT_MODELS[0]
+            self._options_draft_copilot_model = _COMMON_COPILOT_MODELS[0]
+            self._options_original_copilot_window = 128_000
+            self._options_draft_copilot_window = 128_000
             self._command_history: list[str] = []
             self._history_index: int | None = None
             self._composer_mode = "ASK"
@@ -495,6 +526,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 kind="brand",
             )
             self.run_worker(self._listen_events(), name="radagent-events", exclusive=False)
+            self.set_interval(0.28, self._tick_thinking_rows)
             self.action_focus_composer()
 
         async def _listen_events(self) -> None:
@@ -521,6 +553,13 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
         async def _dispatch_text(self, text: str) -> None:
             self._remember_command_history(text.strip())
             if not text.startswith("/") and text != "?":
+                if (
+                    getattr(self.controller, "pending_brief", None) is None
+                    and self._needs_confirmation()
+                    and _is_confirmation_approval_text(text)
+                ):
+                    self._submit_confirmation_approval()
+                    return
                 if self._composer_mode == "RUN":
                     await self._dispatch_text(f"/run {text}")
                     return
@@ -545,6 +584,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             match command.name:
                 case "chat":
                     self._start_operation(self.service.chat(command.args))
+                case "approve":
+                    self._submit_confirmation_approval()
                 case "run":
                     self._demo_status = None
                     self._start_operation(
@@ -552,6 +593,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                             command.args,
                             run_mode=self.service.execution_mode,
                             auto_continue=True,
+                            briefing_context=_tui_run_briefing_context(command.args),
                         )
                     )
                 case "check" | "inspect":
@@ -591,7 +633,10 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 case "memory":
                     self._show_memory()
                 case "confirm":
-                    self._show_confirmation()
+                    if _is_confirmation_approval_text(command.args):
+                        self._submit_confirmation_approval()
+                    else:
+                        self._show_confirmation()
                 case "credibility":
                     self._show_credibility()
                 case "model":
@@ -718,7 +763,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
 
         async def _run_operation(self, operation: Any) -> None:
             try:
-                await operation
+                result = await operation
+                await self._handle_operation_result(result)
             except Exception as exc:
                 self._add_system_row("Operation failed", str(exc), "error")
             finally:
@@ -726,6 +772,13 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 self._operation_worker = None
                 self._refresh_header()
                 self._refresh_task_context()
+
+        async def _handle_operation_result(self, result: Any) -> None:
+            query = _simulation_briefing_query_from_result(result)
+            if not query:
+                return
+            controller_result = await self.controller.start_simulation_briefing(query)
+            self._apply_controller_result(controller_result, "")
 
         def _add_event_row(self, event: Any) -> None:
             self._remember_trace(getattr(event, "payload", {}))
@@ -756,9 +809,32 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 status="running",
                 title="Copilot",
                 summary=self._t("thinking.analyzing"),
+                payload={"activity_frame": _THINKING_FRAMES[self._thinking_frame_index]},
             )
             self._append_row(row)
             return row.id
+
+        def _tick_thinking_rows(self) -> None:
+            running_rows = [
+                index
+                for index, row in enumerate(self._rows)
+                if row.kind == "thinking" and row.status == "running"
+            ]
+            if not running_rows:
+                return
+            self._thinking_frame_index = (
+                self._thinking_frame_index + 1
+            ) % len(_THINKING_FRAMES)
+            frame = _THINKING_FRAMES[self._thinking_frame_index]
+            for index in running_rows:
+                row = self._rows[index]
+                payload = dict(row.payload)
+                payload["activity_frame"] = frame
+                updated = replace(row, payload=payload)
+                self._rows[index] = updated
+                widget = self._row_widgets.get(row.id)
+                if widget is not None and hasattr(widget, "update"):
+                    widget.update(render_row(updated))
 
         def _finish_thinking_row(
             self,
@@ -1089,6 +1165,34 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             ]
             self._show_panel("Confirmation", lines)
 
+        def _needs_confirmation(self) -> bool:
+            try:
+                status = self.service.get_status()
+            except Exception:
+                return False
+            return bool(
+                status.needs_confirmation
+                or (status.job_id and status.current_phase == "human_confirmation")
+            )
+
+        def _submit_confirmation_approval(self) -> None:
+            if not self._needs_confirmation():
+                self._add_system_row(
+                    "Confirmation",
+                    "No active human confirmation is pending.",
+                    "warning",
+                )
+                return
+            response = {
+                "user_decision": "approve",
+                "edits": [],
+                "user_notes": "Approved from RadAgent TUI.",
+            }
+            self._add_system_row("Confirmation submitted", "approve", "running")
+            self._start_operation(
+                self.service.submit_confirmation(response, auto_continue=True)
+            )
+
         def _show_credibility(self) -> None:
             report = self.service.get_credibility_report()
             if not report:
@@ -1412,8 +1516,36 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._options_selected = 0
             self._options_draft_language = self._language
             self._options_draft_theme = self._theme_name
+            self._load_options_model_config()
             self.refresh_bindings()
             self._render_options_panel()
+
+        def _load_options_model_config(self) -> None:
+            try:
+                config = self.service.get_model_config()
+            except Exception:
+                self._options_model_candidates = list(_COMMON_COPILOT_MODELS)
+                self._options_original_copilot_model = self._options_model_candidates[0]
+                self._options_draft_copilot_model = self._options_model_candidates[0]
+                self._options_original_copilot_window = 128_000
+                self._options_draft_copilot_window = 128_000
+                return
+
+            models = {
+                tier_name: str(getattr(tier, "model_name", "") or "")
+                for tier_name, tier in config.tiers.items()
+            }
+            self._options_model_candidates = _copilot_model_candidates(models)
+            pro = config.tiers.get("pro")
+            pro_model = str(getattr(pro, "model_name", "") or "")
+            if not pro_model:
+                pro_model = self._options_model_candidates[0]
+            self._options_original_copilot_model = pro_model
+            self._options_draft_copilot_model = pro_model
+            self._options_original_copilot_window = int(
+                getattr(pro, "context_window_tokens", 128_000) or 128_000
+            )
+            self._options_draft_copilot_window = self._options_original_copilot_window
 
         def _render_options_panel(self) -> None:
             lines = [
@@ -1427,9 +1559,27 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     self._t("options.theme"),
                     f"{self._options_draft_theme}  ({' | '.join(_THEME_NAMES)})",
                 ),
+                self._option_line(
+                    2,
+                    "Copilot Model",
+                    (
+                        f"{self._options_draft_copilot_model}  "
+                        f"({' | '.join(self._options_model_candidates)})"
+                    ),
+                ),
+                self._option_line(
+                    3,
+                    "Copilot Window",
+                    (
+                        f"{_format_context_window(self._options_draft_copilot_window)}  "
+                        f"({_context_window_option_labels()})"
+                    ),
+                ),
                 "",
                 self._t("options.controls"),
                 self._t("options.context_window"),
+                "",
+                *_model_config_help_lines(),
                 "",
                 self._t("options.ctrl_o"),
                 self._t("options.jobs"),
@@ -1454,6 +1604,17 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             elif option == "theme":
                 index = _THEME_NAMES.index(self._options_draft_theme)
                 self._options_draft_theme = _THEME_NAMES[(index + delta) % len(_THEME_NAMES)]
+            elif option == "copilot_model":
+                self._options_draft_copilot_model = _cycle_string_option(
+                    self._options_draft_copilot_model,
+                    self._options_model_candidates,
+                    delta,
+                )
+            elif option == "copilot_window":
+                self._options_draft_copilot_window = _cycle_context_window(
+                    self._options_draft_copilot_window,
+                    delta,
+                )
             self._render_options_panel()
 
         def _apply_options_draft(self) -> None:
@@ -1466,6 +1627,25 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             if self._theme_name != self._options_draft_theme:
                 self._apply_theme(self._options_draft_theme)
                 updates.append(self._theme_name)
+            model_update: dict[str, Any] = {}
+            if self._options_original_copilot_model != self._options_draft_copilot_model:
+                model_update["pro_model"] = self._options_draft_copilot_model
+            if self._options_original_copilot_window != self._options_draft_copilot_window:
+                model_update["pro_context_window_tokens"] = (
+                    self._options_draft_copilot_window
+                )
+            if model_update:
+                try:
+                    self.service.update_model_config(model_update)
+                except Exception as exc:
+                    self._add_system_row("Model config failed", str(exc), "error")
+                    return
+                if "pro_model" in model_update:
+                    updates.append(f"Copilot {self._options_draft_copilot_model}")
+                if "pro_context_window_tokens" in model_update:
+                    updates.append(
+                        f"Window {_format_context_window(self._options_draft_copilot_window)}"
+                    )
             self._options_open = False
             self.refresh_bindings()
             self.query_one("#inspector", static).remove_class("visible")
@@ -1704,6 +1884,104 @@ def _parse_model_config_args(args: str) -> dict[str, Any]:
     return parsed
 
 
+def _copilot_model_candidates(current_models: dict[str, str]) -> list[str]:
+    candidates: list[str] = []
+    for tier_name in ("pro", "lite", "max"):
+        value = str(current_models.get(tier_name, "") or "").strip()
+        if value and value not in candidates:
+            candidates.append(value)
+    for value in _COMMON_COPILOT_MODELS:
+        if value not in candidates:
+            candidates.append(value)
+    return candidates or list(_COMMON_COPILOT_MODELS)
+
+
+def _cycle_string_option(current: str, options: Sequence[str], delta: int) -> str:
+    values = [str(value) for value in options if str(value)]
+    if not values:
+        return current
+    try:
+        index = values.index(current)
+    except ValueError:
+        return values[0 if delta >= 0 else -1]
+    return values[(index + delta) % len(values)]
+
+
+def _cycle_context_window(current: int, delta: int) -> int:
+    try:
+        value = int(current)
+    except (TypeError, ValueError):
+        value = 0
+    values = list(_CONTEXT_WINDOW_SEQUENCE)
+    try:
+        index = values.index(value)
+    except ValueError:
+        return values[0 if delta >= 0 else -1]
+    return values[(index + delta) % len(values)]
+
+
+def _format_context_window(value: int) -> str:
+    try:
+        tokens = int(value)
+    except (TypeError, ValueError):
+        return "unknown"
+    if tokens <= 0:
+        return "unknown"
+    if tokens % 1_000_000 == 0:
+        return f"{tokens // 1_000_000}m"
+    if tokens % 1000 == 0:
+        return f"{tokens // 1000}k"
+    return str(tokens)
+
+
+def _context_window_option_labels() -> str:
+    return " | ".join(
+        _format_context_window(value) for value in _CONTEXT_WINDOW_SEQUENCE
+    )
+
+
+def _model_config_help_lines() -> list[str]:
+    return [
+        "Model",
+        "set: /model url=<base_url> key=<api_key> lite=<model> pro=<model> max=<model>",
+        "tune: /model lite_tokens=<n> pro_tokens=<n> max_tokens=<n>",
+        "ctx: /model lite_window=100k pro_window=500k max_window=1m",
+        "time: /model lite_timeout=<s> pro_timeout=<s> max_timeout=<s>",
+    ]
+
+
+def _is_confirmation_approval_text(text: str) -> bool:
+    return text.strip().lower() in _CONFIRMATION_APPROVAL_TEXTS
+
+
+def _tui_run_briefing_context(query: str) -> dict[str, Any]:
+    return {
+        "status": "approved",
+        "understanding": "TUI run command was explicitly submitted.",
+        "final_query": query,
+        "approval_request": {
+            "requires_human_approval": True,
+            "summary": "Approved from RadAgent TUI.",
+        },
+    }
+
+
+def _simulation_briefing_query_from_result(result: Any) -> str:
+    commands = getattr(result, "commands", [])
+    if not isinstance(commands, list):
+        return ""
+    for command in commands:
+        if not isinstance(command, dict):
+            continue
+        if command.get("name") != "start_simulation_briefing":
+            continue
+        args = command.get("args")
+        if not isinstance(args, dict):
+            return ""
+        return str(args.get("query", "")).strip()
+    return ""
+
+
 _CONTEXT_WINDOW_OPTIONS = {
     "100k": 100_000,
     "200k": 200_000,
@@ -1735,12 +2013,14 @@ def _load_textual() -> _TextualModules:
     try:
         from textual import containers, widgets
         from textual.app import App, ComposeResult
+        from textual.binding import Binding
     except ModuleNotFoundError as exc:
         if exc.name == "textual":
             raise TextualNotInstalledError from exc
         raise
     return _TextualModules(
         app=App,
+        binding=Binding,
         compose_result=ComposeResult,
         containers=containers,
         widgets=widgets,

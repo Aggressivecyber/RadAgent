@@ -6,6 +6,7 @@ detectors and component roles.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -21,6 +22,7 @@ async def scoring_design_node(state: RadiationAgentState) -> dict[str, Any]:
     Writes: g4_model_ir.scoring
     """
     model_ir_dict = state.get("g4_model_ir", {})
+    task_spec = state.get("task_spec", {})
 
     from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
     from agent_core.g4_modeling.schemas.scoring_spec import (
@@ -30,6 +32,7 @@ async def scoring_design_node(state: RadiationAgentState) -> dict[str, Any]:
     )
 
     model_ir = G4ModelIR.model_validate(model_ir_dict)
+    requested = _requested_scoring_outputs(task_spec, model_ir.evidence)
 
     scoring: list[ScoringSpec] = []
 
@@ -58,8 +61,8 @@ async def scoring_design_node(state: RadiationAgentState) -> dict[str, Any]:
             )
             scoring.append(edep_scoring)
 
-            # Region scoring for dose (if component has dose role)
-            if "dose_scoring_region" in comp.roles:
+            # Region scoring for dose when requested or implied by component roles.
+            if _component_requests_dose(comp) or requested["dose_region"] or requested["dose_3d"]:
                 dose_scoring = ScoringSpec(
                     scoring_id=f"{comp_id}_dose",
                     scoring_type="region",
@@ -77,31 +80,48 @@ async def scoring_design_node(state: RadiationAgentState) -> dict[str, Any]:
                 )
                 scoring.append(dose_scoring)
 
-    # 2. Voxel scoring for 3D dose maps (if component has 3d_dose_map role)
+    # 2. Voxel scoring for requested 3D maps. Requests can come from normalized
+    # task outputs, requirement evidence, or component roles.
     for comp in model_ir.components:
-        if "3d_dose_map" in comp.roles:
-            dims = comp.dimensions
-            dx = dims.get("dx", 100.0)
-            dy = dims.get("dy", 100.0)
-            dz = dims.get("dz", 100.0)
+        wants_voxel_edep = _component_requests_voxel_edep(comp) or (
+            requested["edep_3d"] and _is_scoring_target(comp)
+        )
+        wants_voxel_dose = _component_requests_voxel_dose(comp) or (
+            requested["dose_3d"] and _is_scoring_target(comp)
+        )
+        if not wants_voxel_edep and not wants_voxel_dose:
+            continue
 
-            # Voxel size: ~1/10 of each dimension, at least 1 um
-            voxel_dx = max(1.0, round(dx / 10.0, 1))
-            voxel_dy = max(1.0, round(dy / 10.0, 1))
-            voxel_dz = max(1.0, round(dz / 10.0, 1))
-
+        voxel_size = _voxel_size_for_component(comp)
+        if wants_voxel_dose:
             voxel_scoring = ScoringSpec(
                 scoring_id=f"{comp.component_id}_voxel_dose",
                 scoring_type="voxel",
                 quantities=["dose_Gy"],
                 voxel_grid=VoxelGrid(
                     target_component_id=comp.component_id,
-                    voxel_size=[voxel_dx, voxel_dy, voxel_dz],
+                    voxel_size=voxel_size,
                 ),
                 output_format="csv",
                 source_evidence=[
                     f"Auto-generated: voxel dose map for {comp.component_id}, "
-                    f"voxel_size=[{voxel_dx}, {voxel_dy}, {voxel_dz}] um",
+                    f"voxel_size={voxel_size} um",
+                ],
+            )
+            scoring.append(voxel_scoring)
+        if wants_voxel_edep:
+            voxel_scoring = ScoringSpec(
+                scoring_id=f"{comp.component_id}_voxel_edep",
+                scoring_type="voxel",
+                quantities=["edep_MeV"],
+                voxel_grid=VoxelGrid(
+                    target_component_id=comp.component_id,
+                    voxel_size=voxel_size,
+                ),
+                output_format="csv",
+                source_evidence=[
+                    f"Auto-generated: voxel edep map for {comp.component_id}, "
+                    f"voxel_size={voxel_size} um",
                 ],
             )
             scoring.append(voxel_scoring)
@@ -145,3 +165,154 @@ async def scoring_design_node(state: RadiationAgentState) -> dict[str, Any]:
         "g4_model_ir": model_ir.model_dump(mode="json"),
         "current_node": "scoring_design_node",
     }
+
+
+def _voxel_size_for_component(comp: Any) -> list[float]:
+    dims = comp.dimensions
+    dx = dims.get("dx", 100.0)
+    dy = dims.get("dy", 100.0)
+    dz = dims.get("dz", 100.0)
+
+    # Voxel size: about 1/10 of each dimension, at least 1 um.
+    return [
+        max(1.0, round(dx / 10.0, 1)),
+        max(1.0, round(dy / 10.0, 1)),
+        max(1.0, round(dz / 10.0, 1)),
+    ]
+
+
+def _requested_scoring_outputs(task_spec: dict[str, Any], evidence: Any) -> dict[str, bool]:
+    outputs = _collect_output_tokens(task_spec, evidence)
+    return {
+        "edep_region": _has_any(
+            outputs,
+            {
+                "edep",
+                "energy_deposition",
+                "energy_deposition_per_event",
+                "total_energy_deposition",
+            },
+        ),
+        "edep_3d": _has_any(
+            outputs,
+            {
+                "edep_3d",
+                "3d_edep",
+                "3d_edep_map",
+                "edep_map",
+                "voxel_edep",
+                "energy_deposition_map",
+                "energy_deposition_3d_map",
+                "3d_energy_deposition",
+            },
+        ),
+        "dose_region": _has_any(outputs, {"dose", "dose_gy", "dose_region"}),
+        "dose_3d": _has_any(
+            outputs,
+            {
+                "dose_3d",
+                "3d_dose",
+                "3d_dose_map",
+                "dose_map",
+                "voxel_dose",
+                "dose_distribution",
+                "dose_distribution_3d",
+                "3d_dose_distribution",
+            },
+        ),
+        "event_table": _has_any(
+            outputs,
+            {"event_table", "event_data", "events", "per_event", "energy_deposition_per_event"},
+        ),
+    }
+
+
+def _collect_output_tokens(task_spec: dict[str, Any], evidence: Any) -> set[str]:
+    raw_values: list[Any] = []
+    outputs = task_spec.get("outputs") if isinstance(task_spec, dict) else None
+    if isinstance(outputs, list):
+        raw_values.extend(outputs)
+
+    scoring_evidence = getattr(evidence, "scoring", None)
+    for item in scoring_evidence or []:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        if isinstance(text, str):
+            try:
+                decoded = json.loads(text)
+            except json.JSONDecodeError:
+                raw_values.append(text)
+            else:
+                raw_values.append(decoded)
+        else:
+            raw_values.append(text)
+
+    tokens: set[str] = set()
+    for value in raw_values:
+        for token in _flatten_output_value(value):
+            normalized = _normalize_output_token(token)
+            if normalized:
+                tokens.add(normalized)
+    return tokens
+
+
+def _flatten_output_value(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        tokens: list[str] = []
+        for item in value:
+            tokens.extend(_flatten_output_value(item))
+        return tokens
+    if isinstance(value, dict):
+        tokens = []
+        for key, item in value.items():
+            tokens.append(str(key))
+            tokens.extend(_flatten_output_value(item))
+        return tokens
+    return [str(value)]
+
+
+def _normalize_output_token(value: str) -> str:
+    return (
+        value.strip()
+        .lower()
+        .replace("-", "_")
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace(".csv", "")
+    )
+
+
+def _has_any(outputs: set[str], aliases: set[str]) -> bool:
+    return any(alias in outputs for alias in aliases)
+
+
+def _role_text(comp: Any) -> str:
+    return " ".join(str(role).lower() for role in getattr(comp, "roles", []) or [])
+
+
+def _component_requests_dose(comp: Any) -> bool:
+    return "dose" in _role_text(comp)
+
+
+def _component_requests_voxel_edep(comp: Any) -> bool:
+    role_text = _role_text(comp)
+    return "3d_edep" in role_text or "voxel_edep" in role_text
+
+
+def _component_requests_voxel_dose(comp: Any) -> bool:
+    role_text = _role_text(comp)
+    return "3d_dose" in role_text or "voxel_dose" in role_text
+
+
+def _is_scoring_target(comp: Any) -> bool:
+    if getattr(comp, "component_type", "") == "world":
+        return False
+    if bool(getattr(comp, "sensitive", False)):
+        return True
+    role_text = _role_text(comp)
+    return any(token in role_text for token in ("scoring", "detector", "target", "sensitive"))

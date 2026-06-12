@@ -163,14 +163,27 @@ def _module_context_keywords(module_name: str) -> set[str]:
 
 def _extract_ir_subset(module_name: str, g4_model_ir: dict[str, Any]) -> dict[str, Any]:
     """Extract relevant subset of G4ModelIR for a module."""
+    global_units = _normalize_global_units(g4_model_ir.get("global_units"))
+    coordinate_system = _normalize_coordinate_system(
+        g4_model_ir.get("coordinate_system"),
+        global_units=global_units,
+    )
     subset: dict[str, Any] = {
         "model_ir_id": g4_model_ir.get("model_ir_id", ""),
         "job_id": g4_model_ir.get("job_id", ""),
         "modeling_mode": g4_model_ir.get("modeling_mode", "realistic"),
+        "target_system": g4_model_ir.get("target_system", ""),
+        "global_units": global_units,
+        "coordinate_system": coordinate_system,
+        "unit_contract": _build_unit_contract(
+            global_units=global_units,
+            coordinate_system=coordinate_system,
+        ),
     }
 
     if module_name == "simulation_core":
         subset["components"] = g4_model_ir.get("components", [])
+        subset["interfaces"] = g4_model_ir.get("interfaces", [])
         subset["materials"] = g4_model_ir.get("materials", [])
         subset["scoring"] = g4_model_ir.get("scoring", [])
         subset["sensitive_detectors"] = g4_model_ir.get("sensitive_detectors", [])
@@ -190,10 +203,93 @@ def _extract_ir_subset(module_name: str, g4_model_ir: dict[str, Any]) -> dict[st
     return subset
 
 
+def _normalize_global_units(raw_units: Any) -> dict[str, str]:
+    units = {
+        "length": "um",
+        "energy": "MeV",
+        "dose": "Gy",
+        "time": "s",
+    }
+    data = _as_mapping(raw_units)
+    for key in units:
+        value = data.get(key)
+        if value:
+            units[key] = str(value)
+    return units
+
+
+def _normalize_coordinate_system(
+    raw_coordinate_system: Any,
+    *,
+    global_units: dict[str, str],
+) -> dict[str, Any]:
+    coordinate_system: dict[str, Any] = {
+        "system": "cartesian",
+        "origin_definition": "world_center",
+        "axis_definition": {
+            "x": "sensor_width",
+            "y": "sensor_length",
+            "z": "beam_direction",
+        },
+        "unit": global_units["length"],
+    }
+    data = _as_mapping(raw_coordinate_system)
+    for key in ("system", "origin_definition", "axis_definition", "unit"):
+        value = data.get(key)
+        if value:
+            coordinate_system[key] = value
+    if not coordinate_system.get("unit"):
+        coordinate_system["unit"] = global_units["length"]
+    return coordinate_system
+
+
+def _build_unit_contract(
+    *,
+    global_units: dict[str, str],
+    coordinate_system: dict[str, Any],
+) -> dict[str, str]:
+    length_unit = global_units["length"]
+    coordinate_unit = str(coordinate_system.get("unit") or length_unit)
+    return {
+        "length_unit": length_unit,
+        "coordinate_unit": coordinate_unit,
+        "energy_unit": global_units["energy"],
+        "dose_unit": global_units["dose"],
+        "time_unit": global_units["time"],
+        "dimension_semantics": (
+            "Component dimensions are full physical lengths in global_units.length "
+            "unless a key is explicitly named half_x, half_y, or half_z."
+        ),
+        "box_dimension_rule": (
+            "For G4Box, dx/dy/dz are full lengths; pass (dx/2), (dy/2), "
+            f"and (dz/2) multiplied by the Geant4 unit constant {length_unit}."
+        ),
+        "placement_rule": (
+            "Placement position coordinates are translations in coordinate_system.unit; "
+            f"multiply x/y/z by the Geant4 unit constant {coordinate_unit}."
+        ),
+        "voxel_rule": (
+            "Voxel grid sizes are full bin dimensions in global_units.length; "
+            f"use the Geant4 unit constant {length_unit}."
+        ),
+        "unit_source": "g4_model_ir.global_units and g4_model_ir.coordinate_system",
+    }
+
+
+def _as_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        data = value.model_dump(mode="json")
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
 def _get_geant4_api_rules(module_name: str) -> list[str]:
     """Get Geant4 API rules relevant to a module."""
     common_rules = [
         "使用 G4SystemOfUnits.hh 中的单位常量",
+        "ModuleContext.g4_model_ir_subset.unit_contract 是单位、尺寸和位置语义的唯一准则；不得默认使用 mm",
         "不要实例化抽象基类",
         "使用 G4NistManager 获取 NIST 材料",
         "LogicalVolume 必须有 Material",
@@ -204,8 +300,8 @@ def _get_geant4_api_rules(module_name: str) -> list[str]:
         "simulation_core": [
             "材料、几何、放置、SensitiveDetector、Hit 和 ScoringManager 必须在同一接口模型下生成",
             "不得把 unsupported geometry 简化成 G4Box；如无法建模必须显式暴露 unsupported feature",
-            "box dimensions 中 dx/dy/dz 表示全长；构造 G4Box 时使用 half-length 并乘以全局长度单位",
-            "placement position 坐标不要缩放；按 IR 数值乘以全局长度单位",
+            "box dimensions 中 dx/dy/dz 表示全长；构造 G4Box 时使用 half-length 并乘以 unit_contract.length_unit",
+            "placement position 坐标不要缩放；按 IR 数值乘以 unit_contract.coordinate_unit",
             "SensitiveDetector 必须注册到 G4SDManager，并在 geometry 初始化时 "
             "attach 到真实 logical volume",
             "dose_Gy 必须基于真实能量沉积和质量/体积/密度关系，不能写固定占位值",

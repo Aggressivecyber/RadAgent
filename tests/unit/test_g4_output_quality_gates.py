@@ -124,12 +124,12 @@ async def test_base_gates_reject_non_numeric_physics_outputs(
 
 
 @pytest.mark.asyncio
-async def test_base_gates_run_1000_event_self_check(
+async def test_base_gates_run_ir_event_count_self_check(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
-    job_id = "quality_gate_1000"
+    job_id = "quality_gate_ir_events"
     code_dir = tmp_path / "generated_code"
     (code_dir / "src").mkdir(parents=True)
     (code_dir / "include").mkdir()
@@ -198,7 +198,7 @@ async def test_base_gates_run_1000_event_self_check(
             "run_mode": "strict",
             "context_decision": "allow_rag",
             "task_spec": {"simulation_scope": ["geant4"]},
-            "g4_model_ir": {},
+            "g4_model_ir": {"sources": [{"events": 5}]},
             "generated_code_dir": str(code_dir),
             "visual_review_status": "approved",
             "gate_results": [],
@@ -208,10 +208,10 @@ async def test_base_gates_run_1000_event_self_check(
     )
 
     gates = {gate["gate_id"]: gate for gate in result["gate_results"]}
-    assert seen["events"] == 1000
+    assert seen["events"] == 5
     assert gates[6]["status"] == "pass"
     assert gates[9]["checked_items"] == [
-        {"item": "smoke simulation (1000 events)", "result": "pass"}
+        {"item": "smoke simulation (5 events)", "result": "pass"}
     ]
 
 
@@ -251,3 +251,28 @@ async def test_base_gates_block_until_g4_visual_review_is_approved(
     )
     approved_gates = {gate["gate_id"]: gate for gate in approved["gate_results"]}
     assert approved_gates[21]["status"] == "pass"
+
+
+async def test_visual_review_gate_auto_approves_in_test_mode(
+    tmp_path: Path,
+) -> None:
+    code_dir = tmp_path / "generated_code"
+    code_dir.mkdir()
+    (code_dir / "CMakeLists.txt").write_text(
+        "find_package(Geant4 REQUIRED ui_all vis_all)\nadd_executable(sim main.cc)\n",
+        encoding="utf-8",
+    )
+
+    result = await run_visual_review_gate(
+        {
+            "run_mode": "test",
+            "task_spec": {"simulation_scope": ["geant4"]},
+            "generated_code_dir": str(code_dir),
+            "gate_results": [],
+            "failed_gates": [],
+        }
+    )
+
+    gates = {gate["gate_id"]: gate for gate in result["gate_results"]}
+    assert gates[21]["status"] == "pass"
+    assert result["failed_gates"] == []

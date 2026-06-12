@@ -73,11 +73,36 @@ def _source_particles(task_spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Return source component dicts, preserving backwards-compatible particle input."""
     composite = task_spec.get("particles")
     if isinstance(composite, list) and composite:
-        return [item for item in composite if isinstance(item, dict)] or [{}]
+        particles = [item for item in composite if isinstance(item, dict)] or [{}]
+        return [
+            _normalize_particle_from_task_spec(item, task_spec)
+            for item in particles
+        ]
     particle = task_spec.get("particle")
     if isinstance(particle, dict) and particle:
-        return [particle]
-    return [{}]
+        return [_normalize_particle_from_task_spec(particle, task_spec)]
+    return [_normalize_particle_from_task_spec({}, task_spec)]
+
+
+def _normalize_particle_from_task_spec(
+    particle: dict[str, Any],
+    task_spec: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge legacy top-level planning fields into a source particle dict."""
+    normalized = dict(particle)
+    energy = task_spec.get("energy")
+    if "energy_MeV" not in normalized and isinstance(energy, dict):
+        value = energy.get("value")
+        if value is not None:
+            normalized["energy_MeV"] = value
+        unit = energy.get("unit")
+        if unit is not None and "energy_unit" not in normalized:
+            normalized["energy_unit"] = unit
+    if "events" not in normalized and task_spec.get("events") is not None:
+        normalized["events"] = task_spec.get("events")
+    if "direction" not in normalized:
+        normalized["direction"] = [0.0, 0.0, 1.0]
+    return normalized
 
 
 def _default_source_z_offset(model_ir: Any) -> float:

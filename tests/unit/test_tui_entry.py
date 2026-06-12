@@ -1,6 +1,27 @@
 from __future__ import annotations
 
 
+def test_tui_main_reports_missing_textual_dependency(monkeypatch, capsys) -> None:
+    import builtins
+
+    from agent_core.tui.app import main
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "textual" or name.startswith("textual."):
+            raise ModuleNotFoundError("No module named 'textual'", name="textual")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    assert main(["--mode", "test"]) == 1
+
+    error = capsys.readouterr().err
+    assert "requires the optional Textual dependency" in error
+    assert "pip install -e '.[tui]'" in error
+
+
 def test_tui_package_imports_without_textual_runtime() -> None:
     import agent_core.tui as tui
     import agent_core.tui.app as app
@@ -88,3 +109,35 @@ def test_tui_model_config_arg_parser_treats_bare_custom_window_as_k_units() -> N
     parsed = _parse_model_config_args("max_window=750")
 
     assert parsed == {"max_context_window_tokens": 750_000}
+
+
+def test_tui_options_model_config_help_lines_are_discoverable() -> None:
+    from agent_core.tui.app import _model_config_help_lines
+
+    lines = _model_config_help_lines()
+    text = "\n".join(lines)
+
+    assert "Model" in text
+    assert "/model url=" in text
+    assert "lite=" in text
+    assert "pro=" in text
+    assert "max_window=" in text
+
+
+def test_tui_extracts_simulation_briefing_query_from_copilot_result() -> None:
+    from types import SimpleNamespace
+
+    from agent_core.tui.app import _simulation_briefing_query_from_result
+
+    result = SimpleNamespace(
+        commands=[
+            {
+                "name": "start_simulation_briefing",
+                "args": {"query": "建立一个 Geant4 质子束仿真"},
+                "risk": "write",
+                "status": "pending_confirmation",
+            }
+        ]
+    )
+
+    assert _simulation_briefing_query_from_result(result) == "建立一个 Geant4 质子束仿真"

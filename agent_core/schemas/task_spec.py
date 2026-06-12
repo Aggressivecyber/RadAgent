@@ -19,6 +19,10 @@ class SimulationScope(StrEnum):
 class ParticleSpec(BaseModel):
     """Particle source specification."""
 
+    pdg_code: int | None = Field(
+        default=None,
+        description="Optional PDG particle code retained from lightweight task planning",
+    )
     source_id: str | None = Field(
         default=None,
         description="Optional unique source identifier for composite radiation fields",
@@ -104,6 +108,13 @@ class TargetSpec(BaseModel):
         default="box",
         description="Geometry primitive: box, sphere, cylinder",
     )
+
+
+class RequestedEnergySpec(BaseModel):
+    """Top-level energy summary retained for legacy planning consumers."""
+
+    value: float = Field(gt=0, description="Energy value")
+    unit: Literal["MeV", "keV", "GeV", "eV"] = Field(default="MeV")
 
 
 class DeviceSpec(BaseModel):
@@ -295,6 +306,27 @@ class TaskSpec(BaseModel):
     simulation_scope: list[SimulationScope] = Field(
         min_length=1,
         description="Simulation domains to execute",
+    )
+    job_id: str | None = Field(
+        default=None,
+        description="Optional job identifier written by the planning stage",
+    )
+    user_query: str | None = Field(
+        default=None,
+        description="Original user request retained for traceability",
+    )
+    energy: RequestedEnergySpec | None = Field(
+        default=None,
+        description="Top-level source energy summary for legacy consumers",
+    )
+    events: int | None = Field(
+        default=None,
+        gt=0,
+        description="Top-level event count summary for legacy consumers",
+    )
+    modeling_mode: Literal["simple", "realistic"] | None = Field(
+        default=None,
+        description="Requested modeling rigor",
     )
     particle: ParticleSpec | None = Field(
         default=None,

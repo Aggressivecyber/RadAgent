@@ -11,6 +11,53 @@ SELF_CHECK_EVENTS = 1000
 VISUAL_WORKBENCH_EVENTS = 100
 
 
+def resolve_self_check_events(
+    *,
+    g4_model_ir: dict[str, Any] | None = None,
+    task_spec: dict[str, Any] | None = None,
+    default: int = SELF_CHECK_EVENTS,
+) -> int:
+    """Resolve the runtime self-check event count from the simulation contract."""
+    source_events: list[int] = []
+    sources = _mapping_get(g4_model_ir, "sources")
+    if isinstance(sources, list):
+        for source in sources:
+            value = _positive_int(_mapping_get(source, "events"))
+            if value is not None:
+                source_events.append(value)
+    if source_events:
+        return sum(source_events)
+
+    for key in ("events", "n_events", "num_events"):
+        value = _positive_int(_mapping_get(task_spec, key))
+        if value is not None:
+            return value
+
+    run_plan = _mapping_get(task_spec, "run_plan")
+    for key in ("validation_events", "production_events", "events"):
+        value = _positive_int(_mapping_get(run_plan, key))
+        if value is not None:
+            return value
+
+    return max(1, int(default))
+
+
+def _mapping_get(value: Any, key: str) -> Any:
+    if isinstance(value, dict):
+        return value.get(key)
+    return getattr(value, key, None) if value is not None else None
+
+
+def _positive_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
 def prepare_self_check_macro(
     project_dir: str | Path,
     *,

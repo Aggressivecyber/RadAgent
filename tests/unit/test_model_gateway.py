@@ -178,6 +178,27 @@ class TestModelGateway:
         assert result.parsed_json == {"key": "value"}
 
     @pytest.mark.asyncio
+    async def test_call_json_parse_array(self) -> None:
+        """Gateway should preserve JSON arrays in parsed_json."""
+        gw = get_model_gateway()
+
+        json_content = '[{"component_id": "world"}]'
+        with patch(
+            "agent_core.models.gateway.call_openai_compatible_model",
+            new_callable=AsyncMock,
+            return_value=(json_content, {}),
+        ):
+            result = await gw.call(
+                task=ModelTask.INTENT_ROUTING,
+                system_prompt="test",
+                user_prompt="hello",
+                response_format="json",
+            )
+
+        assert result.error is None
+        assert result.parsed_json == [{"component_id": "world"}]
+
+    @pytest.mark.asyncio
     async def test_gateway_applies_default_thinking_by_task(self) -> None:
         """Gateway should add MiMo thinking metadata when callers omit it."""
         gw = get_model_gateway()

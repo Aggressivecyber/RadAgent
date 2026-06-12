@@ -51,6 +51,13 @@ _STANDARD_WORKFLOW = (
     ("run_tools", "Run checks / tools", ("gate", "artifact")),
     ("generate_report", "Generate report", ("report",)),
 )
+_STARTUP_TASK_PLAN = (
+    "Use lite LLM for briefing and modeling extraction.",
+    "Generate Geant4 modules with agentic read/write/edit tools.",
+    "Repair only from build_project and run_smoke feedback.",
+    "Accept completion only after build, smoke, gate, artifact, report.",
+    "Record handoff notes in radagent-tui-e2e-testing.md.",
+)
 
 
 def event_to_row(event: RadAgentEvent) -> TimelineRow:
@@ -107,7 +114,9 @@ def render_row(row: TimelineRow) -> str:
     if row.kind == "assistant_message":
         return f"{role:<7} {row.title}"
     if row.kind == "thinking":
-        return f"{role:<7} {marker:<4} {row.summary}"
+        frame = str(row.payload.get("activity_frame") or "").strip()
+        activity = f"{frame} {row.summary}" if frame else row.summary
+        return f"{role:<7} {marker:<4} {activity}"
     summary = f"  {row.summary}" if row.summary else ""
     return f"{role:<7} {marker:<4} {row.title}{summary}"
 
@@ -194,6 +203,9 @@ def render_startup_status(status: Any) -> str:
         )
     lines.extend(
         [
+            "",
+            "Task Plan",
+            *[f"{index}. {item}" for index, item in enumerate(_STARTUP_TASK_PLAN, start=1)],
             "",
             "System Log",
             "[OK]      Workspace initialized",

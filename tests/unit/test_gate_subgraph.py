@@ -339,7 +339,12 @@ class TestRunG4ModelingGates:
             "gate_results": [],
             "failed_gates": [],
             "g4_model_ir": model_ir.model_dump(mode="json"),
-            "code_modules": [],
+            "code_modules": [
+                {
+                    "module_id": "src/StyleOnly.cc",
+                    "code": 'auto box = new G4Box("b", 42.5, 42.5, 42.5);',
+                }
+            ],
         }
 
         result = await run_g4_modeling_gates(state)
@@ -349,3 +354,6 @@ class TestRunG4ModelingGates:
         # Must have G4-A through G4-H (12-19)
         for gid in range(12, 20):
             assert gid in g4_gate_ids, f"Missing G4 gate {gid}"
+        gate18 = [g for g in gate_results if g["gate_id"] == 18][0]
+        assert gate18["status"] == "warning"
+        assert _gate_name(18) not in result["failed_gates"]

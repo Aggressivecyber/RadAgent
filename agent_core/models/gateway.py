@@ -40,6 +40,9 @@ class ModelGateway:
         temperature: float | None = None,
         max_tokens: int | None = None,
         metadata: dict[str, Any] | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> ModelCallResult:
         selected_tier = tier or tier_for_task(task)
         profile = self.profiles[selected_tier]
@@ -55,6 +58,9 @@ class ModelGateway:
             temperature=temperature,
             max_tokens=max_tokens,
             metadata=request_metadata,
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
         )
 
         start = time.time()
@@ -78,6 +84,24 @@ class ModelGateway:
                 parsed_json = mock_result.parsed_json
                 usage = {"mock": True}
                 reasoning_content = ""
+                tool_calls: list[dict[str, Any]] = []
+                finish_reason = "stop"
+            elif profile.provider == ModelProvider.OPENAI_COMPATIBLE and req.tools:
+                from agent_core.models.client import call_openai_compatible_tools
+
+                if _model_timeouts_enabled():
+                    tools_result = await asyncio.wait_for(
+                        call_openai_compatible_tools(profile, req),
+                        timeout=_provider_call_deadline_s(profile),
+                    )
+                else:
+                    tools_result = await call_openai_compatible_tools(profile, req)
+                content = tools_result["content"]
+                usage = tools_result["usage"]
+                reasoning_content = tools_result["reasoning_content"]
+                tool_calls = tools_result["tool_calls"]
+                finish_reason = tools_result["finish_reason"]
+                parsed_json = None
             elif profile.provider == ModelProvider.OPENAI_COMPATIBLE:
                 if _model_timeouts_enabled():
                     provider_result = await asyncio.wait_for(
@@ -92,6 +116,8 @@ class ModelGateway:
                 parsed_json = None
                 if response_format == "json":
                     parsed_json = _safe_parse_json(content)
+                tool_calls = []
+                finish_reason = "stop"
             else:
                 raise NotImplementedError(f"Unsupported provider: {profile.provider}")
 
@@ -105,6 +131,8 @@ class ModelGateway:
                 reasoning_content=reasoning_content,
                 usage=usage,
                 latency_ms=(time.time() - start) * 1000,
+                tool_calls=tool_calls,
+                finish_reason=finish_reason,
             )
         except TimeoutError:
             result = ModelCallResult(
@@ -285,6 +313,9 @@ class ModelGateway:
                     "max_tokens": req.max_tokens,
                     "system_prompt": req.system_prompt,
                     "user_prompt": req.user_prompt,
+                    "messages": req.messages,
+                    "tools": req.tools,
+                    "tool_choice": req.tool_choice,
                 },
             }
             if result is not None:
@@ -295,6 +326,8 @@ class ModelGateway:
                     "content": result.content,
                     "parsed_json": result.parsed_json,
                     "reasoning_content": result.reasoning_content,
+                    "tool_calls": result.tool_calls,
+                    "finish_reason": result.finish_reason,
                 }
             path.write_text(
                 json.dumps(sanitize(payload, max_string=500000), indent=2, ensure_ascii=False),

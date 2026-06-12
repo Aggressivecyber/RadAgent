@@ -51,8 +51,19 @@ async def model_scope_guard_node(state: RadiationAgentState) -> dict[str, Any]:
 
         # Check evidence decision
         if evidence.evidence_decision == "block_no_context":
-            action = "block"
-            missing_dimensions.extend(["all — context blocked"])
+            critical = {"geometry", "materials", "source"}
+            missing_critical = [
+                dim for dim in critical if not dim_checks.get(dim)
+            ]
+            if missing_critical:
+                action = "block"
+                missing_dimensions.extend(["all — context blocked"])
+            else:
+                action = "proceed_with_warnings"
+                warnings.append(
+                    "external context unavailable; proceeding with explicit user "
+                    "requirements for geometry, materials, and source"
+                )
     else:
         missing_dimensions.append("all — no evidence pack")
         action = "block"

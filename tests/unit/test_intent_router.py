@@ -136,6 +136,35 @@ class TestClassifyIntentWithLiteModel:
         assert result.requires_simulation_pipeline is True
 
     @pytest.mark.asyncio
+    async def test_physics_task_description_is_corrected_to_simulation_work(self) -> None:
+        query = (
+            "一个外部质子束从器件前方沿 z 方向入射，穿过薄入口窗和氧化层后进入"
+            "硅探测器主体，用于观察粒子在器件封装结构中的传播轨迹和能量沉积；"
+        )
+        mock_result = _mock_result(
+            {
+                "intent": "chat",
+                "intent_detail": "general_question",
+                "confidence": 0.85,
+                "routing_reason": "model treated this as a descriptive technical question",
+                "normalized_user_query": query,
+                "requires_job": False,
+                "requires_simulation_pipeline": False,
+                "requires_clarification": True,
+            }
+        )
+
+        with patch.object(
+            get_model_gateway(), "call", new_callable=AsyncMock, return_value=mock_result
+        ):
+            result = await classify_intent_with_lite_model(query)
+
+        assert result.intent == "simulation_work"
+        assert result.intent_detail == "simulation_request"
+        assert result.requires_job is True
+        assert result.requires_simulation_pipeline is True
+
+    @pytest.mark.asyncio
     async def test_slash_text_is_sent_to_lm_not_short_circuited(self) -> None:
         mock_call = AsyncMock(
             return_value=_mock_result(

@@ -177,6 +177,19 @@ async def test_plain_simulation_request_enters_briefing_without_starting_job() -
 
 
 @pytest.mark.asyncio
+async def test_copilot_command_enters_briefing_without_starting_job() -> None:
+    service = _FakeService()
+    controller = TUIController(service)
+
+    result = await controller.start_simulation_briefing("建立一个 Geant4 质子束仿真")
+
+    assert result.action == ControllerAction.SHOW_BRIEFING
+    assert controller.pending_brief is not None
+    assert service.brief_calls[0]["user_message"] == "建立一个 Geant4 质子束仿真"
+    assert service.started_jobs == []
+
+
+@pytest.mark.asyncio
 async def test_approval_starts_job_with_briefing_context() -> None:
     service = _FakeService()
     controller = TUIController(service)

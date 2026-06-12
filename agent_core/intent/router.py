@@ -103,6 +103,17 @@ def _normalize_intent_payload(
     data.setdefault("routing_reason", "Normalized lite intent output.")
     data.setdefault("confidence", 0.5)
 
+    if top_level == "chat" and _looks_like_simulation_task_description(user_query):
+        top_level = "simulation_work"
+        detail = "simulation_request"
+        data["intent"] = top_level
+        data["intent_detail"] = detail
+        data["routing_reason"] = (
+            f"{data.get('routing_reason', 'Normalized lite intent output.')} "
+            "Corrected descriptive physics task to simulation_work because it includes "
+            "a simulation object/source and observable objective."
+        )
+
     if top_level == "chat":
         data["requires_simulation_pipeline"] = False
         data["requires_job"] = bool(data.get("requires_job", False))
@@ -117,3 +128,78 @@ def _default_detail_for_top_level(intent: str) -> str:
     if intent == "simulation_work":
         return "simulation_request"
     return "general_question"
+
+
+def _looks_like_simulation_task_description(user_query: str) -> bool:
+    text = user_query.strip().lower()
+    if not text:
+        return False
+    question_markers = (
+        "?",
+        "？",
+        "为什么",
+        "如何",
+        "怎么",
+        "解释",
+        "说明",
+        "what",
+        "why",
+        "how",
+        "explain",
+    )
+    if any(marker in text for marker in question_markers):
+        return False
+
+    simulation_entities = (
+        "geant4",
+        "仿真",
+        "模拟",
+        "粒子",
+        "质子",
+        "电子",
+        "中子",
+        "gamma",
+        "proton",
+        "electron",
+        "neutron",
+        "beam",
+        "束",
+        "源",
+        "探测器",
+        "detector",
+        "器件",
+        "硅",
+        "silicon",
+        "氧化层",
+        "oxide",
+    )
+    task_objectives = (
+        "观察",
+        "计算",
+        "评估",
+        "得到",
+        "输出",
+        "分析",
+        "传播",
+        "入射",
+        "穿过",
+        "进入",
+        "能量沉积",
+        "沉积能量",
+        "剂量",
+        "轨迹",
+        "响应",
+        "observe",
+        "calculate",
+        "evaluate",
+        "propagation",
+        "incident",
+        "deposit",
+        "energy deposition",
+        "dose",
+        "trajectory",
+        "response",
+    )
+    return any(term in text for term in simulation_entities) and any(
+        term in text for term in task_objectives
+    )

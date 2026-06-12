@@ -129,3 +129,29 @@ class TestNoSimplificationValidator:
         passed, errors = validator.validate(ir)
         # Should flag the open_issues warning or default size
         assert not passed or len(errors) > 0 or default_comp.open_issues
+
+    def test_minimal_single_slab_detector_is_not_forced_to_multi_layer(self):
+        """A user-requested minimal detector may legitimately be world + one slab."""
+        slab = ComponentSpec(
+            component_id="silicon_slab_detector",
+            display_name="Silicon slab detector",
+            component_type="volume",
+            geometry_type="box",
+            dimensions={"dx": 10000.0, "dy": 10000.0, "dz": 1000.0},
+            material_id="silicon",
+            mother_volume="world",
+            sensitive=True,
+            roles=["edep_region", "dose_scoring_region"],
+            source_evidence=["user_spec: 1 mm thick silicon slab detector"],
+        )
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            target_system="minimal silicon slab detector",
+            components=[_world(), slab],
+            materials=[_mat("air"), _mat("silicon")],
+        )
+
+        passed, errors = NoSimplificationValidator().validate(ir)
+
+        assert passed, errors

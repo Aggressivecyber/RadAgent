@@ -91,6 +91,21 @@ class TUIController:
             status="running",
         )
 
+    async def start_simulation_briefing(self, query: str) -> ControllerResult:
+        stripped = query.strip()
+        if not stripped:
+            return ControllerResult(
+                action=ControllerAction.SHOW_MESSAGE,
+                title="Input required",
+                summary="Enter a simulation request.",
+                status="warning",
+            )
+        return await self._continue_briefing(
+            stripped,
+            original_request=stripped,
+            conversation=[{"role": "user", "content": stripped}],
+        )
+
     async def _handle_briefing_reply(self, text: str) -> ControllerResult:
         assert self.pending_brief is not None
         if _is_cancel(text):

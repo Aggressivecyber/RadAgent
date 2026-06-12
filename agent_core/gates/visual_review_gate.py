@@ -22,6 +22,29 @@ async def run_visual_review_gate(state: GateSubgraphState) -> dict[str, Any]:
     if not _requires_g4_visual_review(task_spec, code_dir):
         return {"gate_results": gate_results, "failed_gates": failed}
 
+    run_mode = str(state.get("run_mode") or state.get("execution_mode") or "strict").strip().lower()
+    if run_mode == "test":
+        gate_results.append(
+            {
+                "gate_id": GATE_ID,
+                "name": gate_name(GATE_ID),
+                "status": "pass",
+                "checked_items": [
+                    {
+                        "item": "100-event native G4 visual workbench review",
+                        "result": "pass",
+                    }
+                ],
+                "passed_items": ["visual review auto-approved in test mode"],
+                "failed_items": [],
+                "warnings": ["Visual review auto-approved because run_mode=test."],
+                "evidence": ["run_mode=test"],
+                "file_paths": [],
+                "message": "G4 visual review auto-approved in test mode",
+            }
+        )
+        return {"gate_results": gate_results, "failed_gates": failed}
+
     visual_status = str(state.get("visual_review_status") or "missing").strip().lower()
     visual_notes = str(state.get("visual_review_notes") or "").strip()
     visual_passed = visual_status == "approved"

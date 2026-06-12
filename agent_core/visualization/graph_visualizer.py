@@ -188,7 +188,7 @@ def get_g4_modeling_subgraph_spec() -> SubgraphSpec:
     return SubgraphSpec(
         name="g4_modeling_subgraph",
         display_name="G4 Modeling 子图",
-        description="Model IR 构建 — 核心建模管线 (14 nodes)",
+        description="Model IR 构建 — 核心建模管线 (14 nodes, no internal retry)",
         nodes=(
             NodeSpec("load_task_spec", "加载任务规格", "io", is_entry=True),
             NodeSpec("requirement_capture_node", "需求捕获", "core"),
@@ -225,11 +225,10 @@ def get_g4_modeling_subgraph_spec() -> SubgraphSpec:
             EdgeSpec("model_ir_validation_node", "model_review_report_node", "通过"),
             EdgeSpec(
                 "model_ir_validation_node",
-                "geometry_decomposition_node",
-                "错误 < 3 → 重试",
-                "retry",
+                "persist_model_ir",
+                "错误 → 失败",
+                "block",
             ),
-            EdgeSpec("model_ir_validation_node", "persist_model_ir", "错误 ≥ 3 → 失败", "block"),
         ),
     )
 

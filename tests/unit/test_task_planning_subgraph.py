@@ -37,6 +37,44 @@ class TestParseTask:
         result = await parse_task(state)
         assert result["task_spec"]["particle"]["type"] == "gamma"
 
+    async def test_simple_slab_query_normalizes_source_and_target(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        state = {
+            "job_id": "test_job",
+            "user_query": (
+                "Build a minimal Geant4 silicon slab detector simulation: "
+                "1 MeV electrons entering a 1 mm thick silicon slab in air, "
+                "run 5 events, score total energy deposition per event, and "
+                "write g4_summary.json, event_table.csv, edep_3d.csv, "
+                "dose_3d.csv, and provenance.json. Keep geometry simple and "
+                "use test mode."
+            ),
+        }
+
+        result = await parse_task(state)
+
+        particle = result["task_spec"]["particle"]
+        assert particle["type"] == "electron"
+        assert particle["energy_MeV"] == 1.0
+        assert particle["energy_unit"] == "MeV"
+        assert particle["events"] == 5
+        target = result["task_spec"]["target"]
+        assert target["material"] == "Silicon"
+        assert target["geometry_type"] == "box"
+        assert target["size_um"][2] == 1000.0
+        assert set(result["task_spec"]["outputs"]) >= {
+            "energy_deposition",
+            "energy_deposition_map",
+            "dose_distribution",
+            "event_data",
+        }
+        from agent_core.schemas.task_spec import validate_task_spec
+
+        _, errors = validate_task_spec(result["task_spec"])
+        assert errors == []
+
     async def test_tcad_reserved_scope(self, temp_workspace: Path) -> None:
         state = {
             "job_id": "test_job",

@@ -113,11 +113,15 @@ Useful commands:
 RadAgent also ships a Textual terminal workstation:
 
 ```bash
-radagent-tui
-radagent-tui --theme slate-workstation
-radagent-tui --theme neon-lab
-radagent-tui --theme minimal-terminal
+./start-radagent-tui.sh
+./start-radagent-tui.sh --theme slate-workstation
+./start-radagent-tui.sh --theme neon-lab
+./start-radagent-tui.sh --theme minimal-terminal
 ```
+
+The launcher creates `.venv` if needed, installs the TUI optional dependency,
+and runs `python -m agent_core.tui` from that environment. Use
+`./start-radagent-tui.sh --check` to verify the local TUI install.
 
 The TUI uses a fixed workstation layout: global status bar, transcript timeline,
 right-side Task/Context/Runtime/Workflow panel, bottom command composer, and
@@ -218,12 +222,14 @@ Key packages:
 
 ```text
 agent_core/
+  agent_loop/          generic native tool-calling agent loop (build-fix cycles)
   agent_tools/         reusable agent tool registry, selection, and execution helpers
   app/                 UI-neutral service layer and Pydantic response schemas
   artifacts/           artifact collection graph, manifests, and schemas
   chat/                workflow-aware copilot with RAG/web/job context
   config/              environment, workspace, model endpoint, and runtime settings
   context/             RAG and web-context retrieval nodes
+  dev_tools/           sandboxed file/shell/build tools for agentic codegen loops
   g4_codegen/          coarse module agents, integration, runtime audit, physics review
   g4_modeling/         Model IR schemas, modeling nodes, validators, and reports
   gates/               validation gate runners and schemas
@@ -267,10 +273,12 @@ Module responsibilities and links:
 | Module | Role | Upstream callers | Downstream dependencies |
 | --- | --- | --- | --- |
 | `agent_core.agent_tools` | Registers and executes reusable tools exposed to agent loops. | model gateway tool-call flows, future agents. | `space_radiation`, LangChain tool interfaces. |
+| `agent_core.agent_loop` | Generic native tool-calling loop: model + dev toolkit + dispatch + feed-back until natural finish or budget. | `g4_codegen` agentic repair. | `dev_tools`, `models`. |
 | `agent_core.app` | Stable facade for frontends, model settings, copilot, job/artifact/build/simulation/revision operations. | TUI, future web/API frontends. | `chat`, `config`, `graph`, `models`, `storage`, `tools`, `workspace`, `workflow`, `revision`. |
 | `agent_core.chat` | Workflow-aware copilot with RAG, web search, and workspace/job context. | `app`, REPL, response nodes. | `context`, `models`, `storage`, `tools`, `workspace`. |
 | `agent_core.config` | Environment, run-mode, external tool, concurrency, and workspace configuration. | Most runtime packages. | `models.schemas`, `workspace.paths`. |
 | `agent_core.context` | RAG/web context retrieval and context decision graph. | main graph, chat, codegen context coordination. | `config`, `tools.web_search_tool`. |
+| `agent_core.dev_tools` | Sandboxed read/edit/write/bash/build/smoke tools bound to a project workdir, for agentic codegen loops. | `agent_loop`, `g4_codegen` agentic repair. | `tools.geant4_runner`. |
 | `agent_core.planning` | Converts user request and context into a scoped task spec. | main graph, graph viewer. | `config`. |
 | `agent_core.g4_modeling` | Builds and validates structured Geant4 Model IR before code generation. | main graph, gates. | `config`, `models`. |
 | `agent_core.human_confirmation` | Captures user approval/edits for uncertain model assumptions. | main graph, gates. | `config`. |

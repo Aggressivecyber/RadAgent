@@ -478,6 +478,7 @@ def _make_gate_subgraph_node() -> Any:
         result = await subgraph.ainvoke(
             {
                 "job_id": state.get("job_id", ""),
+                "run_mode": state.get("run_mode", state.get("execution_mode", "strict")),
                 "execution_mode": state.get("execution_mode", "strict"),
                 "g4_model_ir_path": state.get("g4_model_ir_path", ""),
                 "generated_code_dir": state.get("generated_code_dir", ""),

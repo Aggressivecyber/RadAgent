@@ -20,122 +20,47 @@ from agent_core.gates.output_quality import REQUIRED_G4_OUTPUTS, inspect_g4_outp
 from agent_core.models.gateway import _safe_parse_json, get_model_gateway
 from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
 from agent_core.observability import record_event
-from agent_core.tools.geant4_workbench import SELF_CHECK_EVENTS
+from agent_core.tools.geant4_workbench import SELF_CHECK_EVENTS, resolve_self_check_events
 from agent_core.workspace.io import get_job_dir
 from agent_core.workspace.paths import GEANT4_PROJECT_DIRNAME, STAGE_CODEGEN
 
 MODEL_CONTEXT_CHAR_LIMIT = 220_000
-INITIAL_MODEL_CONTEXT_CHAR_LIMIT = 140_000
-INITIAL_INTEGRATION_DEFER_CHAR_LIMIT = INITIAL_MODEL_CONTEXT_CHAR_LIMIT
-INITIAL_INTEGRATION_MAX_TOKENS = 65_536
-RUNTIME_REPAIR_MAX_TOKENS = 65_536
 GLOBAL_INTEGRATION_REPORT_PATH = f"{STAGE_CODEGEN}/global_integration_agent_report.json"
 GLOBAL_INTEGRATION_EVIDENCE_PATH = (
     f"{STAGE_CODEGEN}/integration/global_integration_evidence.json"
 )
-
-GLOBAL_INTEGRATION_SYSTEM_PROMPT = """你是 RadAgent 的全局 Geant4 集成 Agent。
-
-你在所有模块 Agent 完成后工作。你可以读取完整项目文件、模块契约、模块上下文、
-本地数据库检索结果、互联网搜索结果和真实 runtime/physics observation，并通过返回
-proposed_patch 修改生成工程文件。
-
-目标：把各模块拼成一个能编译、能运行、能产出约定 artifact 的完整 Geant4 程序。
-
-工作机制：
-1. 你处在 ReAct 闭环中：先根据当前 project_files 采取 Action 输出 proposed_patch；
-   系统会应用 patch 并执行真实 Geant4 runtime gate。
-2. 如果 runtime_failure_context 非空，它就是上一轮 Observation，包含真实 cmake、make、
-   ctest、smoke simulation 和 artifact contract 失败信息；必须优先修复这些失败。
-3. 每一轮都要基于最新 project_files 和 Observation 重新核对跨文件接口，不要假设上一轮修改正确。
-4. 当 Observation 指向编译错误时，优先修复头源声明、构造函数、public 方法签名、include、
-   CMake source list 和 main wiring，而不是绕过或删除功能。
-5. issues_fixed 里写可审计的决策摘要；不要把失败降级成 warning。
-6. 不要依赖固定模板或硬编码替换；必须根据 project_files 与 runtime_failure_context
-   中的真实 Observation 生成最小必要 patch。
-
-硬性边界：
-1. 只能返回 JSON，不得输出 Markdown fence。
-2. 不得删除、简化或空实现模块原本承担的物理/几何/输出职责。
-3. 可以修改任意 generated project file 来对齐接口、构造函数、include、CMake 和 main wiring。
-4. 新增 adapter/wrapper 可以，但必须保留模块语义，且必须写入 issues_fixed。
-5. 不得引入 content 字段；文件内容只能放在 new_content。
-6. path 必须相对 geant4_project 根目录，不得以 geant4_project/ 开头。
-7. 不确定的 Geant4 API 必须依据 database_search 或 web_search 证据；没有证据不要发明 API。
-8. 不要把编译、运行或 artifact 失败隐藏成 warning。
-9. 只返回确实需要修改的文件；不要把未修改的全部 project_files 原样回传。
-   如果当前模块输出已经可以进入 runtime gate，返回 status="no_change" 且 changed_files=[]。
-集成经验提示：
-1. CMakeLists.txt 应设置 C++17，例如 CMAKE_CXX_STANDARD 17 或 cxx_std_17。
-   CMakeLists.txt 必须启用 Geant4 UI/Vis/Qt 交互支持，例如
-   find_package(Geant4 REQUIRED ui_all vis_all) 或目标环境等效写法。
-2. main.cc 必须使用各模块真实 public 接口；不要凭类名猜构造函数或方法签名。
-   main.cc 必须参考 Geant4 B1 运行契约：不传宏脚本参数时创建 G4UIExecutive 和
-   G4VisExecutive 并启动交互 UI/Qt 可视化 session；交互模式应执行
-   macros/init_vis.mac，并在 GUI session 中执行 macros/gui.mac；传入脚本参数时通过
-   G4UImanager 执行 "/control/execute " + argv[1] 的 batch 模式。
-3. PhysicsListFactoryWrapper 如果只是工厂 wrapper，就调用 CreatePhysicsList() 并把返回的
-   G4VUserPhysicsList* 交给 G4RunManager；不要把 wrapper 对象本身交给 SetUserInitialization。
-4. main.cc 通常只负责 RunManager wiring、宏执行和顶层初始化；不要在 main.cc 中直接接管
-   scoring、output、SensitiveDetector attachment，除非相应模块接口明确要求这样做。
-5. 每个 Class::Method、静态成员和成员变量在 .cc 中出现时，必须在对应 .hh 中有一致声明。
-6. 修改 main.cc、DetectorConstruction、ScoringManager、ActionInitialization 等跨模块文件时，
-   必须同时核对 include/*.hh 与 src/*.cc 的签名一致性。
-7. 如果使用 G4THitsCollection<Hit>，Hit 必须满足 Geant4 hit 接口：通常继承 G4VHit，
-   并实现 Print() 和 Draw()；否则模板实例化会在 GetHit/DrawAllHits 处编译失败。
-8. 不要在 RunAction::EndOfRunAction 里盲目调用 G4ScoringManager::GetMesh(0) 或解引用
-   G4VScoringMesh；如果 runtime observation 出现 Segmentation fault 且栈在
-   G4ScoringManager::GetMesh/ScoringManager::RecordScoring，必须移除该路径或改成
-   显式维护的本地 scoring records，再由 OutputManager 写出 dose_3d.csv/edep_3d.csv。
-   需要声明或使用 scoring mesh 指针时 include "G4VScoringMesh.hh"；不要 include
-   不存在的 "G4ScoringMesh.hh"。
-   如果仍需读取 command-based scoring mesh，在调用 GetMesh(0) 前必须先检查
-   G4ScoringManager::GetScoringManager()->GetNumberOfMesh() > 0；Geant4 11.x 的
-   GetMesh(i) 不做越界保护，mesh 未注册时会段错误。
-   ScoringManager 不得因为 scoring mesh 创建失败、mesh 缺失或 scorer 缺失抛
-   FatalException；用 JustWarning 并 return，让 event-level OutputManager/SteppingAction
-   继续写 event_table.csv。runtime runner 会基于 event_table fallback 补齐 3D smoke
-   验收文件。
-9. runtime gate 会拒绝“形式通过但无物理数据”的输出：生成程序必须把
-   g4_summary.json、provenance.json、event_table.csv、edep_3d.csv、dose_3d.csv 写入
-   G4_OUTPUT_DIR 环境变量指向的目录；只有环境变量不存在时才回退到当前工作目录。
-   event_table.csv 必须包含 EventID,edep_MeV,dose_Gy 事件行；edep_3d.csv 与 dose_3d.csv
-   必须包含坐标列和非零沉积/剂量 bin；smoke stderr 中的 Geant4 命令参数错误必须修复。
-10. 使用 /score/dumpQuantityToFile 或等价 scoring 命令时，最后一个参数必须是合法单位
-    （dose 用 Gy/gray，energy deposit 用 MeV/eV 等），不要把 Phantom、volume name、
-    scorer name 或 mesh name 当作单位参数传入。
-    使用 /score/quantity/energyDeposit、/score/quantity/doseDeposit 等 scoring quantity
-    命令时，单位参数也必须只写 MeV、eV、Gy、gray 这类单个合法单位；不要写 "1 MeV"、
-    "1 Gy" 或任何带数值前缀的单位字符串。
-11. 事件级输出必须由 EventAction/SteppingAction/OutputManager 在每个事件结束时写出；
-    不要只创建表头，也不要依赖未连接到 step/event action 的空缓存。
-12. SensitiveDetector 生命周期必须正确：如果 main.cc 调用 SensitiveDetector::AttachTo，
-    必须在 runManager->Initialize() 之前完成；AttachTo 必须先用
-    G4SDManager::GetSDMpointer()->AddNewDetector(this) 注册 detector，再调用
-    logVol->SetSensitiveDetector(this)。不要在 Initialize() 之后才 attach，否则
-    SensitiveDetector::Initialize 可能不会创建 fHitsCollection，ProcessHits 会在
-    fHitsCollection->insert(hit) 处 Segmentation fault。
-13. 可视化工作台文件必须保留：macros/init_vis.mac、macros/vis.mac、macros/gui.mac。
-    init.mac 可以作为 init_vis.mac 的兼容别名；run.mac 必须保持 batch/self-check 职责，
-    不要混入 /vis 命令。vis.mac 默认绘制 geometry、axes、smooth trajectories、hits，
-    accumulate，并用于 100-event human visual review。所有 LogicalVolume 应有显式
-    G4VisAttributes：world 隐藏，容器线框/低 alpha，target/sensitive/scoring 实体高可见，
-    shielding 半透明实体。
-
-返回格式：
-{
-  "status": "integrated" | "no_change" | "failed",
-  "proposed_patch": {"changed_files": [...]},
-  "issues_fixed": [{"target": "...", "message": "..."}],
-  "errors": []
-}
-"""
+GLOBAL_INTEGRATION_ALLOWED_PATH_PATTERNS = [
+    "src/*.cc",
+    "include/*.hh",
+    "macros/*.mac",
+    "config/*.json",
+    "CMakeLists.txt",
+    "main.cc",
+]
+GLOBAL_INTEGRATION_FORBIDDEN_PATH_EXAMPLES = [
+    "build.sh",
+    "CMakePresets.json",
+    "agent_core/**/*.py",
+    "agent_core/**/*.yaml",
+    "*.sh",
+    ".env",
+]
+_COMPILE_DIAGNOSTIC_RE = re.compile(
+    r"(?P<path>(?:/|[A-Za-z0-9_.-])[^:\n]*?):"
+    r"(?P<line>\d+):(?P<column>\d+):\s*"
+    r"(?P<level>fatal error|error|warning|note):\s*"
+    r"(?P<message>[^\n]+)"
+)
+_LOCAL_INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"', re.MULTILINE)
+_HEADER_SUFFIXES = (".hh", ".hpp", ".hxx", ".h")
+_SOURCE_SUFFIXES = (".cc", ".cpp", ".cxx", ".c")
 
 
 async def run_global_integration_agent(
     proposed_patch: dict[str, Any],
     *,
     job_id: str,
+    g4_model_ir: dict[str, Any] | None = None,
     module_results: dict[str, Any] | None = None,
     module_contracts: dict[str, Any] | None = None,
     module_contexts: dict[str, Any] | None = None,
@@ -146,6 +71,8 @@ async def run_global_integration_agent(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the final global integration agent over module-generated files."""
     original_patch = deepcopy(proposed_patch or {})
+    runtime_events = resolve_self_check_events(g4_model_ir=g4_model_ir)
+    original_patch = _apply_runtime_event_count_to_patch(original_patch, runtime_events)
     report: dict[str, Any] = {
         "job_id": job_id,
         "status": "passed",
@@ -173,22 +100,23 @@ async def run_global_integration_agent(
     integration_context = {
         "job_id": job_id,
         "available_modules": sorted((module_results or {}).keys()),
+        "module_result_diagnostics": _summarize_module_result_diagnostics(
+            module_results or {}
+        ),
         "module_contracts": module_contracts or {},
         "module_context_summaries": _summarize_module_contexts(module_contexts or {}),
         "interface_contracts": interface_contracts or {},
         "runtime_failure_context": runtime_failure_context or {},
+        "runtime_gate_contract": {
+            "runner": "Geant4Runner.smoke_test",
+            "events": runtime_events,
+            "event_source": "g4_model_ir.sources.events"
+            if g4_model_ir
+            else "default_self_check_events",
+        },
         "integration_memory": _load_integration_memory(job_id),
         "project_files": _project_files_from_patch(original_patch),
-        "write_contract": {
-            "output": "proposed_patch JSON",
-            "allowed_paths": "only generated project paths inside geant4_project",
-            "must_preserve_schema": True,
-            "partial_response_merge": True,
-            "final_runtime_gate": (
-                "After patch application, gate_subgraph must pass Geant4 build, "
-                "ctest, data contract, and smoke simulation gates."
-            ),
-        },
+        "write_contract": _global_integration_write_contract(original_patch),
     }
 
     evidence = await _collect_integration_evidence(
@@ -225,296 +153,48 @@ async def run_global_integration_agent(
             "project files, module contracts, and runtime failure context."
         )
 
-    max_runtime_rounds = max(0, int(runtime_repair_rounds or 0))
     attempt_offset = max(0, int(runtime_attempt_offset or 0))
 
-    initial_deferred = _should_defer_initial_integration_model(
-        integration_context=integration_context,
-        round_index=attempt_offset,
+    # Agentic build-fix loop: the model receives the assembled project plus
+    # read/edit/write/bash/build/smoke tools and iterates until the Geant4
+    # project compiles and the smoke run passes. This replaces the former
+    # one-shot whole-patch JSON regeneration, which could not self-repair
+    # compile errors. ``runtime_repair_rounds`` is retained for call-site
+    # compatibility; the agentic loop handles iteration internally.
+    from agent_core.g4_codegen.agentic_repair import run_agentic_repair
+
+    repaired_patch, agentic_report = await run_agentic_repair(
+        original_patch,
+        job_id=job_id,
+        attempt_index=attempt_offset,
+        runtime_failure_context=runtime_failure_context,
+        expected_events=runtime_events,
     )
-    if initial_deferred:
-        integrated_patch = _mark_initial_integration_deferred(original_patch, report)
-        _persist_patch(integrated_patch, job_id)
-        _persist_report(report, job_id)
-        if max_runtime_rounds <= 0:
-            return integrated_patch, report
-    else:
-        result = await _call_integration_model(
-            gateway=gateway,
-            job_id=job_id,
-            integration_context=integration_context,
-            round_index=attempt_offset,
-        )
-        if result.error:
-            if runtime_failure_context or max_runtime_rounds <= 0:
-                report["status"] = "failed"
-                report["errors"].append(f"Global integration model call failed: {result.error}")
-                _persist_report(report, job_id)
-                return original_patch, report
 
-            integrated_patch = deepcopy(original_patch)
-            schema_errors = _validate_patch_schema(integrated_patch)
-            if schema_errors:
-                report["status"] = "failed"
-                report["errors"].extend(schema_errors)
-                _persist_report(report, job_id)
-                return original_patch, report
+    gate = agentic_report.get("runtime_gate", {})
+    report["runtime_gate_attempts"].append(gate)
+    report["status"] = agentic_report.get("status", "failed")
+    report["changed_files"] = _changed_paths(original_patch, repaired_patch)
+    report["agentic"] = {
+        "stop_reason": agentic_report.get("stop_reason"),
+        "n_turns": agentic_report.get("n_turns"),
+        "tool_calls": agentic_report.get("tool_calls"),
+        "tool_audit": agentic_report.get("tool_audit"),
+    }
+    if agentic_report.get("loop_error"):
+        report.setdefault("warnings", []).append(f"agent loop: {agentic_report['loop_error']}")
+    if agentic_report.get("errors"):
+        report["errors"].extend(agentic_report["errors"])
 
-            report.setdefault("warnings", []).append(
-                "Initial global integration model call failed: "
-                f"{result.error}; continuing to runtime gate with assembled project files."
-            )
-            report["llm_status"] = "initial_model_error_runtime_fallback"
-            report["changed_files"] = []
-            integrated_patch.setdefault("metadata", {})
-            integrated_patch["metadata"]["global_integration_agent"] = {
-                "status": "initial_model_error_runtime_fallback",
-                "issues_fixed": 0,
-                "changed_files": 0,
-                "report_path": GLOBAL_INTEGRATION_REPORT_PATH,
-                "runtime_gate_required": True,
-            }
-            integrated_patch["metadata"]["final_runtime_gate"] = {
-                "required": True,
-                "gates": [
-                    "Build/Parse",
-                    "Unit Test",
-                    "Data Contract",
-                    "Smoke Simulation",
-                ],
-                "runner": "Geant4Runner.smoke_test",
-            }
-            _persist_patch(integrated_patch, job_id)
-            _persist_report(report, job_id)
-        else:
-            data = result.parsed_json or _safe_parse_json(result.content) or {}
-            if not isinstance(data, dict):
-                report["status"] = "failed"
-                report["errors"].append("Global integration returned invalid JSON")
-                _persist_report(report, job_id)
-                return original_patch, report
-
-            status = str(data.get("status", "")).strip().lower()
-            if status == "repaired":
-                status = "integrated"
-            if status not in {"integrated", "no_change"}:
-                report["status"] = "failed"
-                report["errors"].append(
-                    f"Global integration returned status '{status or 'missing'}'"
-                )
-                _persist_report(report, job_id)
-                return original_patch, report
-
-            candidate_patch = data.get("proposed_patch")
-            if not isinstance(candidate_patch, dict):
-                report["status"] = "failed"
-                report["errors"].append("Global integration response missing proposed_patch object")
-                _persist_report(report, job_id)
-                return original_patch, report
-            candidate_patch = _normalize_candidate_patch_metadata(original_patch, candidate_patch)
-
-            if _is_empty_no_change(status, candidate_patch):
-                integrated_patch = deepcopy(original_patch)
-            else:
-                schema_errors = _validate_candidate_patch_schema(original_patch, candidate_patch)
-                if schema_errors:
-                    report["status"] = "failed"
-                    report["errors"].extend(schema_errors)
-                    _persist_report(report, job_id)
-                    return original_patch, report
-
-                integrated_patch, merge_errors = _merge_patch_by_path(
-                    original_patch, candidate_patch
-                )
-                if merge_errors:
-                    report["status"] = "failed"
-                    report["errors"].extend(merge_errors)
-                    _persist_report(report, job_id)
-                    return original_patch, report
-
-            schema_errors = _validate_patch_schema(integrated_patch)
-            if schema_errors:
-                report["status"] = "failed"
-                report["errors"].extend(schema_errors)
-                _persist_report(report, job_id)
-                return original_patch, report
-
-            issues_fixed = data.get("issues_fixed", [])
-            if isinstance(issues_fixed, list):
-                report["issues_fixed"] = [
-                    issue
-                    for issue in issues_fixed
-                    if isinstance(issue, dict) and issue.get("target") and issue.get("message")
-                ]
-            report["changed_files"] = _changed_paths(original_patch, integrated_patch)
-            report["llm_status"] = status
-
-            integrated_patch.setdefault("metadata", {})
-            integrated_patch["metadata"]["global_integration_agent"] = {
-                "status": status,
-                "issues_fixed": len(report["issues_fixed"]),
-                "changed_files": len(report["changed_files"]),
-                "report_path": GLOBAL_INTEGRATION_REPORT_PATH,
-                "runtime_gate_required": True,
-            }
-            integrated_patch["metadata"]["final_runtime_gate"] = {
-                "required": True,
-                "gates": [
-                    "Build/Parse",
-                    "Unit Test",
-                    "Data Contract",
-                    "Smoke Simulation",
-                ],
-                "runner": "Geant4Runner.smoke_test",
-            }
-            _persist_patch(integrated_patch, job_id)
-            _persist_report(report, job_id)
-
-    for repair_round in range(1, max_runtime_rounds + 1):
-        attempt = attempt_offset + repair_round
-        runtime_gate = await _run_integration_runtime_gate(
-            job_id=job_id,
-            proposed_patch=integrated_patch,
-            attempt=attempt,
-        )
-        report["runtime_gate_attempts"].append(runtime_gate)
-        if runtime_gate.get("status") == "pass":
-            report["status"] = "passed"
-            _persist_patch(integrated_patch, job_id)
-            _persist_report(report, job_id)
-            break
-        if repair_round >= max_runtime_rounds:
-            report["status"] = "failed"
-            report["errors"].append(
-                "Global integration runtime gate failed after "
-                f"{max_runtime_rounds} repair round(s)"
-            )
-            _persist_patch(integrated_patch, job_id)
-            _persist_report(report, job_id)
-            break
-
-        report["status"] = "repairing"
-        _persist_patch(integrated_patch, job_id)
-        _persist_report(report, job_id)
-        integration_context["runtime_failure_context"] = runtime_gate
-        integration_context["project_files"] = _project_files_from_patch(integrated_patch)
-        integration_context["integration_memory"] = _load_integration_memory(job_id)
-        integration_context["integration_memory"]["previous_runtime_gate"] = runtime_gate
-        evidence = await _collect_integration_evidence(
-            job_id=job_id,
-            integration_context=integration_context,
-        )
-        integration_context["database_search"] = evidence["database_search"]
-        integration_context["web_search"] = evidence["web_search"]
-        _persist_integration_context(integration_context, job_id)
-
-        retry_result = await _call_integration_model(
-            gateway=gateway,
-            job_id=job_id,
-            integration_context=integration_context,
-            round_index=attempt,
-        )
-        if retry_result.error:
-            report["status"] = "failed"
-            report["errors"].append(
-                f"Global integration runtime repair model call failed: {retry_result.error}"
-            )
-            _persist_patch(integrated_patch, job_id)
-            _persist_report(report, job_id)
-            break
-        retry_patch, retry_errors, retry_issues = _parse_integration_response(
-            response_content=retry_result.content,
-            parsed_json=retry_result.parsed_json,
-            original_patch=integrated_patch,
-        )
-        if retry_errors:
-            report["status"] = "failed"
-            report["errors"].extend(retry_errors)
-            _persist_patch(integrated_patch, job_id)
-            _persist_report(report, job_id)
-            break
-        integrated_patch = retry_patch
-        if retry_issues:
-            report["issues_fixed"].extend(retry_issues)
-        report["changed_files"] = _changed_paths(original_patch, integrated_patch)
-        report["status"] = "passed"
-        integrated_patch.setdefault("metadata", {})
-        integrated_patch["metadata"]["global_integration_agent"] = {
-            "status": "integrated",
-            "issues_fixed": len(report["issues_fixed"]),
-            "changed_files": len(report["changed_files"]),
-            "report_path": GLOBAL_INTEGRATION_REPORT_PATH,
-            "runtime_gate_required": True,
-            "runtime_repair_attempt": attempt,
-        }
-        integrated_patch["metadata"]["final_runtime_gate"] = {
-            "required": True,
-            "gates": [
-                "Build/Parse",
-                "Unit Test",
-                "Data Contract",
-                "Smoke Simulation",
-            ],
-            "runner": "Geant4Runner.smoke_test",
-        }
-        _persist_patch(integrated_patch, job_id)
-        _persist_report(report, job_id)
-
-    _persist_patch(integrated_patch, job_id)
-    _persist_report(report, job_id)
-    return integrated_patch, report
-
-
-def _is_mock_gateway(gateway: Any) -> bool:
-    profile = getattr(gateway, "profiles", {}).get(ModelTier.MAX)
-    return getattr(profile, "provider", None) == ModelProvider.MOCK
-
-
-def _should_defer_initial_integration_model(
-    *,
-    integration_context: dict[str, Any],
-    round_index: int,
-) -> bool:
-    """Let runtime validation produce the first observation for oversized initial context."""
-    if round_index != 0:
-        return False
-    if _has_runtime_failure_observation(integration_context.get("runtime_failure_context", {})):
-        return False
-    context_text = _model_context_json(
-        integration_context,
-        max_chars=INITIAL_MODEL_CONTEXT_CHAR_LIMIT,
-        max_project_file_chars=45_000,
-    )
-    return len(context_text) > INITIAL_INTEGRATION_DEFER_CHAR_LIMIT
-
-
-def _has_runtime_failure_observation(runtime_failure_context: Any) -> bool:
-    if not isinstance(runtime_failure_context, dict) or not runtime_failure_context:
-        return False
-    if runtime_failure_context.get("errors"):
-        return True
-    status = str(runtime_failure_context.get("status", "")).strip().lower()
-    if status in {"fail", "failed", "error"}:
-        return True
-    details = runtime_failure_context.get("details", {})
-    return isinstance(details, dict) and bool(details.get("failed_gates"))
-
-
-def _mark_initial_integration_deferred(
-    proposed_patch: dict[str, Any],
-    report: dict[str, Any],
-) -> dict[str, Any]:
-    patched = deepcopy(proposed_patch)
-    patched.setdefault("metadata", {})
-    patched["metadata"]["global_integration_agent"] = {
-        "status": "no_change",
-        "issues_fixed": 0,
-        "changed_files": 0,
+    repaired_patch.setdefault("metadata", {})
+    repaired_patch["metadata"]["global_integration_agent"] = {
+        "status": report["status"],
+        "issues_fixed": len(report["issues_fixed"]),
+        "changed_files": len(report["changed_files"]),
         "report_path": GLOBAL_INTEGRATION_REPORT_PATH,
         "runtime_gate_required": True,
-        "deferred_until_runtime_gate": True,
     }
-    patched["metadata"]["final_runtime_gate"] = {
+    repaired_patch["metadata"]["final_runtime_gate"] = {
         "required": True,
         "gates": [
             "Build/Parse",
@@ -523,78 +203,16 @@ def _mark_initial_integration_deferred(
             "Smoke Simulation",
         ],
         "runner": "Geant4Runner.smoke_test",
+        "events": runtime_events,
     }
-    report["llm_status"] = "no_change"
-    report["changed_files"] = []
-    report["deferred_until_runtime_gate"] = True
-    report.setdefault("warnings", []).append(
-        "Initial global integration LLM call deferred because model context is large "
-        "and no runtime failure observation is available yet; final runtime gate "
-        "remains required."
-    )
-    return patched
+    _persist_patch(repaired_patch, job_id)
+    _persist_report(report, job_id)
+    return repaired_patch, report
 
 
-async def _call_integration_model(
-    *,
-    gateway: Any,
-    job_id: str,
-    integration_context: dict[str, Any],
-    round_index: int,
-) -> Any:
-    has_runtime_observation = bool(integration_context.get("runtime_failure_context"))
-    round_label = (
-        "initial integration"
-        if round_index == 0
-        else f"runtime repair round {round_index}"
-    )
-    context_limit = (
-        MODEL_CONTEXT_CHAR_LIMIT
-        if has_runtime_observation
-        else INITIAL_MODEL_CONTEXT_CHAR_LIMIT
-    )
-    project_file_limit = 180_000 if has_runtime_observation else 110_000
-    integration_context_json = _model_context_json(
-        integration_context,
-        max_chars=context_limit,
-        max_project_file_chars=project_file_limit,
-    )
-    max_tokens = _integration_max_tokens(
-        gateway,
-        repair=has_runtime_observation,
-    )
-    return await gateway.call(
-        task=ModelTask.CODEGEN,
-        tier=ModelTier.MAX,
-        system_prompt=GLOBAL_INTEGRATION_SYSTEM_PROMPT,
-        user_prompt=(
-            f"请执行 {round_label}。读取 integration_context 中的 project_files、模块契约、"
-            "module contracts、database_search、web_search，以及 runtime_failure_context 中的真实 "
-            "cmake/make/ctest/smoke/artifact 错误，然后返回最终 proposed_patch。"
-            "不要删减模块职责；只做接口、构建、运行和 artifact 对齐。\n"
-            "只返回确实修改的 changed_files；不要回传未修改文件。"
-            "如果无需修改，返回 status=\"no_change\" 和空 changed_files。\n"
-            f"{integration_context_json}"
-        ),
-        response_format="json",
-        max_tokens=max_tokens,
-        metadata={
-            "job_id": job_id,
-            "module_name": "global_integration_agent",
-            "integration_round": round_index,
-            "enable_thinking": True,
-            "available_modules": integration_context.get("available_modules", []),
-        },
-    )
-
-
-def _integration_max_tokens(gateway: Any, *, repair: bool) -> int:
-    configured = RUNTIME_REPAIR_MAX_TOKENS if repair else INITIAL_INTEGRATION_MAX_TOKENS
+def _is_mock_gateway(gateway: Any) -> bool:
     profile = getattr(gateway, "profiles", {}).get(ModelTier.MAX)
-    profile_tokens = getattr(profile, "max_tokens", None)
-    if isinstance(profile_tokens, int) and profile_tokens > 0:
-        return max(configured, profile_tokens)
-    return configured
+    return getattr(profile, "provider", None) == ModelProvider.MOCK
 
 
 def _model_context_json(
@@ -621,6 +239,9 @@ def _model_context_json(
         "interface_contracts": integration_context.get("interface_contracts", {}),
         "module_contracts": _compact_module_contracts(
             integration_context.get("module_contracts", {})
+        ),
+        "module_result_diagnostics": _compact_module_result_diagnostics(
+            integration_context.get("module_result_diagnostics", {})
         ),
         "module_context_summaries": _compact_module_context_summaries(
             integration_context.get("module_context_summaries", {})
@@ -697,6 +318,58 @@ def _model_context_json(
     if len(text) <= max_chars:
         return text
     return _fit_model_context_json(prompt_context, max_chars=max_chars)
+
+
+def _summarize_module_result_diagnostics(
+    module_results: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    diagnostics: dict[str, dict[str, Any]] = {}
+    for module_name, result in module_results.items():
+        if not isinstance(result, dict):
+            diagnostics[str(module_name)] = {
+                "status": "unknown",
+                "generated_file_count": 0,
+                "generated_paths": [],
+                "warnings": [],
+                "errors": [f"module result is {type(result).__name__}, expected object"],
+                "repair_attempt_count": 0,
+            }
+            continue
+        generated_files = [
+            item for item in result.get("generated_files", []) if isinstance(item, dict)
+        ]
+        diagnostics[str(module_name)] = {
+            "status": str(result.get("status", "")),
+            "generated_file_count": len(generated_files),
+            "generated_paths": [
+                str(item.get("path", "")) for item in generated_files if item.get("path")
+            ][:80],
+            "warnings": _clip_list(result.get("warnings", []), max_items=20),
+            "errors": _clip_list(result.get("errors", []), max_items=20),
+            "repair_attempt_count": len(result.get("repair_attempts", []) or []),
+        }
+    return diagnostics
+
+
+def _compact_module_result_diagnostics(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    compact: dict[str, Any] = {}
+    for module_name, diagnostics in value.items():
+        if not isinstance(diagnostics, dict):
+            continue
+        compact[str(module_name)] = {
+            "status": diagnostics.get("status", ""),
+            "generated_file_count": diagnostics.get("generated_file_count", 0),
+            "generated_paths": _clip_list(
+                diagnostics.get("generated_paths", []),
+                max_items=30,
+            ),
+            "warnings": _clip_list(diagnostics.get("warnings", []), max_items=10),
+            "errors": _clip_list(diagnostics.get("errors", []), max_items=10),
+            "repair_attempt_count": diagnostics.get("repair_attempt_count", 0),
+        }
+    return compact
 
 
 def _project_files_for_model(
@@ -890,9 +563,16 @@ def _compact_runtime_failure_context(runtime_failure_context: Any) -> dict[str, 
                 }
             )
     compact["failed_gates"] = failed_gates
-    compact["artifact_summaries"] = _runtime_artifact_summaries(runtime_failure_context)
+    artifact_summaries = _runtime_artifact_summaries(runtime_failure_context)
+    compact["artifact_summaries"] = artifact_summaries
     compact["runtime_project_files"] = _runtime_project_file_summaries(
         runtime_failure_context
+    )
+    compact["compile_error_contexts"] = _compile_error_source_contexts(
+        {
+            **runtime_failure_context,
+            "artifact_summaries": artifact_summaries,
+        }
     )
     compact["recent_failed_events"] = _recent_failed_events(runtime_failure_context)
     for key in (
@@ -905,10 +585,261 @@ def _compact_runtime_failure_context(runtime_failure_context: Any) -> dict[str, 
         "unit_test_result",
         "output_quality",
         "output_summary",
+        "runner_contract",
     ):
         if key in runtime_failure_context:
             compact[key] = runtime_failure_context[key]
-    return _trim_json_value(compact, max_chars=35_000)
+    return _trim_runtime_failure_context(compact, max_chars=35_000)
+
+
+def _compile_error_source_contexts(
+    runtime_failure_context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    project_dir_value = runtime_failure_context.get("project_dir")
+    if not project_dir_value:
+        return []
+    project_dir = Path(str(project_dir_value))
+    if not project_dir.is_dir():
+        return []
+
+    contexts: list[dict[str, Any]] = []
+    seen: set[tuple[str, int, int, str]] = set()
+    for diagnostic_text in _iter_diagnostic_strings(runtime_failure_context):
+        for match in _COMPILE_DIAGNOSTIC_RE.finditer(diagnostic_text):
+            raw_path = match.group("path")
+            line = int(match.group("line"))
+            column = int(match.group("column"))
+            source_path = _resolve_runtime_source_path(project_dir, raw_path)
+            if source_path is None:
+                continue
+            try:
+                relative_path = str(source_path.relative_to(project_dir))
+            except ValueError:
+                relative_path = str(source_path)
+            key = (relative_path, line, column, match.group("message"))
+            if key in seen:
+                continue
+            seen.add(key)
+            contexts.append(
+                {
+                    "path": relative_path,
+                    "line": line,
+                    "column": column,
+                    "level": match.group("level"),
+                    "message": match.group("message"),
+                    "diagnostic": _diagnostic_block(diagnostic_text, match.start()),
+                    "source_excerpt": _source_excerpt(source_path, line),
+                    "related_files": _related_runtime_source_contexts(
+                        project_dir,
+                        source_path,
+                    ),
+                }
+            )
+            if len(contexts) >= 12:
+                return contexts
+    return contexts
+
+
+def _related_runtime_source_contexts(
+    project_dir: Path,
+    source_path: Path,
+    *,
+    max_files: int = 8,
+) -> list[dict[str, str]]:
+    try:
+        source_content = source_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        source_content = ""
+
+    candidates: list[tuple[Path, str]] = []
+
+    def add(candidate: Path, reason: str) -> None:
+        resolved = _resolve_runtime_source_path(project_dir, str(candidate))
+        if resolved is not None and resolved != source_path:
+            candidates.append((resolved, reason))
+
+    _add_companion_translation_units(project_dir, source_path, add)
+    for include_value in _LOCAL_INCLUDE_RE.findall(source_content):
+        include_path = Path(include_value)
+        add(source_path.parent / include_path, "local_include")
+        add(project_dir / include_path, "local_include")
+        add(project_dir / "include" / include_path, "local_include")
+
+    for candidate, _reason in list(candidates):
+        _add_companion_translation_units(project_dir, candidate, add)
+
+    related: list[dict[str, str]] = []
+    seen: set[Path] = set()
+    for candidate, reason in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            relative_path = str(candidate.relative_to(project_dir))
+            content = candidate.read_text(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
+        related.append(
+            {
+                "path": relative_path,
+                "reason": reason,
+                "content_excerpt": _clip_text(content, 5_000),
+            }
+        )
+        if len(related) >= max_files:
+            break
+    return related
+
+
+def _add_companion_translation_units(
+    project_dir: Path,
+    path: Path,
+    add: Any,
+) -> None:
+    suffix = path.suffix
+    stem = path.stem
+    if suffix in _SOURCE_SUFFIXES:
+        for header_suffix in _HEADER_SUFFIXES:
+            add(project_dir / "include" / f"{stem}{header_suffix}", "same_stem_header")
+        return
+    if suffix in _HEADER_SUFFIXES:
+        for source_suffix in _SOURCE_SUFFIXES:
+            add(project_dir / "src" / f"{stem}{source_suffix}", "same_stem_source")
+
+
+def _iter_diagnostic_strings(value: Any, *, _remaining: list[int] | None = None):
+    if _remaining is None:
+        _remaining = [120]
+    if _remaining[0] <= 0:
+        return
+    if isinstance(value, str):
+        if _COMPILE_DIAGNOSTIC_RE.search(value):
+            _remaining[0] -= 1
+            yield _clip_text(value, 30_000)
+        return
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_diagnostic_strings(item, _remaining=_remaining)
+        return
+    if isinstance(value, dict):
+        preferred_keys = (
+            "errors",
+            "warnings",
+            "stderr",
+            "stdout",
+            "build_output",
+            "cmake_output",
+            "artifact_summaries",
+            "preview",
+            "log_tail",
+            "details",
+            "build_result",
+            "cmake_configure_result",
+        )
+        for key in preferred_keys:
+            if key in value:
+                yield from _iter_diagnostic_strings(value[key], _remaining=_remaining)
+
+
+def _resolve_runtime_source_path(project_dir: Path, raw_path: str) -> Path | None:
+    path = Path(raw_path)
+    candidates = [path] if path.is_absolute() else [project_dir / path, path]
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            candidate.resolve().relative_to(project_dir.resolve())
+        except ValueError:
+            continue
+        return candidate
+    return None
+
+
+def _diagnostic_block(text: str, start: int) -> str:
+    lines = text[start:].splitlines()
+    block: list[str] = []
+    for line in lines[:10]:
+        if block and line.startswith("make["):
+            break
+        block.append(line)
+    return _clip_text("\n".join(block), 4_000)
+
+
+def _source_excerpt(path: Path, line: int, *, context_lines: int = 8) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    if not lines:
+        return ""
+    start = max(1, line - context_lines)
+    end = min(len(lines), line + context_lines)
+    excerpt_lines = [
+        f"{number:5d} | {lines[number - 1]}"
+        for number in range(start, end + 1)
+    ]
+    return _clip_text("\n".join(excerpt_lines), 8_000)
+
+
+def _trim_runtime_failure_context(
+    compact: dict[str, Any],
+    *,
+    max_chars: int,
+) -> dict[str, Any]:
+    text = json.dumps(compact, ensure_ascii=False)
+    if len(text) <= max_chars:
+        return compact
+
+    reduced = deepcopy(compact)
+    reduced["runtime_project_files"] = _clip_list(
+        reduced.get("runtime_project_files", []),
+        max_items=8,
+    )
+    reduced["artifact_summaries"] = _clip_list(
+        reduced.get("artifact_summaries", []),
+        max_items=4,
+    )
+    for key in (
+        "build_result",
+        "cmake_configure_result",
+        "unit_test_result",
+        "output_quality",
+        "output_summary",
+    ):
+        if key in reduced:
+            reduced[key] = _trim_json_value(reduced[key], max_chars=6_000)
+    text = json.dumps(reduced, ensure_ascii=False)
+    if len(text) <= max_chars:
+        return reduced
+
+    minimal = {
+        key: reduced.get(key)
+        for key in (
+            "job_id",
+            "status",
+            "phase",
+            "attempt",
+            "project_dir",
+            "output_dir",
+            "missing_outputs",
+            "compile_error_contexts",
+            "errors",
+            "runner_contract",
+        )
+        if key in reduced
+    }
+    minimal["warnings"] = _clip_list(reduced.get("warnings", []), max_items=4)
+    minimal["failed_gates"] = _clip_list(reduced.get("failed_gates", []), max_items=4)
+    text = json.dumps(minimal, ensure_ascii=False)
+    if len(text) <= max_chars:
+        return minimal
+
+    minimal["errors"] = _clip_list(minimal.get("errors", []), max_items=4)
+    minimal["compile_error_contexts"] = _clip_list(
+        minimal.get("compile_error_contexts", []),
+        max_items=4,
+    )
+    return _trim_json_value(minimal, max_chars=max_chars)
 
 
 def _runtime_artifact_summaries(runtime_failure_context: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1166,54 +1097,25 @@ def _trim_json_value(value: Any, *, max_chars: int) -> Any:
     return {"summary": _clip_text(text, max_chars)}
 
 
-def _parse_integration_response(
-    *,
-    response_content: str,
-    parsed_json: dict[str, Any] | None,
-    original_patch: dict[str, Any],
-) -> tuple[dict[str, Any], list[str], list[dict[str, Any]]]:
-    data = parsed_json or _safe_parse_json(response_content) or {}
-    if not isinstance(data, dict):
-        return original_patch, ["Global integration returned invalid JSON"], []
-
-    status = str(data.get("status", "")).strip().lower()
-    if status == "repaired":
-        status = "integrated"
-    if status not in {"integrated", "no_change"}:
-        return original_patch, [f"Global integration returned status '{status or 'missing'}'"], []
-
-    candidate_patch = data.get("proposed_patch")
-    if not isinstance(candidate_patch, dict):
-        return original_patch, ["Global integration response missing proposed_patch object"], []
-    candidate_patch = _normalize_candidate_patch_metadata(original_patch, candidate_patch)
-
-    if _is_empty_no_change(status, candidate_patch):
-        integrated_patch = deepcopy(original_patch)
-    else:
-        schema_errors = _validate_candidate_patch_schema(original_patch, candidate_patch)
-        if schema_errors:
-            return original_patch, schema_errors, []
-
-        integrated_patch, merge_errors = _merge_patch_by_path(original_patch, candidate_patch)
-        if merge_errors:
-            return original_patch, merge_errors, []
-
-    schema_errors = _validate_patch_schema(integrated_patch)
-    if schema_errors:
-        return original_patch, schema_errors, []
-
-    issues = data.get("issues_fixed", [])
-    clean_issues = [
-        issue
-        for issue in issues
-        if isinstance(issue, dict) and issue.get("target") and issue.get("message")
-    ] if isinstance(issues, list) else []
-    return integrated_patch, [], clean_issues
-
-
-def _is_empty_no_change(status: str, candidate_patch: dict[str, Any]) -> bool:
-    files = candidate_patch.get("changed_files")
-    return status == "no_change" and isinstance(files, list) and not files
+def _apply_runtime_event_count_to_patch(
+    patch: dict[str, Any],
+    expected_events: int | None,
+) -> dict[str, Any]:
+    if expected_events is None or expected_events <= 0:
+        return patch
+    patched = deepcopy(patch)
+    changed_files = patched.get("changed_files")
+    if not isinstance(changed_files, list):
+        return patched
+    for entry in changed_files:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("path") != "macros/run.mac":
+            continue
+        content = entry.get("new_content")
+        if isinstance(content, str):
+            entry["new_content"] = _replace_run_macro_events(content, expected_events)
+    return patched
 
 
 async def _run_integration_runtime_gate(
@@ -1221,10 +1123,16 @@ async def _run_integration_runtime_gate(
     job_id: str,
     proposed_patch: dict[str, Any],
     attempt: int,
+    expected_events: int = SELF_CHECK_EVENTS,
 ) -> dict[str, Any]:
     attempt_dir = get_job_dir(job_id) / STAGE_CODEGEN / "integration" / f"runtime_attempt_{attempt}"
     project_dir = attempt_dir / GEANT4_PROJECT_DIRNAME
     output_dir = attempt_dir / "g4_output_package"
+    runner_contract = _runtime_gate_runner_contract(
+        project_dir=project_dir,
+        output_dir=output_dir,
+        events=expected_events,
+    )
     if attempt_dir.exists():
         shutil.rmtree(attempt_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -1258,25 +1166,27 @@ async def _run_integration_runtime_gate(
             str(project_dir),
             job_id=job_id,
             output_dir=str(output_dir),
-            events=SELF_CHECK_EVENTS,
+            events=expected_events,
         )
         gate = _summarize_runtime_gate_result(
             result=result,
             attempt=attempt,
             project_dir=project_dir,
             output_dir=output_dir,
-            expected_events=SELF_CHECK_EVENTS,
+            expected_events=expected_events,
         )
+        gate["runner_contract"] = runner_contract
     except Exception as exc:
         gate = {
             "status": "fail",
             "attempt": attempt,
             "project_dir": str(project_dir),
             "output_dir": str(output_dir),
-            "expected_events": SELF_CHECK_EVENTS,
+            "expected_events": expected_events,
             "errors": [str(exc)],
             "warnings": [],
             "artifacts": [],
+            "runner_contract": runner_contract,
         }
     (attempt_dir / "runtime_gate_result.json").write_text(
         json.dumps(gate, indent=2, ensure_ascii=False),
@@ -1295,6 +1205,38 @@ async def _run_integration_runtime_gate(
         details=gate,
     )
     return gate
+
+
+def _runtime_gate_runner_contract(
+    *,
+    project_dir: Path,
+    output_dir: Path,
+    events: int = SELF_CHECK_EVENTS,
+) -> dict[str, Any]:
+    project_abs = project_dir.resolve()
+    build_abs = project_abs / "build"
+    output_abs = output_dir.resolve()
+    return {
+        "runner": "Geant4Runner.smoke_test",
+        "events": events,
+        "project_dir": str(project_dir),
+        "project_dir_abs": str(project_abs),
+        "build_dir_abs": str(build_abs),
+        "output_dir": str(output_dir),
+        "output_dir_abs": str(output_abs),
+        "configure_command_shape": f"cmake {project_abs}",
+        "configure_cwd": str(build_abs),
+        "build_command_shape": "make -j4",
+        "ctest_command_shape": "ctest --output-on-failure",
+        "simulation_output_env": "G4_OUTPUT_DIR",
+        "required_outputs": list(REQUIRED_G4_OUTPUTS),
+        "allowed_path_patterns": list(GLOBAL_INTEGRATION_ALLOWED_PATH_PATTERNS),
+        "forbidden_path_examples": list(GLOBAL_INTEGRATION_FORBIDDEN_PATH_EXAMPLES),
+        "permission_rule": (
+            "Repair patches may modify/create only green generated project files. "
+            "Do not add shell scripts or CMakePresets.json; fix build behavior in CMakeLists.txt."
+        ),
+    }
 
 
 def _summarize_runtime_gate_result(
@@ -1323,7 +1265,11 @@ def _summarize_runtime_gate_result(
     if missing_outputs:
         errors.append(f"Missing output contract files: {', '.join(missing_outputs)}")
     smoke_result = _load_json_file(output_dir / "smoke_simulation_result.json")
-    quality = inspect_g4_output_quality(output_dir, smoke_result=smoke_result)
+    quality = inspect_g4_output_quality(
+        output_dir,
+        smoke_result=smoke_result,
+        expected_events=expected_events,
+    )
     quality_errors = [
         error
         for error in quality.errors
@@ -1556,7 +1502,63 @@ def _build_integration_query(integration_context: dict[str, Any]) -> str:
             parts.extend(str(item) for item in value[:8])
         elif isinstance(value, str):
             parts.append(value)
+    parts.extend(_runtime_failure_query_terms(failure_context))
     return " ".join(parts)[:1800]
+
+
+def _runtime_failure_query_terms(failure_context: Any) -> list[str]:
+    if not isinstance(failure_context, dict):
+        return []
+    terms: list[str] = []
+
+    def add(value: Any, *, max_chars: int = 450) -> None:
+        if value is None or len(terms) >= 18:
+            return
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                terms.append(_clip_text(text, max_chars))
+            return
+        if isinstance(value, list):
+            for item in value:
+                add(item, max_chars=max_chars)
+                if len(terms) >= 18:
+                    break
+            return
+        if isinstance(value, dict):
+            for nested_key in (
+                "path",
+                "message",
+                "diagnostic",
+                "errors",
+                "warnings",
+                "failed_items",
+                "missing_outputs",
+            ):
+                if nested_key in value:
+                    add(value[nested_key], max_chars=max_chars)
+                    if len(terms) >= 18:
+                        break
+
+    for key in (
+        "errors",
+        "warnings",
+        "missing_outputs",
+        "compile_error_contexts",
+        "failed_gates",
+    ):
+        add(failure_context.get(key))
+    for key in (
+        "build_result",
+        "cmake_configure_result",
+        "unit_test_result",
+        "output_quality",
+    ):
+        nested = failure_context.get(key)
+        if isinstance(nested, dict):
+            add(nested.get("errors"))
+            add(nested.get("warnings"))
+    return terms
 
 
 async def _search_database(query: str) -> list[dict[str, Any]]:
@@ -1615,26 +1617,55 @@ def _persist_integration_context(context: dict[str, Any], job_id: str) -> None:
     )
 
 
-def _validate_patch_schema(patch: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    files = patch.get("changed_files")
-    if not isinstance(files, list) or not files:
-        return ["proposed_patch.changed_files must be a non-empty list"]
-    for index, entry in enumerate(files):
-        if not isinstance(entry, dict):
-            errors.append(f"changed_files[{index}] must be an object")
-            continue
-        if "content" in entry:
-            errors.append(f"{entry.get('path', index)}: content field is forbidden")
-        for required in ("path", "new_content", "zone", "generated_by", "module_name"):
-            if not entry.get(required):
-                errors.append(f"{entry.get('path', index)}: missing {required}")
-        path = str(entry.get("path", ""))
-        if path.startswith("geant4_project/") or ".." in path or path.startswith("/"):
-            errors.append(f"{path}: path must be relative to generated_code_dir")
-        if "```" in str(entry.get("new_content", "")):
-            errors.append(f"{path}: new_content must not contain markdown fences")
-    return errors
+def _global_integration_write_contract(patch: dict[str, Any]) -> dict[str, Any]:
+    existing_paths = sorted(
+        {
+            str(entry.get("path"))
+            for entry in patch.get("changed_files", [])
+            if isinstance(entry, dict)
+            and entry.get("path")
+            and _global_integration_path_allowed(str(entry.get("path")))
+        }
+    )
+    return {
+        "output": "proposed_patch JSON",
+        "path_root": "geant4_project",
+        "allowed_path_patterns": list(GLOBAL_INTEGRATION_ALLOWED_PATH_PATTERNS),
+        "allowed_existing_paths": existing_paths,
+        "forbidden_path_examples": list(GLOBAL_INTEGRATION_FORBIDDEN_PATH_EXAMPLES),
+        "can_modify_existing_green_files": True,
+        "can_create_new_green_files": True,
+        "must_preserve_schema": True,
+        "partial_response_merge": True,
+        "permission_rule": (
+            "Every changed_files[].path must be relative to geant4_project and must pass "
+            "FilePermissionValidator.can_auto_apply(path). Put build changes in "
+            "CMakeLists.txt; do not create shell scripts or CMakePresets.json."
+        ),
+        "final_runtime_gate": (
+            "After patch application, gate_subgraph must pass Geant4 build, ctest, "
+            "data contract, and smoke simulation gates."
+        ),
+    }
+
+
+def _global_integration_path_allowed(path: str) -> bool:
+    if not path or path.startswith("/") or path.startswith("geant4_project/") or ".." in path:
+        return False
+    from agent_core.validators.file_permission_validator import FilePermissionValidator
+
+    return FilePermissionValidator().can_auto_apply(path)
+
+
+def _global_integration_path_permission_error(path: str) -> str | None:
+    if _global_integration_path_allowed(path):
+        return None
+    allowed = ", ".join(GLOBAL_INTEGRATION_ALLOWED_PATH_PATTERNS)
+    forbidden = ", ".join(GLOBAL_INTEGRATION_FORBIDDEN_PATH_EXAMPLES)
+    return (
+        f"{path}: not allowed by generated project write policy; "
+        f"allowed patterns: {allowed}; forbidden examples: {forbidden}"
+    )
 
 
 def _validate_candidate_patch_schema(
@@ -1669,6 +1700,9 @@ def _validate_candidate_patch_schema(
             errors.append(f"{path}: missing new_content")
         if path.startswith("geant4_project/") or ".." in path or path.startswith("/"):
             errors.append(f"{path}: path must be relative to generated_code_dir")
+        permission_error = _global_integration_path_permission_error(path)
+        if permission_error:
+            errors.append(permission_error)
         if "```" in str(entry.get("new_content", "")):
             errors.append(f"{path}: new_content must not contain markdown fences")
         if path not in original_paths:
@@ -1748,6 +1782,8 @@ def _infer_module_name(path: str) -> str:
 def _merge_patch_by_path(
     original_patch: dict[str, Any],
     candidate_patch: dict[str, Any],
+    *,
+    expected_events: int | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     original_files = original_patch.get("changed_files")
     candidate_files = candidate_patch.get("changed_files")
@@ -1784,7 +1820,7 @@ def _merge_patch_by_path(
             _postprocess_patch_entry(merged_entry)
             merged_files.append(merged_entry)
 
-    _postprocess_merged_patch_files(merged_files)
+    _postprocess_merged_patch_files(merged_files, expected_events=expected_events)
 
     merged_patch = deepcopy(original_patch)
     merged_patch["changed_files"] = merged_files
@@ -1824,7 +1860,11 @@ def _postprocess_patch_entry(entry: dict[str, Any]) -> None:
     entry["new_content"] = content
 
 
-def _postprocess_merged_patch_files(files: list[dict[str, Any]]) -> None:
+def _postprocess_merged_patch_files(
+    files: list[dict[str, Any]],
+    *,
+    expected_events: int | None = None,
+) -> None:
     by_path = {
         str(entry.get("path")): entry
         for entry in files
@@ -1873,7 +1913,7 @@ def _postprocess_merged_patch_files(files: list[dict[str, Any]]) -> None:
             stepping_content = _remove_duplicate_stepping_energy_record(stepping_content)
         stepping_entry["new_content"] = stepping_content
 
-    _align_physics_configuration(by_path)
+    _align_physics_configuration(by_path, expected_events=expected_events)
 
 
 def _scoring_manager_returns_reference(header_content: str) -> bool:
@@ -1957,7 +1997,11 @@ def _remove_duplicate_stepping_energy_record(content: str) -> str:
     )
 
 
-def _align_physics_configuration(by_path: dict[str, dict[str, Any]]) -> None:
+def _align_physics_configuration(
+    by_path: dict[str, dict[str, Any]],
+    *,
+    expected_events: int | None = None,
+) -> None:
     physics_list = _physics_list_from_macro(by_path.get("macros/physics_list.mac", {}))
     physics_entry = by_path.get("src/PhysicsListFactoryWrapper.cc")
     if isinstance(physics_entry, dict) and isinstance(
@@ -1997,7 +2041,8 @@ def _align_physics_configuration(by_path: dict[str, dict[str, Any]]) -> None:
         )
         if primary_position:
             content = _replace_run_macro_position(content, primary_position)
-        content = _replace_run_macro_events(content, 1000)
+        if expected_events is not None and expected_events > 0:
+            content = _replace_run_macro_events(content, expected_events)
         run_entry["new_content"] = content
 
 

@@ -70,6 +70,7 @@ class NoSimplificationValidator:
             kw in target_lower
             for kw in ("detector", "sensor", "pixel", "strip", "stack", "radiation", "rad-hard")
         )
+        requires_multi_component = _requires_multi_component_model(target_lower)
 
         if is_complex_request:
             for category, patterns in _required_complex_patterns(target_lower):
@@ -92,7 +93,7 @@ class NoSimplificationValidator:
         non_world_components = [
             c for c in model_ir.components if c.component_type not in ("world",)
         ]
-        if len(non_world_components) <= 2 and is_complex_request:
+        if len(non_world_components) <= 2 and requires_multi_component:
             errors.append(
                 f"Complex model has only {len(non_world_components)} non-world components "
                 f"(expected multi-layer stack). Possible layer merge simplification."
@@ -266,3 +267,28 @@ def _required_complex_patterns(target_lower: str) -> list[tuple[str, set[str]]]:
     if any(kw in target_lower for kw in ("electrode", "contact", "pixel", "strip")):
         required.append(("electrode", by_category["electrode"]))
     return required
+
+
+def _requires_multi_component_model(target_lower: str) -> bool:
+    """Return whether the request implies structure beyond one sensitive volume."""
+    return any(
+        kw in target_lower
+        for kw in (
+            "stack",
+            "multi-layer",
+            "multilayer",
+            "layered",
+            "oxide",
+            "insulator",
+            "electrode",
+            "contact",
+            "pcb",
+            "board",
+            "housing",
+            "package",
+            "shield",
+            "pixel",
+            "strip",
+            "rad-hard",
+        )
+    )

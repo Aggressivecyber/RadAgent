@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import pytest
+from agent_core.tui.app import (
+    _copilot_model_candidates,
+    _cycle_context_window,
+    _format_context_window,
+)
 from agent_core.tui.commands import (
     CommandParseError,
     command_suggestions,
@@ -109,3 +114,28 @@ def test_input_mode_for_text_distinguishes_ask_run_and_command() -> None:
     assert input_mode_for_text("Explain current workspace") == "ASK"
     assert input_mode_for_text("/check tools") == "CMD"
     assert input_mode_for_text("/run 7 MeV electron through aluminum") == "RUN"
+
+
+def test_copilot_model_candidates_include_current_models_and_common_mimo_options() -> None:
+    candidates = _copilot_model_candidates(
+        {
+            "lite": "mimo-v2.5",
+            "pro": "mimo-v2.5-pro",
+            "max": "custom-review-model",
+        }
+    )
+
+    assert candidates[:3] == ["mimo-v2.5-pro", "mimo-v2.5", "custom-review-model"]
+    assert "mimo-v2.5-pro" in candidates
+    assert len(candidates) == len(set(candidates))
+
+
+def test_copilot_context_window_cycles_standard_values_and_formats_labels() -> None:
+    assert _cycle_context_window(100_000, 1) == 200_000
+    assert _cycle_context_window(200_000, 1) == 500_000
+    assert _cycle_context_window(500_000, 1) == 1_000_000
+    assert _cycle_context_window(1_000_000, 1) == 100_000
+    assert _cycle_context_window(128_000, 1) == 100_000
+    assert _cycle_context_window(100_000, -1) == 1_000_000
+    assert _format_context_window(1_000_000) == "1m"
+    assert _format_context_window(128_000) == "128k"

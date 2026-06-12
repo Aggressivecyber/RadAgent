@@ -110,3 +110,49 @@ def test_module_context_filters_rag_snippets_by_module_keywords() -> None:
 
     joined = " ".join(item.get("content", "") for item in ctx["rag_snippets"])
     assert "GetScoreMap" in joined
+
+
+def test_simulation_core_context_preserves_ir_units_and_coordinate_contract() -> None:
+    ctx = build_module_context(
+        module_name="simulation_core",
+        module_contract=_contract("simulation_core"),
+        g4_model_ir={
+            "model_ir_id": "test_units",
+            "job_id": "job_units",
+            "global_units": {
+                "length": "um",
+                "energy": "MeV",
+                "dose": "Gy",
+                "time": "s",
+            },
+            "coordinate_system": {
+                "system": "cartesian",
+                "origin_definition": "world_center",
+                "axis_definition": {
+                    "x": "slab_width",
+                    "y": "slab_height",
+                    "z": "beam_direction",
+                },
+                "unit": "um",
+            },
+            "components": [
+                {
+                    "component_id": "silicon_slab",
+                    "shape": "box",
+                    "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 1000.0},
+                }
+            ],
+            "materials": [{"material_id": "silicon", "geant4_name": "G4_Si"}],
+            "scoring": [{"scoring_id": "edep", "target_component_id": "silicon_slab"}],
+        },
+        codegen_plan={"required_modules": MODULE_NAMES},
+        geometry_strategy_plan={"global_strategy": "agent_generated_geometry"},
+        code_architecture_plan={"classes": []},
+        job_id="job_units",
+    )
+
+    ir_subset = ctx["g4_model_ir_subset"]
+    assert ir_subset["global_units"]["length"] == "um"
+    assert ir_subset["coordinate_system"]["unit"] == "um"
+    assert ir_subset["unit_contract"]["length_unit"] == "um"
+    assert "G4Box" in ir_subset["unit_contract"]["box_dimension_rule"]

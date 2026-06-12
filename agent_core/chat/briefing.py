@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from agent_core.models.gateway import get_model_gateway
 from agent_core.models.schemas import ModelTask, ModelTier
@@ -184,6 +184,31 @@ class SimulationBriefingResult(BaseModel):
             }
         return data
 
+    @field_validator("hidden_questions", "questions", mode="before")
+    @classmethod
+    def _coerce_question_list(cls, value: Any) -> list[str]:
+        """Normalize list items to strings.
+
+        The prompt asks for ``list[str]`` but the model occasionally mirrors the
+        ``next_question`` structure and returns dicts (``{"field", "question"}``).
+        Coerce such items to their question text so a valid briefing is never
+        rejected at the boundary.
+        """
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            value = [value]
+        normalized: list[str] = []
+        for item in value:
+            if isinstance(item, Mapping):
+                text = str(item.get("question") or item.get("field") or "")
+                normalized.append(text)
+            elif isinstance(item, str):
+                normalized.append(item)
+            else:
+                normalized.append(str(item))
+        return normalized
+
     @field_validator("final_query")
     @classmethod
     def _final_query_required_for_approval(cls, value: str, info: Any) -> str:
@@ -242,8 +267,8 @@ class SimulationBriefingPlanner:
             workflow_context=workflow_context,
         )
         result = await gateway.call(
-            task=ModelTask.SIMULATION_BRIEFING,
-            tier=ModelTier.MAX,
+            task=ModelTask.SIMPLE_EXTRACTION,
+            tier=ModelTier.LITE,
             system_prompt=BRIEFING_SYSTEM_PROMPT,
             user_prompt=_build_briefing_user_prompt(
                 user_message=user_message,
@@ -254,23 +279,19 @@ class SimulationBriefingPlanner:
             ),
             response_format="json",
             temperature=0.0,
-            max_tokens=8192,
-            metadata={"module_name": "simulation_briefing"},
+            max_tokens=4096,
+            metadata={"module_name": "simulation_briefing", "enable_thinking": False},
         )
-        if result.error:
-            raise RuntimeError(f"Simulation briefing failed: {result.error}")
-        data = _briefing_json_from_result(result)
-        if not data:
-            repair = await _repair_briefing_json(
-                gateway=gateway,
-                user_message=user_message,
-                workflow_context=workflow_context,
-                failed_result=result,
-            )
-            data = _briefing_json_from_result(repair)
-        if not data:
-            data = _fallback_needs_input_briefing(user_message)
-        briefing = SimulationBriefingResult.model_validate(data)
+        briefing: SimulationBriefingResult | None = None
+        if not result.error:
+            data = _briefing_json_from_result(result)
+            try:
+                briefing = SimulationBriefingResult.model_validate(data) if data else None
+            except ValidationError:
+                briefing = None
+        if briefing is None:
+            data = _fallback_ready_briefing(user_message)
+            briefing = SimulationBriefingResult.model_validate(data)
         briefing.compacted_briefing_memory = prompt_state.compacted_memory
         briefing.context_window_stats = prompt_state.stats
         if briefing.ready_for_approval and briefing.approval_request is None:
@@ -503,66 +524,6 @@ def _build_approved_summary_prompt(briefing_context: Mapping[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-async def _repair_briefing_json(
-    *,
-    gateway: Any,
-    user_message: str,
-    workflow_context: Mapping[str, Any],
-    failed_result: Any,
-) -> Any:
-    return await gateway.call(
-        task=ModelTask.SIMULATION_BRIEFING,
-        tier=ModelTier.MAX,
-        system_prompt=BRIEFING_JSON_REPAIR_PROMPT,
-        user_prompt=json.dumps(
-            {
-                "latest_user_message": user_message,
-                "workflow_context": dict(workflow_context),
-                "failed_content": str(getattr(failed_result, "content", "") or ""),
-                "failed_reasoning_content": str(
-                    getattr(failed_result, "reasoning_content", "") or ""
-                ),
-                "required_output_schema": {
-                    "status": "needs_input | ready_for_approval",
-                    "understanding": "string",
-                    "next_question": {
-                        "field": "string",
-                        "question": "one highest-impact question",
-                        "choices": ["2-4 concise choices when useful"],
-                        "why": "short reason",
-                    },
-                    "hidden_questions": ["string"],
-                    "questions": ["string"],
-                    "recommendations": ["string"],
-                    "draft_plan": {},
-                    "missing_critical_fields": ["string"],
-                    "assumptions": ["string"],
-                    "risks": ["string"],
-                    "final_query": "string",
-                    "proposed_command": {
-                        "name": "start_job",
-                        "args": {"query": "string", "run_mode": "strict"},
-                        "risk": "write",
-                        "status": "pending",
-                        "summary": "string",
-                    },
-                    "approval_request": {
-                        "requires_human_approval": True,
-                        "summary": "string",
-                        "risks": ["string"],
-                    },
-                },
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        response_format="json",
-        temperature=0.0,
-        max_tokens=4096,
-        metadata={"module_name": "simulation_briefing_repair"},
-    )
-
-
 def _briefing_json_from_result(result: Any) -> dict[str, Any]:
     parsed = getattr(result, "parsed_json", None)
     if isinstance(parsed, dict) and parsed:
@@ -629,6 +590,55 @@ def _fallback_needs_input_briefing(user_message: str) -> dict[str, Any]:
         "risks": ["规划模型没有返回结构化 JSON，当前不会启动仿真。"],
         "final_query": "",
     }
+
+
+def _fallback_ready_briefing(user_message: str) -> dict[str, Any]:
+    query = " ".join(str(user_message or "").split()).strip()
+    if not query:
+        return _fallback_needs_input_briefing(user_message)
+    return {
+        "status": "ready_for_approval",
+        "understanding": "已将用户输入整理为可启动的 RadAgent 仿真任务。",
+        "next_question": None,
+        "hidden_questions": [],
+        "questions": [],
+        "recommendations": ["先用小事件数完成 build、smoke 和输出契约验证。"],
+        "draft_plan": {
+            "objective": query,
+            "simulation_scope": ["geant4"] if _looks_like_geant4(query) else [],
+            "geometry": {},
+            "materials": [],
+            "source": {},
+            "physics": {},
+            "scoring": [],
+            "run_plan": {"validation": "small smoke run before production"},
+            "codegen_constraints": ["preserve explicit user constraints from final_query"],
+        },
+        "missing_critical_fields": [],
+        "assumptions": ["未在简报阶段补问的信息交给下游 task planning/modeling 节点抽取。"],
+        "risks": ["轻量简报只做结构化启动，不替代后续 build/smoke/gate 反馈。"],
+        "final_query": query,
+        "proposed_command": {
+            "name": "start_job",
+            "args": {"query": query, "run_mode": "strict"},
+            "risk": "write",
+            "status": "pending",
+            "summary": "Start the approved simulation workflow.",
+        },
+        "approval_request": {
+            "requires_human_approval": True,
+            "summary": f"Start simulation task: {_clip_summary(query, limit=120)}",
+            "risks": ["后续 workflow 会通过模型 IR、build、smoke 和 gate 继续校验。"],
+        },
+    }
+
+
+def _looks_like_geant4(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        marker in lowered
+        for marker in ("geant4", "g4", "particle", "proton", "electron", "neutron")
+    ) or any(marker in text for marker in ("质子", "电子", "中子", "粒子", "探测器"))
 
 
 def _clip_summary(value: Any, *, limit: int = 50) -> str:

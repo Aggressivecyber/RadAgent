@@ -109,6 +109,32 @@ async def test_chat_emits_events_without_ui_dependency(tmp_path, monkeypatch) ->
     assert kwargs["workflow_context"]["status"] == "idle"
 
 
+@pytest.mark.asyncio
+async def test_copilot_can_offer_controlled_simulation_start(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+
+    response = await service.chat(
+        "建立一个 Geant4 仿真：外部质子束沿 z 方向入射硅探测器，观察轨迹和能量沉积"
+    )
+
+    assert response.commands == [
+        {
+            "name": "start_simulation_briefing",
+            "args": {
+                "query": (
+                    "建立一个 Geant4 仿真：外部质子束沿 z 方向入射硅探测器，"
+                    "观察轨迹和能量沉积"
+                )
+            },
+            "risk": "write",
+            "status": "pending_confirmation",
+            "summary": "Prepare simulation briefing",
+        }
+    ]
+    assert "确认" in response.message
+    assert "start_job" not in response.message
+
+
 def test_service_exposes_frontend_safe_model_config(tmp_path, monkeypatch) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
@@ -297,6 +323,11 @@ async def test_start_job_persists_approved_briefing_context(tmp_path, monkeypatc
 
     assert service.state["copilot_briefing"]["final_query"] == briefing_context["final_query"]
     assert service.state["copilot_briefing"]["approved"] is True
+    assert service.state["raw_human_response"] == {
+        "user_decision": "approve",
+        "edits": [],
+        "user_notes": "Approved before pipeline start through RadAgent briefing.",
+    }
     assert service.state["task_summary_short"]["zh"] == "硅探测器沉积能量仿真"
     assert service.state["copilot_context_usage"]["history_usage_ratio"] == 0.61
     context = service.get_workflow_context()
@@ -304,3 +335,138 @@ async def test_start_job_persists_approved_briefing_context(tmp_path, monkeypatc
     assert "copilot_briefing" in memory
     assert "silicon detector" in memory["copilot_briefing"].summary
     assert memory["copilot_briefing"].payload["approval_request"]["requires_human_approval"]
+
+
+@pytest.mark.asyncio
+async def test_preapproved_job_does_not_block_after_g4_modeling_requires_confirmation(
+    tmp_path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_preapproved"
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "build detector",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+        "raw_human_response": {
+            "user_decision": "approve",
+            "edits": [],
+            "user_notes": "Approved before pipeline start through RadAgent briefing.",
+        },
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_modeling")
+
+    async def g4_modeling(state: dict) -> dict:
+        return {"human_confirmation_required": True}
+
+    async def human_confirmation(state: dict) -> dict:
+        assert state["raw_human_response"]["user_decision"] == "approve"
+        return {
+            "confirmation_status": "approved",
+            "human_confirmation_required": False,
+            "unconfirmed_assumptions_count": 0,
+        }
+
+    async def no_op(state: dict) -> dict:
+        return {}
+
+    service._subgraph_nodes = {
+        "g4_modeling": g4_modeling,
+        "human_confirmation": human_confirmation,
+        "g4_codegen": no_op,
+        "patch": no_op,
+        "gate": no_op,
+        "artifact": no_op,
+        "report": no_op,
+    }
+
+    status = await service.run_until_blocked()
+
+    assert status.status == "completed"
+    assert "human_confirmation" in status.completed_phases
+    assert "g4_codegen" in status.completed_phases
+    assert [
+        event.event_type
+        for event in service.recent_events()
+        if event.event_type == "human_confirmation_required"
+    ] == []
+
+
+@pytest.mark.asyncio
+async def test_run_phase_stops_when_codegen_status_is_failed(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_codegen_failed"
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "build detector",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
+
+    async def failed_codegen(state: dict) -> dict:
+        return {
+            "g4_codegen_status": "failed",
+            "errors": ["runtime_app did not pass layer gate"],
+        }
+
+    service._subgraph_nodes = {"g4_codegen": failed_codegen}
+
+    result = await service.run_phase("g4_codegen")
+
+    assert result.success is False
+    assert service.current_phase_idx == PIPELINE_PHASES.index("g4_codegen")
+    assert "g4_codegen" not in service.completed_phases
+    assert service.state["termination_reason"] == "g4_codegen status is failed"
+    assert service.recent_events()[-1].event_type == "phase_failed"
+    assert result.status.status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_run_until_blocked_does_not_report_finished_after_failed_gate(
+    tmp_path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_gate_failed"
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "build detector",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("gate")
+
+    async def failed_gate(state: dict) -> dict:
+        return {"validation_status": "failed", "failed_gates": [{"gate_id": 1}]}
+
+    service._subgraph_nodes = {"gate": failed_gate}
+
+    status = await service.run_until_blocked()
+
+    assert status.status == "failed"
+    assert status.current_phase == "gate"
+    assert "gate" not in status.completed_phases
+    event_types = [event.event_type for event in service.recent_events()]
+    assert "phase_failed" in event_types
+    assert "job_finished" not in event_types

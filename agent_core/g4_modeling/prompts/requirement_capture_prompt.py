@@ -66,6 +66,66 @@ IMPORTANT RULES:
    angular_distribution, and relative_weight when provided
 """
 
+UNIFIED_MODELING_DRAFT_PROMPT = """You are a Geant4 modeling drafter.
+
+Given the user request and task specification, output one JSON object that
+captures the full initial modeling draft. Use the exact field names below.
+Prefer a compact, complete answer. Do not write prose.
+
+User request:
+{user_query}
+
+Task specification:
+{task_spec}
+
+Return:
+{{
+  "target_system": "short description",
+  "modeling_mode": "simple|realistic",
+  "components": [
+    {{
+      "component_id": "unique_id",
+      "display_name": "human readable name",
+      "component_type": "world|assembly|layer|volume|shielding|electrode|substrate",
+      "geometry_type": "box|cylinder|sphere|tubs|cons|polycone|trapezoid",
+      "dimensions": {{"dx": 1.0, "dy": 1.0, "dz": 1.0}},
+      "material_id": "material name",
+      "placement": {{"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]}},
+      "mother_volume": "parent_id or null",
+      "sensitive": true,
+      "roles": ["edep_region", "dose_scoring_region"],
+      "source_evidence": ["short evidence refs"],
+      "open_issues": [],
+      "requires_confirmation": false
+    }}
+  ],
+  "physics": {{
+    "physics_list": "FTFP_BERT|QGSP_BIC_HP|Shielding|Livermore|...",
+    "selection_reasoning": "why this physics list fits the request",
+    "em_physics": "standard|livermore|penelope|option4 or null",
+    "hadronic": "bertini|binary_cascade|qgsp or null",
+    "decay": true,
+    "cuts": {{"gamma": 0.1, "e-": 0.1}} or null,
+    "hp_neutron": false,
+    "source_evidence": ["short evidence refs"]
+  }},
+  "required_outputs": ["edep", "dose_3d", "event_table"],
+  "missing_information": ["key unresolved items"],
+  "open_issues": ["modeling issues to track"],
+  "assumptions": ["explicit assumptions made"]
+}}
+
+Rules:
+1. Keep the geometry explicit. Do not merge distinct layers.
+2. Use world + target components whenever the request implies a target geometry.
+3. If a value is uncertain, omit it and put the uncertainty in open_issues.
+4. The deterministic pipeline will fill materials, sources, scoring, and detector
+   wiring later, so focus on components and physics here.
+5. Component dimensions must be numeric full lengths in micrometers (um). Convert
+   cm, mm, and nm to um before writing JSON.
+6. Return valid JSON only.
+"""
+
 GEOMETRY_DECOMPOSITION_PROMPT = """You are a Geant4 geometry decomposition specialist.
 
 Given the structured requirements and available evidence, decompose the target
@@ -86,7 +146,8 @@ Create a JSON array of component specifications. Each component must have:
 - component_type: one of "world", "assembly", "layer", "volume",
   "shielding", "electrode", "substrate"
 - geometry_type: one of "box", "cylinder", "sphere", "tubs", "cons", "polycone", "trapezoid"
-- dimensions: dict with shape-specific keys (box: dx/dy/dz as half-lengths, cylinder: rmin/rmax/dz)
+- dimensions: dict with shape-specific keys in global units
+  (box: dx/dy/dz as full lengths, cylinder: rmin/rmax/dz)
 - material_id: reference to a material definition
 - placement: {{position: [x,y,z], rotation: [rx,ry,rz]}} relative to mother volume
 - mother_volume: parent component_id (null for world only)
@@ -99,7 +160,7 @@ Create a JSON array of component specifications. Each component must have:
 RULES:
 1. Exactly ONE world volume (component_type="world") — must be first
 2. All dimensions MUST come from evidence — do NOT invent values
-3. Use half-lengths for box (dx=half_width), consistent with Geant4 convention
+3. Use full lengths for box dx/dy/dz; codegen converts them to G4Box half-lengths
 4. Layer stacking: use z-axis for beam direction, place layers contiguously
 5. Do NOT merge or skip any layer the user specified
 6. Keep dimensions present, but include only evidence-backed numeric keys

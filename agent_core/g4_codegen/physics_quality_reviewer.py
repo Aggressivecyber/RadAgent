@@ -25,6 +25,10 @@ PHYSICS_REVIEW_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 物理质量审核 
    user limits、最小步长或等效控制是否合理。
 6. 输出 artifact 是否代表真实 event/scoring 数据，而不是表头、固定零值或 fallback 假数据。
 7. 如果使用 Geant4 示例代码，是否只是参考真实接口，而不是把 B1/B2 示例需求照搬进当前需求。
+8. 如果 runtime_verification_summary 显示最新 runtime gate 已通过，必须把该最新通过事实
+   作为 runtime/build/artifact 状态的权威证据；不得因为早期 repair attempt 的旧失败
+   要求已经被最新通过结果否定的修复。仍可基于当前 project_files 和 G4ModelIR 提出
+   未被 runtime pass 覆盖的真实物理保真度问题。
 
 只返回 JSON，不要输出 Markdown fence。
 
@@ -63,9 +67,16 @@ async def run_physics_quality_reviewer(
             global_integration_report,
             max_chars=18_000,
         ),
+        "runtime_verification_summary": _runtime_verification_summary(
+            global_integration_report
+        ),
         "project_files": _project_files_for_review(proposed_patch, max_total_chars=36_000),
         "review_instruction": (
             "Score physics/model/source/geometry/transport/output fidelity. "
+            "If runtime_verification_summary.latest_runtime_gate_passed is true, "
+            "treat the latest passing runtime gate as authoritative for build/run/"
+            "artifact status and do not request fixes solely from earlier failed "
+            "runtime attempts. "
             "When status is revise or fail, required_fixes must be concrete enough "
             "for global_integration_agent to patch the project."
         ),
@@ -228,6 +239,72 @@ def _project_files_for_review(
             }
         )
     return files
+
+
+def _runtime_verification_summary(report: Any) -> dict[str, Any]:
+    if not isinstance(report, dict):
+        return {}
+    attempts = [
+        attempt
+        for attempt in report.get("runtime_gate_attempts", [])
+        if isinstance(attempt, dict)
+    ]
+    latest = _latest_runtime_attempt(attempts)
+    prior_failures = [
+        attempt
+        for attempt in attempts
+        if attempt is not latest and str(attempt.get("status", "")).lower() != "pass"
+    ]
+    if not latest:
+        return {
+            "global_integration_status": report.get("status"),
+            "latest_runtime_gate_passed": False,
+            "prior_failed_attempt_count": len(prior_failures),
+        }
+
+    output_quality = latest.get("output_quality", {})
+    if not isinstance(output_quality, dict):
+        output_quality = {}
+    metrics = output_quality.get("metrics", {})
+    if not isinstance(metrics, dict):
+        metrics = {}
+    smoke = latest.get("smoke_result") or latest.get("smoke_simulation_result") or {}
+    if not isinstance(smoke, dict):
+        smoke = {}
+    return {
+        "global_integration_status": report.get("status"),
+        "latest_attempt": latest.get("attempt"),
+        "latest_runtime_gate_status": latest.get("status"),
+        "latest_runtime_gate_passed": latest.get("status") == "pass",
+        "prior_failed_attempt_count": len(prior_failures),
+        "expected_events": latest.get("expected_events") or metrics.get("expected_events"),
+        "events_requested": metrics.get("events_requested"),
+        "missing_outputs": latest.get("missing_outputs", []),
+        "error_count": len(latest.get("errors", []) or []),
+        "output_quality_status": output_quality.get("status"),
+        "output_quality_errors": output_quality.get("errors", []),
+        "event_table_rows": metrics.get("event_table_rows"),
+        "event_table_nonzero_rows": metrics.get("event_table_nonzero_rows"),
+        "edep_3d_nonzero_rows": metrics.get("edep_3d_nonzero_rows"),
+        "dose_3d_nonzero_rows": metrics.get("dose_3d_nonzero_rows"),
+        "smoke_success": smoke.get("success"),
+        "smoke_process_success": smoke.get("process_success"),
+    }
+
+
+def _latest_runtime_attempt(attempts: list[dict[str, Any]]) -> dict[str, Any]:
+    if not attempts:
+        return {}
+
+    def key(attempt: dict[str, Any]) -> tuple[int, int]:
+        value = attempt.get("attempt")
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = -1
+        return (parsed, attempts.index(attempt))
+
+    return max(attempts, key=key)
 
 
 def _compact_module_contracts(module_contracts: Any) -> dict[str, Any]:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 
 class TestG4CodegenSubgraphCompilation:
     """Verify the G4 codegen subgraph compiles."""
@@ -173,6 +175,25 @@ class TestCodegenValidators:
         assert not clean
         assert len(violations) > 0
 
+    def test_no_magic_number_ignores_units_zeroes_and_presentation_literals(self) -> None:
+        """Validator should focus on physical literals, not C++/visual boilerplate."""
+        from agent_core.g4_codegen.validators.no_magic_number import check_magic_numbers
+
+        code = "\n".join(
+            [
+                "G4ThreeVector origin(0., 0., 0.);",
+                "auto source = G4ThreeVector(0.0 * um, 0.0 * um, -1500.0 * um);",
+                "G4Colour red(1., 0., 0.);",
+                "circle.SetScreenSize(4.);",
+                "G4cout << std::setw(7) << value;",
+                "auto binDx_um = width / nx;  // 1000 um",
+            ]
+        )
+
+        clean, violations = check_magic_numbers(code, "test")
+
+        assert clean, violations
+
 
 class TestLoadModelIr:
     """Test the codegen I/O functions."""
@@ -193,3 +214,96 @@ class TestLoadModelIr:
 
         result = await load_model_ir({"g4_model_ir_path": "/nonexistent/ir.json"})
         assert result["g4_model_ir"] == {}
+
+
+@pytest.mark.asyncio
+async def test_module_layer_records_agent_start_event(tmp_path, monkeypatch) -> None:
+    """Layer execution should expose whether each module agent actually started."""
+    from agent_core.g4_codegen import graph_nodes
+    from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    events: list[dict[str, object]] = []
+
+    def fake_record_event(**kwargs):
+        events.append(kwargs)
+
+    async def fake_agent(_ctx):
+        return ModuleAgentResult(
+            module_name="runtime_app",
+            status="generated",
+            generated_files=[
+                GeneratedModuleFile(
+                    path="main.cc",
+                    new_content="int main(){return 0;}\n",
+                    generated_by="runtime_app_module_agent",
+                    module_name="runtime_app",
+                    rationale="test",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(graph_nodes, "record_event", fake_record_event)
+    monkeypatch.setattr(graph_nodes, "_get_agent_function", lambda _module_name: fake_agent)
+
+    await graph_nodes.run_module_layer_node(
+        {
+            "job_id": "job_runtime_start",
+            "module_contexts": {"runtime_app": {"job_id": "job_runtime_start"}},
+        },
+        "runtime_modules",
+        ["runtime_app"],
+    )
+
+    assert any(
+        event.get("event_type") == "module_agent_start"
+        and event.get("module_name") == "runtime_app"
+        and event.get("layer") == "runtime_modules"
+        for event in events
+    )
+
+
+@pytest.mark.asyncio
+async def test_module_layer_preserves_pending_module_contexts(tmp_path, monkeypatch) -> None:
+    """Running one layer must not drop contexts needed by later module layers."""
+    from agent_core.g4_codegen import graph_nodes
+    from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr(graph_nodes, "record_event", lambda **_kwargs: None)
+
+    async def fake_agent(_ctx):
+        return ModuleAgentResult(
+            module_name="simulation_core",
+            status="generated",
+            generated_files=[
+                GeneratedModuleFile(
+                    path="include/DetectorConstruction.hh",
+                    new_content="#pragma once\n",
+                    generated_by="simulation_core_module_agent",
+                    module_name="simulation_core",
+                    rationale="test",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(graph_nodes, "_get_agent_function", lambda _module_name: fake_agent)
+
+    update = await graph_nodes.run_module_layer_node(
+        {
+            "job_id": "job_preserve_contexts",
+            "module_contexts": {
+                "simulation_core": {"job_id": "job_preserve_contexts"},
+                "runtime_app": {
+                    "job_id": "job_preserve_contexts",
+                    "module_contract": {"module_name": "runtime_app"},
+                },
+            },
+        },
+        "core_modules",
+        ["simulation_core"],
+    )
+
+    assert update["module_contexts"]["runtime_app"]["module_contract"]["module_name"] == (
+        "runtime_app"
+    )

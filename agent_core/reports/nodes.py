@@ -23,6 +23,22 @@ from agent_core.workspace.paths import STAGE_REPORT
 from .schemas import ReportSubgraphState
 
 
+def _format_report_value(value: Any, *, limit: int | None = None) -> str:
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, dict) and value.get("preview"):
+        text = str(value["preview"])
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        except TypeError:
+            text = str(value)
+    text = " ".join(text.split())
+    if limit is not None and len(text) > limit:
+        return text[: max(0, limit - 1)] + "…"
+    return text
+
+
 async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     """Generate the comprehensive final report."""
     job_id = state.get("job_id", "unknown")
@@ -69,9 +85,13 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     elif "reserved" in str(simulation_scope):
         termination = "completed_with_reserved_scope"
     elif failed_gates:
-        termination = f"failed_gates: {', '.join(failed_gates[:5])}"
+        termination = "failed_gates: " + ", ".join(
+            _format_report_value(gate) for gate in failed_gates[:5]
+        )
     elif errors:
-        termination = f"errors: {'; '.join(errors[:3])}"
+        termination = "errors: " + "; ".join(
+            _format_report_value(error) for error in errors[:3]
+        )
     else:
         termination = "completed_unverified"
 
@@ -220,7 +240,7 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
             gid = g.get("gate_id", "?")
             gname = g.get("name", "?")
             gstatus = g.get("status", "?")
-            gmsg = g.get("message", "")[:80]
+            gmsg = _format_report_value(g.get("message", ""), limit=80).replace("|", "\\|")
             gpassed = len(g.get("passed_items", []))
             gfailed = len(g.get("failed_items", []))
             report_lines.append(
@@ -288,7 +308,7 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
             ]
         )
         for err in errors:
-            report_lines.append(f"- {err}")
+            report_lines.append(f"- {_format_report_value(err)}")
 
     # Architecture note
     report_lines.extend(

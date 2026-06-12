@@ -39,6 +39,8 @@ _NIST_MATERIALS: dict[str, tuple[str, float]] = {
     "Fe": ("G4_Fe", 7.874),
     "Iron": ("G4_Fe", 7.874),
     "Water": ("G4_WATER", 1.000),
+    "Galactic": ("G4_Galactic", 1e-25),
+    "G4_Galactic": ("G4_Galactic", 1e-25),
 }
 
 # Well-known custom materials
@@ -96,10 +98,12 @@ async def material_definition_node(state: RadiationAgentState) -> dict[str, Any]
     for comp in model_ir.components:
         needed_materials.add(comp.material_id)
 
+    material_evidence = _collect_material_evidence(model_ir, needed_materials)
+
     # Define each material
     materials: list[MaterialSpec] = []
     for mat_id in sorted(needed_materials):
-        mat = _define_material(mat_id)
+        mat = _define_material(mat_id, source_evidence=material_evidence.get(mat_id, []))
         materials.append(mat)
 
     model_ir.materials = materials
@@ -131,23 +135,33 @@ async def material_definition_node(state: RadiationAgentState) -> dict[str, Any]
     }
 
 
-def _define_material(mat_id: str) -> MaterialSpec:
+def _define_material(
+    mat_id: str,
+    *,
+    source_evidence: list[str] | None = None,
+) -> MaterialSpec:
     """Define a single material from ID, using known databases."""
+    context_evidence = _dedupe(source_evidence or [])
+
     # Check NIST first
-    if mat_id in _NIST_MATERIALS:
-        nist_name, density = _NIST_MATERIALS[mat_id]
+    nist_material = _resolve_nist_material(mat_id)
+    if nist_material is not None:
+        nist_name, density = nist_material
         return MaterialSpec(
             material_id=mat_id,
-            name=f"{mat_id} (NIST)",
+            name=f"{nist_name} (NIST)",
             classification="nist",
             nist_name=nist_name,
             density_g_cm3=density,
-            source_evidence=[f"NIST material: {nist_name}"],
+            source_evidence=_dedupe(
+                [f"nist:{nist_name}"] + context_evidence
+            ),
         )
 
     # Check custom materials
-    if mat_id in _CUSTOM_MATERIALS:
-        info = _CUSTOM_MATERIALS[mat_id]
+    custom_material = _resolve_custom_material(mat_id)
+    if custom_material is not None:
+        custom_key, info = custom_material
         return MaterialSpec(
             material_id=mat_id,
             name=info["name"],
@@ -158,7 +172,9 @@ def _define_material(mat_id: str) -> MaterialSpec:
             ],
             density_g_cm3=info["density_g_cm3"],
             state=info.get("state", "solid"),
-            source_evidence=[f"Known custom material: {mat_id}"],
+            source_evidence=_dedupe(
+                [f"known_custom_material:{custom_key}"] + context_evidence
+            ),
         )
 
     # Unknown material — flag as open issue
@@ -167,9 +183,126 @@ def _define_material(mat_id: str) -> MaterialSpec:
         name=f"Unknown material '{mat_id}'",
         classification="custom",
         composition=[ElementFraction(element="Si", fraction=1.0)],
-        density_g_cm3=2.33,  # Silicon default
-        source_evidence=[],
+        density_g_cm3=2.33,
+        source_evidence=context_evidence or [f"material_reference:{mat_id}"],
         open_issues=[
             f"Material '{mat_id}' not in known database — composition and density need verification"
         ],
     )
+
+
+def _collect_material_evidence(
+    model_ir: G4ModelIR,
+    needed_materials: set[str],
+) -> dict[str, list[str]]:
+    evidence_by_material: dict[str, list[str]] = {}
+    for mat_id in needed_materials:
+        evidence: list[str] = []
+        for comp in model_ir.components:
+            if not _material_names_equivalent(comp.material_id, mat_id):
+                continue
+            evidence.append(f"component:{comp.component_id}:material_id={comp.material_id}")
+            evidence.extend(
+                f"component:{comp.component_id}:{ref}"
+                for ref in comp.source_evidence
+                if str(ref).strip()
+            )
+
+        if model_ir.evidence is not None:
+            for item in model_ir.evidence.materials:
+                if _evidence_mentions_material(item, mat_id):
+                    evidence.append(_format_evidence_ref(item))
+
+        evidence_by_material[mat_id] = _dedupe(evidence)
+    return evidence_by_material
+
+
+def _resolve_nist_material(mat_id: str) -> tuple[str, float] | None:
+    return _NIST_LOOKUP.get(_material_key(mat_id))
+
+
+def _resolve_custom_material(mat_id: str) -> tuple[str, dict[str, Any]] | None:
+    return _CUSTOM_LOOKUP.get(_material_key(mat_id))
+
+
+def _material_names_equivalent(left: str, right: str) -> bool:
+    if _material_key(left) == _material_key(right):
+        return True
+    left_nist = _resolve_nist_material(left)
+    right_nist = _resolve_nist_material(right)
+    if left_nist and right_nist and left_nist[0] == right_nist[0]:
+        return True
+    left_custom = _resolve_custom_material(left)
+    right_custom = _resolve_custom_material(right)
+    return bool(left_custom and right_custom and left_custom[0] == right_custom[0])
+
+
+def _evidence_mentions_material(item: dict[str, Any], mat_id: str) -> bool:
+    text = _material_key(" ".join(str(value) for value in item.values()))
+    if not text:
+        return False
+    return any(key and key in text for key in _candidate_material_keys(mat_id))
+
+
+def _candidate_material_keys(mat_id: str) -> set[str]:
+    keys = {_material_key(mat_id)}
+    nist_material = _resolve_nist_material(mat_id)
+    if nist_material is not None:
+        nist_name = nist_material[0]
+        keys.add(_material_key(nist_name))
+        keys.update(
+            _material_key(alias)
+            for alias, candidate in _NIST_MATERIALS.items()
+            if candidate[0] == nist_name
+        )
+    custom_material = _resolve_custom_material(mat_id)
+    if custom_material is not None:
+        custom_key, _ = custom_material
+        keys.update(
+            _material_key(alias)
+            for alias in _CUSTOM_MATERIALS
+            if _material_key(alias) == _material_key(custom_key)
+        )
+    return {key for key in keys if key}
+
+
+def _format_evidence_ref(item: dict[str, Any]) -> str:
+    source_type = str(item.get("source_type") or "material_evidence")
+    source = str(item.get("source") or item.get("title") or "unknown_source")
+    dimension = str(item.get("dimension") or "materials")
+    return f"{source_type}:{source}:{dimension}"
+
+
+def _material_key(value: str) -> str:
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        clean = str(value).strip()
+        if not clean or clean in seen:
+            continue
+        seen.add(clean)
+        deduped.append(clean)
+    return deduped
+
+
+def _build_nist_lookup() -> dict[str, tuple[str, float]]:
+    lookup: dict[str, tuple[str, float]] = {}
+    for alias, material in _NIST_MATERIALS.items():
+        lookup[_material_key(alias)] = material
+        lookup[_material_key(material[0])] = material
+    return lookup
+
+
+def _build_custom_lookup() -> dict[str, tuple[str, dict[str, Any]]]:
+    return {
+        _material_key(alias): (alias, material)
+        for alias, material in _CUSTOM_MATERIALS.items()
+    }
+
+
+_NIST_LOOKUP = _build_nist_lookup()
+_CUSTOM_LOOKUP = _build_custom_lookup()

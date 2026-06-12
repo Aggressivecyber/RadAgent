@@ -10,6 +10,7 @@ import json
 import logging
 from typing import Any, Literal, cast
 
+from agent_core.context.doc_store import Geant4DocStore
 from agent_core.g4_modeling.subgraph_state import G4ModelingSubgraphState as RadiationAgentState
 from agent_core.workspace.io import get_stage_dir
 from agent_core.workspace.paths import STAGE_MODEL_IR
@@ -89,6 +90,28 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
         material_evidence.append(web_item)
         physics_evidence.append(web_item)
 
+    if not physics_evidence:
+        physics_evidence.extend(_local_geant4_reference_items("physics"))
+
+    requirements = _load_requirements(job_id)
+    if requirements:
+        if requirements.get("required_components"):
+            geometry_evidence.append(
+                _user_requirement_item("geometry", requirements["required_components"])
+            )
+        if requirements.get("required_materials"):
+            material_evidence.append(
+                _user_requirement_item("materials", requirements["required_materials"])
+            )
+        if requirements.get("required_sources"):
+            source_evidence.append(
+                _user_requirement_item("source", requirements["required_sources"])
+            )
+        if requirements.get("required_outputs"):
+            scoring_evidence.append(
+                _user_requirement_item("scoring", requirements["required_outputs"])
+            )
+
     evidence_pack = EvidencePack(
         evidence_decision=cast(
             Literal["allow_rag", "allow_with_web_supplement", "block_no_context"],
@@ -133,3 +156,46 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
         "evidence_pack": evidence_pack.model_dump(mode="json"),
         "current_node": "evidence_retrieval_node",
     }
+
+
+def _load_requirements(job_id: str) -> dict[str, Any]:
+    if not job_id:
+        return {}
+    req_file = get_stage_dir(job_id, STAGE_MODEL_IR) / "requirements.json"
+    if not req_file.is_file():
+        return {}
+    try:
+        data = json.loads(req_file.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _user_requirement_item(dimension: str, value: Any) -> dict[str, Any]:
+    return {
+        "source_type": "user_requirement",
+        "source": "requirements.json",
+        "dimension": dimension,
+        "text": json.dumps(value, ensure_ascii=False),
+    }
+
+
+def _local_geant4_reference_items(dimension: str) -> list[dict[str, Any]]:
+    """Return curated local Geant4 reference docs for a missing evidence dimension."""
+    if dimension != "physics":
+        return []
+    physics_doc_ids = {"g4_physics_list", "g4_phys_list_factory"}
+    items: list[dict[str, Any]] = []
+    for doc in Geant4DocStore().get_documents():
+        if doc.doc_id not in physics_doc_ids:
+            continue
+        items.append(
+            {
+                "source_type": "local_geant4_reference",
+                "source": f"{doc.source}:{doc.doc_id}",
+                "title": doc.title,
+                "dimension": dimension,
+                "text": doc.content,
+            }
+        )
+    return items

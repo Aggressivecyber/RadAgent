@@ -7,6 +7,7 @@ import csv
 import json
 import logging
 import os
+import shlex
 import shutil
 from pathlib import Path
 from typing import Any
@@ -65,21 +66,32 @@ class Geant4Runner:
 
     async def configure(self, source_dir: str, build_dir: str) -> dict[str, Any]:
         """Run cmake configure. Returns {success, cmake_output, errors}."""
-        Path(build_dir).mkdir(parents=True, exist_ok=True)
-        rc, out, err = await self._run(f"cmake {source_dir}", cwd=build_dir)
-        return {"success": rc == 0, "cmake_output": out, "errors": err}
+        source_path = Path(source_dir).resolve()
+        build_path = Path(build_dir).resolve()
+        build_path.mkdir(parents=True, exist_ok=True)
+        command = f"cmake {shlex.quote(str(source_path))}"
+        rc, out, err = await self._run(command, cwd=str(build_path))
+        return {
+            "success": rc == 0,
+            "command": command,
+            "source_dir": str(source_path),
+            "build_dir": str(build_path),
+            "cmake_output": out,
+            "errors": err,
+        }
 
     async def build(self, build_dir: str, threads: int = 4) -> dict[str, Any]:
         """Run make. Returns {success, build_output, executable_path, errors}."""
-        rc, out, err = await self._run(f"make -j{threads}", cwd=build_dir)
+        build_path = Path(build_dir).resolve()
+        rc, out, err = await self._run(f"make -j{threads}", cwd=str(build_path))
         exe: str | None = None
         if rc == 0:
             candidates = (
-                list(Path(build_dir).glob("*.exe"))
-                + list(Path(build_dir).glob("*_sim"))
-                + [p for p in Path(build_dir).iterdir() if p.is_file() and os.access(p, os.X_OK)]
+                list(build_path.glob("*.exe"))
+                + list(build_path.glob("*_sim"))
+                + [p for p in build_path.iterdir() if p.is_file() and os.access(p, os.X_OK)]
             )
-            exe = str(candidates[0]) if candidates else None
+            exe = str(candidates[0].resolve()) if candidates else None
         return {"success": rc == 0, "build_output": out, "executable_path": exe, "errors": err}
 
     async def simulate(
@@ -92,17 +104,18 @@ class Geant4Runner:
         job_id: str = "unknown",
     ) -> dict[str, Any]:
         """Run simulation. Macro passed as positional arg per project convention."""
-        cmd = executable
+        executable_path = Path(executable).resolve()
+        cmd = shlex.quote(str(executable_path))
         if macro:
-            cmd += f" {macro}"
+            cmd += f" {shlex.quote(str(Path(macro).resolve()))}"
         env_prefix = ""
         if threads > 1:
             env_prefix += f"export G4FORCE_RUN_MANAGER_THREAD={threads}; "
         if output_dir:
-            env_prefix += f"export G4_OUTPUT_DIR={output_dir}; "
+            env_prefix += f"export G4_OUTPUT_DIR={shlex.quote(str(Path(output_dir).resolve()))}; "
         if job_id != "unknown":
-            env_prefix += f"export G4_JOB_ID={job_id}; "
-        rc, out, err = await self._run(env_prefix + cmd, cwd=str(Path(executable).parent))
+            env_prefix += f"export G4_JOB_ID={shlex.quote(job_id)}; "
+        rc, out, err = await self._run(env_prefix + cmd, cwd=str(executable_path.parent))
         runtime_error_patterns = detect_smoke_runtime_errors(err)
         process_success = rc == 0
         return {
@@ -111,7 +124,7 @@ class Geant4Runner:
             "returncode": rc,
             "command": cmd,
             "runtime_error_patterns": runtime_error_patterns,
-            "output_dir": output_dir or str(Path(executable).parent),
+            "output_dir": str(Path(output_dir).resolve()) if output_dir else str(executable_path.parent),
             "log": out,
             "errors": err,
         }

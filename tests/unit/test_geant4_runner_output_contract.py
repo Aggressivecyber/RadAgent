@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -75,6 +76,98 @@ def test_visual_workbench_environment_defaults_qt_to_xcb(monkeypatch: pytest.Mon
 
     assert env["QT_QPA_PLATFORM"] == "xcb"
     assert env["DISPLAY"] == ":7"
+
+
+@pytest.mark.asyncio
+async def test_configure_resolves_relative_source_before_running_from_build_dir(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "geant4_project"
+    build_dir = project_dir / "build"
+    project_dir.mkdir()
+    runner = _runner()
+    seen: dict[str, str | None] = {}
+
+    async def fake_run(cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
+        seen["cmd"] = cmd
+        seen["cwd"] = cwd
+        return 0, "", ""
+
+    runner._run = fake_run  # type: ignore[method-assign]
+
+    result = await runner.configure(
+        os.path.relpath(project_dir, Path.cwd()),
+        os.path.relpath(build_dir, Path.cwd()),
+    )
+
+    assert result["success"] is True
+    assert seen["cmd"] == f"cmake {project_dir.resolve()}"
+    assert seen["cwd"] == str(build_dir.resolve())
+    assert result["command"] == f"cmake {project_dir.resolve()}"
+    assert result["source_dir"] == str(project_dir.resolve())
+    assert result["build_dir"] == str(build_dir.resolve())
+
+
+@pytest.mark.asyncio
+async def test_build_returns_absolute_executable_path_for_relative_build_dir(
+    tmp_path: Path,
+) -> None:
+    build_dir = tmp_path / "geant4_project" / "build"
+    build_dir.mkdir(parents=True)
+    executable = build_dir / "RadAgent"
+    executable.write_text("", encoding="utf-8")
+    executable.chmod(0o755)
+    runner = _runner()
+
+    async def fake_run(cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
+        assert cmd == "make -j4"
+        assert cwd == str(build_dir.resolve())
+        return 0, "", ""
+
+    runner._run = fake_run  # type: ignore[method-assign]
+
+    result = await runner.build(os.path.relpath(build_dir, Path.cwd()))
+
+    assert result["success"] is True
+    assert result["executable_path"] == str(executable.resolve())
+
+
+@pytest.mark.asyncio
+async def test_simulate_resolves_relative_paths_before_running_from_executable_dir(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "geant4_project"
+    build_dir = project_dir / "build"
+    macros_dir = project_dir / "macros"
+    output_dir = tmp_path / "out"
+    build_dir.mkdir(parents=True)
+    macros_dir.mkdir(parents=True)
+    executable = build_dir / "RadAgent"
+    macro = macros_dir / "run.mac"
+    executable.write_text("", encoding="utf-8")
+    macro.write_text("/run/beamOn 1\n", encoding="utf-8")
+    runner = _runner()
+    seen: dict[str, str | None] = {}
+
+    async def fake_run(cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
+        seen["cmd"] = cmd
+        seen["cwd"] = cwd
+        return 0, "", ""
+
+    runner._run = fake_run  # type: ignore[method-assign]
+
+    result = await runner.simulate(
+        os.path.relpath(executable, Path.cwd()),
+        macro=os.path.relpath(macro, Path.cwd()),
+        output_dir=os.path.relpath(output_dir, Path.cwd()),
+        job_id="job path",
+    )
+
+    assert result["success"] is True
+    assert seen["cwd"] == str(build_dir.resolve())
+    assert str(executable.resolve()) in str(seen["cmd"])
+    assert str(macro.resolve()) in str(seen["cmd"])
+    assert f"G4_OUTPUT_DIR={output_dir.resolve()}" in str(seen["cmd"])
 
 
 def test_materialize_output_contract_derives_3d_outputs_from_event_table(tmp_path: Path) -> None:

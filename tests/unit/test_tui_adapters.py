@@ -73,6 +73,24 @@ def test_brand_row_renders_without_status_prefix() -> None:
     assert rendered == RADAGENT_BRAND_MARK
 
 
+def test_thinking_row_renders_activity_frame() -> None:
+    row = TimelineRow(
+        id="thinking:1",
+        kind="thinking",
+        status="running",
+        title="Copilot",
+        summary="Analyzing simulation request",
+        payload={"activity_frame": "[.. ]"},
+    )
+
+    rendered = render_row(row)
+
+    assert rendered.startswith("Copilot")
+    assert "run" in rendered
+    assert "[.. ]" in rendered
+    assert "Analyzing simulation request" in rendered
+
+
 def test_status_to_header_renders_confirmation_state() -> None:
     status = JobStatus(
         job_id="job_1",
@@ -308,6 +326,9 @@ def test_startup_status_renders_workstation_sections_and_semantic_tool_states() 
     assert "Profile     Model" in rendered
     assert "lite        mimo-v2.5" in rendered
     assert "pro         mimo-v2.5-pro" in rendered
+    assert "Task Plan" in rendered
+    assert "Use lite LLM for briefing and modeling extraction." in rendered
+    assert "Generate Geant4 modules with agentic read/write/edit tools." in rendered
     assert "System Log" in rendered
     assert "[OK]      Workspace initialized" in rendered
 

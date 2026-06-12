@@ -58,6 +58,36 @@ class TestGenerateFinalReport:
         assert result["verified"] is False
         assert "failed_gates" in result["termination_reason"]
 
+    async def test_failed_report_handles_structured_errors(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        state = {
+            "job_id": "test_job",
+            "user_query": "test query",
+            "execution_mode": "strict",
+            "validation_status": "failed",
+            "context_decision": "allow_rag",
+            "simulation_scope": ["geant4"],
+            "failed_gates": [],
+            "errors": [
+                {
+                    "preview": "OK green-zone files; rejected build.sh",
+                    "truncated": True,
+                },
+                "Build failed",
+            ],
+            "g4_model_ir_path": "",
+            "gate_results_path": "",
+        }
+
+        result = await generate_final_report(state)
+
+        assert result["verified"] is False
+        assert "OK green-zone files" in result["termination_reason"]
+        report = Path(result["final_report_path"]).read_text()
+        assert "OK green-zone files" in report
+
     async def test_reserved_scope_note(self, temp_workspace: Path) -> None:
         """Report must mention TCAD/SPICE reserved scopes."""
         state = {

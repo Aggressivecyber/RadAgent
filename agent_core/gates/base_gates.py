@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_core.gates.output_quality import REQUIRED_G4_OUTPUTS, inspect_g4_output_quality
-from agent_core.tools.geant4_workbench import SELF_CHECK_EVENTS
+from agent_core.tools.geant4_workbench import resolve_self_check_events
 from agent_core.validators.code_structure_validator import CodeStructureValidator
 from agent_core.validators.schema_validator import SchemaValidator
 from agent_core.workspace.io import get_job_dir, get_output_dir
@@ -61,6 +61,10 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     context_decision = state.get("context_decision", "block_no_context")
     task_spec = state.get("task_spec", {})
     model_ir = state.get("g4_model_ir", {})
+    self_check_events = resolve_self_check_events(
+        g4_model_ir=model_ir if isinstance(model_ir, dict) else {},
+        task_spec=task_spec if isinstance(task_spec, dict) else {},
+    )
     code_dir = state.get("generated_code_dir", "")
     output_dir = get_output_dir(job_id)
     _job_dir = get_job_dir(job_id)  # noqa: F841 — reserved for gate persistence
@@ -308,7 +312,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
                 str(code_dir),
                 job_id=job_id,
                 output_dir=str(output_dir),
-                events=SELF_CHECK_EVENTS,
+                events=self_check_events,
             )
             build_valid = build_result.get("success", False)
             g6_msg = (
@@ -386,7 +390,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
     output_quality = inspect_g4_output_quality(
         output_dir,
         smoke_result=smoke_result,
-        expected_events=SELF_CHECK_EVENTS,
+        expected_events=self_check_events,
     )
 
     # Gate 8: Data Contract
@@ -457,7 +461,7 @@ async def run_base_gates(state: GateSubgraphState) -> dict[str, Any]:
             "name": gate_name(9),
             "status": g9_severity,
             "checked_items": [
-                {"item": "smoke simulation (1000 events)", "result": g9_severity},
+                {"item": f"smoke simulation ({self_check_events} events)", "result": g9_severity},
             ],
             "passed_items": ["smoke simulation passed"] if g9_severity == "pass" else [],
             "failed_items": [g9_message] if g9_severity == "fail" else [],
