@@ -136,6 +136,16 @@ _KNOWN_GEANT4_FIXES: tuple[tuple[str, str], ...] = (
         "that daughter center +/- half-length lies within the mother's bounds "
         "on every axis; fix the placement coordinates or the dimensions.",
     ),
+    (
+        "No material associated to the logical volume", "GetMass",
+        "MATERIAL FIX: a logical volume was created with a null material — "
+        "MaterialRegistry/NIST lookup failed for its material_id, then "
+        "G4LogicalVolume::GetMass() aborted. Verify the NIST name is valid and "
+        "spelled exactly (e.g. G4_PLASTIC_SC_VINYLENE, not G4_PLASTIC_SC_VINYL; "
+        "G4_POLYSTYRENE is a safe fallback) and that GetMaterial() returns "
+        "non-null BEFORE constructing the logical volume. A null material must "
+        "be a hard error, not silently passed to G4LogicalVolume.",
+    ),
 )
 
 

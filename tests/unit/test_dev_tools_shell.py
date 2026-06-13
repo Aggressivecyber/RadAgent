@@ -71,3 +71,12 @@ def test_known_fix_hints_append_for_classic_geant4_errors() -> None:
     # Unrelated output passes through unchanged; empty stays empty.
     assert _known_fix_hints("undefined reference to foo") == "undefined reference to foo"
     assert _known_fix_hints("") == ""
+
+
+def test_known_fix_hint_for_null_material() -> None:
+    from agent_core.dev_tools.shell import _known_fix_hints
+    out = _known_fix_hints(
+        "*** G4Exception : GeomMgt0002\nNo material associated to the logical volume: X! GetMass"
+    )
+    assert "MATERIAL FIX" in out
+    assert "G4_POLYSTYRENE" in out
