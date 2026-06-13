@@ -128,7 +128,7 @@ async def run_agentic_repair(
             )
         return None
 
-    budget = max_turns or int(__import__("os").getenv("RADAGENT_AGENTIC_MAX_TURNS", "48"))
+    budget = max_turns or int(__import__("os").getenv("RADAGENT_AGENTIC_MAX_TURNS", "80"))
 
     loop_result = await run_agent_loop(
         gateway=gateway,
@@ -138,7 +138,7 @@ async def run_agentic_repair(
         user_message=user_message,
         toolkit=toolkit,
         max_turns=budget,
-        max_tokens=8192,
+        max_tokens=16384,
         stop_hook=_smoke_passed,
         nudge_hook=_diagnosis_nudge,
         metadata={

@@ -99,8 +99,13 @@ async def build_project(project_dir: Path, *, threads: int = 4) -> dict[str, Any
     }
 
 
-def _tail(text: str, *, max_chars: int = 8000) -> str:
-    """Keep the END of compiler output — that's where errors + carets live."""
+def _tail(text: str, *, max_chars: int = 20000) -> str:
+    """Keep the END of compiler output — that's where errors + carets live.
+
+    The model has a ~1M-token context window, so we keep a generous tail
+    (20k chars) to preserve the full error context for complex multi-file
+    builds instead of truncating to the last 8k.
+    """
     if len(text) <= max_chars:
         return text
     return "..." + text[-(max_chars - 3):]
