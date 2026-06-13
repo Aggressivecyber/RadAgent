@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RadAgent · 器件截面画布</title>
+<script src="konva.min.js"></script>
+<script src="polygon-clipping.umd.js"></script>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#161a21; --panel2:#1d222b; --line:#2a313d;
+    --fg:#e6e8ec; --muted:#8a93a3; --accent:#7c6cff; --err:#f85149; --snap:#ffd23f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--fg);font:13px/1.45 -apple-system,"Segoe UI","Noto Sans CJK SC",Roboto,sans-serif;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:14px;margin:0;font-weight:600}
+  header .sub{color:var(--muted);font-size:12px}
+  .toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:auto}
+  button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);padding:5px 10px;border-radius:5px;cursor:pointer;font-size:12px}
+  button:hover{border-color:var(--accent)}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  select,input[type=number],input[type=text]{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:3px 6px;font-size:12px;width:100%}
+  input[type=checkbox]{accent-color:var(--accent)}
+  .main{flex:1;display:flex;min-height:0}
+  .stage-wrap{flex:1;min-width:0;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 50%,#14171e 0%,#0c0e12 100%)}
+  #konva-container{width:100%;height:100%}
+  .axisbar{position:absolute;top:8px;left:10px;display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.4);padding:5px 8px;border-radius:5px;font-size:11px;z-index:5}
+  .axisbar span{color:var(--muted)}
+  .axisbar select{width:auto}
+  .axisbar label{display:flex;align-items:center;gap:3px;color:var(--muted);font-size:11px}
+  .zoomctl{position:absolute;top:8px;right:10px;display:flex;gap:4px;z-index:5}
+  .zoomctl button{padding:3px 8px}
+  .side{width:300px;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:12px;flex-shrink:0}
+  .side h3{margin:0 0 8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .field{margin-bottom:9px}
+  .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}
+  .row{display:flex;gap:6px}.row>*{flex:1}
+  .comp-list{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto}
+  .comp-list li{padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;border:1px solid transparent}
+  .comp-list li:hover{background:var(--panel2)}
+  .comp-list li.sel{background:var(--panel2);border-color:var(--accent)}
+  .swatch{width:12px;height:12px;border-radius:2px;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}
+  .pill{font-size:10px;color:var(--muted);margin-left:auto}
+  .hint{color:var(--muted);font-size:11px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--line);margin:12px 0}
+  .empty-side{color:var(--muted);font-size:12px}
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--accent);color:var(--fg);padding:8px 14px;border-radius:6px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+  .alignbar{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:6px}
+  .alignbar button{padding:5px 0;font-size:14px;line-height:1}
+  .seg{display:flex;gap:0;border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-bottom:8px}
+  .seg button{flex:1;border:none;border-radius:0;background:var(--panel2)}
+  .seg button.on{background:var(--accent);color:#fff}
+  .loadfail{position:fixed;inset:0;background:#1a0f0f;color:#ffb4b4;display:flex;align-items:center;justify-content:center;text-align:center;padding:40px;font-size:14px;z-index:100}
+  code{background:var(--panel2);padding:1px 4px;border-radius:3px;font-size:11px}
+</style>
+<style id="tech-theme">
+/* ========= Tech Innovation 主题(theme-factory) =========
+   Electric Blue #0066ff · Neon Cyan #00ffff · Dark #1e1e1e · White
+   + frontend-design 哲学:signature = 工程坐标 HUD;字体区分(数据等宽);
+     大胆集中在 cyan 高光,其余克制。 */
+:root{
+  --bg:#070a10; --panel:#0d1118; --panel2:#131923;
+  --line:rgba(0,170,255,.12); --line-strong:rgba(0,170,255,.26);
+  --fg:#eaf2fb; --muted:#6e7d92; --muted2:#4a5668;
+  --accent:#0066ff;            /* electric blue 主操作 */
+  --accent-soft:rgba(0,102,255,.16);
+  --cyan:#00e5ff;              /* neon cyan 高亮/数据/选中 */
+  --cyan-soft:rgba(0,229,255,.14);
+  --err:#ff4d6d; --snap:#ffd23f;
+  --radius:9px;
+  --mono:ui-monospace,"JetBrains Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI","Noto Sans CJK SC",Roboto,sans-serif;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 22px -8px rgba(0,0,0,.55);
+  --shadow-lg:0 10px 40px -12px rgba(0,0,0,.7),0 0 0 1px rgba(0,229,255,.05);
+}
+html,body{height:100%}
+body{
+  background:
+    radial-gradient(1100px 560px at 82% -14%, rgba(0,102,255,.12), transparent 60%),
+    radial-gradient(820px 480px at -8% 116%, rgba(0,229,255,.07), transparent 60%),
+    var(--bg);
+  font-family:var(--sans);letter-spacing:.1px;color:var(--fg);
+}
+/* header:工具栏顶栏 + cyan 顶边发光(signature 之一) */
+header{
+  background:linear-gradient(180deg,rgba(16,22,33,.9),rgba(10,14,22,.85));
+  backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3);
+  border-bottom:1px solid var(--line);padding:9px 18px;position:relative;
+}
+header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,.55),transparent);}
+header h1{font-size:14px;font-weight:700;letter-spacing:.4px;color:#fff;
+  font-family:var(--sans);}
+header h1::before{content:"◢ ";color:var(--cyan);font-size:11px;}
+header .sub{font-size:12px;font-family:var(--mono);color:var(--muted);}
+/* 按钮:electric blue 主,ghost 透明,数据感 */
+button{
+  background:linear-gradient(180deg,#16202e,#0e1521);border:1px solid var(--line-strong);
+  padding:6px 11px;border-radius:var(--radius);font-size:12px;font-weight:500;color:var(--fg);
+  transition:all .15s cubic-bezier(.4,0,.2,1);font-family:var(--sans);
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 1px 2px rgba(0,0,0,.35);
+}
+button:hover{border-color:rgba(0,229,255,.55);color:#fff;
+  background:linear-gradient(180deg,#1d2a3d,#13202f);box-shadow:0 0 0 1px rgba(0,229,255,.15),0 4px 14px -4px rgba(0,229,255,.25);}
+button:active{transform:translateY(1px)}
+button.ghost{background:transparent;border-color:transparent;box-shadow:none}
+button.ghost:hover{background:var(--cyan-soft);border-color:var(--line-strong);color:var(--cyan)}
+button:disabled{opacity:.32;cursor:not-allowed}
+#btnUndo,#btnRedo{font-size:15px;padding:6px 9px;font-family:var(--mono)}
+/* 输入:工程数据字段用等宽 */
+select,input[type=number]{background:#080d15;border:1px solid var(--line-strong);border-radius:var(--radius);
+  padding:6px 9px;font-size:12px;color:var(--fg);width:100%;font-family:var(--mono);transition:border-color .15s,box-shadow .15s;}
+input[type=text]{background:#080d15;border:1px solid var(--line-strong);border-radius:var(--radius);
+  padding:6px 9px;font-size:12px;color:var(--fg);width:100%;transition:border-color .15s,box-shadow .15s;}
+select:focus,input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
+/* 画布舞台:深空 + 工程网格氛围 */
+.stage-wrap{
+  background:
+    radial-gradient(circle at 50% 36%,#0e1420 0%,#06090f 100%);
+  border-right:1px solid var(--line);cursor:crosshair;
+}
+.axisbar,.zoomctl{
+  background:rgba(8,13,21,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.axisbar{font-family:var(--mono);}
+.zoomctl button{padding:4px 9px;background:rgba(255,255,255,.04)}
+/* signature:坐标 HUD */
+#hudCoord{color:var(--cyan);font-family:var(--mono);font-size:11px;font-weight:600;
+  padding:1px 6px;background:var(--cyan-soft);border-radius:5px;border:1px solid rgba(0,229,255,.25);}
+/* 侧栏 */
+.side{
+  width:312px;
+  background:linear-gradient(180deg,rgba(13,17,24,.95),rgba(8,12,18,.95));
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-left:1px solid var(--line);
+}
+.side h3{font-size:10.5px;letter-spacing:1.2px;color:var(--muted);font-weight:600;margin-bottom:10px;
+  text-transform:uppercase;}
+.side h3::before{content:"";display:inline-block;width:5px;height:5px;background:var(--cyan);
+  border-radius:1px;margin-right:7px;vertical-align:2px;box-shadow:0 0 6px var(--cyan);}
+.field label{font-size:11px;color:var(--muted);font-weight:500;font-family:var(--mono);text-transform:uppercase;letter-spacing:.4px}
+.comp-list li{border-radius:var(--radius);padding:7px 9px;transition:all .12s;border:1px solid transparent;font-family:var(--sans)}
+.comp-list li:hover{background:rgba(0,229,255,.05)}
+.comp-list li.sel{background:var(--cyan-soft);border-color:rgba(0,229,255,.45)}
+.swatch{border-radius:3px;box-shadow:0 0 0 1px rgba(0,229,255,.1)}
+.pill{background:rgba(0,229,255,.06);padding:1px 6px;border-radius:5px;color:var(--cyan);font-family:var(--mono);font-size:10px}
+.alignbar button{padding:7px 0;font-size:15px;border-radius:var(--radius);background:rgba(255,255,255,.03);border:1px solid var(--line-strong);font-family:var(--mono)}
+.alignbar button:hover{background:var(--cyan-soft);border-color:rgba(0,229,255,.55);color:var(--cyan)}
+.seg{border-radius:8px;border:1px solid var(--line-strong);background:rgba(0,0,0,.3);padding:3px}
+.seg button{border:none;background:transparent;border-radius:5px;font-weight:500}
+.seg button.on{background:var(--accent);color:#fff;box-shadow:0 2px 12px -2px rgba(0,102,255,.65)}
+hr{border:none;border-top:1px solid var(--line)}
+.toast{
+  background:rgba(13,18,27,.96);backdrop-filter:blur(14px);
+  border:1px solid rgba(0,229,255,.3);box-shadow:var(--shadow-lg);
+  border-radius:var(--radius);padding:10px 16px;font-size:12.5px;font-weight:500;bottom:24px;
+}
+code{background:rgba(0,229,255,.08);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--cyan);font-family:var(--mono)}
+.side,.comp-list{scrollbar-width:thin;scrollbar-color:rgba(0,170,255,.3) transparent}
+.side::-webkit-scrollbar,.comp-list::-webkit-scrollbar{width:8px;height:8px}
+.side::-webkit-scrollbar-thumb,.comp-list::-webkit-scrollbar-thumb{background:rgba(0,170,255,.22);border-radius:8px}
+.side::-webkit-scrollbar-thumb:hover{background:rgba(0,229,255,.4)}
+.empty-side,.hint{color:var(--muted)}
+.loadfail{background:rgba(30,8,14,.95);backdrop-filter:blur(8px)}
+</style>
+<style id="workbench-theme">
+:root{
+  --bg:#f4f6f8;
+  --panel:#ffffff;
+  --panel2:#f8fafc;
+  --panel3:#eef2f6;
+  --line:#d8dee8;
+  --line-strong:#b9c3d0;
+  --fg:#17202a;
+  --muted:#667085;
+  --muted2:#98a2b3;
+  --accent:#2563eb;
+  --accent-soft:#e8f0ff;
+  --accent-line:#8bb4ff;
+  --err:#c2410c;
+  --err-soft:#fff1e8;
+  --snap:#b7791f;
+  --ok:#047857;
+  --radius:6px;
+  --mono:ui-monospace,"SFMono-Regular","Roboto Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI","Noto Sans CJK SC",Roboto,sans-serif;
+  --shadow:0 1px 2px rgba(16,24,40,.08);
+  --shadow-pop:0 16px 36px rgba(16,24,40,.14);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font:13px/1.45 var(--sans);
+  display:flex;
+  flex-direction:column;
+  letter-spacing:0;
+}
+header{
+  min-height:56px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:10px 16px;
+  background:var(--panel);
+  border-bottom:1px solid var(--line);
+  flex-wrap:wrap;
+  box-shadow:var(--shadow);
+  position:relative;
+}
+header::after{display:none}
+header h1{
+  margin:0;
+  font-size:15px;
+  font-weight:650;
+  color:var(--fg);
+  letter-spacing:0;
+}
+header h1::before{content:"";display:none}
+header .sub{
+  color:var(--muted);
+  font-size:12px;
+  font-family:var(--sans);
+}
+.toolbar{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-left:auto;
+}
+button{
+  min-height:30px;
+  background:var(--panel);
+  color:var(--fg);
+  border:1px solid var(--line-strong);
+  padding:5px 10px;
+  border-radius:var(--radius);
+  cursor:pointer;
+  font-size:12px;
+  font-weight:520;
+  font-family:var(--sans);
+  box-shadow:none;
+  transition:background .12s,border-color .12s,color .12s,box-shadow .12s;
+}
+button:hover{
+  background:var(--panel2);
+  border-color:#9aa8ba;
+  color:var(--fg);
+  box-shadow:var(--shadow);
+}
+button:active{transform:none;background:var(--panel3)}
+button.ghost{
+  background:transparent;
+  border-color:transparent;
+  color:var(--muted);
+}
+button.ghost:hover{
+  background:var(--panel2);
+  border-color:var(--line);
+  color:var(--fg);
+}
+button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+#btnUndo,#btnRedo{
+  width:32px;
+  padding:5px 0;
+  font-family:var(--mono);
+  font-size:14px;
+}
+select,input[type=number],input[type=text]{
+  width:100%;
+  min-height:30px;
+  background:var(--panel);
+  color:var(--fg);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:5px 8px;
+  font-size:12px;
+  font-family:var(--sans);
+  transition:border-color .12s,box-shadow .12s,background .12s;
+}
+input[type=number],select{font-family:var(--mono)}
+select:focus,input:focus{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft);
+}
+input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
+.main{flex:1;display:flex;min-height:0}
+.stage-wrap{
+  flex:1;
+  min-width:0;
+  position:relative;
+  overflow:hidden;
+  background:#f7f9fc;
+  border-right:1px solid var(--line);
+  cursor:crosshair;
+}
+#konva-container{width:100%;height:100%}
+.preview3d{
+  position:absolute;
+  right:12px;
+  bottom:12px;
+  width:min(560px,calc(100% - 24px));
+  max-width:560px;
+  background:rgba(255,255,255,.96);
+  border:1px solid var(--line);
+  border-radius:8px;
+  box-shadow:var(--shadow-pop);
+  z-index:9;
+  overflow:hidden;
+  display:none;
+}
+.preview3d.show{display:block}
+.preview3d-head{
+  min-height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:7px 9px;
+  border-bottom:1px solid var(--line);
+  background:var(--panel);
+}
+.preview3d-head strong{font-size:12px;color:var(--fg)}
+.preview3d-head div{display:flex;gap:4px}
+.preview3d-head button{min-height:24px;padding:2px 7px}
+#preview3dCanvas{
+  display:block;
+  width:100%;
+  height:auto;
+  background:#f8fafc;
+}
+.preview3d-foot{
+  padding:6px 9px;
+  border-top:1px solid var(--line);
+  color:var(--muted);
+  font-size:11px;
+  background:var(--panel);
+}
+.axisbar,.zoomctl{
+  position:absolute;
+  z-index:5;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.axisbar{
+  top:10px;
+  left:12px;
+  right:340px;
+  padding:6px 8px;
+  font:11px/1.2 var(--mono);
+  flex-wrap:wrap;
+}
+.axisbar span{color:var(--muted)}
+.axisbar select{width:auto;min-height:26px;padding:3px 7px}
+.axisbar label{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  color:var(--muted);
+  font:11px/1.2 var(--sans);
+}
+.slice-control{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:2px 4px;
+  border-left:1px solid var(--line);
+  white-space:nowrap;
+}
+.slice-control input[type=number]{min-height:26px;padding:3px 7px}
+.zoomctl{top:10px;right:12px;padding:4px}
+.zoomctl button{
+  width:28px;
+  min-height:26px;
+  padding:3px 0;
+  border-color:transparent;
+  background:transparent;
+  font-family:var(--mono);
+}
+.zoomctl button.on{
+  width:auto;
+  padding:3px 8px;
+  background:var(--accent-soft);
+  border-color:#bdd0ff;
+  color:#1d4ed8;
+}
+#hudCoord{
+  color:#1d4ed8;
+  font:600 11px/1.2 var(--mono);
+  padding:3px 7px;
+  background:var(--accent-soft);
+  border-radius:999px;
+  border:1px solid #c7d7fe;
+}
+.side{
+  width:324px;
+  flex-shrink:0;
+  overflow-y:auto;
+  padding:14px;
+  background:var(--panel);
+  border-left:1px solid var(--line);
+}
+.side h3{
+  margin:0 0 9px;
+  font-size:11px;
+  line-height:1.2;
+  color:#475467;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  font-weight:700;
+}
+.side h3::before{display:none}
+.field{margin-bottom:10px}
+.field label{
+  display:block;
+  margin-bottom:4px;
+  color:var(--muted);
+  font:600 11px/1.25 var(--sans);
+  text-transform:none;
+  letter-spacing:0;
+}
+.checkrow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 8px;
+  color:#344054;
+  font:600 12px/1.25 var(--sans);
+}
+.checkrow input{flex:0 0 auto}
+.row{display:flex;gap:6px}.row>*{flex:1}
+.comp-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+  max-height:260px;
+  overflow:auto;
+}
+.comp-list li{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:32px;
+  padding:6px 8px;
+  border-radius:var(--radius);
+  cursor:pointer;
+  font-size:12px;
+  border:1px solid transparent;
+  transition:background .12s,border-color .12s;
+}
+.comp-list li:hover{background:var(--panel2)}
+.comp-list li.sel{
+  background:var(--accent-soft);
+  border-color:#bdd0ff;
+}
+.swatch{
+  width:12px;
+  height:12px;
+  border-radius:3px;
+  flex-shrink:0;
+  border:1px solid rgba(15,23,42,.15);
+  box-shadow:none;
+}
+.pill{
+  margin-left:auto;
+  padding:1px 6px;
+  border-radius:999px;
+  background:#f1f5f9;
+  color:#475467;
+  font:10px/1.5 var(--mono);
+}
+.hint,.empty-side{
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.55;
+}
+.vertex-table{
+  display:grid;
+  gap:4px;
+}
+.vertex-tools{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:4px;
+  margin-bottom:5px;
+}
+.vertex-tools button{
+  min-height:24px;
+  padding:2px 5px;
+}
+.vertex-row{
+  display:grid;
+  grid-template-columns:28px minmax(0,1fr) minmax(0,1fr);
+  gap:5px;
+  align-items:center;
+}
+.vertex-row.selected{
+  background:rgba(37,99,235,.08);
+  border-radius:6px;
+}
+.vertex-row span{
+  color:#475467;
+  font:600 11px/1.2 var(--mono);
+}
+.vertex-row.selected span{
+  color:#155eef;
+}
+.vertex-head span{
+  color:var(--muted);
+}
+.vertex-row input{
+  min-width:0;
+  font-family:var(--mono);
+}
+.health{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:6px;
+  margin-bottom:8px;
+}
+.metric{
+  min-width:0;
+  padding:7px 8px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.metric b{
+  display:block;
+  color:var(--fg);
+  font:650 15px/1.1 var(--mono);
+  margin-bottom:2px;
+}
+.metric span{
+  display:block;
+  color:var(--muted);
+  font-size:10px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.issue-list{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  margin:0 0 10px;
+}
+.issue{
+  display:flex;
+  align-items:flex-start;
+  gap:7px;
+  padding:6px 8px;
+  border-radius:var(--radius);
+  background:#f8fafc;
+  border:1px solid var(--line);
+  color:var(--muted);
+  font-size:11px;
+}
+.issue-clickable{
+  width:100%;
+  min-height:0;
+  text-align:left;
+  cursor:pointer;
+  font-family:var(--sans);
+  box-shadow:none;
+}
+.issue-clickable:hover{
+  background:#eef4ff;
+  border-color:#bdd0ff;
+}
+.issue-waived{
+  background:#f8fafc;
+  border-color:#d9e2ec;
+  color:#667085;
+}
+.issue-waived .issue-text{
+  opacity:.78;
+}
+.issue-toolbar{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto auto;
+  gap:5px;
+  align-items:center;
+  margin:0 0 8px;
+}
+.issue-toolbar button{
+  min-height:28px;
+  padding:3px 8px;
+}
+.issue-counter{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:42px;
+  height:28px;
+  padding:0 7px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  color:var(--muted);
+  font:650 10px/1 var(--mono);
+}
+.issue-current{
+  border-color:#2563eb!important;
+  box-shadow:0 0 0 1px rgba(37,99,235,.16);
+}
+.issue-text{flex:1;min-width:0}
+.issue-actions{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-left:auto;
+}
+.issue-actions button{
+  min-height:22px;
+  padding:2px 6px;
+  font-size:10px;
+  white-space:nowrap;
+}
+.issue small{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font:10px/1.25 var(--mono);
+}
+.issue.warn{
+  color:#92400e;
+  background:#fffbeb;
+  border-color:#fde68a;
+}
+.issue.err{
+  color:#9a3412;
+  background:var(--err-soft);
+  border-color:#fed7aa;
+}
+.issue.issue-waived{
+  background:#f8fafc;
+  border-color:#d9e2ec;
+  color:#667085;
+}
+.stack-tools{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:6px;
+  align-items:center;
+  margin:0 0 7px;
+}
+.stack-tools label{
+  margin:0;
+}
+.stack-tools .pill{
+  justify-self:end;
+}
+.stack-list{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  margin:0 0 12px;
+}
+.stack-row{
+  width:100%;
+  display:grid;
+  grid-template-columns:10px minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
+  min-height:36px;
+  padding:6px 8px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  color:var(--fg);
+  text-align:left;
+  box-shadow:none;
+}
+.stack-row:hover{
+  background:#eef4ff;
+  border-color:#bdd0ff;
+}
+.stack-row.selected{
+  background:#e9f0ff;
+  border-color:#92b4ff;
+}
+.stack-swatch{
+  width:10px;
+  height:22px;
+  border-radius:2px;
+  border:1px solid rgba(16,24,40,.18);
+}
+.stack-main,.stack-span{
+  min-width:0;
+}
+.stack-main b,.stack-span b{
+  display:block;
+  color:var(--fg);
+  font:650 11px/1.25 var(--sans);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.stack-main small,.stack-span small{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font:10px/1.2 var(--mono);
+}
+.stack-span{
+  text-align:right;
+}
+.stack-relation{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  align-self:flex-start;
+  width:max-content;
+  max-width:100%;
+  padding:2px 4px 2px 6px;
+  margin:0 0 -1px 18px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#f8fafc;
+  color:var(--muted);
+  font:10px/1.2 var(--sans);
+  cursor:pointer;
+}
+.stack-relation.ok{color:#047857;background:#ecfdf3;border-color:#a7f3d0}
+.stack-relation.warn{color:#92400e;background:#fffbeb;border-color:#fde68a}
+.stack-relation.err{color:#9a3412;background:var(--err-soft);border-color:#fed7aa}
+.stack-relation.muted{color:#667085;background:#f2f4f7}
+.stack-relation-actions{
+  display:inline-flex;
+  gap:3px;
+  margin-left:2px;
+}
+.stack-action{
+  min-height:18px;
+  padding:1px 5px;
+  border-radius:999px;
+  font-size:10px;
+  line-height:1;
+  background:rgba(255,255,255,.72);
+}
+.stack-action:hover{background:#fff}
+.stack-empty{
+  padding:8px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  color:var(--muted);
+  font-size:11px;
+}
+.list-tools{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:6px;
+  margin-bottom:8px;
+}
+.component-list-tools{
+  grid-template-columns:minmax(0,1fr) 92px auto auto auto;
+}
+.list-actions{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:6px;
+  margin-top:8px;
+}
+.list-actions button{padding-left:6px;padding-right:6px}
+.annotation-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin:0 0 10px;
+}
+.annotation-row{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  align-items:center;
+  min-height:34px;
+  padding:6px 8px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.annotation-row.muted{opacity:.58}
+.annotation-row b{
+  display:block;
+  color:var(--fg);
+  font:600 11px/1.2 var(--mono);
+}
+.annotation-row small{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font:10px/1.25 var(--sans);
+}
+.selection-summary{
+  margin:0 0 12px;
+  padding:9px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.selection-summary-head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:7px;
+}
+.selection-summary-head strong{
+  color:var(--fg);
+  font-size:12px;
+  font-weight:650;
+}
+.summary-grid{
+  display:grid;
+  grid-template-columns:72px minmax(0,1fr);
+  gap:5px 8px;
+  margin:0;
+}
+.summary-grid dt{
+  min-width:0;
+  color:var(--muted);
+  font:650 10px/1.35 var(--sans);
+}
+.summary-grid dd{
+  min-width:0;
+  margin:0;
+  color:#344054;
+  font:11px/1.35 var(--mono);
+  overflow-wrap:anywhere;
+}
+.pair-probe{
+  margin-top:8px;
+  padding:7px;
+  border:1px solid #d8dee8;
+  border-radius:var(--radius);
+  background:#fff;
+}
+.pair-probe b{
+  display:block;
+  margin-bottom:3px;
+  color:var(--fg);
+  font-size:11px;
+}
+.pair-probe span{
+  display:block;
+  color:#344054;
+  font:11px/1.35 var(--mono);
+  overflow-wrap:anywhere;
+}
+.pair-gap-control{
+  display:grid;
+  grid-template-columns:48px minmax(0,1fr) auto;
+  gap:5px;
+  margin-top:7px;
+}
+.pair-gap-control select,
+.pair-gap-control input,
+.pair-gap-control button{
+  min-width:0;
+  height:28px;
+  font-size:11px;
+}
+.summary-copy{
+  width:100%;
+  margin-top:8px;
+  border-color:var(--line);
+}
+.comp-list li.hidden{display:none}
+.comp-list li.muted{
+  opacity:.52;
+}
+.comp-id{
+  color:var(--muted);
+  font:600 10.5px/1.2 var(--mono);
+  max-width:92px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.layer-btn{
+  width:24px;
+  min-height:24px;
+  padding:0;
+  border-color:transparent;
+  background:transparent;
+  color:var(--muted);
+  font-family:var(--mono);
+}
+.layer-btn:hover{background:#e9eef5;border-color:var(--line);box-shadow:none}
+.measure-label{
+  position:absolute;
+  left:12px;
+  bottom:12px;
+  z-index:8;
+  display:none;
+  min-width:220px;
+  padding:7px 9px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:rgba(255,255,255,.94);
+  color:var(--fg);
+  font:11px/1.45 var(--mono);
+  box-shadow:var(--shadow);
+}
+.measure-label.show{display:block}
+.kbd{
+  display:inline-flex;
+  align-items:center;
+  min-height:18px;
+  padding:0 5px;
+  border:1px solid var(--line);
+  border-bottom-color:var(--line-strong);
+  border-radius:4px;
+  background:var(--panel);
+  color:#475467;
+  font:10px/1 var(--mono);
+}
+.command-palette{
+  position:fixed;
+  inset:0;
+  z-index:45;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:72px 18px 18px;
+  background:rgba(15,23,42,.18);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+}
+.command-palette[hidden]{display:none}
+.command-palette-panel{
+  width:min(560px,100%);
+  max-height:min(620px,calc(100vh - 96px));
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--panel);
+  box-shadow:var(--shadow-pop);
+}
+.command-palette-search{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:8px;
+  align-items:center;
+  padding:10px;
+  border-bottom:1px solid var(--line);
+  background:var(--panel);
+}
+.command-palette-search span{
+  min-width:40px;
+  padding:3px 7px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--panel2);
+  color:var(--muted);
+  text-align:center;
+  font:650 10px/1.3 var(--mono);
+}
+#commandPaletteSearch{
+  min-height:34px;
+  border-color:transparent;
+  background:var(--panel2);
+  font-size:13px;
+}
+.command-list{
+  overflow:auto;
+  padding:6px;
+}
+.command-item{
+  width:100%;
+  min-height:44px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  margin:0;
+  padding:7px 9px;
+  border-color:transparent;
+  border-radius:6px;
+  background:transparent;
+  color:var(--fg);
+  text-align:left;
+  box-shadow:none;
+}
+.command-item:hover,
+.command-item.active{
+  background:var(--accent-soft);
+  border-color:#bdd0ff;
+  box-shadow:none;
+}
+.command-item:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+.command-item b{
+  display:block;
+  color:var(--fg);
+  font:650 12px/1.3 var(--sans);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.command-item small{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font:10px/1.25 var(--sans);
+}
+.command-item .kbd{
+  justify-self:end;
+  white-space:nowrap;
+}
+.command-empty{
+  padding:18px 10px;
+  color:var(--muted);
+  text-align:center;
+  font-size:12px;
+}
+hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+.toast{
+  position:fixed;
+  bottom:18px;
+  left:50%;
+  transform:translateX(-50%);
+  background:var(--panel);
+  border:1px solid var(--accent);
+  color:var(--fg);
+  padding:9px 14px;
+  border-radius:var(--radius);
+  font-size:12px;
+  opacity:0;
+  transition:opacity .18s;
+  pointer-events:none;
+  z-index:50;
+  box-shadow:var(--shadow-pop);
+}
+.toast.show{opacity:1}
+.alignbar{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:5px;
+  margin-bottom:8px;
+}
+.alignbar button{
+  min-height:30px;
+  padding:4px 0;
+  font-size:14px;
+  line-height:1;
+  font-family:var(--mono);
+}
+.seg{
+  display:flex;
+  gap:4px;
+  padding:3px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  margin-bottom:10px;
+}
+.seg button{
+  flex:1;
+  min-height:28px;
+  border:none;
+  border-radius:4px;
+  background:transparent;
+  color:var(--muted);
+  box-shadow:none;
+}
+.seg button:hover{background:#e9eef5;color:var(--fg);box-shadow:none}
+.seg button.on{
+  background:var(--panel);
+  color:var(--fg);
+  box-shadow:var(--shadow);
+}
+.loadfail{
+  position:fixed;
+  inset:0;
+  background:#fff7ed;
+  color:#9a3412;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:40px;
+  font-size:14px;
+  z-index:100;
+}
+code{
+  background:#eef2f6;
+  color:#344054;
+  padding:1px 5px;
+  border-radius:4px;
+  font:11px/1.3 var(--mono);
+}
+.side,.comp-list{scrollbar-width:thin;scrollbar-color:#c7ced8 transparent}
+.side::-webkit-scrollbar,.comp-list::-webkit-scrollbar{width:8px;height:8px}
+.side::-webkit-scrollbar-thumb,.comp-list::-webkit-scrollbar-thumb{background:#c7ced8;border-radius:8px}
+.side::-webkit-scrollbar-thumb:hover,.comp-list::-webkit-scrollbar-thumb:hover{background:#9aa8ba}
+@media (max-width:900px){
+  header{align-items:flex-start}
+  .toolbar{width:100%;margin-left:0}
+  .main{flex-direction:column}
+  .side{width:100%;max-height:42vh;border-left:none;border-top:1px solid var(--line)}
+  .axisbar{right:12px;flex-wrap:wrap}
+  .zoomctl{top:auto;right:12px;bottom:56px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>器件截面画布</h1>
+  <span class="sub">编辑 <code>g4_model_ir.json</code> 的组件截面、材料和尺寸</span>
+  <div class="toolbar">
+    <button id="btnUndo" onclick="undo()" title="撤销 Ctrl+Z" disabled>↶</button>
+    <button id="btnRedo" onclick="redo()" title="重做 Ctrl+Y" disabled>↷</button>
+    <button id="btnCommandPalette" data-action="open-command-palette" class="ghost" onclick="openCommandPalette()" title="命令 Ctrl+K">命令</button>
+    <input type="file" id="file" accept=".json,application/json" style="display:none"/>
+    <input type="file" id="dxfFile" accept=".dxf,text/plain" style="display:none"/>
+    <select id="jobSelect" onchange="onJobSelect()" style="display:none;max-width:240px"></select>
+    <button onclick="document.getElementById('file').click()">载入</button>
+    <button class="ghost" onclick="loadExample()">示例</button>
+    <button onclick="exportJSON()">导出 JSON</button>
+    <button id="btnWrite" onclick="writeToJob()" style="display:none">回写 Job</button>
+    <button data-action="import-dxf" class="ghost" onclick="document.getElementById('dxfFile').click()">导入 DXF</button>
+    <button onclick="exportPNG()">导出 PNG</button>
+    <button data-action="export-svg" onclick="exportSVG()">导出 SVG</button>
+    <button data-action="export-dxf" onclick="exportDXF()">导出 DXF</button>
+    <button class="ghost" onclick="toggle3DPreview()">三维预览</button>
+    <button onclick="copyNL()">复制描述</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="stage-wrap" id="stageWrap">
+    <div class="axisbar">
+      <span>截面:</span>
+      <select id="lateral" onchange="onAxisChange()"></select>
+      <span>×</span>
+      <select id="depth" onchange="onAxisChange()"></select>
+      <span>μm</span>
+      <span style="margin:0 4px">|</span>
+      <label><input type="checkbox" id="equalScale" checked onchange="relayout()">等比</label>
+      <label><input type="checkbox" id="snapOn" checked onchange="onSnapSettingsChange()">吸附</label>
+      <label><input type="checkbox" id="snapGrid" checked onchange="onSnapSettingsChange()">网格</label>
+      <label><input type="checkbox" id="snapComponents" checked onchange="onSnapSettingsChange()">组件</label>
+      <label><input type="checkbox" id="snapCanvas" checked onchange="onSnapSettingsChange()">中心</label>
+      <label><input type="checkbox" id="ratioScale" onchange="onRatioChange()">等比缩放</label>
+      <span>网格</span>
+      <input type="number" id="gridStep" min="0" step="any" value="100" title="网格步长 μm" style="width:72px" onchange="onGridSettingsChange()"/>
+      <span>原点</span>
+      <input type="number" id="gridOriginLat" step="any" value="0" title="当前横向轴网格原点 μm" style="width:64px" onchange="onGridSettingsChange()"/>
+      <input type="number" id="gridOriginDep" step="any" value="0" title="当前深度轴网格原点 μm" style="width:64px" onchange="onGridSettingsChange()"/>
+      <span>吸附px</span>
+      <input type="number" id="snapPx" min="0" step="1" value="7" title="吸附阈值 px" style="width:56px" onchange="onSnapSettingsChange()"/>
+      <span class="slice-control">
+        <label><input type="checkbox" id="sliceEnabled" onchange="onSliceSettingsChange()">剖切</label>
+        <span id="sliceAxisLabel">y</span>
+        <input type="number" id="slicePos" step="any" value="0" title="第三轴剖切位置 μm" style="width:70px" onchange="onSliceSettingsChange()"/>
+        <span>厚</span>
+        <input type="number" id="sliceThickness" min="0" step="any" value="1" title="剖切厚度 μm" style="width:62px" onchange="onSliceSettingsChange()"/>
+      </span>
+      <span id="hudCoord">cursor: -- μm</span>
+      <span id="sliceBadge" style="display:none"></span>
+      <span id="hudOverlap" style="display:none"></span>
+      <span id="polyHint" style="color:var(--snap);display:none">多边形模式</span>
+    </div>
+    <div class="zoomctl">
+      <button id="toolSelect" class="on" onclick="setToolMode('select')" title="选择/编辑">选择</button>
+      <button id="toolMeasure" onclick="setToolMode('measure')" title="测量距离">测量</button>
+      <button onclick="setViewAxes('x','y')" title="俯视 x-y">XY</button>
+      <button onclick="setViewAxes('x','z')" title="正视 x-z">XZ</button>
+      <button onclick="setViewAxes('y','z')" title="侧视 y-z">YZ</button>
+      <button onclick="zoomBy(1.25)">+</button>
+      <button onclick="zoomBy(.8)">−</button>
+      <button class="ghost" onclick="resetView()">1:1</button>
+    </div>
+    <div class="preview3d" id="preview3d" aria-label="三维预览">
+      <div class="preview3d-head">
+        <strong>三维预览 <span id="preview3dViewLabel" class="pill">Iso</span></strong>
+        <div>
+          <button class="ghost" data-view-preset="iso" onclick="set3DViewPreset('iso')">ISO</button>
+          <button class="ghost" data-view-preset="top" onclick="set3DViewPreset('top')">Top</button>
+          <button class="ghost" data-view-preset="front" onclick="set3DViewPreset('front')">Front</button>
+          <button class="ghost" data-view-preset="side" onclick="set3DViewPreset('side')">Side</button>
+          <button class="ghost" onclick="rotate3D(-18)">↺</button>
+          <button class="ghost" onclick="rotate3D(18)">↻</button>
+          <button class="ghost" onclick="toggle3DPreview()">收起</button>
+        </div>
+      </div>
+      <canvas id="preview3dCanvas" width="560" height="360"></canvas>
+      <div class="preview3d-foot">等轴测预览使用组件 3D 包围盒；多边形截面按 3D bbox 近似显示。</div>
+    </div>
+    <div id="measureLabel" class="measure-label">测量: 点击两点</div>
+    <div id="konva-container"></div>
+  </div>
+
+  <aside class="side">
+    <h3>模型检查 <span class="pill" style="margin-left:4px">3D</span></h3>
+    <div class="health" id="healthMetrics">
+      <div class="metric"><b>—</b><span>组件</span></div>
+      <div class="metric"><b>—</b><span>材料</span></div>
+      <div class="metric"><b>—</b><span>问题</span></div>
+    </div>
+    <div class="field">
+      <label>DRC 规则 / 最小 3D 间隙 (μm)</label>
+      <div class="row">
+        <select id="drcRuleDeck" onchange="onDrcRuleDeckChange()" title="切换常用 DRC 规则预设">
+          <option value="custom">Custom</option>
+          <option value="detector_default">Detector default</option>
+          <option value="tight_stack">Tight stack</option>
+          <option value="loose_assembly">Loose assembly</option>
+        </select>
+        <input type="number" id="minGapDrc" min="0" step="any" value="0" onchange="onDrcSettingsChange()" title="0 表示不检查相邻实体间隙"/>
+      </div>
+    </div>
+    <div class="issue-toolbar">
+      <select id="issueSeverityFilter" onchange="onIssueFilterChange()" title="过滤检查问题">
+        <option value="all">全部问题</option>
+        <option value="err">仅错误</option>
+        <option value="warn">仅警告</option>
+        <option value="fixable">可修复</option>
+        <option value="waived">已豁免</option>
+      </select>
+      <button data-action="issue-prev" class="ghost" onclick="stepIssue(-1,true)" title="上一条问题">上一条</button>
+      <button data-action="issue-next" class="ghost" onclick="stepIssue(1,true)" title="下一条问题">下一条</button>
+      <button data-action="issue-focus" class="ghost" onclick="focusCurrentIssue()" title="定位当前问题">定位</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin:0 0 8px">
+      <span id="issueCursorLabel" class="issue-counter">0/0</span>
+      <span id="issueFilterCount" class="pill">0/0</span>
+    </div>
+    <div id="issueList" class="issue-list">
+      <div class="issue">载入模型后显示几何和数据检查。</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+      <button class="ghost" onclick="fixSafeIssues()">修复安全项</button>
+      <button class="ghost" onclick="copyModelHealthReport()">复制检查报告</button>
+      <button class="ghost" data-action="export-drc-csv" onclick="exportDRCReportCSV()">导出 DRC CSV</button>
+      <button class="ghost" data-action="export-component-csv" onclick="exportComponentReportCSV()">导出组件 CSV</button>
+    </div>
+
+    <h3>层栈 / 间隙 <span class="pill" style="margin-left:4px">3D</span></h3>
+    <div class="stack-tools">
+      <label>
+        栈轴
+        <select id="stackAxis" onchange="onStackAxisChange()">
+          <option value="auto">自动(当前第三轴)</option>
+          <option value="x">x</option>
+          <option value="y">y</option>
+          <option value="z">z</option>
+        </select>
+      </label>
+      <span class="pill">当前 <b id="stackAxisResolved">—</b></span>
+    </div>
+    <div id="stackList" class="stack-list">
+      <div class="stack-empty">载入模型后显示真实 3D 层栈。</div>
+    </div>
+
+    <h3>对齐 / 居中 <span id="selCount" class="pill" style="margin-left:4px">未选</span></h3>
+    <div class="alignbar">
+      <button title="左对齐" onclick="alignSel('left')">⇤</button>
+      <button title="水平居中(到画布)" onclick="alignSel('hcenter')">↔</button>
+      <button title="右对齐" onclick="alignSel('right')">⇥</button>
+      <button title="顶对齐" onclick="alignSel('top')">⇡</button>
+      <button title="垂直居中(到画布)" onclick="alignSel('vcenter')">↕</button>
+      <button title="底对齐" onclick="alignSel('bottom')">⇣</button>
+    </div>
+    <div class="seg">
+      <button id="alignRef_bbox" class="on" onclick="setAlignRef('bbox')">相对选中集</button>
+      <button id="alignRef_world" onclick="setAlignRef('world')">相对 World</button>
+    </div>
+    <div class="field">
+      <label>3D 对齐 轴 / 特征 / 参考</label>
+      <div class="row">
+        <select id="align3dAxis" title="3D 对齐轴">
+          <option value="x">x</option>
+          <option value="y">y</option>
+          <option value="z" selected>z</option>
+        </select>
+        <select id="align3dFeature" title="对齐 min / center / max">
+          <option value="min">min</option>
+          <option value="center" selected>center</option>
+          <option value="max">max</option>
+        </select>
+        <select id="align3dRef" title="3D 对齐参考">
+          <option value="world">World</option>
+          <option value="primary">主选</option>
+        </select>
+      </div>
+    </div>
+    <button onclick="align3DSelection()" style="width:100%;margin-bottom:8px">应用 3D 对齐</button>
+    <div class="field">
+      <label>3D 特征定位 轴 / 特征 / 目标</label>
+      <div class="row">
+        <select id="place3dAxis" title="3D 特征定位轴">
+          <option value="x">x</option>
+          <option value="y">y</option>
+          <option value="z" selected>z</option>
+        </select>
+        <select id="place3dFeature" title="定位 min / center / max">
+          <option value="min">min</option>
+          <option value="center" selected>center</option>
+          <option value="max">max</option>
+        </select>
+        <input type="number" id="place3dTarget" step="any" placeholder="μm"/>
+      </div>
+    </div>
+    <button onclick="place3DFeatureSelection()" style="width:100%;margin-bottom:8px">定位 3D 特征</button>
+    <div class="field">
+      <label>3D 等间隙分布轴</label>
+      <div class="row">
+        <select id="distribute3dAxis" title="沿该 3D 轴对选中组件等间隙分布">
+          <option value="x">x</option>
+          <option value="y">y</option>
+          <option value="z" selected>z</option>
+        </select>
+      </div>
+    </div>
+    <button data-action="distribute-3d-gaps" onclick="distributeSelection3DGapsFromUI()" style="width:100%;margin-bottom:8px">3D 等间隙分布</button>
+
+    <h3>布尔操作 <span class="pill" style="margin-left:4px">选 2 个</span></h3>
+    <div class="seg">
+      <button onclick="booleanOp('union')" title="并集/合并">∪ 并集</button>
+      <button onclick="booleanOp('difference')" title="A 减 B(刻蚀孔/挖槽)">∖ 差集</button>
+      <button onclick="booleanOp('intersection')" title="交集/重叠区">∩ 交集</button>
+    </div>
+
+    <hr>
+    <h3>精确变换</h3>
+    <div class="field">
+      <label>步长 / 缩放</label>
+      <div class="row"><input type="number" id="nudgeStep" step="any" value="10"/><input type="number" id="scaleFactor" step="any" value="1.1"/></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px">
+      <button onclick="nudgeSelection(0,1)">↑</button>
+      <button onclick="scaleSelectionByInput(1)">放大</button>
+      <button onclick="nudgeSelection(0,-1)">↓</button>
+      <button onclick="nudgeSelection(-1,0)">←</button>
+      <button onclick="scaleSelectionByInput(-1)">缩小</button>
+      <button onclick="nudgeSelection(1,0)">→</button>
+    </div>
+    <div class="seg" style="margin-bottom:8px">
+      <button data-action="mirror-lat" onclick="mirrorSelection2D('lat')" title="按选区中心镜像当前截面横向轴">↔ 镜像</button>
+      <button data-action="mirror-dep" onclick="mirrorSelection2D('dep')" title="按选区中心镜像当前截面深度轴">↕ 镜像</button>
+      <button data-action="rotate-ccw" onclick="rotateSelection2D('ccw')" title="绕选区中心逆时针旋转 90°">↺ 90°</button>
+      <button data-action="rotate-cw" onclick="rotateSelection2D('cw')" title="绕选区中心顺时针旋转 90°">↻ 90°</button>
+    </div>
+    <div class="field">
+      <label>目标尺寸 当前截面 W/H (μm)</label>
+      <div class="row"><input type="number" id="targetLatSize" step="any" placeholder="W"/><input type="number" id="targetDepSize" step="any" placeholder="H"/></div>
+    </div>
+    <button onclick="fitSelectionToInputs()" style="width:100%;margin-bottom:6px">应用目标尺寸</button>
+    <label class="checkrow" title="开启后,3D 移动/对齐/定位/改尺寸不会让组件越出 mother_volume 或 World">
+      <input type="checkbox" id="constrain3dWorld" checked onchange="syncTransformConstraintFromUI()"/>
+      <span>限制在 mother / World 内</span>
+    </label>
+    <div class="field">
+      <label>越界处理</label>
+      <select id="constraintBoundaryMode" onchange="syncTransformConstraintFromUI()">
+        <option value="block">阻止越界</option>
+        <option value="clamp">贴边夹紧</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>3D 位移 Δx / Δy / Δz (μm)</label>
+      <div class="row"><input type="number" id="move3dDx" step="any" value="0"/><input type="number" id="move3dDy" step="any" value="0"/><input type="number" id="move3dDz" step="any" value="0"/></div>
+    </div>
+    <button onclick="move3DSelection()" style="width:100%;margin-bottom:6px">移动 3D</button>
+    <div class="field">
+      <label>3D 中心 x / y / z (μm)</label>
+      <div class="row"><input type="number" id="center3dX" step="any" placeholder="x"/><input type="number" id="center3dY" step="any" placeholder="y"/><input type="number" id="center3dZ" step="any" placeholder="z"/></div>
+    </div>
+    <button onclick="set3DCenterForSelection()" style="width:100%;margin-bottom:6px">定位 3D 中心</button>
+    <div class="field">
+      <label>3D 目标尺寸 dx / dy / dz (μm)</label>
+      <div class="row"><input type="number" id="target3dDx" step="any" placeholder="dx"/><input type="number" id="target3dDy" step="any" placeholder="dy"/><input type="number" id="target3dDz" step="any" placeholder="dz"/></div>
+    </div>
+    <button onclick="apply3DSizeToSelection()" style="width:100%;margin-bottom:6px">应用 3D 尺寸</button>
+    <button class="ghost" onclick="createDimensionFromMeasure()" style="width:100%;margin-bottom:6px">测量转尺寸标注</button>
+    <button data-action="annotate-pair-gap" class="ghost" onclick="createPairGapAnnotation()" style="width:100%;margin-bottom:6px">两组件间隙标注</button>
+    <button data-action="annotate-selection-dimensions" class="ghost" onclick="createDimensionsForSelection()" style="width:100%;margin-bottom:8px">选区尺寸标注</button>
+
+    <h3>阵列复制</h3>
+    <div class="field">
+      <label>数量 / 当前截面偏移 (μm)</label>
+      <div class="row"><input type="number" id="arrayCount" min="2" step="1" value="3"/><input type="number" id="arrayDx" step="any" value="20"/><input type="number" id="arrayDy" step="any" value="0"/></div>
+    </div>
+    <button onclick="arrayDuplicateSelection()" style="width:100%;margin-bottom:10px">创建线性阵列</button>
+
+    <h3>尺寸标注</h3>
+    <div id="annotationList" class="annotation-list">
+      <div class="empty-side">无尺寸标注</div>
+    </div>
+
+    <div id="editPanel"><h3>编辑</h3><div class="empty-side">点画布上的层开始编辑(Shift 点多选)</div></div>
+    <hr>
+
+    <h3>插入图形</h3>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:6px">
+      <button onclick="addShape('square')" title="正方形">▦</button>
+      <button onclick="addShape('rectangle')" title="长方形">▭</button>
+      <button onclick="addShape('circle')" title="圆形">◯</button>
+      <button onclick="addShape('triangle')" title="三角形">△</button>
+      <button onclick="addShape('hexagon')" title="多边形">六边</button>
+    </div>
+
+    <h3>装配树</h3>
+    <div id="assemblyTreeList" class="annotation-list">
+      <div class="empty-side">载入模型后显示装配树</div>
+    </div>
+    <h3>属性图层</h3>
+    <div class="list-tools" style="grid-template-columns:1fr">
+      <select id="layerGroupMode" onchange="onLayerGroupModeChange()" title="按材料或组件类型分组管理">
+        <option value="material">按材料</option>
+        <option value="type">按类型</option>
+      </select>
+    </div>
+    <div id="layerGroupList" class="annotation-list">
+      <div class="empty-side">载入模型后显示材料/类型分组</div>
+    </div>
+    <h3>组件列表</h3>
+    <div class="list-tools component-list-tools">
+      <input type="text" id="componentSearch" placeholder="搜索组件、材料或角色" oninput="onComponentListFilterChange()"/>
+      <select id="componentStatusFilter" onchange="onComponentListFilterChange()" title="按可见性/锁定状态筛选">
+        <option value="all">全部</option>
+        <option value="visible">可见</option>
+        <option value="hidden">隐藏</option>
+        <option value="locked">锁定</option>
+      </select>
+      <button class="ghost" data-action="clear-component-list-filter" onclick="clearComponentListFilter()">清筛</button>
+      <button class="ghost" onclick="selectAllVisible()">全选</button>
+      <button class="ghost" onclick="clearSelection()">清空</button>
+    </div>
+    <ul class="comp-list" id="compList"></ul>
+    <div class="list-actions">
+      <button onclick="focusSelection()">聚焦</button>
+      <button data-action="copy-selection" onclick="copySelectionToClipboard()" class="ghost">复制</button>
+      <button data-action="paste-selection" onclick="pasteClipboardSelection()" class="ghost">粘贴</button>
+      <button onclick="duplicateSelected()" class="ghost">副本</button>
+      <button onclick="addComponent()" class="ghost">加层</button>
+      <button onclick="deleteSelected()" class="ghost">删除</button>
+    </div>
+    <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <button onclick="sortComponentsByDepth()" class="ghost">按深度排序</button>
+      <button onclick="addPolygonNodeMode()" class="ghost">加节点</button>
+    </div>
+    <div style="margin-top:6px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+      <button data-action="isolate-selection" onclick="isolateSelection()" class="ghost">隔离</button>
+      <button data-action="restore-isolation" onclick="restoreIsolation()" class="ghost">恢复</button>
+      <button data-action="show-all-components" onclick="showAllComponents()" class="ghost">显示全部</button>
+    </div>
+    <h3>选择集</h3>
+    <div class="list-tools" style="grid-template-columns:1fr auto">
+      <input type="text" id="selectionSetName" placeholder="选区名"/>
+      <button data-action="save-selection-set" onclick="saveSelectionSetFromInput()" class="ghost">保存</button>
+    </div>
+    <div id="selectionSetList" class="annotation-list">
+      <div class="empty-side">无保存选区</div>
+    </div>
+    <h3>视图状态</h3>
+    <div class="list-tools" style="grid-template-columns:1fr auto">
+      <input type="text" id="viewStateName" placeholder="视图名"/>
+      <button data-action="save-view-state" onclick="saveViewStateFromInput()" class="ghost">保存</button>
+    </div>
+    <div id="viewStateList" class="annotation-list">
+      <div class="empty-side">无保存视图</div>
+    </div>
+    <hr>
+    <h3>操作</h3>
+    <div class="hint">
+      • <b>拖矩形</b>改位置(开吸附时自动对齐边)<br>
+      • <b>拖 8 手柄</b>改尺寸 · <b>双击矩形边</b>加多边形节点<br>
+      • <b>Shift+点</b>多选 → 用上方对齐/居中<br>
+      • <b>滚轮</b>缩放 · <b>拖空白</b>平移<br>
+      • <span class="kbd">F</span> 聚焦选中 · <span class="kbd">I</span> 隔离 · <span class="kbd">Shift+H</span> 显示全部
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+<div id="commandPalette" class="command-palette" role="dialog" aria-modal="true" aria-label="命令面板" hidden>
+  <div class="command-palette-panel">
+    <div class="command-palette-search">
+      <span>Ctrl K</span>
+      <input type="text" id="commandPaletteSearch" autocomplete="off" placeholder="搜索命令"/>
+    </div>
+    <div id="commandPaletteList" class="command-list"></div>
+  </div>
+</div>
+
+<script src="cad_core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

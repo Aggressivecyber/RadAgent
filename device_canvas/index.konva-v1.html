@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RadAgent · 半导体器件截面画布 (Konva)</title>
+<script src="konva.min.js"></script>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#161a21; --panel2:#1d222b; --line:#2a313d;
+    --fg:#e6e8ec; --muted:#8a93a3; --accent:#7c6cff; --err:#f85149;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--fg);font:13px/1.45 -apple-system,"Segoe UI","Noto Sans CJK SC",Roboto,sans-serif;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:14px;margin:0;font-weight:600}
+  header .sub{color:var(--muted);font-size:12px}
+  .toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:auto}
+  button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);padding:5px 10px;border-radius:5px;cursor:pointer;font-size:12px}
+  button:hover{border-color:var(--accent)}
+  button.ghost{background:transparent}
+  select,input[type=number],input[type=text]{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:3px 6px;font-size:12px;width:100%}
+  .main{flex:1;display:flex;min-height:0}
+  .stage-wrap{flex:1;min-width:0;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 50%,#14171e 0%,#0c0e12 100%)}
+  #konva-container{width:100%;height:100%}
+  .axisbar{position:absolute;top:8px;left:10px;display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.4);padding:5px 8px;border-radius:5px;font-size:11px;z-index:5}
+  .axisbar span{color:var(--muted)}
+  .axisbar select{width:auto}
+  .zoomctl{position:absolute;top:8px;right:10px;display:flex;gap:4px;z-index:5}
+  .zoomctl button{padding:3px 8px}
+  .hint-overlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:var(--muted);font-size:14px;text-align:center;pointer-events:none;padding:30px}
+  .side{width:290px;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:12px;flex-shrink:0}
+  .side h3{margin:0 0 8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .field{margin-bottom:9px}
+  .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}
+  .row{display:flex;gap:6px}.row>*{flex:1}
+  .comp-list{list-style:none;margin:0;padding:0}
+  .comp-list li{padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;border:1px solid transparent}
+  .comp-list li:hover{background:var(--panel2)}
+  .comp-list li.sel{background:var(--panel2);border-color:var(--accent)}
+  .swatch{width:12px;height:12px;border-radius:2px;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}
+  .pill{font-size:10px;color:var(--muted);margin-left:auto}
+  .hint{color:var(--muted);font-size:11px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--line);margin:12px 0}
+  .empty-side{color:var(--muted);font-size:12px}
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--accent);color:var(--fg);padding:8px 14px;border-radius:6px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+  .loadfail{position:fixed;inset:0;background:#1a0f0f;color:#ffb4b4;display:flex;align-items:center;justify-content:center;text-align:center;padding:40px;font-size:14px;z-index:100}
+</style>
+</head>
+<body>
+<header>
+  <h1>器件截面画布</h1>
+  <span class="sub">Konva 引擎 · 把 <code>g4_model_ir.json</code> 拖进来 · agent 的理解 → 人工修正 → 导出</span>
+  <div class="toolbar">
+    <input type="file" id="file" accept=".json,application/json" style="display:none"/>
+    <select id="jobSelect" onchange="onJobSelect()" style="display:none;max-width:260px"></select>
+    <button onclick="document.getElementById('file').click()">📂 载入 JSON</button>
+    <button class="ghost" onclick="loadExample()">载入示例 (PiN 探测器)</button>
+    <button onclick="exportJSON()">💾 导出修正 JSON</button>
+    <button id="btnWrite" onclick="writeToJob()" style="display:none">⤴ 回写到 Job</button>
+    <button onclick="exportPNG()">🖼 PNG</button>
+    <button onclick="copyNL()">📋 复制描述</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="stage-wrap" id="stageWrap">
+    <div class="axisbar">
+      <span>截面:</span>
+      <select id="lateral" onchange="onAxisChange()"></select>
+      <span>×</span>
+      <select id="depth" onchange="onAxisChange()"></select>
+      <span>μm</span>
+      <span style="margin-left:8px">|</span>
+      <label style="display:flex;align-items:center;gap:4px;color:var(--muted)"><input type="checkbox" id="equalScale" checked onchange="relayout()"> 等比</label>
+    </div>
+    <div class="zoomctl">
+      <button onclick="zoomBy(1.25)">+</button>
+      <button onclick="zoomBy(.8)">−</button>
+      <button class="ghost" onclick="resetView()">⌂</button>
+    </div>
+    <div id="konva-container"></div>
+  </div>
+
+  <aside class="side">
+    <div id="editPanel"><h3>编辑</h3><div class="empty-side">点画布上的层开始编辑</div></div>
+    <hr>
+    <h3>组件列表</h3>
+    <ul class="comp-list" id="compList"></ul>
+    <div style="margin-top:10px;display:flex;gap:6px">
+      <button onclick="addComponent()" style="flex:1">＋ 加层</button>
+      <button onclick="deleteSelected()" class="ghost" style="flex:1">🗑 删除</button>
+    </div>
+    <hr>
+    <h3>操作</h3>
+    <div class="hint">
+      • <b>拖矩形</b>改位置 · <b>拖 8 个手柄</b>改尺寸<br>
+      • <b>滚轮</b>缩放 · <b>拖空白</b>平移视图<br>
+      • 切换横向/深度轴后,数据不变,只是重新投影<br>
+      • world volume 半透明,不可删除
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+ * 半导体器件截面画布 — Konva 重构版
+ * 设计原则:数据层(全 3D ComponentSpec,轴无关)与视图层(像素)严格分离。
+ * 切换截面轴 = 仅重新投影所有矩形到像素,数据 components 永不随轴变化,
+ * 因此拖拽/缩放恒定按"当前轴"正确读写 position/dimensions。
+ * ============================================================ */
+
+if (typeof Konva === "undefined") {
+  document.body.innerHTML = '<div class="loadfail">⚠ 无法加载 Konva 库(CDN 被阻断?)。<br>请联网,或把 konva.min.js 下载到本地后改 &lt;script src&gt;。</div>';
+  throw new Error("Konva missing");
+}
+
+/* ---------- 材料配色 ---------- */
+const MAT_COLORS = {
+  silicon:"#4a90a4", si:"#4a90a4", sio2:"#6fbfbf", "silicon dioxide":"#6fbfbf", oxide:"#6fbfbf",
+  si3n4:"#7aa874","silicon nitride":"#7aa874", nitride:"#7aa874",
+  polysilicon:"#6a6a78", poly:"#6a6a78", aluminum:"#c0c4cc", al:"#c0c4cc",
+  copper:"#b87333", cu:"#b87333", tungsten:"#8a8f99", w:"#8a8f99",
+  titanium:"#b0b6c0", ti:"#b0b6c0", gold:"#e3c163", au:"#e3c163",
+  air:"transparent", vacuum:"transparent", water:"#3a6f8f",
+  epoxy:"#5a4a3a", kapton:"#caa84a", sapphire:"#5a7fb0", germanium:"#6a7a8a", ge:"#6a7a8a", gaas:"#8a6a9a",
+};
+const MAT_DEFAULTS = ["Silicon","SiO2","Si3N4","Polysilicon","Aluminum","Copper","Tungsten","Titanium","Gold","Air","Sapphire","Germanium","GaAs","Epoxy","Kapton","Water"];
+function matColor(id){
+  const k=(id||"").toLowerCase().replace(/_/g," ");
+  if (MAT_COLORS[k]) return MAT_COLORS[k];
+  for (const key in MAT_COLORS) if (k.includes(key)) return MAT_COLORS[key];
+  let h=0; for (const c of id||"?") h=(h*31+c.charCodeAt(0))>>>0;
+  return `hsl(${h%360} 45% 55%)`;
+}
+const isWorld = c => c.component_type==="world";
+
+/* ---------- 状态 ---------- */
+let model=null;            // {meta, components, materials, sourceName}
+let selectedId=null;
+const axes={lateral:"x", depth:"z"};
+const AXIS_IDX={x:0,y:1,z:2};
+const DIM_KEY={x:"dx",y:"dy",z:"dz"};
+
+/* camera: layer 本地像素 ↔ 数据 μm。
+ * 视图缩放/平移由 Konva stage 的 scale/position 负责,不影响这层映射。 */
+const camera={minLat:0,maxLat:0,minDep:0,maxDep:0,sLat:1,sDep:1,ox:0,oy:0};
+function fitCamera(){
+  if(!model||!model.components.length){camera.minLat=-10;camera.maxLat=10;camera.minDep=-10;camera.maxDep=10;camera.sLat=1;camera.sDep=1;camera.ox=0;camera.oy=0;return;}
+  const {minLat,maxLat,minDep,maxDep}=dataBounds();
+  const W=stage.width(), H=stage.height();
+  const padL=(maxLat-minLat)*0.08+1e-6, padD=(maxDep-minDep)*0.12+1e-6;
+  const mL=minLat-padL, ML=maxLat+padL, mD=minDep-padD, MD=maxDep+padD;
+  camera.minLat=mL; camera.maxLat=ML; camera.minDep=mD; camera.maxDep=MD;
+  const equal=document.getElementById("equalScale").checked;
+  if (equal){
+    const s=Math.min(W/(ML-mL), H/(MD-mD));
+    camera.sLat=s; camera.sDep=s;
+  } else {
+    camera.sLat=W/(ML-mL); camera.sDep=H/(MD-mD);
+  }
+  // 居中
+  camera.ox=(W-(ML-mL)*camera.sLat)/2;
+  camera.oy=(H-(MD-mD)*camera.sDep)/2;
+}
+// 数据→layer 本地像素
+function X(lat){return camera.ox+(lat-camera.minLat)*camera.sLat;}
+function Y(dep){return camera.oy+(camera.maxDep-dep)*camera.sDep;}  // 深度向上为正
+// layer 本地像素→数据
+function toDataX(px){return (px-camera.ox)/camera.sLat+camera.minLat;}
+function toDataY(py){return camera.maxDep-(py-camera.oy)/camera.sDep;}
+
+function dataBounds(){
+  let mL=Infinity,ML=-Infinity,mD=Infinity,MD=-Infinity;
+  const li=AXIS_IDX[axes.lateral], di=AXIS_IDX[axes.depth];
+  for(const c of model.components){
+    const dLat=c.dimensions[DIM_KEY[axes.lateral]]||0;
+    const dDep=c.dimensions[DIM_KEY[axes.depth]]||0;
+    const pLat=c.placement.position[li], pDep=c.placement.position[di];
+    mL=Math.min(mL,pLat-dLat/2); ML=Math.max(ML,pLat+dLat/2);
+    mD=Math.min(mD,pDep-dDep/2); MD=Math.max(MD,pDep+dDep/2);
+  }
+  if(!isFinite(mL)){mL=-10;ML=10;mD=-10;MD=10;}
+  return {minLat:mL,maxLat:ML,minDep:mD,maxDep:MD};
+}
+
+/* ---------- Konva 舞台 ---------- */
+const stage=new Konva.Stage({container:"konva-container",width:stageW(),height:stageH()});
+const bgLayer=new Konva.Layer(); stage.add(bgLayer);
+const compLayer=new Konva.Layer(); stage.add(compLayer);
+const uiLayer=new Konva.Layer(); stage.add(uiLayer);   // 标签/选中框/手柄
+const tr=new Konva.Transformer({rotateEnabled:false,keepRatio:false,borderStroke:"#7c6cff",
+  anchorStroke:"#7c6cff",anchorFill:"#7c6cff",anchorSize:9,ignoreStroke:true});
+uiLayer.add(tr);
+
+function stageW(){return document.getElementById("stageWrap").clientWidth;}
+function stageH(){return document.getElementById("stageWrap").clientHeight;}
+
+/* ---------- 背景网格 + 标尺 ---------- */
+let bgGroup=new Konva.Group(); bgLayer.add(bgGroup);
+function drawBackground(){
+  bgGroup.destroyChildren();
+  const W=stage.width(),H=stage.height();
+  // 网格按"数据步长"画,随 stage 缩放自适应粗细
+  const viewSpanLat=(camera.maxLat-camera.minLat)/(stage.scaleX()||1);
+  const step=niceStep(viewSpanLat/10);
+  // 深度纵向线
+  for(let v=Math.ceil(camera.minLat/step)*step; v<=camera.maxLat; v+=step){
+    const px=X(v);
+    bgGroup.add(new Konva.Line({points:[px,0,px,H],stroke:"#1c2128",strokeWidth:1}));
+    bgGroup.add(new Konva.Text({x:px+2,y:H-14,text:fmt(v),fontSize:9,fill:"#8a93a3"}));
+  }
+  const viewSpanDep=(camera.maxDep-camera.minDep)/(stage.scaleY()||1);
+  const stepD=niceStep(viewSpanDep/8);
+  for(let v=Math.ceil(camera.minDep/stepD)*stepD; v<=camera.maxDep; v+=stepD){
+    const py=Y(v);
+    bgGroup.add(new Konva.Line({points:[0,py,W,py],stroke:"#1c2128",strokeWidth:1}));
+    bgGroup.add(new Konva.Text({x:4,y:py-12,text:fmt(v),fontSize:9,fill:"#8a93a3"}));
+  }
+  bgLayer.batchDraw();
+}
+function niceStep(raw){const p=Math.pow(10,Math.floor(Math.log10(raw)));const n=raw/p;return (n<1.5?1:n<3?2:n<7?5:10)*p;}
+function fmt(v){const a=Math.abs(v);if(a>=1000)return (v/1000).toFixed(1)+"k";if(a>=10)return v.toFixed(0);if(a>=1)return v.toFixed(1);return v.toFixed(2);}
+
+/* ---------- 渲染组件矩形 ---------- */
+function relayout(){
+  if(!model) return;
+  fitCamera();
+  drawBackground();
+  drawComponents();
+}
+const rectNodes=new Map(); // id -> {rect,label,depLabel,matLabel}
+function drawComponents(){
+  // 清空旧节点
+  for(const [,n] of rectNodes){n.rect.destroy(); if(n.label)n.label.destroy(); if(n.matLabel)n.matLabel.destroy(); if(n.depLabel)n.depLabel.destroy();}
+  rectNodes.clear();
+  tr.nodes([]);
+
+  const li=AXIS_IDX[axes.lateral], di=AXIS_IDX[axes.depth];
+  // world 先画(底层)
+  const ordered=[...model.components].sort((a,b)=>(isWorld(a)?-1:0)-(isWorld(b)?-1:0));
+  for(const c of ordered){
+    const dLat=c.dimensions[DIM_KEY[axes.lateral]]||0;
+    const dDep=c.dimensions[DIM_KEY[axes.depth]]||0;
+    const cx=X(c.placement.position[li]);
+    const cy=Y(c.placement.position[di]);
+    const w=Math.max(dLat*camera.sLat,1), h=Math.max(dDep*camera.sDep,1);
+    const x=cx-w/2, y=cy-h/2;
+    const col=c.color?`rgb(${c.color.map(v=>Math.round(v*255)).join(",")})`:matColor(c.material_id);
+    const world=isWorld(c);
+
+    const rect=new Konva.Rect({
+      x,y,width:w,height:h,
+      fill: world?"rgba(0,0,0,0)":col,
+      opacity: world?0.5:0.9,
+      stroke: world?"#3a4250":col,
+      strokeWidth: world?1:1.3,
+      dash: world?[5,4]:(c.geometry_type!=="box"?[6,4]:undefined),
+      draggable:!world,
+      name:"comp",
+      id:c.component_id,
+      cornerRadius:0,
+    });
+    rect.setAttr("cid",c.component_id);
+    compLayer.add(rect);
+
+    let label=null,matLabel=null,depLabel=null;
+    if(w>36&&h>16&&!world){
+      label=new Konva.Text({x:x+5,y:y+4,text:c.display_name,fontSize:12,fontStyle:600,fill:"#fff",listening:false});
+      matLabel=new Konva.Text({x:x+5,y:y+20,text:c.material_id+(c.geometry_type!=="box"?` (${c.geometry_type})`:""),fontSize:10.5,fill:"#dfe4ea",listening:false});
+      depLabel=new Konva.Text({x:x+w-6,y:y+h/2-6,width:Math.max(w-10,20),align:"right",text:fmt(dDep)+"μm",fontSize:10,fill:"#cfd6df",listening:false});
+      compLayer.add(label);compLayer.add(matLabel);compLayer.add(depLabel);
+    }
+    rectNodes.set(c.component_id,{rect,label,matLabel,depLabel});
+
+    // 交互
+    rect.on("click tap",e=>{e.cancelBubble=true;select(c.component_id);});
+    rect.on("dragmove",()=>onRectMove(c));
+    // resize 不产生 scale 形变,而是落回 width/height(transform 事件实时)
+    rect.on("transform",()=>onRectTransform(c));
+  }
+  if(selectedId && rectNodes.has(selectedId)){
+    tr.nodes([rectNodes.get(selectedId).rect]);
+  }
+  compLayer.batchDraw();
+  uiLayer.batchDraw();
+}
+
+/* 拖动:从矩形像素位置反算数据 position[latIdx]/[depIdx] */
+function onRectMove(c){
+  const n=rectNodes.get(c.component_id); if(!n) return;
+  const li=AXIS_IDX[axes.lateral], di=AXIS_IDX[axes.depth];
+  const cxPx=n.rect.x()+n.rect.width()/2;
+  const cyPx=n.rect.y()+n.rect.height()/2;
+  c.placement.position[li]=toDataX(cxPx);
+  c.placement.position[di]=toDataY(cyPx);
+  // 同步标签
+  moveLabels(n);
+  renderEditValues(c);
+}
+/* 缩放:Konva transform 用 scale,落回 width/height,转回数据 dimensions */
+function onRectTransform(c){
+  const n=rectNodes.get(c.component_id); if(!n) return;
+  const r=n.rect;
+  const newW=r.width()*r.scaleX();
+  const newH=r.height()*r.scaleY();
+  // 落回尺寸,清掉 scale
+  r.width(Math.max(newW,1)); r.height(Math.max(newH,1)); r.scaleX(1); r.scaleY(1);
+  // 转回数据
+  const dLat=newW/camera.sLat, dDep=newH/camera.sDep;
+  c.dimensions[DIM_KEY[axes.lateral]]=dLat;
+  c.dimensions[DIM_KEY[axes.depth]]=dDep;
+  // 位置:矩形中心
+  const li=AXIS_IDX[axes.lateral], di=AXIS_IDX[axes.depth];
+  const cxPx=r.x()+r.width()/2, cyPx=r.y()+r.height()/2;
+  c.placement.position[li]=toDataX(cxPx);
+  c.placement.position[di]=toDataY(cyPx);
+  moveLabels(n);
+  renderEditValues(c);
+}
+function moveLabels(n){
+  if(n.label){n.label.x(n.rect.x()+5);n.label.y(n.rect.y()+4);}
+  if(n.matLabel){n.matLabel.x(n.rect.x()+5);n.matLabel.y(n.rect.y()+20);}
+  if(n.depLabel){n.depLabel.x(n.rect.x()+n.rect.width()-6);n.depLabel.y(n.rect.y()+n.rect.height()/2-6);}
+}
+
+/* ---------- 选中 ---------- */
+function select(id){
+  selectedId=id;
+  const n=rectNodes.get(id);
+  tr.nodes(n?[n.rect]:[]);
+  // 置顶选中矩形,避免被遮挡
+  if(n) n.rect.moveToTop();
+  renderList(); renderEdit();
+  compLayer.batchDraw(); uiLayer.batchDraw();
+}
+
+/* ---------- 点击空白取消 + 背景平移 ---------- */
+let panning=false, panStart=null;
+stage.on("mousedown touchstart",e=>{
+  if(e.target===stage){ selectedId=null; tr.nodes([]); renderList(); renderEdit(); }
+});
+// 背景拖动平移(按住空白拖动)
+stage.on("mousedown touchstart",e=>{
+  if(e.target===stage){
+    panning=true;
+    const p=stage.getPointerPosition();
+    panStart={x:p.x-stage.x(),y:p.y-stage.y()};
+  }
+});
+stage.on("mousemove touchmove",()=>{
+  if(!panning||!panStart) return;
+  const p=stage.getPointerPosition(); if(!p) return;
+  stage.position({x:p.x-panStart.x, y:p.y-panStart.y});
+  bgLayer.batchDraw(); compLayer.batchDraw(); uiLayer.batchDraw();
+});
+stage.on("mouseup touchend",()=>{panning=false;panStart=null;});
+window.addEventListener("mouseup",()=>{panning=false;panStart=null;});
+
+/* ---------- 滚轮缩放 ---------- */
+document.getElementById("stageWrap").addEventListener("wheel",e=>{
+  e.preventDefault();
+  if(!model) return;
+  const oldScale=stage.scaleX();
+  const factor=e.deltaY<0?1.1:0.9;
+  const newScale=Math.max(0.05,Math.min(80,oldScale*factor));
+  const mouse={x:stage.width()/2,y:stage.height()/2};
+  const pointer=stage.getPointerPosition()||mouse;
+  const mx=(pointer.x-stage.x())/oldScale, my=(pointer.y-stage.y())/oldScale;
+  const nx=pointer.x-mx*newScale, ny=pointer.y-my*newScale;
+  stage.scale({x:newScale,y:newScale}); stage.position({x:nx,y:ny});
+  drawBackground();
+  bgLayer.batchDraw(); compLayer.batchDraw(); uiLayer.batchDraw();
+},{passive:false});
+
+function zoomBy(f){const s=Math.max(0.05,Math.min(80,stage.scaleX()*f));stage.scale({x:s,y:s});drawBackground();stage.batchDraw();}
+function resetView(){stage.scale({x:1,y:1});stage.position({x:0,y:0});relayout();}
+
+/* ---------- 轴切换 ---------- */
+function onAxisChange(){
+  const lat=document.getElementById("lateral").value;
+  const dep=document.getElementById("depth").value;
+  if(lat===dep){toast("横向轴与深度轴不能相同","err"); // 恢复选择
+    document.getElementById("lateral").value=axes.lateral; document.getElementById("depth").value=axes.depth; return;}
+  axes.lateral=lat; axes.depth=dep;
+  resetView();   // 重新 fit + 重绘
+  renderList(); renderEdit();
+  toast(`截面: ${lat} × ${dep}`);
+}
+function inferAxes(components){
+  const span=a=>{const idx=AXIS_IDX[a];let mn=Infinity,mx=-Infinity;for(const c of components){const d=c.dimensions[DIM_KEY[a]]||0;const p=c.placement.position[idx];mn=Math.min(mn,p-d/2);mx=Math.max(mx,p+d/2);}return isFinite(mn)?mx-mn:0;};
+  const s={x:span("x"),y:span("y"),z:span("z")};
+  const depth=Object.entries(s).sort((a,b)=>a[1]-b[1])[0][0];
+  const lat=["x","y","z"].filter(a=>a!==depth).sort((a,b)=>s[b]-s[a])[0];
+  axes.lateral=lat; axes.depth=depth;
+}
+function populateAxisSelectors(){
+  const lat=document.getElementById("lateral"),dep=document.getElementById("depth");
+  lat.innerHTML="";dep.innerHTML="";
+  for(const a of ["x","y","z"]){const o1=document.createElement("option");o1.value=a;o1.textContent=a;if(a===axes.lateral)o1.selected=true;lat.appendChild(o1);
+    const o2=document.createElement("option");o2.value=a;o2.textContent=a;if(a===axes.depth)o2.selected=true;dep.appendChild(o2);}
+}
+
+/* ---------- 载入 ---------- */
+function loadModel(data,sourceName){
+  let components=[],materials=[],meta={};
+  if(Array.isArray(data)) components=data;
+  else if(data.components){components=data.components;materials=data.materials||[];meta={model_ir_id:data.model_ir_id,job_id:data.job_id,target_system:data.target_system,coordinate_system:data.coordinate_system,global_units:data.global_units,_full:data};}
+  else {toast("JSON 里没找到 components","err");return;}
+  components=components.map(normalizeComponent);
+  model={meta,components,materials,sourceName};
+  selectedId=null;
+  inferAxes(components); populateAxisSelectors();
+  resetView();
+  renderList(); renderEdit();
+  toast(`已载入 ${components.length} 个组件${sourceName?" ("+sourceName+")":""}`);
+}
+function normalizeComponent(c){
+  const dims=c.dimensions||{};
+  return {
+    component_id:c.component_id||`comp_${Math.random().toString(36).slice(2,7)}`,
+    display_name:c.display_name||c.component_id||"component",
+    component_type:c.component_type||"volume",
+    geometry_type:c.geometry_type||"box",
+    dimensions:{dx:+dims.dx||0,dy:+dims.dy||0,dz:+dims.dz||0},
+    material_id:c.material_id||"Silicon",
+    placement:{position:(c.placement&&c.placement.position)?c.placement.position.map(Number):[0,0,0],rotation:(c.placement&&c.placement.rotation)?c.placement.rotation.map(Number):[0,0,0]},
+    mother_volume:c.mother_volume??null,sensitive:!!c.sensitive,roles:c.roles||[],color:c.color||null,
+    source_evidence:c.source_evidence||["user_canvas_edit"],open_issues:c.open_issues||[],
+    requires_confirmation:c.requires_confirmation||false,confirmed_by_user:true,confirmation_source:"device_canvas",
+  };
+}
+
+/* ---------- 列表 ---------- */
+function renderList(){
+  const ul=document.getElementById("compList"); if(!model){ul.innerHTML="";return;} ul.innerHTML="";
+  for(const c of model.components){
+    const li=document.createElement("li"); if(c.component_id===selectedId)li.classList.add("sel");
+    const sw=document.createElement("span");sw.className="swatch";
+    sw.style.background=isWorld(c)?"transparent":matColor(c.material_id);
+    sw.style.border=isWorld(c)?"1px dashed #6a7280":"1px solid rgba(255,255,255,.15)";
+    li.appendChild(sw);
+    const nm=document.createElement("span");nm.textContent=c.display_name+(isWorld(c)?" (world)":"");li.appendChild(nm);
+    const p=document.createElement("span");p.className="pill";p.textContent=c.material_id;li.appendChild(p);
+    li.onclick=()=>select(c.component_id);
+    ul.appendChild(li);
+  }
+}
+
+/* ---------- 编辑面板 ---------- */
+function renderEdit(){
+  const root=document.getElementById("editPanel");
+  if(!model){root.innerHTML="<h3>编辑</h3><div class='empty-side'>未载入</div>";return;}
+  const c=model.components.find(c=>c.component_id===selectedId);
+  if(!c){root.innerHTML="<h3>编辑</h3><div class='empty-side'>点画布上的层开始编辑</div>";return;}
+  const world=isWorld(c);
+  root.innerHTML=`
+    <h3>编辑 — ${esc(c.display_name)}</h3>
+    <div class="field"><label>display_name</label><input type="text" id="f_name" value="${esc(c.display_name)}"/></div>
+    <div class="field"><label>component_id</label><input type="text" id="f_id" value="${esc(c.component_id)}"/></div>
+    <div class="field"><label>material_id</label><input type="text" id="f_mat" value="${esc(c.material_id)}" list="matlist"/><datalist id="matlist">${MAT_DEFAULTS.map(m=>`<option value="${m}">`).join("")}</datalist></div>
+    <div class="field"><label>component_type</label><select id="f_type">${["world","assembly","layer","volume","shielding","electrode","substrate"].map(t=>`<option ${t===c.component_type?"selected":""}>${t}</option>`).join("")}</select></div>
+    <div class="field"><label>geometry_type</label><select id="f_geom">${["box","sphere","cylinder","tubs","cons","polycone","trapezoid"].map(t=>`<option ${t===c.geometry_type?"selected":""}>${t}</option>`).join("")}</select></div>
+    <div class="field"><label>尺寸 dx/dy/dz (μm)</label><div class="row"><input type="number" id="f_dx" step="any" value="${c.dimensions.dx}"/><input type="number" id="f_dy" step="any" value="${c.dimensions.dy}"/><input type="number" id="f_dz" step="any" value="${c.dimensions.dz}"/></div></div>
+    <div class="field"><label>位置 x/y/z (μm)</label><div class="row"><input type="number" id="f_px" step="any" value="${c.placement.position[0]}"/><input type="number" id="f_py" step="any" value="${c.placement.position[1]}"/><input type="number" id="f_pz" step="any" value="${c.placement.position[2]}"/></div></div>
+    <div class="field"><label><input type="checkbox" id="f_sens" ${c.sensitive?"checked":""}/> sensitive detector(敏感区)</label></div>
+    <div class="field"><label>roles(逗号分隔)</label><input type="text" id="f_roles" value="${esc((c.roles||[]).join(", "))}"/></div>
+    ${world?"<div class='hint'>world volume:母容器,透明最大,不可拖拽/删除。</div>":""}
+    <div class="hint" style="margin-top:8px">当前截面 <b>${axes.lateral}</b>(横)×<b>${axes.depth}</b>(深)。改数字后画布自动更新。</div>
+  `;
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.addEventListener("input",fn);};
+  bind("f_name",e=>{c.display_name=e.value;renderList();drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);});
+  bind("f_id",e=>{const old=c.component_id;c.component_id=e.value||old;model.components.forEach(x=>{if(x.mother_volume===old)x.mother_volume=c.component_id;});selectedId=c.component_id;renderList();drawComponents();});
+  bind("f_mat",e=>{c.material_id=e.value;drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);renderList();});
+  bind("f_type",e=>{c.component_type=e.value;renderList();});
+  bind("f_geom",e=>{c.geometry_type=e.value;drawComponents();});
+  bind("f_dx",e=>{c.dimensions.dx=+e.value||0;drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);});
+  bind("f_dy",e=>{c.dimensions.dy=+e.value||0;drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);});
+  bind("f_dz",e=>{c.dimensions.dz=+e.value||0;drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);});
+  bind("f_px",e=>{c.placement.position[0]=+e.value||0;drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);});
+  bind("f_py",e=>{c.placement.position[1]=+e.value||0;drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);});
+  bind("f_pz",e=>{c.placement.position[2]=+e.value||0;drawComponents();if(selectedId===c.component_id)tr.nodes([rectNodes.get(c.component_id).rect]);});
+  bind("f_sens",e=>{c.sensitive=e.target.checked;});
+  bind("f_roles",e=>{c.roles=e.value.split(",").map(s=>s.trim()).filter(Boolean);});
+}
+/* 拖拽/缩放时,只更新右侧面板里的数字输入框,不重建 DOM(避免失焦) */
+function renderEditValues(c){
+  if(c.component_id!==selectedId) return;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e&&document.activeElement!==e)e.value=v;};
+  const p=c.placement.position,d=c.dimensions;
+  set("f_px",Number(p[0].toFixed(4)));set("f_py",Number(p[1].toFixed(4)));set("f_pz",Number(p[2].toFixed(4)));
+  set("f_dx",Number(d.dx.toFixed(4)));set("f_dy",Number(d.dy.toFixed(4)));set("f_dz",Number(d.dz.toFixed(4)));
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+/* ---------- 加/删 ---------- */
+function addComponent(){
+  if(!model){loadExample();return;}
+  const di=AXIS_IDX[axes.depth], dk=DIM_KEY[axes.depth];
+  let top=-Infinity;
+  for(const c of model.components){if(isWorld(c))continue;top=Math.max(top,c.placement.position[di]+(c.dimensions[dk]||0)/2);}
+  if(!isFinite(top))top=0;
+  const nc=normalizeComponent({
+    component_id:`layer_${model.components.length+1}`,display_name:`新层 ${model.components.length}`,
+    component_type:"layer",geometry_type:"box",material_id:"Silicon",
+    dimensions:{dx:1000,dy:1000,dz:10},placement:{position:[0,0,top+5],rotation:[0,0,0]},
+    mother_volume:findWorldId(),roles:[],
+  });
+  model.components.push(nc);
+  // 若深度轴非 z,top 是基于 depth 轴算的,position 的 z 位保持 0 也可;但为视觉一致,放到 depth 轴方向
+  nc.placement.position[di]=top+5;
+  selectedId=nc.component_id; resetView(); renderList(); renderEdit();
+}
+function findWorldId(){const w=model.components.find(c=>isWorld(c));return w?w.component_id:null;}
+function deleteSelected(){
+  if(!selectedId)return;
+  const c=model.components.find(c=>c.component_id===selectedId);
+  if(c&&isWorld(c)){toast("world volume 不能删除","err");return;}
+  model.components=model.components.filter(c=>c.component_id!==selectedId);
+  selectedId=null; resetView(); renderList(); renderEdit();
+}
+
+/* ---------- 导出 ---------- */
+function exportJSON(){
+  if(!model){toast("没有数据","err");return;}
+  let out;
+  if(model.meta._full){
+    out=JSON.parse(JSON.stringify(model.meta._full));
+    out.components=JSON.parse(JSON.stringify(model.components));
+    out.human_confirmation=Object.assign({},out.human_confirmation,{confirmed_via:"device_canvas",confirmed_at:new Date().toISOString()});
+    out.confirmed_fields=Array.from(new Set([...(out.confirmed_fields||[]),"components"]));
+    out.assumptions_confirmed=true;
+  } else { out=JSON.parse(JSON.stringify(model.components)); }
+  download(new Blob([JSON.stringify(out,null,2)],{type:"application/json"}),(model.meta.job_id||"device")+"_confirmed.json");
+  toast("已导出修正 JSON");
+}
+function exportPNG(){
+  if(!model)return;
+  tr.nodes([]); uiLayer.batchDraw();   // 临时隐藏手柄
+  const url=stage.toDataURL({pixelRatio:2,mimeType:"image/png"});
+  const a=document.createElement("a");a.href=url;a.download=(model.meta.job_id||"device")+"_section.png";document.body.appendChild(a);a.click();a.remove();
+  if(selectedId&&rectNodes.has(selectedId))tr.nodes([rectNodes.get(selectedId).rect]);
+  uiLayer.batchDraw();
+  toast("已导出 PNG");
+}
+function copyNL(){
+  if(!model)return;
+  const txt=describeNL();
+  navigator.clipboard.writeText(txt).then(()=>toast("描述已复制")).catch(()=>prompt("复制:",txt));
+}
+function describeNL(){
+  const comps=model.components.filter(c=>!isWorld(c));
+  const sys=model.meta.target_system||"半导体器件";
+  const lines=[];
+  lines.push(`【${sys}】人工修正后的器件截面(沿 ${axes.lateral}(横向)×${axes.depth}(深度)截面),单位 μm:`);
+  const di=AXIS_IDX[axes.depth],dk=DIM_KEY[axes.depth],lk=DIM_KEY[axes.lateral],li=AXIS_IDX[axes.lateral];
+  const sorted=[...comps].sort((a,b)=>(a.placement.position[di]-a.dimensions[dk]/2)-(b.placement.position[di]-b.dimensions[dk]/2));
+  for(const c of sorted){
+    const p=c.placement.position,d=c.dimensions;
+    const sens=c.sensitive?"【敏感区/打分】":"";
+    const roles=(c.roles&&c.roles.length)?`[${c.roles.join(",")}]`:"";
+    lines.push(`- ${c.display_name} (${c.material_id}, ${c.geometry_type}): 厚度 ${fmt(d[dk])}μm, 横向 ${fmt(d[lk])}μm, 中心 [${p.map(fmt).join(", ")}] ${sens}${roles}`);
+  }
+  lines.push(`共 ${comps.length} 个有效层(world 容器除外)。`);
+  return lines.join("\n");
+}
+function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
+
+/* ---------- 文件载入 ---------- */
+document.getElementById("file").addEventListener("change",e=>{if(e.target.files[0])readFile(e.target.files[0]);});
+function readFile(f){const r=new FileReader();r.onload=()=>{try{loadModel(JSON.parse(r.result),f.name);}catch(err){toast("解析失败: "+err.message,"err");}};r.readAsText(f);}
+const stageWrap=document.getElementById("stageWrap");
+stageWrap.addEventListener("dragover",e=>e.preventDefault());
+stageWrap.addEventListener("drop",e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)readFile(f);});
+
+/* ---------- Job 浏览(serve.py)---------- */
+let currentJobId=null;
+async function initJobBrowser(){
+  let jobs=[];try{const r=await fetch("/api/jobs",{cache:"no-store"});if(!r.ok)return;jobs=await r.json();}catch(e){return;}
+  if(!jobs.length)return;
+  const sel=document.getElementById("jobSelect");
+  sel.innerHTML='<option value="">— 选择 Job(agent 的理解)—</option>'+jobs.map(j=>`<option value="${esc(j.job_id)}">${esc(j.job_id)} · ${j.n_components}组件 · ${esc(j.target_system||"")}</option>`).join("");
+  sel.style.display="";document.getElementById("btnWrite").style.display="";
+}
+async function onJobSelect(){
+  const id=document.getElementById("jobSelect").value;if(!id)return;
+  try{const r=await fetch("/api/job?id="+encodeURIComponent(id),{cache:"no-store"});const data=await r.json();currentJobId=id;loadModel(data,id);}
+  catch(e){toast("加载失败: "+e.message,"err");}
+}
+async function writeToJob(){
+  if(!model){toast("没有数据","err");return;}
+  if(!currentJobId){toast("当前非 Job 加载,请用「导出 JSON」","err");return;}
+  let out=model.meta._full?JSON.parse(JSON.stringify(model.meta._full)):{components:model.components};
+  out.components=JSON.parse(JSON.stringify(model.components));
+  out.human_confirmation=Object.assign({},out.human_confirmation,{confirmed_via:"device_canvas",confirmed_at:new Date().toISOString()});
+  out.confirmed_fields=Array.from(new Set([...(out.confirmed_fields||[]),"components"]));out.assumptions_confirmed=true;
+  try{const r=await fetch("/api/save?id="+encodeURIComponent(currentJobId),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(out)});
+    const res=await r.json();if(res.ok)toast("已回写到 "+currentJobId+" 的 04_human_confirmation/");else toast("回写失败","err");}
+  catch(e){toast("回写失败: "+e.message,"err");}
+}
+
+/* ---------- 工具 ---------- */
+function toast(msg,kind="ok"){const t=document.getElementById("toast");t.textContent=msg;t.style.borderColor=kind==="err"?"var(--err)":"var(--accent)";t.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove("show"),1800);}
+
+/* ---------- 窗口尺寸 ---------- */
+function resizeStage(){stage.size({width:stageW(),height:stageH()});if(model)resetView();}
+window.addEventListener("resize",resizeStage);
+
+/* ---------- 示例:PiN 硅探测器 ---------- */
+function loadExample(){
+  loadModel({
+    model_ir_id:"example_pin_detector",job_id:"canvas_demo",
+    target_system:"PiN 硅辐射探测器(示例:agent 的初步理解)",
+    coordinate_system:{axis_definition:{x:"sensor_width",y:"sensor_length",z:"beam_direction"}},
+    materials:[{material_id:"Silicon",name:"Silicon (NIST)"},{material_id:"SiO2",name:"Silicon Dioxide"},{material_id:"Aluminum",name:"Aluminum (NIST)"},{material_id:"Air",name:"Air (NIST)"}],
+    components:[
+      {component_id:"world_volume",display_name:"World",component_type:"world",geometry_type:"box",dimensions:{dx:5000,dy:5000,dz:5000},material_id:"Air",placement:{position:[0,0,0]},mother_volume:null},
+      {component_id:"back_contact",display_name:"Al 背接触",component_type:"electrode",geometry_type:"box",dimensions:{dx:1000,dy:1000,dz:2},material_id:"Aluminum",placement:{position:[0,0,-252]},mother_volume:"world_volume",roles:["electrode"]},
+      {component_id:"si_substrate",display_name:"Si 衬底 (n+)",component_type:"substrate",geometry_type:"box",dimensions:{dx:1000,dy:1000,dz:300},material_id:"Silicon",placement:{position:[0,0,-100]},mother_volume:"world_volume",roles:["dose_scoring_region"]},
+      {component_id:"si_intrinsic",display_name:"Si 本征层 (i)",component_type:"layer",geometry_type:"box",dimensions:{dx:1000,dy:1000,dz:200},material_id:"Silicon",placement:{position:[0,0,150]},mother_volume:"world_volume",sensitive:true,roles:["edep_region","dose_scoring_region"]},
+      {component_id:"si_window",display_name:"Si 顶窗 (p+)",component_type:"layer",geometry_type:"box",dimensions:{dx:1000,dy:1000,dz:2},material_id:"Silicon",placement:{position:[0,0,251]},mother_volume:"world_volume"},
+      {component_id:"oxide",display_name:"SiO2 钝化",component_type:"layer",geometry_type:"box",dimensions:{dx:1000,dy:1000,dz:0.5},material_id:"SiO2",placement:{position:[0,0,252.25]},mother_volume:"world_volume"},
+      {component_id:"top_contact",display_name:"Al 顶接触",component_type:"electrode",geometry_type:"box",dimensions:{dx:1000,dy:1000,dz:1},material_id:"Aluminum",placement:{position:[0,0,253]},mother_volume:"world_volume",roles:["electrode"]},
+    ],
+  });
+}
+
+/* ---------- 启动 ---------- */
+initJobBrowser();
+loadExample();
+</script>
+</body>
+</html>
