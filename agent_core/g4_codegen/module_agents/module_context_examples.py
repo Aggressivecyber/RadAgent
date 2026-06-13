@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from agent_core.g4_codegen.cmake_template import RADAGENT_CMAKE_TEMPLATE
+
 MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
     "simulation_core": {
         "owned_files": [
@@ -161,6 +163,13 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "runManager->SetUserInitialization(physics.CreatePhysicsList());\n"
             "runManager->SetUserInitialization(new ActionInitialization());\n"
         ),
+        # Canonical CMakeLists.txt — derived from the Geant4 B1 example. It
+        # GLOBs src/*.cc and include/*.hh, so EVERY generated source is
+        # compiled automatically with UI/Vis/Qt enabled. Output this VERBATIM
+        # as CMakeLists.txt; do NOT regenerate CMake from scratch. Only extend
+        # it (extra target_link_libraries, etc.) if the project truly needs a
+        # dependency beyond Geant4.
+        "cmake_template": RADAGENT_CMAKE_TEMPLATE,
         "notes": [
             "Read upstream summaries and use the actual generated class constructors and methods.",
             "Wire OutputManager through RunAction/EventAction/SteppingAction so "
@@ -174,8 +183,11 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "calls EndOfEvent(componentId) per region to pull per-event (edep, dose); a "
             "non-null ScoringManager with zero regions means ConstructSDandField did not "
             "register any region — that is a bug.",
-            "CMake must include every generated source file needed by the final "
-            "application and enable Geant4 UI/Vis/Qt support.",
+            "CMakeLists.txt: output the cmake_template field VERBATIM. It is the Geant4 "
+            "B1 CMake (find_package ui_all vis_all + file(GLOB src/*.cc include/*.hh)), "
+            "so every generated source auto-compiles. Do NOT write CMake from scratch "
+            "and do NOT hand-list source files. Only add extra target_link_libraries if "
+            "the project needs a non-Geant4 dependency.",
             "main.cc should follow the B1 launch pattern: argc == 1 starts "
             "UIExecutive and executes macros/init_vis.mac, otherwise execute argv[1] "
             "as a batch macro.",

@@ -59,6 +59,30 @@ def assemble_proposed_patch(
             )
             agent_file_count += 1
 
+    # Force the canonical CMakeLists.txt (Geant4 B1 template that file(GLOB)s
+    # every src/*.cc + include/*.hh). CMake is formulaic and the model
+    # reinventing it per run was a recurring source of build failures; the
+    # glob template needs no per-project editing, so the canonical version
+    # always wins regardless of what the runtime_app agent emitted.
+    from agent_core.g4_codegen.cmake_template import CMAKE_PATH, RADAGENT_CMAKE_TEMPLATE
+
+    changed_files = [c for c in changed_files if c.get("path") != CMAKE_PATH]
+    changed_files.append(
+        {
+            "path": CMAKE_PATH,
+            "operation": "create_or_replace",
+            "new_content": RADAGENT_CMAKE_TEMPLATE,
+            "zone": "green",
+            "generated_by": "canonical_cmake_template",
+            "module_name": "runtime_app",
+            "rationale": "Fixed B1-derived CMake (ui_all vis_all + file(GLOB sources))",
+            "dependencies": [],
+            "satisfies": [],
+            "risk_notes": [],
+            "used_references": [],
+        }
+    )
+
     patch = {
         "patch_id": f"patch_{job_id}_g4_codegen",
         "job_id": job_id,

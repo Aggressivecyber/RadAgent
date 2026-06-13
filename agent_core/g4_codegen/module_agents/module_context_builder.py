@@ -316,8 +316,10 @@ def _get_geant4_api_rules(module_name: str) -> list[str]:
         "runtime_app": [
             "main.cc 必须使用实际生成的 DetectorConstruction、"
             "PhysicsListFactoryWrapper 和 ActionInitialization 接口",
-            "CMakeLists.txt 必须包含所有生成的 src/*.cc 和 main.cc，"
-            "设置足够的 C++ 标准，并启用 Geant4 UI/Vis/Qt 交互依赖",
+            "CMakeLists.txt 直接使用 module_code_example.cmake_template 字段"
+            "（Geant4 B1 模板：find_package ui_all vis_all + file(GLOB src/*.cc "
+            "include/*.hh)），原样输出即可，所有生成源文件会被自动编译；"
+            "不要从零编写 CMake、也不要手列源文件。集成装配器会强制使用该模板",
             "main.cc 必须参考 Geant4 B1 示例：无宏脚本参数时创建 UIExecutive "
             "并打开交互 UI；有宏脚本参数时通过 UImanager 执行 batch macro",
             "RunAction/EventAction/SteppingAction 必须真实连接 OutputManager 和 scoring 数据流",
