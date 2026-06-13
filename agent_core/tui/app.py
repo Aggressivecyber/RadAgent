@@ -13,6 +13,7 @@ from agent_core.tui.adapters import (
     event_to_row,
     render_artifacts_table,
     render_command_palette,
+    render_confirmation_review,
     render_error_state,
     render_header,
     render_job_detail,
@@ -637,6 +638,18 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                         self._submit_confirmation_approval()
                     else:
                         self._show_confirmation()
+                case "reject":
+                    self._submit_confirmation_decision(
+                        "reject",
+                        command.args,
+                        title="Confirmation rejected",
+                    )
+                case "ask-more":
+                    self._submit_confirmation_decision(
+                        "ask_more",
+                        command.args,
+                        title="Confirmation needs more input",
+                    )
                 case "credibility":
                     self._show_credibility()
                 case "model":
@@ -1152,18 +1165,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
 
         def _show_confirmation(self) -> None:
             review = self.service.get_confirmation_review()
-            if not review.get("report_path"):
-                self._show_panel("Confirmation", ["No confirmation report for the active job."])
-                return
-            preview = str(review.get("preview", ""))
-            lines = [
-                f"status: {review.get('status', '') or 'unknown'}",
-                f"unconfirmed: {review.get('unconfirmed_assumptions_count', 0)}",
-                f"report: {review.get('report_path', '')}",
-                "",
-                *preview.splitlines()[:180],
-            ]
-            self._show_panel("Confirmation", lines)
+            rendered = render_confirmation_review(review)
+            self._show_panel("Confirmation", rendered.splitlines()[2:])
 
         def _needs_confirmation(self) -> bool:
             try:
@@ -1191,6 +1194,30 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._add_system_row("Confirmation submitted", "approve", "running")
             self._start_operation(
                 self.service.submit_confirmation(response, auto_continue=True)
+            )
+
+        def _submit_confirmation_decision(
+            self,
+            decision: str,
+            notes: str,
+            *,
+            title: str,
+        ) -> None:
+            if not self._needs_confirmation():
+                self._add_system_row(
+                    "Confirmation",
+                    "No active human confirmation is pending.",
+                    "warning",
+                )
+                return
+            response = {
+                "user_decision": decision,
+                "edits": [],
+                "user_notes": notes.strip(),
+            }
+            self._add_system_row(title, response["user_notes"], "warning")
+            self._start_operation(
+                self.service.submit_confirmation(response, auto_continue=False)
             )
 
         def _show_credibility(self) -> None:
@@ -1691,6 +1718,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                     "/gates",
                     "/memory",
                     "/confirm",
+                    "/reject <reason>",
+                    "/ask-more <question>",
                     "/credibility",
                     "/model [url=... key=... lite=... pro=... max=...]",
                     "/logs",

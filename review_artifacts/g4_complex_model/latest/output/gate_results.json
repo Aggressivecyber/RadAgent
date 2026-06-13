@@ -2,28 +2,25 @@
   {
     "gate_id": 0,
     "name": "Context Sufficiency",
-    "status": "pass",
+    "status": "warning",
     "checked_items": [
       {
-        "item": "context_decision == allow_rag",
-        "result": "pass"
-      },
-      {
-        "item": "sufficient context retrieved",
+        "item": "context_decision == allow_rag or allow_with_web",
         "result": "pass"
       }
     ],
     "passed_items": [
-      "context_decision == allow_rag",
-      "sufficient context retrieved"
+      "context_decision == allow_rag or allow_with_web"
     ],
     "failed_items": [],
-    "warnings": [],
+    "warnings": [
+      "Web supplement used"
+    ],
     "evidence": [
-      "context_decision: allow_rag"
+      "context_decision: allow_with_web_supplement"
     ],
     "file_paths": [],
-    "message": "Context sufficient via RAG for the fixture model."
+    "message": "Context supplemented via web search"
   },
   {
     "gate_id": 1,
@@ -35,21 +32,18 @@
         "result": "pass"
       },
       {
-        "item": "simulation_scope == ['geant4']",
+        "item": "required fields present",
         "result": "pass"
       }
     ],
     "passed_items": [
-      "task_spec schema validation",
-      "simulation_scope == ['geant4']"
+      "schema valid"
     ],
     "failed_items": [],
     "warnings": [],
-    "evidence": [
-      "scope: geant4 only"
-    ],
+    "evidence": [],
     "file_paths": [],
-    "message": "Task spec schema valid for Geant4-only scope."
+    "message": "Task spec schema valid"
   },
   {
     "gate_id": 2,
@@ -57,11 +51,7 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "required components (9)",
-        "result": "pass"
-      },
-      {
-        "item": "required materials (5)",
+        "item": "Model IR loaded",
         "result": "pass"
       },
       {
@@ -70,156 +60,199 @@
       }
     ],
     "passed_items": [
-      "required components (9)",
-      "required materials (5)",
-      "Model IR schema valid"
+      "Model IR valid"
     ],
     "failed_items": [],
-    "warnings": [
-      "oxide_layer 1 um thickness may need step limit control"
-    ],
-    "evidence": [
-      "components: world, housing, pcb, sensor_stack, top_electrode, oxide_layer, silicon_bulk, sensitive_region, bottom_electrode",
-      "materials: G4_AIR, G4_Al, G4_Si, FR4, SiO2"
-    ],
-    "file_paths": [
-      "output/g4_model_ir.json"
-    ],
-    "message": "Model IR complete: 9 components, 5 materials, 4 scoring specs."
+    "warnings": [],
+    "evidence": [],
+    "file_paths": [],
+    "message": "Model IR schema valid"
   },
   {
     "gate_id": 3,
     "name": "Patch Format",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "applied patch file exists",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "No applied patch found"
+    ],
     "warnings": [],
     "evidence": [],
     "file_paths": [],
-    "message": "Patch Format is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "message": "No applied patch found"
   },
   {
     "gate_id": 4,
     "name": "File Permission",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "patch file zones",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "No patch data available for permission check"
+    ],
     "warnings": [],
     "evidence": [],
     "file_paths": [],
-    "message": "File Permission is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "message": "No patch data available for permission check"
   },
   {
     "gate_id": 5,
     "name": "Static Check",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "code directory exists",
+        "result": "pass"
+      },
+      {
+        "item": "src/*.cc files present",
+        "result": "fail"
+      },
+      {
+        "item": "include/*.hh files present",
+        "result": "fail"
+      },
+      {
+        "item": "CMakeLists.txt valid",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "Missing CMakeLists.txt",
+      "No .cc files in src/",
+      "No .hh files in include/",
+      "Missing required class: DetectorConstruction",
+      "Missing required class: PhysicsList",
+      "Missing required class: PrimaryGeneratorAction",
+      "Missing required class: SteppingAction"
+    ],
     "warnings": [],
-    "evidence": [],
-    "file_paths": [],
-    "message": "Static Check is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "evidence": [
+      "code_dir: /tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/06_patch/geant4_project"
+    ],
+    "file_paths": [
+      "/tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/06_patch/geant4_project"
+    ],
+    "message": "Missing CMakeLists.txt; No .cc files in src/; No .hh files in include/; Missing required class: DetectorConstruction; Missing required class: PhysicsList; Missing required class: PrimaryGeneratorAction; Missing required class: SteppingAction"
   },
   {
     "gate_id": 6,
     "name": "Build/Parse",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "build/parse verification",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "Build failed"
+    ],
     "warnings": [],
-    "evidence": [],
-    "file_paths": [],
-    "message": "Build/Parse is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "evidence": [
+      "/tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package/cmake_configure_result.json"
+    ],
+    "file_paths": [
+      "/tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package/cmake_configure_result.json"
+    ],
+    "message": "Build failed"
   },
   {
     "gate_id": 7,
     "name": "Unit Test",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "unit test execution",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "Unit tests required; no unit test result artifact found"
+    ],
     "warnings": [],
     "evidence": [],
     "file_paths": [],
-    "message": "Unit Test is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "message": "Unit tests required; no unit test result artifact found"
   },
   {
     "gate_id": 8,
     "name": "Data Contract",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "g4_summary.json",
+        "result": "fail"
+      },
+      {
+        "item": "edep_3d.csv",
+        "result": "fail"
+      },
+      {
+        "item": "dose_3d.csv",
+        "result": "fail"
+      },
+      {
+        "item": "event_table.csv",
+        "result": "fail"
+      },
+      {
+        "item": "provenance.json",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
+    ],
     "warnings": [],
-    "evidence": [],
+    "evidence": [
+      "output_dir: /tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package"
+    ],
     "file_paths": [],
-    "message": "Data Contract is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "message": "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
   },
   {
     "gate_id": 9,
     "name": "Smoke Simulation",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "smoke simulation (1000 events)",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "Smoke simulation required; no smoke simulation result artifact found"
+    ],
     "warnings": [],
     "evidence": [],
     "file_paths": [],
-    "message": "Smoke Simulation is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "message": "Smoke simulation required; no smoke simulation result artifact found"
   },
   {
     "gate_id": 10,
     "name": "Benchmark Regression",
     "status": "skipped",
+    "critical": false,
     "checked_items": [
       {
-        "item": "fixture scope",
+        "item": "benchmark regression check",
         "result": "skipped"
       }
     ],
@@ -228,26 +261,30 @@
     "warnings": [],
     "evidence": [],
     "file_paths": [],
-    "message": "Benchmark Regression is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "message": "No matching benchmark case; explicitly non-critical"
   },
   {
     "gate_id": 11,
     "name": "Physics Sanity",
-    "status": "skipped",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "edep values non-negative, finite",
+        "result": "fail"
+      },
+      {
+        "item": "dose values non-negative, finite",
+        "result": "fail"
       }
     ],
     "passed_items": [],
-    "failed_items": [],
+    "failed_items": [
+      "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
+    ],
     "warnings": [],
     "evidence": [],
     "file_paths": [],
-    "message": "Physics Sanity is a runtime job gate; this tracked fixture does not execute Geant4.",
-    "critical": false
+    "message": "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
   },
   {
     "gate_id": 12,
@@ -255,52 +292,40 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "components >= 8 (actual: 9)",
+        "item": "components count (2)",
         "result": "pass"
       },
       {
-        "item": "housing present",
+        "item": "materials count (2)",
         "result": "pass"
       },
       {
-        "item": "pcb present",
+        "item": "scoring specs count (4)",
         "result": "pass"
       },
       {
-        "item": "sensor_stack present",
+        "item": "simplification_policy defined",
         "result": "pass"
       },
       {
-        "item": "oxide_layer present",
-        "result": "pass"
-      },
-      {
-        "item": "sensitive_region present",
-        "result": "pass"
-      },
-      {
-        "item": "scoring >= 3 (actual: 4)",
+        "item": "evidence pack present",
         "result": "pass"
       }
     ],
     "passed_items": [
-      "components >= 8 (actual: 9)",
-      "housing present",
-      "pcb present",
-      "sensor_stack present",
-      "oxide_layer present",
-      "sensitive_region present",
-      "scoring >= 3 (actual: 4)"
+      "components count (2)",
+      "materials count (2)",
+      "scoring specs count (4)",
+      "simplification_policy defined",
+      "evidence pack present"
     ],
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "all 9 required components present"
+      "components: world, silicon_detector"
     ],
-    "file_paths": [
-      "output/g4_model_ir.json"
-    ],
-    "message": "Model complete: all 9 required components present."
+    "file_paths": [],
+    "message": "All checks passed"
   },
   {
     "gate_id": 13,
@@ -308,59 +333,35 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "housing not simplified away",
+        "item": "no missing complex components",
         "result": "pass"
       },
       {
-        "item": "pcb not simplified away",
+        "item": "no layer merge simplification",
         "result": "pass"
       },
       {
-        "item": "oxide_layer not simplified away",
+        "item": "all source_evidence non-empty",
         "result": "pass"
       },
       {
-        "item": "top_electrode not simplified away",
-        "result": "pass"
-      },
-      {
-        "item": "bottom_electrode not simplified away",
-        "result": "pass"
-      },
-      {
-        "item": "sensitive_region not simplified away",
-        "result": "pass"
-      },
-      {
-        "item": "multi-layer stack not merged into single silicon box",
-        "result": "pass"
-      },
-      {
-        "item": "all user-requested scoring regions exist",
+        "item": "no placeholder values",
         "result": "pass"
       }
     ],
     "passed_items": [
-      "housing not simplified away",
-      "pcb not simplified away",
-      "oxide_layer not simplified away",
-      "top_electrode not simplified away",
-      "bottom_electrode not simplified away",
-      "sensitive_region not simplified away",
-      "multi-layer stack not merged into single silicon box",
-      "all user-requested scoring regions exist"
+      "no missing complex components",
+      "no layer merge simplification",
+      "all source_evidence non-empty",
+      "no placeholder values"
     ],
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "component count: 9 (required: 9)",
-      "simplification_policy.allow_simplification == false"
+      "component_ids: world, silicon_detector"
     ],
-    "file_paths": [
-      "output/g4_model_ir.json",
-      "output/no_simplification_report.json"
-    ],
-    "message": "No unapproved simplifications detected.",
+    "file_paths": [],
+    "message": "All checks passed",
     "missing_components": [],
     "unapproved_simplifications": []
   },
@@ -370,42 +371,46 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "all interfaces have valid parent and child",
+        "item": "exactly one world volume",
         "result": "pass"
       },
       {
-        "item": "world has no parent",
-        "result": "pass"
-      },
-      {
-        "item": "sensitive_region nested in silicon_bulk",
-        "result": "pass"
-      },
-      {
-        "item": "electrodes/oxide in sensor_stack",
+        "item": "all mother_volume references valid",
         "result": "pass"
       },
       {
         "item": "no orphan volumes",
         "result": "pass"
+      },
+      {
+        "item": "no circular containment",
+        "result": "pass"
+      },
+      {
+        "item": "all interface references valid",
+        "result": "pass"
+      },
+      {
+        "item": "interface-hierarchy consistency",
+        "result": "pass"
       }
     ],
     "passed_items": [
-      "all interfaces have valid parent and child",
-      "world has no parent",
-      "sensitive_region nested in silicon_bulk",
-      "electrodes/oxide in sensor_stack",
-      "no orphan volumes"
+      "exactly one world volume",
+      "all mother_volume references valid",
+      "no orphan volumes",
+      "no circular containment",
+      "all interface references valid",
+      "interface-hierarchy consistency"
     ],
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "interface chain verified"
+      "components: 2, interfaces: 1",
+      "component_ids: world, silicon_detector"
     ],
-    "file_paths": [
-      "output/geometry_interface_report.json"
-    ],
-    "message": "All geometry interfaces consistent. Nesting hierarchy valid."
+    "file_paths": [],
+    "message": "All checks passed"
   },
   {
     "gate_id": 15,
@@ -413,22 +418,18 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "overlap checks enabled for model interfaces",
+        "item": "no overlapping daughter volumes",
         "result": "pass"
       }
     ],
     "passed_items": [
-      "overlap checks enabled for model interfaces"
+      "no overlapping daughter volumes"
     ],
     "failed_items": [],
     "warnings": [],
-    "evidence": [
-      "geometry_interface_report.json"
-    ],
-    "file_paths": [
-      "output/geometry_interface_report.json"
-    ],
-    "message": "Overlap policy is explicit for the fixture geometry hierarchy."
+    "evidence": [],
+    "file_paths": [],
+    "message": "All checks passed"
   },
   {
     "gate_id": 16,
@@ -444,6 +445,10 @@
         "result": "pass"
       },
       {
+        "item": "all sources have source_evidence",
+        "result": "pass"
+      },
+      {
         "item": "physics has source_evidence",
         "result": "pass"
       }
@@ -451,68 +456,55 @@
     "passed_items": [
       "all components have source_evidence",
       "all materials have source_evidence",
+      "all sources have source_evidence",
       "physics has source_evidence"
     ],
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "evidence_traceability_report.json"
+      "evidence_traceability_report verified"
     ],
-    "file_paths": [
-      "output/evidence_traceability_report.json"
-    ],
-    "message": "All model elements have traceable evidence sources."
+    "file_paths": [],
+    "message": "All checks passed"
   },
   {
     "gate_id": 17,
     "name": "G4-F Code Module Boundary",
-    "status": "pass",
+    "status": "fail",
     "checked_items": [
       {
-        "item": "code module plan exists",
-        "result": "pass"
-      },
-      {
-        "item": "modules have explicit dependencies",
-        "result": "pass"
-      },
-      {
-        "item": "model components mapped to modules",
-        "result": "pass"
+        "item": "generated C++ modules available",
+        "result": "fail"
       }
     ],
-    "passed_items": [
-      "code module plan exists",
-      "modules have explicit dependencies",
-      "model components mapped to modules"
+    "passed_items": [],
+    "failed_items": [
+      "No generated C++ modules available for boundary validation"
     ],
-    "failed_items": [],
     "warnings": [],
-    "evidence": [
-      "code_module_plan.json"
-    ],
-    "file_paths": [
-      "output/code_module_plan.json"
-    ],
-    "message": "Code module boundaries are explicit in the fixture plan."
+    "evidence": [],
+    "file_paths": [],
+    "message": "No generated C++ modules available for boundary validation"
   },
   {
     "gate_id": 18,
     "name": "G4-G No Magic Number",
-    "status": "skipped",
+    "status": "warning",
+    "critical": false,
     "checked_items": [
       {
-        "item": "fixture scope",
-        "result": "skipped"
+        "item": "generated C++ modules available",
+        "result": "warning"
       }
     ],
     "passed_items": [],
     "failed_items": [],
-    "warnings": [],
+    "warnings": [
+      "No generated C++ modules available for magic-number validation"
+    ],
     "evidence": [],
     "file_paths": [],
-    "message": "G4-G scans generated C++ files; this fixture stores a code plan only.",
-    "critical": false
+    "message": "No generated C++ modules available for magic-number validation"
   },
   {
     "gate_id": 19,
@@ -520,32 +512,81 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "confirmation_required=True",
+        "item": "confirmation_required=False",
         "result": "pass"
       },
       {
-        "item": "confirmation_status=approved",
-        "result": "pass"
-      },
-      {
-        "item": "remaining_unconfirmed_fields=0",
+        "item": "confirmation_status=not_required",
         "result": "pass"
       }
     ],
     "passed_items": [
-      "confirmation_required=True",
-      "confirmation_status=approved",
-      "remaining_unconfirmed_fields=0"
+      "confirmation_required=False",
+      "confirmation_status=not_required"
     ],
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "output/confirmation_record.json"
+      ""
     ],
     "file_paths": [
-      "output/confirmation_record.json",
-      "output/confirmed_model_plan.json"
+      "",
+      ""
     ],
-    "message": "Human confirmation complete for the fixture model."
+    "message": "Human confirmation not required."
+  },
+  {
+    "gate_id": 20,
+    "name": "Credibility/Plausibility Assessment",
+    "status": "warning",
+    "checked_items": [
+      {
+        "item": "g4_summary.json present",
+        "result": "fail"
+      },
+      {
+        "item": "edep_3d.csv present",
+        "result": "fail"
+      },
+      {
+        "item": "dose_3d.csv present",
+        "result": "fail"
+      },
+      {
+        "item": "event_table.csv present",
+        "result": "fail"
+      },
+      {
+        "item": "provenance.json present",
+        "result": "fail"
+      },
+      {
+        "item": "output quality contract",
+        "result": "fail"
+      },
+      {
+        "item": "prior critical gates passed",
+        "result": "warning"
+      }
+    ],
+    "passed_items": [],
+    "failed_items": [],
+    "warnings": [
+      "Credibility assessment uncertain because prior critical gates failed: Gate 3: Patch Format, Gate 4: File Permission, Gate 5: Static Check, Gate 6: Build/Parse, Gate 7: Unit Test"
+    ],
+    "evidence": [
+      "output_dir: /tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package"
+    ],
+    "file_paths": [],
+    "message": "Credibility assessment uncertain; earlier critical failures take precedence",
+    "metrics": {
+      "missing_outputs": [
+        "g4_summary.json",
+        "edep_3d.csv",
+        "dose_3d.csv",
+        "event_table.csv",
+        "provenance.json"
+      ]
+    }
   }
 ]

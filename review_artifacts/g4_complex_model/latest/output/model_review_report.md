@@ -1,86 +1,54 @@
-# Model Review Report - Radiation-Hard Silicon Pixel Detector
+# G4 Model Review: mir_job_919509e8__20260612_201928
+- **Job ID**: job_919509e8__20260612_201928
+- **Mode**: realistic
+- **Target**: 10 MeV proton beam on 300 μm silicon slab detector
 
-## Artifact Info
-- **Kind**: g4_complex_model
-- **Run Type**: test
-- **Is Stub**: false
-- **Job ID**: rad_detector_complex
-- **Validation Status**: passed
-- **Validation Scope**: fixture_model_review
+## ✅ Validation Status: PASSED
 
-## Model Summary
+## Geometry Components
+| ID | Type | Material | Parent | Sensitive |
+|----|------|----------|--------|-----------|
+| world | box | G4_AIR | — |  |
+| silicon_detector | box | G4_Si | world | ✓ |
 
-### Components (9)
-| ID | Type | Material | Parent | Roles |
-|----|------|----------|--------|-------|
-| world | world | G4_AIR | root | root |
-| housing | volume | G4_Al | world | housing, shielding |
-| pcb | volume | FR4 | housing | mechanical_support |
-| sensor_stack | assembly | G4_AIR | pcb | assembly |
-| top_electrode | volume | G4_Al | sensor_stack | electrode |
-| oxide_layer | volume | SiO2 | sensor_stack | oxide, dose_critical |
-| silicon_bulk | volume | G4_Si | sensor_stack | substrate |
-| sensitive_region | volume | G4_Si | silicon_bulk | edep_region, sensitive_detector |
-| bottom_electrode | volume | G4_Al | sensor_stack | electrode |
+## Materials
+| ID | Name | Type | Density (g/cm³) |
+|----|------|------|-----------------|
+| G4_AIR | G4_AIR (NIST) | nist | 0.001225 |
+| G4_Si | G4_Si (NIST) | nist | 2.33 |
 
-### Materials (5)
-| ID | Type | Density (g/cm³) |
-|----|------|-----------------|
-| G4_AIR | NIST | 0.001214 |
-| G4_Al | NIST | 2.699 |
-| FR4 | custom | 1.850 |
-| G4_Si | NIST | 2.329 |
-| SiO2 | custom | 2.200 |
+## Particle Source
+- **Particle**: proton
+- **Energy**: 10.0 MeV (mono)
+- **Events**: 1000
+- **Position**: [0.0, 0.0, -800.0] → direction [0.0, 0.0, 1.0]
 
-### Source
-- **Particle**: proton, 10 MeV, mono-energetic
-- **Position**: (0, 0, 1500) mm
-- **Direction**: (0, 0, -1), vertical incidence
-
-### Scoring (4)
-1. **sensitive_edep**: region scoring on sensitive_region, edep_MeV and n_entries
-2. **oxide_dose**: region scoring on oxide_layer, dose_Gy and edep_MeV
-3. **bulk_dose_3d**: mesh scoring on silicon_bulk, dose_Gy and edep_MeV (5 mm voxels)
-4. **event_table**: region scoring on sensitive_region, event_id, edep, position
-
-### Physics
+## Physics
 - **List**: QGSP_BIC_HP
-- **Reasoning**: Binary cascade for low-energy proton, HP neutron, standard EM
+- **Reasoning**: User explicitly requested QGSP_BIC_HP for proton transport with high-precision neutron handling.
 
-## Simplification Check
-- **Policy**: allow_simplification = false
-- **All complex components preserved**: yes
-- **No merged layers**: yes
-- **No missing components**: yes
+## Sensitive Detectors
+- **SiliconDetectorSdSensitiveDetector**: linked to ['silicon_detector'], collection=silicon_detector_Hits
 
-## Gate Summary
-- Total: 20 gates
-- Passed: 10
-- Skipped: 10 (non-critical fixture-only gates)
-- Failed: 0
-- Warnings: 1
-- Skipped Gates: Patch Format, File Permission, Static Check, Build/Parse, Unit Test, Data Contract, Smoke Simulation, Benchmark Regression, Physics Sanity, G4-G No Magic Number
+## Scoring
+- **silicon_detector_edep** (region): edep_MeV
+- **silicon_detector_dose** (region): dose_Gy
+- **silicon_detector_voxel_dose** (voxel): dose_Gy
+- **event_table** (region): edep_MeV, event_id, track_id
 
-## Known Limitations
-1. Fixture artifact, no actual Geant4 simulation executed
-2. Oxide layer 1 μm needs step limit control in production
-3. 3D dose map mesh resolution limited by voxel size
-4. OutputManager generates planned outputs, not actual data
-5. Runtime job gates are skipped because this artifact stores review inputs only
+## Construction Audit Trail
+Total steps: 12
+- [evidence_retrieval_node] modify → mir_job_919509e8__20260612_201928: Organized evidence: geometry=1, materials=1, source=1, physics=2, scoring=1
+- [model_scope_guard_node] validate → mir_job_919509e8__20260612_201928: Scope guard result: proceed_with_warnings
+- [geometry_decomposition_node] create → mir_job_919509e8__20260612_201928: Normalized draft components, 2 components, 1 interfaces
+- [coordinate_system_node] modify → mir_job_919509e8__20260612_201928: Set coordinate system: cartesian, origin=world_center
+- [material_definition_node] create → mir_job_919509e8__20260612_201928: Defined 2 materials: ['G4_AIR', 'G4_Si']
+- [source_definition_node] create → sources: Configured 1 source(s): primary_source:proton 10.0 MeV mono/gun
+- [physics_list_node] validate → physics: Preserved drafted physics list: QGSP_BIC_HP
+- [sensitive_detector_node] create → sensitive_detectors: Created 1 sensitive detectors for: ['silicon_detector']
+- [scoring_design_node] create → scoring: Created 4 scoring configurations: ['silicon_detector_edep', 'silicon_detector_dose', 'silicon_detector_voxel_dose', 'event_table']
+- [model_ir_validation_node] validate → mir_job_919509e8__20260612_201928: Ran 7 validators: 7 passed, 0 errors
+- ... and 2 more entries
 
-## Human Confirmation
-- **Status**: approved
-- **Remaining Unconfirmed Fields**: 0
-
-## Nesting Hierarchy
-```
-world
-└── housing (Al)
-    └── pcb (FR4)
-        └── sensor_stack (air gap)
-            ├── top_electrode (Al, 0.5 mm)
-            ├── oxide_layer (SiO2, 1 μm)
-            ├── silicon_bulk (Si, 30 mm)
-            │   └── sensitive_region (Si, 25 mm, scored)
-            └── bottom_electrode (Al, 0.5 mm)
-```
+## Open Issues
+- ⚠️ Source position not specified; assumed at z = -5 mm (world boundary) for vertical incidence.

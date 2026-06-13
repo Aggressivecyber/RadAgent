@@ -1,20 +1,4 @@
 {
-  "total_files": 15,
-  "file_paths": [
-    "CMakeLists.txt",
-    "src/main.cc",
-    "src/DetectorConstruction.cc",
-    "src/MaterialRegistry.cc",
-    "src/GeometryContext.cc",
-    "src/PrimaryGeneratorAction.cc",
-    "src/RunAction.cc",
-    "src/OutputManager.cc",
-    "include/DetectorConstruction.hh",
-    "include/MaterialRegistry.hh",
-    "include/GeometryContext.hh",
-    "include/PrimaryGeneratorAction.hh",
-    "include/RunAction.hh",
-    "include/OutputManager.hh",
-    "macros/run.mac"
-  ]
+  "total_files": 0,
+  "file_paths": []
 }

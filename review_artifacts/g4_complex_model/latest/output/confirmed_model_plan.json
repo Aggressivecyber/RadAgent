@@ -1,8 +1,595 @@
 {
   "schema_version": "confirmed_model_plan_v1",
-  "job_id": "rad_detector_complex",
+  "job_id": "job_919509e8__20260612_201928",
+  "source_query": "建立 Geant4 仿真项目：10 MeV 单能质子束垂直入射 300 μm 厚硅平板探测器（横向 10 mm x 10 mm），运行 1000 个事件。使用 QGSP_BIC_HP 物理列表。记录每个事件的总能量沉积以及沿入射方向的深度能量沉积分布（Bragg 曲线，300 bins over 0.3 mm）。硅平板位于世界体中心，世界体为 50x50x10 mm³ 空气。质子源为点源，沿 +z 方向入射。输出统计信息和深度分布数据。",
+  "domain_profile": "geant4",
+  "components": [
+    {
+      "component_id": "world",
+      "component_type": "world",
+      "material_id": "G4_AIR",
+      "geometry": {},
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "roles": [],
+      "confirmed_by_user": true,
+      "parameters": [
+        {
+          "field_path": "components.world.display_name",
+          "value": "World Volume",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.geometry_type",
+          "value": "box",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.dimensions",
+          "value": {
+            "dx": 50000.0,
+            "dy": 50000.0,
+            "dz": 10000.0
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.material_id",
+          "value": "G4_AIR",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.mother_volume",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.sensitive",
+          "value": false,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.color",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.source_evidence",
+          "value": [
+            "User request: world volume 50x50x10 mm³ air"
+          ],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.open_issues",
+          "value": [],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.requires_confirmation",
+          "value": false,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.confirmed_by_user",
+          "value": false,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world.confirmation_source",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        }
+      ]
+    },
+    {
+      "component_id": "silicon_detector",
+      "component_type": "volume",
+      "material_id": "G4_Si",
+      "geometry": {},
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "roles": [
+        "edep_region",
+        "dose_scoring_region"
+      ],
+      "confirmed_by_user": true,
+      "parameters": [
+        {
+          "field_path": "components.silicon_detector.display_name",
+          "value": "Silicon Slab Detector",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.geometry_type",
+          "value": "box",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.dimensions",
+          "value": {
+            "dx": 10000.0,
+            "dy": 10000.0,
+            "dz": 300.0
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.material_id",
+          "value": "G4_Si",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.mother_volume",
+          "value": "world",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.sensitive",
+          "value": true,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.color",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.source_evidence",
+          "value": [
+            "User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral"
+          ],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.open_issues",
+          "value": [],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.requires_confirmation",
+          "value": false,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.confirmed_by_user",
+          "value": false,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.silicon_detector.confirmation_source",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "particle_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "proton"
+    },
+    {
+      "source_id": "energy",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": {
+        "value": 10.0,
+        "unit": "MeV",
+        "distribution": "mono",
+        "sigma": null,
+        "spectrum_file": null
+      }
+    },
+    {
+      "source_id": "beam",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": {
+        "position": [
+          0.0,
+          0.0,
+          -800.0
+        ],
+        "direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "sigma_position_um": null,
+        "sigma_direction_rad": null,
+        "angular_distribution": "mono",
+        "angular_spectrum_file": null,
+        "surface_shape": "point",
+        "surface_size": null
+      }
+    },
+    {
+      "source_id": "generator_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "gun"
+    },
+    {
+      "source_id": "events",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": 1000
+    },
+    {
+      "source_id": "relative_weight",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "source_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "task_spec.particles[0]: source_id=primary_source, particle=proton, energy=10.0 MeV, distribution=mono, generator=gun, position=[0.0, 0.0, -800.0], direction=[0.0, 0.0, 1.0], angular_distribution=mono"
+      ]
+    },
+    {
+      "source_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    }
+  ],
+  "scoring": [
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "region"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "edep_MeV"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        {
+          "region_component_id": "silicon_detector",
+          "quantity": "edep_MeV"
+        }
+      ]
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: region edep scoring for silicon_detector"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "region"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "dose_Gy"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        {
+          "region_component_id": "silicon_detector",
+          "quantity": "dose_Gy"
+        }
+      ]
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: region dose scoring for silicon_detector"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "voxel"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "dose_Gy"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": {
+        "target_component_id": "silicon_detector",
+        "voxel_size": [
+          1000.0,
+          1000.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: voxel dose map for silicon_detector, voxel_size=[1000.0, 1000.0, 30.0] um"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "region"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "edep_MeV",
+        "event_id",
+        "track_id"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        {
+          "region_component_id": "silicon_detector",
+          "quantity": "edep_MeV"
+        }
+      ]
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: event table for all sensitive components"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    }
+  ],
+  "assumptions_confirmed": true,
   "confirmation_status": "approved",
-  "requires_human_confirmation": false,
-  "remaining_unconfirmed_fields": [],
-  "model_ir_path": "output/g4_model_ir.json"
+  "confirmation_history": []
 }

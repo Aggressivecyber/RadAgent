@@ -47,6 +47,30 @@ def test_visual_workbench_commands_are_parsed_and_validated() -> None:
         parse_command("/visual-reject")
 
 
+def test_human_confirmation_decision_commands_are_parsed_and_validated() -> None:
+    reject = parse_command("/reject Geometry assumptions are wrong")
+    assert reject.name == "reject"
+    assert reject.args == "Geometry assumptions are wrong"
+
+    ask_more = parse_command("/ask-more What detector pressure should be used?")
+    assert ask_more.name == "ask-more"
+    assert ask_more.args == "What detector pressure should be used?"
+
+    with pytest.raises(CommandParseError, match="Usage: /reject"):
+        parse_command("/reject")
+    with pytest.raises(CommandParseError, match="Usage: /ask-more"):
+        parse_command("/ask-more")
+
+
+def test_human_confirmation_edit_command_is_parsed_and_validated() -> None:
+    edit = parse_command("/edit-confirmation sources.primary.energy=200 unit=MeV")
+    assert edit.name == "edit-confirmation"
+    assert edit.args == "sources.primary.energy=200 unit=MeV"
+
+    with pytest.raises(CommandParseError, match="Usage: /edit-confirmation"):
+        parse_command("/edit-confirmation")
+
+
 def test_unknown_command_is_rejected() -> None:
     with pytest.raises(CommandParseError, match="Unknown command"):
         parse_command("/banana")

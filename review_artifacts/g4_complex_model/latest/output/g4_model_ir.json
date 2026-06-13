@@ -1,12 +1,80 @@
 {
-  "model_ir_id": "rad_hard_detector_v1",
-  "job_id": "rad_detector_complex",
+  "schema_version": "g4_model_ir_v1",
+  "model_ir_id": "mir_job_919509e8__20260612_201928",
+  "job_id": "job_919509e8__20260612_201928",
   "modeling_mode": "realistic",
-  "target_system": "Radiation-Hard Silicon Pixel Detector — Full sensor stack with housing, PCB, electrodes, oxide, and sensitive silicon",
+  "target_system": "10 MeV proton beam on 300 μm silicon slab detector",
   "simplification_policy": {
     "allow_simplification": false,
     "requires_user_approval": true,
     "approved_simplifications": []
+  },
+  "global_units": {
+    "length": "um",
+    "energy": "MeV",
+    "dose": "Gy",
+    "time": "s"
+  },
+  "coordinate_system": {
+    "system": "cartesian",
+    "origin_definition": "world_center",
+    "axis_definition": {
+      "x": "sensor_width",
+      "y": "sensor_length",
+      "z": "beam_direction"
+    },
+    "unit": "um"
+  },
+  "evidence": {
+    "evidence_decision": "block_no_context",
+    "geometry": [
+      {
+        "source_type": "user_requirement",
+        "source": "requirements.json",
+        "dimension": "geometry",
+        "text": "[{\"component_id\": \"world\", \"display_name\": \"World Volume\", \"component_type\": \"world\", \"geometry_type\": \"box\", \"material\": \"G4_AIR\", \"role\": \"modeling draft component\", \"source\": \"User request: world volume 50x50x10 mm³ air\"}, {\"component_id\": \"silicon_detector\", \"display_name\": \"Silicon Slab Detector\", \"component_type\": \"volume\", \"geometry_type\": \"box\", \"material\": \"G4_Si\", \"role\": \"edep_region, dose_scoring_region\", \"source\": \"User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral\"}]"
+      }
+    ],
+    "materials": [
+      {
+        "source_type": "user_requirement",
+        "source": "requirements.json",
+        "dimension": "materials",
+        "text": "[{\"name\": \"Silicon\", \"classification\": \"custom\", \"reason\": \"Target material from task specification\"}, {\"name\": \"G4_AIR\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'world'\"}, {\"name\": \"G4_Si\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'silicon_detector'\"}]"
+      }
+    ],
+    "source": [
+      {
+        "source_type": "user_requirement",
+        "source": "requirements.json",
+        "dimension": "source",
+        "text": "[{\"source_id\": \"primary_source\", \"particle_type\": \"proton\", \"energy\": \"10.0 MeV\", \"distribution\": \"mono\", \"geometry\": \"pencil\", \"direction\": \"[0.0, 0.0, 1.0]\", \"angular_distribution\": \"mono\"}]"
+      }
+    ],
+    "physics": [
+      {
+        "source_type": "local_geant4_reference",
+        "source": "geant4_reference:g4_physics_list",
+        "title": "G4VModularPhysicsList — Physics List",
+        "dimension": "physics",
+        "text": "Use G4VModularPhysicsList or FTFP_BERT, QGSP_BIC, Shielding for pre-built physics lists. EM physics: G4EmStandardPhysics (recommended). Hadronic: FTFP_BERT for protons/neutrons > 5 GeV. Register physics: RegisterPhysics(new G4EmStandardPhysics()). Include: #include \"G4VModularPhysicsList.hh\", #include \"FTFP_BERT.hh\" or #include \"G4EmStandardPhysics.hh\"."
+      },
+      {
+        "source_type": "local_geant4_reference",
+        "source": "geant4_reference:g4_phys_list_factory",
+        "title": "G4PhysListFactory — Reference Physics List Factory",
+        "dimension": "physics",
+        "text": "G4PhysListFactory creates Geant4 reference physics lists such as FTFP_BERT, QGSP_BERT, QGSP_BIC, and Shielding. Use factory.GetReferencePhysList(\"FTFP_BERT\") to obtain a G4VModularPhysicsList*. The factory object must remain valid while creating the list; do not return a physics list from a local temporary factory if the wrapper caches related state. Production cuts should be set on the physics list with SetDefaultCutValue(value) or SetCutValue(value, particleName) where supported by the actual physics-list API. Include: #include \"G4PhysListFactory.hh\" and #include \"G4VModularPhysicsList.hh\"."
+      }
+    ],
+    "scoring": [
+      {
+        "source_type": "user_requirement",
+        "source": "requirements.json",
+        "dimension": "scoring",
+        "text": "[\"edep\", \"dose_3d\", \"event_table\"]"
+      }
+    ]
   },
   "components": [
     {
@@ -15,470 +83,480 @@
       "component_type": "world",
       "geometry_type": "box",
       "dimensions": {
-        "dx": 2000,
-        "dy": 2000,
-        "dz": 2000
+        "dx": 50000.0,
+        "dy": 50000.0,
+        "dz": 10000.0
       },
       "material_id": "G4_AIR",
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "mother_volume": null,
+      "sensitive": false,
       "roles": [],
-      "open_issues": [],
+      "color": null,
       "source_evidence": [
-        "default_world"
-      ]
+        "User request: world volume 50x50x10 mm³ air"
+      ],
+      "open_issues": [],
+      "requires_confirmation": false,
+      "confirmed_by_user": false,
+      "confirmation_source": null
     },
     {
-      "component_id": "housing",
-      "display_name": "Aluminum Housing Shell",
+      "component_id": "silicon_detector",
+      "display_name": "Silicon Slab Detector",
       "component_type": "volume",
       "geometry_type": "box",
       "dimensions": {
-        "dx": 120,
-        "dy": 120,
-        "dz": 100
+        "dx": 10000.0,
+        "dy": 10000.0,
+        "dz": 300.0
       },
-      "material_id": "G4_Al",
+      "material_id": "G4_Si",
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
       "mother_volume": "world",
-      "roles": [
-        "housing",
-        "shielding"
-      ],
-      "open_issues": [],
-      "source_evidence": [
-        "user_specification:housing"
-      ]
-    },
-    {
-      "component_id": "pcb",
-      "display_name": "FR4 PCB Carrier Board",
-      "component_type": "volume",
-      "geometry_type": "box",
-      "dimensions": {
-        "dx": 100,
-        "dy": 100,
-        "dz": 15
-      },
-      "material_id": "FR4",
-      "mother_volume": "housing",
-      "roles": [
-        "mechanical_support"
-      ],
-      "open_issues": [],
-      "source_evidence": [
-        "user_specification:pcb"
-      ]
-    },
-    {
-      "component_id": "sensor_stack",
-      "display_name": "Sensor Stack Assembly",
-      "component_type": "assembly",
-      "geometry_type": "box",
-      "dimensions": {
-        "dx": 80,
-        "dy": 80,
-        "dz": 35
-      },
-      "material_id": "G4_AIR",
-      "mother_volume": "pcb",
-      "roles": [
-        "assembly"
-      ],
-      "open_issues": [],
-      "source_evidence": [
-        "user_specification:sensor_stack"
-      ]
-    },
-    {
-      "component_id": "top_electrode",
-      "display_name": "Top Aluminum Electrode",
-      "component_type": "volume",
-      "geometry_type": "box",
-      "dimensions": {
-        "dx": 70,
-        "dy": 70,
-        "dz": 0.5
-      },
-      "material_id": "G4_Al",
-      "mother_volume": "sensor_stack",
-      "roles": [
-        "electrode"
-      ],
-      "open_issues": [],
-      "source_evidence": [
-        "user_specification:electrode"
-      ]
-    },
-    {
-      "component_id": "oxide_layer",
-      "display_name": "Gate Oxide (SiO2)",
-      "component_type": "volume",
-      "geometry_type": "box",
-      "dimensions": {
-        "dx": 70,
-        "dy": 70,
-        "dz": 0.001
-      },
-      "material_id": "SiO2",
-      "mother_volume": "sensor_stack",
-      "roles": [
-        "oxide",
-        "dose_critical"
-      ],
-      "open_issues": [
-        "Oxide thickness 1 μm is at Geant4 step limit — may need special step control"
-      ],
-      "source_evidence": [
-        "user_specification:oxide"
-      ]
-    },
-    {
-      "component_id": "silicon_bulk",
-      "display_name": "Silicon Bulk Substrate",
-      "component_type": "volume",
-      "geometry_type": "box",
-      "dimensions": {
-        "dx": 70,
-        "dy": 70,
-        "dz": 30
-      },
-      "material_id": "G4_Si",
-      "mother_volume": "sensor_stack",
-      "roles": [
-        "substrate"
-      ],
-      "open_issues": [],
-      "source_evidence": [
-        "user_specification:silicon_bulk"
-      ]
-    },
-    {
-      "component_id": "sensitive_region",
-      "display_name": "Sensitive Silicon Active Region",
-      "component_type": "volume",
-      "geometry_type": "box",
-      "dimensions": {
-        "dx": 68,
-        "dy": 68,
-        "dz": 25
-      },
-      "material_id": "G4_Si",
-      "mother_volume": "silicon_bulk",
+      "sensitive": true,
       "roles": [
         "edep_region",
-        "sensitive_detector"
+        "dose_scoring_region"
+      ],
+      "color": null,
+      "source_evidence": [
+        "User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral"
       ],
       "open_issues": [],
-      "source_evidence": [
-        "user_specification:sensitive_region"
-      ]
-    },
+      "requires_confirmation": false,
+      "confirmed_by_user": false,
+      "confirmation_source": null
+    }
+  ],
+  "interfaces": [
     {
-      "component_id": "bottom_electrode",
-      "display_name": "Bottom Aluminum Electrode",
-      "component_type": "volume",
-      "geometry_type": "box",
-      "dimensions": {
-        "dx": 70,
-        "dy": 70,
-        "dz": 0.5
-      },
-      "material_id": "G4_Al",
-      "mother_volume": "sensor_stack",
-      "roles": [
-        "electrode"
-      ],
-      "open_issues": [],
-      "source_evidence": [
-        "user_specification:electrode"
-      ]
+      "interface_id": "iface_silicon_detector_world",
+      "component_a": "world",
+      "component_b": "silicon_detector",
+      "relationship": "contains",
+      "expected_gap_um": 0.0,
+      "overlap_allowed": false,
+      "overlap_check_enabled": true,
+      "tolerance_um": 0.001,
+      "source_evidence": []
     }
   ],
   "materials": [
     {
       "material_id": "G4_AIR",
-      "name": "G4_AIR",
+      "name": "G4_AIR (NIST)",
       "classification": "nist",
       "nist_name": "G4_AIR",
-      "density_g_cm3": 0.001214,
-      "custom": false,
+      "composition": null,
+      "density_g_cm3": 0.001225,
+      "state": "solid",
+      "temperature_kelvin": null,
       "source_evidence": [
-        "NIST"
-      ]
-    },
-    {
-      "material_id": "G4_Al",
-      "name": "G4_Al",
-      "classification": "nist",
-      "nist_name": "G4_Al",
-      "density_g_cm3": 2.699,
-      "custom": false,
-      "source_evidence": [
-        "NIST"
-      ]
+        "nist:G4_AIR",
+        "component:world:material_id=G4_AIR",
+        "component:world:User request: world volume 50x50x10 mm³ air",
+        "user_requirement:requirements.json:materials"
+      ],
+      "open_issues": []
     },
     {
       "material_id": "G4_Si",
-      "name": "G4_Si",
+      "name": "G4_Si (NIST)",
       "classification": "nist",
       "nist_name": "G4_Si",
-      "density_g_cm3": 2.329,
-      "custom": false,
+      "composition": null,
+      "density_g_cm3": 2.33,
+      "state": "solid",
+      "temperature_kelvin": null,
       "source_evidence": [
-        "NIST"
-      ]
-    },
-    {
-      "material_id": "FR4",
-      "name": "FR4_Epoxy",
-      "classification": "custom",
-      "nist_name": "",
-      "density_g_cm3": 1.85,
-      "custom": true,
-      "custom_composition": {
-        "elements": {
-          "Si": 0.282,
-          "O": 0.205,
-          "C": 0.254,
-          "H": 0.119
-        },
-        "method": "fraction_by_weight"
-      },
-      "source_evidence": [
-        "user_specification:fr4",
-        "PDG_material_table"
-      ]
-    },
-    {
-      "material_id": "SiO2",
-      "name": "SiliconDioxide",
-      "classification": "custom",
-      "nist_name": "",
-      "density_g_cm3": 2.2,
-      "custom": true,
-      "custom_composition": {
-        "elements": {
-          "Si": 1,
-          "O": 2
-        },
-        "method": "stoichiometric"
-      },
-      "source_evidence": [
-        "user_specification:sio2",
-        "NIST"
-      ]
+        "nist:G4_Si",
+        "component:silicon_detector:material_id=G4_Si",
+        "component:silicon_detector:User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral",
+        "user_requirement:requirements.json:materials"
+      ],
+      "open_issues": []
     }
   ],
   "sources": [
     {
-      "source_id": "proton_10mev",
+      "source_id": "primary_source",
       "particle_type": "proton",
       "energy": {
         "value": 10.0,
         "unit": "MeV",
-        "distribution": "mono"
+        "distribution": "mono",
+        "sigma": null,
+        "spectrum_file": null
       },
       "beam": {
         "position": [
-          0,
-          0,
-          1500
+          0.0,
+          0.0,
+          -800.0
         ],
         "direction": [
-          0,
-          0,
-          -1
+          0.0,
+          0.0,
+          1.0
         ],
-        "sigma_position_um": 0.0,
+        "sigma_position_um": null,
+        "sigma_direction_rad": null,
+        "angular_distribution": "mono",
+        "angular_spectrum_file": null,
         "surface_shape": "point",
-        "surface_size": []
+        "surface_size": null
       },
-      "generator_type": "gps",
+      "generator_type": "gun",
+      "events": 1000,
+      "relative_weight": null,
       "source_evidence": [
-        "user_specification:10mev_proton"
-      ]
+        "task_spec.particles[0]: source_id=primary_source, particle=proton, energy=10.0 MeV, distribution=mono, generator=gun, position=[0.0, 0.0, -800.0], direction=[0.0, 0.0, 1.0], angular_distribution=mono"
+      ],
+      "open_issues": []
     }
   ],
   "physics": {
     "physics_list": "QGSP_BIC_HP",
-    "selection_reasoning": "QGSP_BIC_HP chosen for 10 MeV proton in silicon detector: binary cascade for low-energy proton interactions, high-precision neutron model, standard EM for electron/photon tracking. Critical for accurate oxide dose and silicon bulk energy deposition.",
+    "selection_reasoning": "User explicitly requested QGSP_BIC_HP for proton transport with high-precision neutron handling.",
+    "em_physics": "standard",
+    "hadronic": "binary_cascade",
+    "decay": true,
+    "cuts": {
+      "gamma": 0.1,
+      "e-": 0.1
+    },
+    "hp_neutron": true,
     "source_evidence": [
-      "geant4_physics_guide:QGSP_BIC_HP"
-    ]
+      "User request: QGSP_BIC_HP physics list"
+    ],
+    "open_issues": []
   },
   "scoring": [
     {
-      "scoring_id": "sensitive_edep",
+      "scoring_id": "silicon_detector_edep",
       "scoring_type": "region",
       "quantities": [
-        "edep_MeV",
-        "n_entries"
+        "edep_MeV"
       ],
-      "target_component_id": "sensitive_region",
+      "voxel_grid": null,
+      "region_scores": [
+        {
+          "region_component_id": "silicon_detector",
+          "quantity": "edep_MeV"
+        }
+      ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification:sensitive_edep"
-      ]
+        "Auto-generated: region edep scoring for silicon_detector"
+      ],
+      "open_issues": []
     },
     {
-      "scoring_id": "oxide_dose",
+      "scoring_id": "silicon_detector_dose",
       "scoring_type": "region",
       "quantities": [
-        "dose_Gy",
-        "edep_MeV"
+        "dose_Gy"
       ],
-      "target_component_id": "oxide_layer",
+      "voxel_grid": null,
+      "region_scores": [
+        {
+          "region_component_id": "silicon_detector",
+          "quantity": "dose_Gy"
+        }
+      ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification:oxide_dose"
-      ]
+        "Auto-generated: region dose scoring for silicon_detector"
+      ],
+      "open_issues": []
     },
     {
-      "scoring_id": "bulk_dose_3d",
-      "scoring_type": "mesh",
+      "scoring_id": "silicon_detector_voxel_dose",
+      "scoring_type": "voxel",
       "quantities": [
-        "dose_Gy",
-        "edep_MeV"
+        "dose_Gy"
       ],
-      "target_component_id": "silicon_bulk",
-      "output_format": "csv",
-      "mesh_definition": {
-        "voxel_size": {
-          "dx": 5.0,
-          "dy": 5.0,
-          "dz": 5.0
-        },
-        "unit": "mm"
+      "voxel_grid": {
+        "target_component_id": "silicon_detector",
+        "voxel_size": [
+          1000.0,
+          1000.0,
+          30.0
+        ]
       },
+      "region_scores": [],
+      "output_format": "csv",
       "source_evidence": [
-        "user_specification:3d_dose_map"
-      ]
+        "Auto-generated: voxel dose map for silicon_detector, voxel_size=[1000.0, 1000.0, 30.0] um"
+      ],
+      "open_issues": []
     },
     {
       "scoring_id": "event_table",
       "scoring_type": "region",
       "quantities": [
-        "event_id",
         "edep_MeV",
-        "x_mm",
-        "y_mm",
-        "z_mm"
+        "event_id",
+        "track_id"
       ],
-      "target_component_id": "sensitive_region",
+      "voxel_grid": null,
+      "region_scores": [
+        {
+          "region_component_id": "silicon_detector",
+          "quantity": "edep_MeV"
+        }
+      ],
       "output_format": "csv",
       "source_evidence": [
-        "user_specification:event_table"
-      ]
+        "Auto-generated: event table for all sensitive components"
+      ],
+      "open_issues": []
     }
   ],
-  "interfaces": [
+  "sensitive_detectors": [
     {
-      "parent_component": "world",
-      "child_component": "housing",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "housing",
-      "child_component": "pcb",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "pcb",
-      "child_component": "sensor_stack",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "sensor_stack",
-      "child_component": "top_electrode",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "sensor_stack",
-      "child_component": "oxide_layer",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "sensor_stack",
-      "child_component": "silicon_bulk",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "silicon_bulk",
-      "child_component": "sensitive_region",
-      "interface_type": "daughter"
-    },
-    {
-      "parent_component": "sensor_stack",
-      "child_component": "bottom_electrode",
-      "interface_type": "daughter"
+      "sd_id": "silicon_detector_sd",
+      "name": "SiliconDetectorSdSensitiveDetector",
+      "linked_component_ids": [
+        "silicon_detector"
+      ],
+      "scoring_ids": [],
+      "collection_name": "silicon_detector_Hits",
+      "hit_fields": [
+        {
+          "name": "event_id",
+          "dtype": "int",
+          "unit": null
+        },
+        {
+          "name": "track_id",
+          "dtype": "int",
+          "unit": null
+        },
+        {
+          "name": "particle",
+          "dtype": "int",
+          "unit": "G4ParticleDefinition PDG encoding"
+        },
+        {
+          "name": "edep_MeV",
+          "dtype": "float",
+          "unit": "MeV"
+        },
+        {
+          "name": "x_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "y_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "z_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "time_s",
+          "dtype": "float",
+          "unit": "s"
+        }
+      ],
+      "open_issues": []
     }
   ],
-  "open_issues": [
-    "Oxide layer 1 μm thickness requires step limit control (SetMaxStepSize)"
-  ],
-  "evidence": {
-    "evidence_decision": "allow_rag",
-    "geometry": [
+  "ledger": {
+    "schema_version": "construction_ledger_v1",
+    "steps": [
       {
-        "source": "user_specification",
-        "desc": "detector stack layout: housing → pcb → sensor_stack → electrodes/oxide/silicon"
-      }
-    ],
-    "materials": [
-      {
-        "source": "NIST",
-        "desc": "G4_AIR, G4_Al, G4_Si standard definitions"
+        "timestamp": "2026-06-12T12:19:36.233328+00:00",
+        "node_name": "requirement_capture_node",
+        "action": "create",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Initialized G4ModelIR skeleton",
+        "evidence_refs": [],
+        "modified_fields": [
+          "model_ir_id",
+          "job_id",
+          "modeling_mode"
+        ],
+        "warnings": []
       },
       {
-        "source": "user_specification",
-        "desc": "FR4 custom composition from PDG material table"
+        "timestamp": "2026-06-12T12:19:44.344030+00:00",
+        "node_name": "requirement_capture_node",
+        "action": "modify",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Captured draft: 2 components, physics=QGSP_BIC_HP",
+        "evidence_refs": [],
+        "modified_fields": [
+          "target_system",
+          "components",
+          "physics",
+          "open_issues"
+        ],
+        "warnings": []
       },
       {
-        "source": "NIST",
-        "desc": "SiO2 stoichiometric composition, density 2.200 g/cm³"
-      }
-    ],
-    "source": [
+        "timestamp": "2026-06-12T12:19:44.344811+00:00",
+        "node_name": "evidence_retrieval_node",
+        "action": "modify",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Organized evidence: geometry=1, materials=1, source=1, physics=2, scoring=1",
+        "evidence_refs": [],
+        "modified_fields": [
+          "evidence"
+        ],
+        "warnings": []
+      },
       {
-        "source": "user_specification",
-        "desc": "10 MeV mono-energetic proton, vertical incidence"
-      }
-    ],
-    "physics": [
+        "timestamp": "2026-06-12T12:19:44.345281+00:00",
+        "node_name": "model_scope_guard_node",
+        "action": "validate",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Scope guard result: proceed_with_warnings",
+        "evidence_refs": [],
+        "modified_fields": [],
+        "warnings": [
+          "external context unavailable; proceeding with explicit user requirements for geometry, materials, and source"
+        ]
+      },
       {
-        "source": "geant4_physics_guide",
-        "desc": "QGSP_BIC_HP for low-energy proton detector simulation"
-      }
-    ],
-    "scoring": [
+        "timestamp": "2026-06-12T12:19:44.346195+00:00",
+        "node_name": "geometry_decomposition_node",
+        "action": "create",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Normalized draft components, 2 components, 1 interfaces",
+        "evidence_refs": [],
+        "modified_fields": [
+          "components",
+          "interfaces"
+        ],
+        "warnings": []
+      },
       {
-        "source": "user_specification",
-        "desc": "sensitive region edep, oxide dose, bulk 3D dose map, event table"
+        "timestamp": "2026-06-12T12:19:44.346756+00:00",
+        "node_name": "coordinate_system_node",
+        "action": "modify",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Set coordinate system: cartesian, origin=world_center",
+        "evidence_refs": [],
+        "modified_fields": [
+          "coordinate_system",
+          "global_units"
+        ],
+        "warnings": []
+      },
+      {
+        "timestamp": "2026-06-12T12:19:44.347143+00:00",
+        "node_name": "material_definition_node",
+        "action": "create",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Defined 2 materials: ['G4_AIR', 'G4_Si']",
+        "evidence_refs": [],
+        "modified_fields": [
+          "materials"
+        ],
+        "warnings": []
+      },
+      {
+        "timestamp": "2026-06-12T12:19:44.347646+00:00",
+        "node_name": "source_definition_node",
+        "action": "create",
+        "target_id": "sources",
+        "description": "Configured 1 source(s): primary_source:proton 10.0 MeV mono/gun",
+        "evidence_refs": [],
+        "modified_fields": [
+          "sources"
+        ],
+        "warnings": []
+      },
+      {
+        "timestamp": "2026-06-12T12:19:44.347963+00:00",
+        "node_name": "physics_list_node",
+        "action": "validate",
+        "target_id": "physics",
+        "description": "Preserved drafted physics list: QGSP_BIC_HP",
+        "evidence_refs": [],
+        "modified_fields": [],
+        "warnings": []
+      },
+      {
+        "timestamp": "2026-06-12T12:19:44.349157+00:00",
+        "node_name": "sensitive_detector_node",
+        "action": "create",
+        "target_id": "sensitive_detectors",
+        "description": "Created 1 sensitive detectors for: ['silicon_detector']",
+        "evidence_refs": [],
+        "modified_fields": [
+          "sensitive_detectors"
+        ],
+        "warnings": []
+      },
+      {
+        "timestamp": "2026-06-12T12:19:44.349562+00:00",
+        "node_name": "scoring_design_node",
+        "action": "create",
+        "target_id": "scoring",
+        "description": "Created 4 scoring configurations: ['silicon_detector_edep', 'silicon_detector_dose', 'silicon_detector_voxel_dose', 'event_table']",
+        "evidence_refs": [],
+        "modified_fields": [
+          "scoring"
+        ],
+        "warnings": []
+      },
+      {
+        "timestamp": "2026-06-12T12:19:44.350879+00:00",
+        "node_name": "model_ir_validation_node",
+        "action": "validate",
+        "target_id": "mir_job_919509e8__20260612_201928",
+        "description": "Ran 7 validators: 7 passed, 0 errors",
+        "evidence_refs": [],
+        "modified_fields": [],
+        "warnings": []
+      },
+      {
+        "timestamp": "2026-06-12T12:19:44.351838+00:00",
+        "node_name": "model_review_report_node",
+        "action": "create",
+        "target_id": "model_review",
+        "description": "Generated model review report (55 sections, 2648 chars)",
+        "evidence_refs": [],
+        "modified_fields": [],
+        "warnings": []
       }
     ]
   },
-  "ledger": {
-    "entries": [
-      {
-        "node": "complex_model_builder",
-        "action": "create",
-        "target": "rad_hard_detector_v1",
-        "description": "Initial complex detector model IR created from user specification",
-        "timestamp": "2026-06-07T16:30:00Z"
-      }
-    ],
-    "version": "1.0"
-  },
-  "human_confirmation": {
-    "status": "approved",
-    "source": "fixture",
-    "record_path": "output/confirmation_record.json"
-  },
-  "confirmed_fields": [
-    "geometry",
-    "materials",
-    "source",
-    "physics",
-    "scoring"
+  "open_issues": [
+    "Source position not specified; assumed at z = -5 mm (world boundary) for vertical incidence."
   ],
+  "human_confirmation": {},
+  "confirmed_fields": [],
   "unconfirmed_fields": [],
-  "assumptions_confirmed": true
+  "assumptions_confirmed": false
 }

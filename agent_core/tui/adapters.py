@@ -350,6 +350,32 @@ def render_job_detail(job: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
+def render_confirmation_review(review: dict[str, Any]) -> str:
+    """Render the active human-confirmation review with decision actions."""
+    if not review.get("report_path"):
+        return render_error_state(
+            "No confirmation report for the active job.",
+            suggestions=["Run /status", "Resume a job", "Wait for modeling to finish"],
+        )
+    preview = str(review.get("preview", ""))
+    lines = [
+        "Confirmation",
+        "",
+        f"{'Status':<13}{review.get('status', '') or 'unknown'}",
+        f"{'Required':<13}{'yes' if review.get('required') else 'no'}",
+        f"{'Unconfirmed':<13}{review.get('unconfirmed_assumptions_count', 0)}",
+        f"{'Report':<13}{review.get('report_path', '')}",
+        "",
+        "Actions",
+        "/confirm approve",
+        "/reject <reason>",
+        "/ask-more <question>",
+    ]
+    if preview:
+        lines.extend(["", "Preview", *preview.splitlines()[:180]])
+    return "\n".join(lines)
+
+
 def render_error_state(title: str, *, suggestions: list[str] | None = None) -> str:
     """Render an actionable error state with next steps."""
     lines = ["ERROR", title]

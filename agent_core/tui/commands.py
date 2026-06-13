@@ -58,7 +58,9 @@ _COMMAND_DESCRIPTIONS = {
     "project": "Switch project",
     "projects": "List projects",
     "accept-revision": "Accept a saved revision",
+    "ask-more": "Request more human-confirmation detail",
     "reject-revision": "Reject a saved revision",
+    "reject": "Reject active human confirmation",
     "revision": "Open one revision",
     "simulate": "Run the generated simulator",
     "visual-approve": "Approve G4 visual review",
@@ -91,11 +93,13 @@ _MODES = frozenset({"ask", "run", "cmd", "inspect", "artifact", "config"})
 
 _REQUIRES_ARGS = {
     "artifact": "Usage: /artifact <path>",
+    "ask-more": "Usage: /ask-more <question or requested clarification>",
     "chat": "Usage: /chat <message>",
     "demo": "Usage: /demo <geant4|tcad|ngspice|neutron-ct|electron-dose>",
     "job": "Usage: /job <job_id>",
     "project": "Usage: /project <slug-or-id>",
     "accept-revision": "Usage: /accept-revision <revision_id>",
+    "reject": "Usage: /reject <reason>",
     "reject-revision": "Usage: /reject-revision <revision_id>",
     "revision": "Usage: /revision <revision_id>",
     "revise": "Usage: /revise <change request>",

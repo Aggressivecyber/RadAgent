@@ -1,33 +1,10 @@
 {
-  "total_components": 9,
-  "materials_count": 5,
+  "total_components": 2,
   "component_ids": [
     "world",
-    "housing",
-    "pcb",
-    "sensor_stack",
-    "top_electrode",
-    "oxide_layer",
-    "silicon_bulk",
-    "sensitive_region",
-    "bottom_electrode"
+    "silicon_detector"
   ],
-  "component_types": [
-    "assembly",
-    "volume",
-    "world"
-  ],
-  "material_ids": [
-    "G4_AIR",
-    "G4_Al",
-    "G4_Si",
-    "FR4",
-    "SiO2"
-  ],
-  "custom_materials": [
-    "FR4",
-    "SiO2"
-  ],
-  "nesting_depth": 4,
-  "nesting_chain": "world → housing → pcb → sensor_stack → {top_electrode, oxide, silicon_bulk → sensitive_region, bottom_electrode}"
+  "materials_count": 2,
+  "sources_count": 1,
+  "scoring_count": 4
 }

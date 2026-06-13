@@ -41,6 +41,7 @@ wechat-scraper = [
 
 [project.scripts]
 radagent-tui = "agent_core.tui.app:main"
+radagent-web = "agent_core.web.server:main"
 
 [tool.setuptools.packages.find]
 include = ["agent_core*", "knowledge_base*"]

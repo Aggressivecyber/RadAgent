@@ -124,6 +124,36 @@ def test_tui_options_model_config_help_lines_are_discoverable() -> None:
     assert "max_window=" in text
 
 
+def test_tui_confirmation_edit_arg_parser() -> None:
+    from agent_core.tui.app import _parse_confirmation_edit_args
+
+    response = _parse_confirmation_edit_args(
+        'sources.primary.energy=200 unit=MeV reason="raise beam energy"'
+    )
+
+    assert response == {
+        "user_decision": "edit",
+        "edits": [
+            {
+                "field_path": "sources.primary.energy",
+                "new_value": "200",
+                "unit": "MeV",
+                "reason": "raise beam energy",
+            }
+        ],
+        "user_notes": "Edited sources.primary.energy.",
+    }
+
+
+def test_tui_confirmation_edit_arg_parser_requires_field_assignment() -> None:
+    import pytest
+
+    from agent_core.tui.app import _parse_confirmation_edit_args
+
+    with pytest.raises(ValueError, match="field.path=value"):
+        _parse_confirmation_edit_args("unit=MeV reason=missing-field")
+
+
 def test_tui_extracts_simulation_briefing_query_from_copilot_result() -> None:
     from types import SimpleNamespace
 

@@ -5,6 +5,7 @@ from agent_core.tui.adapters import (
     event_to_row,
     render_artifacts_table,
     render_command_palette,
+    render_confirmation_review,
     render_error_state,
     render_header,
     render_job_detail,
@@ -474,6 +475,26 @@ def test_job_detail_renders_resume_retry_and_output_location() -> None:
     assert "Error        macro syntax error" in rendered
     assert "/resume job-001" in rendered
     assert "/retry job-001" in rendered
+
+
+def test_confirmation_review_renders_decision_commands_and_preview() -> None:
+    rendered = render_confirmation_review(
+        {
+            "status": "pending",
+            "required": True,
+            "unconfirmed_assumptions_count": 3,
+            "report_path": "/tmp/job/human_confirmation_report.md",
+            "preview": "Confirm target material and detector pressure.",
+        }
+    )
+
+    assert "Confirmation" in rendered
+    assert "Status       pending" in rendered
+    assert "Unconfirmed  3" in rendered
+    assert "/confirm approve" in rendered
+    assert "/reject <reason>" in rendered
+    assert "/ask-more <question>" in rendered
+    assert "Confirm target material" in rendered
 
 
 def test_error_state_and_command_palette_are_actionable() -> None:

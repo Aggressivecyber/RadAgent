@@ -992,6 +992,144 @@ async def test_confirmation_approval_text_submits_active_human_confirmation(tmp_
 
 
 @pytest.mark.asyncio
+async def test_confirmation_decision_commands_submit_structured_responses(tmp_path) -> None:
+    class _ConfirmationService(RadAgentAppService):
+        def __init__(self) -> None:
+            super().__init__(workspace_root=tmp_path)
+            self.submitted: list[tuple[dict, bool]] = []
+
+        def get_status(self) -> JobStatus:
+            return JobStatus(
+                job_id="job_needs_confirmation",
+                status="paused",
+                current_phase="human_confirmation",
+                current_phase_idx=4,
+                completed_phases=[
+                    "prepare_workspace",
+                    "context",
+                    "task_planning",
+                    "g4_modeling",
+                ],
+                execution_mode="test",
+                run_mode="test",
+                workspace_root=str(tmp_path),
+                needs_confirmation=True,
+                state={"human_confirmation_required": True},
+            )
+
+        async def submit_confirmation(
+            self,
+            response: dict,
+            *,
+            auto_continue: bool = True,
+        ) -> JobStatus:
+            self.submitted.append((response, auto_continue))
+            return self.get_status()
+
+    service = _ConfirmationService()
+    app_cls = create_app_class()
+    app = app_cls(service=service)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text("/reject Geometry assumptions are wrong")
+        await _wait_for_operation_idle(app, pilot)
+        await app._dispatch_text("/ask-more What detector pressure should be used?")
+        await _wait_for_operation_idle(app, pilot)
+        await pilot.pause()
+
+        assert service.submitted == [
+            (
+                {
+                    "user_decision": "reject",
+                    "edits": [],
+                    "user_notes": "Geometry assumptions are wrong",
+                },
+                False,
+            ),
+            (
+                {
+                    "user_decision": "ask_more",
+                    "edits": [],
+                    "user_notes": "What detector pressure should be used?",
+                },
+                False,
+            ),
+        ]
+        assert any(row.title == "Confirmation rejected" for row in app._rows)
+        assert any(row.title == "Confirmation needs more input" for row in app._rows)
+
+
+@pytest.mark.asyncio
+async def test_confirmation_edit_command_submits_structured_edit(tmp_path) -> None:
+    class _ConfirmationService(RadAgentAppService):
+        def __init__(self) -> None:
+            super().__init__(workspace_root=tmp_path)
+            self.submitted: list[tuple[dict, bool]] = []
+
+        def get_status(self) -> JobStatus:
+            return JobStatus(
+                job_id="job_needs_confirmation",
+                status="paused",
+                current_phase="human_confirmation",
+                current_phase_idx=4,
+                completed_phases=[
+                    "prepare_workspace",
+                    "context",
+                    "task_planning",
+                    "g4_modeling",
+                ],
+                execution_mode="test",
+                run_mode="test",
+                workspace_root=str(tmp_path),
+                needs_confirmation=True,
+                state={"human_confirmation_required": True},
+            )
+
+        async def submit_confirmation(
+            self,
+            response: dict,
+            *,
+            auto_continue: bool = True,
+        ) -> JobStatus:
+            self.submitted.append((response, auto_continue))
+            return self.get_status()
+
+    service = _ConfirmationService()
+    app_cls = create_app_class()
+    app = app_cls(service=service)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await app._dispatch_text(
+            '/edit-confirmation sources.primary.energy=200 unit=MeV reason="raise beam energy"'
+        )
+        await _wait_for_operation_idle(app, pilot)
+        await pilot.pause()
+
+        assert service.submitted == [
+            (
+                {
+                    "user_decision": "edit",
+                    "edits": [
+                        {
+                            "field_path": "sources.primary.energy",
+                            "new_value": "200",
+                            "unit": "MeV",
+                            "reason": "raise beam energy",
+                        }
+                    ],
+                    "user_notes": "Edited sources.primary.energy.",
+                },
+                False,
+            )
+        ]
+        assert any(row.title == "Confirmation edited" for row in app._rows)
+
+
+@pytest.mark.asyncio
 async def test_demo_autoplays_to_completed_state(tmp_path) -> None:
     app_cls = create_app_class()
     app = app_cls(service=RadAgentAppService(workspace_root=tmp_path))

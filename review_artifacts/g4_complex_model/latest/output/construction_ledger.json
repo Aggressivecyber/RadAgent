@@ -2,38 +2,161 @@
   "schema_version": "construction_ledger_v1",
   "steps": [
     {
-      "timestamp": "2026-06-07T16:30:00Z",
-      "node_name": "fixture_generator",
+      "timestamp": "2026-06-12T12:19:36.233328+00:00",
+      "node_name": "requirement_capture_node",
       "action": "create",
-      "target_id": "rad_hard_detector_v1",
-      "description": "Created canonical 9-component detector model fixture.",
-      "evidence_refs": [
-        "user_specification",
-        "NIST",
-        "geant4_physics_guide"
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Initialized G4ModelIR skeleton",
+      "evidence_refs": [],
+      "modified_fields": [
+        "model_ir_id",
+        "job_id",
+        "modeling_mode"
       ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.344030+00:00",
+      "node_name": "requirement_capture_node",
+      "action": "modify",
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Captured draft: 2 components, physics=QGSP_BIC_HP",
+      "evidence_refs": [],
+      "modified_fields": [
+        "target_system",
+        "components",
+        "physics",
+        "open_issues"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.344811+00:00",
+      "node_name": "evidence_retrieval_node",
+      "action": "modify",
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Organized evidence: geometry=1, materials=1, source=1, physics=2, scoring=1",
+      "evidence_refs": [],
+      "modified_fields": [
+        "evidence"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.345281+00:00",
+      "node_name": "model_scope_guard_node",
+      "action": "validate",
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Scope guard result: proceed_with_warnings",
+      "evidence_refs": [],
+      "modified_fields": [],
+      "warnings": [
+        "external context unavailable; proceeding with explicit user requirements for geometry, materials, and source"
+      ]
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.346195+00:00",
+      "node_name": "geometry_decomposition_node",
+      "action": "create",
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Normalized draft components, 2 components, 1 interfaces",
+      "evidence_refs": [],
       "modified_fields": [
         "components",
-        "materials",
-        "sources",
+        "interfaces"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.346756+00:00",
+      "node_name": "coordinate_system_node",
+      "action": "modify",
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Set coordinate system: cartesian, origin=world_center",
+      "evidence_refs": [],
+      "modified_fields": [
+        "coordinate_system",
+        "global_units"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.347143+00:00",
+      "node_name": "material_definition_node",
+      "action": "create",
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Defined 2 materials: ['G4_AIR', 'G4_Si']",
+      "evidence_refs": [],
+      "modified_fields": [
+        "materials"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.347646+00:00",
+      "node_name": "source_definition_node",
+      "action": "create",
+      "target_id": "sources",
+      "description": "Configured 1 source(s): primary_source:proton 10.0 MeV mono/gun",
+      "evidence_refs": [],
+      "modified_fields": [
+        "sources"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.347963+00:00",
+      "node_name": "physics_list_node",
+      "action": "validate",
+      "target_id": "physics",
+      "description": "Preserved drafted physics list: QGSP_BIC_HP",
+      "evidence_refs": [],
+      "modified_fields": [],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.349157+00:00",
+      "node_name": "sensitive_detector_node",
+      "action": "create",
+      "target_id": "sensitive_detectors",
+      "description": "Created 1 sensitive detectors for: ['silicon_detector']",
+      "evidence_refs": [],
+      "modified_fields": [
+        "sensitive_detectors"
+      ],
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.349562+00:00",
+      "node_name": "scoring_design_node",
+      "action": "create",
+      "target_id": "scoring",
+      "description": "Created 4 scoring configurations: ['silicon_detector_edep', 'silicon_detector_dose', 'silicon_detector_voxel_dose', 'event_table']",
+      "evidence_refs": [],
+      "modified_fields": [
         "scoring"
       ],
       "warnings": []
     },
     {
-      "timestamp": "2026-06-07T16:30:00Z",
-      "node_name": "fixture_generator",
+      "timestamp": "2026-06-12T12:19:44.350879+00:00",
+      "node_name": "model_ir_validation_node",
       "action": "validate",
-      "target_id": "rad_hard_detector_v1",
-      "description": "Verified no simplification and complete geometry nesting.",
-      "evidence_refs": [
-        "no_simplification_report.json",
-        "geometry_interface_report.json"
-      ],
+      "target_id": "mir_job_919509e8__20260612_201928",
+      "description": "Ran 7 validators: 7 passed, 0 errors",
+      "evidence_refs": [],
       "modified_fields": [],
-      "warnings": [
-        "Fixture does not execute Geant4."
-      ]
+      "warnings": []
+    },
+    {
+      "timestamp": "2026-06-12T12:19:44.351838+00:00",
+      "node_name": "model_review_report_node",
+      "action": "create",
+      "target_id": "model_review",
+      "description": "Generated model review report (55 sections, 2648 chars)",
+      "evidence_refs": [],
+      "modified_fields": [],
+      "warnings": []
     }
   ]
 }
