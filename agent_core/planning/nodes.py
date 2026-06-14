@@ -88,10 +88,19 @@ _MATERIAL_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("germanium", "Germanium"),
     ("water", "Water"),
 )
+_PARTICLE_KEYWORDS: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
+    (("neutron", "neutrons", "中子"), {"type": "neutron", "pdg_code": 2112}),
+    (("muon", "muons", "缪子"), {"type": "mu-", "pdg_code": 13}),
+    (("proton", "protons", "质子"), {"type": "proton", "pdg_code": 2212}),
+    (("gamma", "gammas", "γ", "伽马"), {"type": "gamma", "pdg_code": 22}),
+    (("electron", "electrons", "e-", "电子"), {"type": "electron", "pdg_code": 11}),
+)
 _OUTPUT_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("edep_3d", "energy deposition map"), "energy_deposition_map"),
     (("total energy deposition", "energy deposition", "edep"), "energy_deposition"),
-    (("dose_3d", "dose map", "dose distribution"), "dose_distribution"),
+    (("dose_3d", "dose map", "dose distribution", "detector dose", "dose"), "dose_distribution"),
+    (("leakage", "flux", "fluence"), "particle_flux"),
+    (("spectrum", "histogram"), "energy_spectrum"),
     (("event_table", "per event", "event data"), "event_data"),
     (("hit", "hits"), "hit_data"),
 )
@@ -166,28 +175,37 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
     scope = detect_scope(user_query)
     query_lower = user_query.lower()
 
-    # Parse particle info
-    particle: dict[str, Any] = {}
-    if "proton" in query_lower or "质子" in user_query:
-        particle = {"type": "proton", "pdg_code": 2212}
-    elif "gamma" in query_lower or "gamma" in query_lower:
-        particle = {"type": "gamma", "pdg_code": 22}
-    elif "electron" in query_lower or "电子" in user_query:
-        particle = {"type": "electron", "pdg_code": 11}
-
     energy_value, energy_unit = _parse_energy(user_query)
     events = _parse_events(user_query)
     target = _parse_target(user_query)
     outputs = _parse_outputs(user_query)
     metadata: dict[str, str] = {}
+    model_plan: dict[str, Any] = {}
+
+    # Parse particle info. Use explicit transport particle mentions before
+    # secondary products so a neutron shielding task is not misclassified as
+    # gamma just because it asks for secondary-gamma scoring.
+    particle = _detect_particle(query_lower)
+    if not particle:
+        model_plan = await _model_assisted_task_plan(user_query, job_id)
+        particle = _normalize_model_particle(
+            model_plan.get("particle"),
+            fallback_energy=energy_value,
+            fallback_unit=energy_unit,
+        )
+        outputs = _merge_outputs(outputs, _normalize_model_outputs(model_plan.get("outputs")))
+        if not target:
+            target = _normalize_model_target(model_plan.get("target"))
+        if model_plan:
+            metadata["model_assisted_task_planning"] = "true"
 
     if particle:
         particle = {
             **particle,
-            "energy_MeV": energy_value,
-            "energy_unit": energy_unit,
-            "energy_distribution": "mono",
-            "direction": [0.0, 0.0, 1.0],
+            "energy_MeV": particle.get("energy_MeV", energy_value),
+            "energy_unit": particle.get("energy_unit", energy_unit),
+            "energy_distribution": particle.get("energy_distribution", "mono"),
+            "direction": particle.get("direction", [0.0, 0.0, 1.0]),
         }
         if events is not None:
             particle["events"] = events
@@ -256,6 +274,146 @@ def _canonical_energy_unit(unit: str) -> str:
     if lowered == "ev":
         return "eV"
     return "MeV"
+
+
+def _detect_particle(query_lower: str) -> dict[str, Any]:
+    for keywords, particle in _PARTICLE_KEYWORDS:
+        if any(keyword in query_lower for keyword in keywords):
+            result = dict(particle)
+            if result["type"] == "mu-" and "cosmic" in query_lower:
+                result["angular_distribution"] = "cosine"
+                result["generator_type"] = "gps"
+                result["direction"] = [0.0, 0.0, -1.0]
+            return result
+    return {}
+
+
+async def _model_assisted_task_plan(user_query: str, job_id: str) -> dict[str, Any]:
+    """Ask the model for structured planning only when rules are insufficient."""
+    try:
+        from agent_core.models.gateway import get_model_gateway
+        from agent_core.models.schemas import ModelTask, ModelTier
+
+        gateway = get_model_gateway()
+        result = await gateway.call(
+            task=ModelTask.TASK_PLANNING,
+            tier=ModelTier.PRO,
+            system_prompt=(
+                "Extract a minimal Geant4 task plan as JSON. Return only JSON with "
+                "optional keys particle, target, outputs. particle may include type, "
+                "pdg_code, energy_MeV, energy_unit, angular_distribution, "
+                "generator_type. outputs must be stable snake_case names such as "
+                "energy_deposition, dose_distribution, particle_flux, hit_data, "
+                "energy_spectrum, event_data."
+            ),
+            user_prompt=user_query,
+            response_format="json",
+            temperature=0.0,
+            max_tokens=900,
+            metadata={
+                "job_id": job_id,
+                "module_name": "task_planning_model_assist",
+            },
+        )
+        data = result.parsed_json
+        return dict(data) if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _normalize_model_particle(
+    value: Any,
+    *,
+    fallback_energy: float,
+    fallback_unit: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    particle_type = str(value.get("type") or "").strip()
+    if not particle_type:
+        return {}
+    unit = _canonical_energy_unit(str(value.get("energy_unit") or fallback_unit))
+    energy = _optional_positive_float(value.get("energy_MeV"), fallback_energy)
+    particle: dict[str, Any] = {
+        "type": particle_type,
+        "energy_MeV": energy,
+        "energy_unit": unit,
+        "energy_distribution": str(value.get("energy_distribution") or "mono"),
+        "direction": _normal_direction(value.get("direction")),
+    }
+    pdg = _optional_int(value.get("pdg_code"))
+    if pdg is not None:
+        particle["pdg_code"] = pdg
+    angular = str(value.get("angular_distribution") or "").strip()
+    if angular in {"mono", "gaussian", "isotropic", "cosine", "custom"}:
+        particle["angular_distribution"] = angular
+    generator = str(value.get("generator_type") or "").strip()
+    if generator in {"gun", "gps"}:
+        particle["generator_type"] = generator
+    return particle
+
+
+def _normalize_model_outputs(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    outputs: list[str] = []
+    for item in value:
+        text = str(item or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if text and text not in outputs:
+            outputs.append(text)
+    return outputs
+
+
+def _merge_outputs(base: list[str], extra: list[str]) -> list[str]:
+    result = list(base)
+    for output in extra:
+        if output not in result:
+            result.append(output)
+    return result
+
+
+def _normalize_model_target(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    material = str(value.get("material") or "").strip()
+    if not material:
+        return None
+    target: dict[str, Any] = {
+        "material": material,
+        "geometry_type": str(value.get("geometry_type") or "box"),
+    }
+    size = value.get("size_um")
+    if isinstance(size, list) and len(size) == 3:
+        parsed = [_optional_positive_float(item, 0.0) for item in size]
+        if all(item > 0 for item in parsed):
+            target["size_um"] = parsed
+    return target
+
+
+def _optional_positive_float(value: Any, fallback: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if parsed > 0 else fallback
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normal_direction(value: Any) -> list[float]:
+    if isinstance(value, list) and len(value) == 3:
+        try:
+            parsed = [float(item) for item in value]
+        except (TypeError, ValueError):
+            return [0.0, 0.0, 1.0]
+        if any(item != 0.0 for item in parsed):
+            return parsed
+    return [0.0, 0.0, 1.0]
 
 
 def _parse_events(user_query: str) -> int | None:

@@ -12,6 +12,9 @@ RADAGENT_CMAKE_TEMPLATE = """\
 cmake_minimum_required(VERSION 3.16...3.27)
 project(RadAgentG4)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Geant4 with all UI + Vis drivers (incl. Qt/OGL), same as the B1 example.
 find_package(Geant4 REQUIRED ui_all vis_all)
 

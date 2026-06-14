@@ -108,7 +108,7 @@ def route_after_human_confirmation(state: RadAgentMainState) -> str:
         return "context_subgraph"
 
     if status == "pending":
-        return "human_confirmation_subgraph"
+        return "report_subgraph"
 
     # rejected, failed, expired, or unknown
     return "report_subgraph"

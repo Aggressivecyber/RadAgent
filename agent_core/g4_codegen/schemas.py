@@ -19,6 +19,9 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     g4_model_ir_path: str
     component_specs_dir: str
     construction_ledger_path: str
+    confirmation_record_path: str
+    confirmed_model_plan_path: str
+    human_confirmation_status: str
 
     # Loaded data
     g4_model_ir: dict[str, Any]
@@ -100,6 +103,8 @@ class ModuleContext(BaseModel):
     existing_generated_file_summaries: list[dict[str, Any]] = Field(default_factory=list)
     previous_failures: list[dict[str, Any]] = Field(default_factory=list)
     runtime_failure_context: dict[str, Any] = Field(default_factory=dict)
+    human_confirmation_context: dict[str, Any] = Field(default_factory=dict)
+    agentic_repair_lessons: dict[str, Any] = Field(default_factory=dict)
     run_mode: str = "strict"
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from pathlib import Path
 from typing import Any
 
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
@@ -113,6 +114,7 @@ async def build_module_contexts_node(
     context_decision = state.get("context_decision")
     web_search_available = state.get("web_search_available")
     runtime_failure_context = state.get("runtime_failure_context", {})
+    human_confirmation_context = _load_human_confirmation_context(state)
 
     contexts: dict[str, Any] = {}
     for module_name, contract in module_contracts.items():
@@ -131,10 +133,86 @@ async def build_module_contexts_node(
             context_decision=context_decision,
             web_search_available=web_search_available,
             runtime_failure_context=runtime_failure_context,
+            human_confirmation_context=human_confirmation_context,
         )
         contexts[module_name] = ctx
 
     return {"module_contexts": contexts, "current_node": "build_module_contexts"}
+
+
+def _load_human_confirmation_context(state: G4CodegenSubgraphState) -> dict[str, Any]:
+    """Load compact human-confirmation constraints for module-agent prompts."""
+    confirmed_plan_path = str(state.get("confirmed_model_plan_path") or "")
+    confirmation_status = str(state.get("human_confirmation_status") or "")
+    if not confirmed_plan_path:
+        return {}
+
+    path = Path(confirmed_plan_path)
+    if not path.is_file():
+        return {
+            "status": confirmation_status or "missing",
+            "source_path": confirmed_plan_path,
+            "confirmed_constraints": [],
+            "load_error": "confirmed_model_plan_path does not exist",
+        }
+
+    try:
+        confirmed_plan = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "status": confirmation_status or "unreadable",
+            "source_path": confirmed_plan_path,
+            "confirmed_constraints": [],
+            "load_error": str(exc),
+        }
+
+    agent_context = confirmed_plan.get("agent_context", {})
+    if not isinstance(agent_context, dict):
+        agent_context = {}
+
+    confirmed_constraints = agent_context.get("confirmed_constraints", [])
+    if not isinstance(confirmed_constraints, list):
+        confirmed_constraints = []
+    confirmed_constraints = [
+        item for item in confirmed_constraints if isinstance(item, dict)
+    ]
+    edited_constraints = [
+        item
+        for item in confirmed_constraints
+        if item.get("edited") is True or str(item.get("status") or "").lower() == "edited"
+    ]
+
+    return {
+        "source": "human_confirmation",
+        "source_path": confirmed_plan_path,
+        "status": confirmation_status or str(confirmed_plan.get("confirmation_status") or ""),
+        "purpose": str(agent_context.get("purpose") or "codegen_hard_constraints"),
+        "confirmed_constraints": confirmed_constraints[:40],
+        "constraint_digest": _human_constraint_digest(confirmed_constraints[:40]),
+        "constraint_count": len(confirmed_constraints),
+        "edited_constraint_count": len(edited_constraints),
+        "codegen_instruction": str(
+            agent_context.get("codegen_instruction")
+            or "Treat confirmed constraints as hard requirements; do not override them with defaults."
+        ),
+    }
+
+
+def _human_constraint_digest(constraints: list[dict[str, Any]]) -> list[str]:
+    digest: list[str] = []
+    for item in constraints:
+        field_path = str(item.get("field_path") or "")
+        if not field_path:
+            continue
+        status = str(item.get("status") or "confirmed")
+        category = str(item.get("category") or "other")
+        value = item.get("value")
+        if isinstance(value, (dict, list)):
+            value_text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        else:
+            value_text = str(value)
+        digest.append(f"{status} {category} {field_path} = {value_text}")
+    return digest
 
 
 async def context_coordinator_node(
@@ -286,15 +364,18 @@ def _latest_context_coordination(coordination_by_node: dict[str, Any]) -> dict[s
 def _extract_file_summary(module_name: str, file_data: dict[str, Any]) -> dict[str, Any]:
     """Extract a lightweight summary from a generated file for cross-module context."""
     content = file_data.get("new_content", "") or file_data.get("content", "")
+    public_method_signatures = _extract_public_method_signatures(content)
+    public_methods = _method_names_from_signatures(public_method_signatures)
     return {
         "module_name": module_name,
         "path": file_data.get("path", ""),
         "generated_by": file_data.get("generated_by", f"{module_name}_module_agent"),
         "classes": _extract_classes(content),
-        "public_methods": _extract_public_methods(content),
+        "public_methods": public_methods,
+        "public_method_signatures": public_method_signatures,
         "constructor_signatures": _extract_constructor_signatures(content),
         "includes": _extract_includes(content),
-        "provided_symbols": _extract_classes(content),  # symbols ≈ class names
+        "provided_symbols": sorted(set(_extract_classes(content) + public_methods)),
     }
 
 
@@ -314,24 +395,83 @@ def _extract_classes(content: str) -> list[str]:
 
 def _extract_public_methods(content: str) -> list[str]:
     """Extract public method names from C++ content."""
+    return _method_names_from_signatures(_extract_public_method_signatures(content))
+
+
+def _extract_public_method_signatures(content: str) -> list[str]:
+    """Extract public non-constructor method declaration signatures."""
     import re
 
-    methods: list[str] = []
-    public_blocks = re.findall(
+    comment_free = _strip_cpp_comments(content)
+    class_names = set(_extract_classes(comment_free))
+    signatures: list[str] = []
+    for block in _public_blocks(comment_free):
+        for declaration in _public_declarations(block):
+            signature = re.sub(r"\s+", " ", declaration).strip().rstrip(";")
+            if "(" not in signature or ")" not in signature:
+                continue
+            if (
+                "operator" in signature
+                or signature.endswith("= delete")
+                or signature.endswith("= default")
+            ):
+                continue
+            name = _method_name_from_signature(signature)
+            if not name or name in {"if", "for", "while", "switch", "return"}:
+                continue
+            if name.lstrip("~") in class_names:
+                continue
+            signatures.append(signature)
+    return sorted(set(signatures))
+
+
+def _strip_cpp_comments(content: str) -> str:
+    import re
+
+    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+    return re.sub(r"//.*", "", content)
+
+
+def _public_blocks(content: str) -> list[str]:
+    import re
+
+    return re.findall(
         r"\bpublic:\s*(.*?)(?=\bprivate:|\bprotected:|\n};|$)",
         content,
         re.DOTALL,
     )
-    for block in public_blocks:
-        for match in re.finditer(
-            r"(?:~?[A-Za-z_]\w*|operator\s+\w+)\s*\(",
-            block,
-        ):
-            name = match.group(0).split("(", 1)[0].strip()
-            if name in {"if", "for", "while", "switch", "return"}:
-                continue
-            methods.append(name)
-    return sorted(set(methods))
+
+
+def _public_declarations(block: str) -> list[str]:
+    declarations: list[str] = []
+    current: list[str] = []
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        current.append(line)
+        joined = " ".join(current)
+        if ";" in line:
+            declarations.append(joined.split(";", 1)[0] + ";")
+            current = []
+    return declarations
+
+
+def _method_names_from_signatures(signatures: list[str]) -> list[str]:
+    return sorted(
+        {
+            name
+            for signature in signatures
+            if (name := _method_name_from_signature(signature))
+        }
+    )
+
+
+def _method_name_from_signature(signature: str) -> str:
+    before_args = signature.split("(", 1)[0].strip()
+    if not before_args:
+        return ""
+    return before_args.split()[-1].strip("*&")
 
 
 def _extract_constructor_signatures(content: str) -> list[str]:

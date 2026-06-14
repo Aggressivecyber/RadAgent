@@ -31,6 +31,7 @@ def build_module_context(
     context_decision: str | None = None,
     web_search_available: bool | None = None,
     runtime_failure_context: dict[str, Any] | None = None,
+    human_confirmation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build context for a module agent.
 
@@ -64,6 +65,8 @@ def build_module_context(
         existing_generated_file_summaries=existing_file_summaries or [],
         previous_failures=previous_failures or [],
         runtime_failure_context=runtime_failure_context or {},
+        human_confirmation_context=human_confirmation_context or {},
+        agentic_repair_lessons=_load_agentic_repair_lessons(job_id),
         run_mode=run_mode,
     )
 
@@ -80,6 +83,72 @@ def build_module_context(
     ctx_path.write_text(json.dumps(context_data, indent=2, ensure_ascii=False))
 
     return context_data
+
+
+def _load_agentic_repair_lessons(job_id: str) -> dict[str, Any]:
+    """Load job-local repair lessons so fresh module agents avoid repeated failures."""
+    from agent_core.workspace.io import get_job_dir
+
+    path = (
+        get_job_dir(job_id)
+        / STAGE_CODEGEN
+        / "integration"
+        / "agentic_repair_lessons.json"
+    )
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "source_path": str(path),
+            "lessons": [],
+            "lesson_count": 0,
+            "load_error": "agentic_repair_lessons.json is unreadable",
+        }
+    lessons = data.get("lessons") if isinstance(data, dict) else []
+    if not isinstance(lessons, list):
+        lessons = []
+    cleaned: list[dict[str, Any]] = []
+    for lesson in lessons:
+        if not isinstance(lesson, dict):
+            continue
+        lesson_id = str(lesson.get("id") or "").strip()
+        instruction = str(lesson.get("prompt_instruction") or "").strip()
+        if not lesson_id or not instruction:
+            continue
+        cleaned.append(
+            {
+                "id": lesson_id,
+                "title": str(lesson.get("title") or "").strip(),
+                "prompt_instruction": instruction,
+                "evidence": str(lesson.get("evidence") or "").strip(),
+                "count": _positive_int(lesson.get("count"), default=1),
+            }
+        )
+    cleaned = sorted(
+        cleaned,
+        key=lambda item: (-int(item.get("count") or 0), str(item.get("id") or "")),
+    )[:12]
+    return {
+        "source": "agentic_repair_lessons",
+        "source_path": str(path),
+        "schema_version": str(data.get("schema_version") or "") if isinstance(data, dict) else "",
+        "lesson_count": len(cleaned),
+        "lessons": cleaned,
+        "codegen_instruction": (
+            "Apply these prior repair lessons before choosing defaults or writing "
+            "fresh code; they summarize failures already seen in this job."
+        ),
+    }
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
 
 
 def _select_context_snippets(

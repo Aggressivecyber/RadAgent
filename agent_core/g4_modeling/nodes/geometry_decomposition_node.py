@@ -65,6 +65,7 @@ async def geometry_decomposition_node(
             )
 
         model_ir.components = components
+        _resolve_sibling_box_overlaps(model_ir.components)
         interfaces = _generate_interfaces(components)
         model_ir.interfaces = interfaces
         model_ir.ledger.add_entry(
@@ -170,6 +171,7 @@ async def geometry_decomposition_node(
 
     # Update model IR
     model_ir.components = components
+    _resolve_sibling_box_overlaps(model_ir.components)
 
     # Generate interfaces from parent-child relationships
     interfaces = _generate_interfaces(components)
@@ -474,6 +476,108 @@ def _material_names_match(left: str, right: str) -> bool:
         if lhs in names and rhs in names:
             return True
     return lhs in rhs or rhs in lhs
+
+
+def _resolve_sibling_box_overlaps(components: list[ComponentSpec]) -> None:
+    siblings: dict[str | None, list[ComponentSpec]] = {}
+    for comp in components:
+        siblings.setdefault(comp.mother_volume, []).append(comp)
+
+    for children in siblings.values():
+        if len(children) < 2:
+            continue
+        for child in children:
+            if not _looks_like_downstream_detector(child):
+                continue
+            moved = _move_after_overlapping_siblings(child, children)
+            if moved and "geometry_decomposition:placed downstream of shielding stack to avoid overlap" not in child.source_evidence:
+                child.source_evidence.append(
+                    "geometry_decomposition:placed downstream of shielding stack to avoid overlap"
+                )
+
+
+def _looks_like_downstream_detector(comp: ComponentSpec) -> bool:
+    text = " ".join(
+        [
+            comp.component_id,
+            comp.display_name,
+            comp.component_type,
+            " ".join(comp.roles),
+            " ".join(comp.source_evidence),
+        ]
+    ).lower()
+    return "detector" in text or "downstream" in text or comp.sensitive
+
+
+def _move_after_overlapping_siblings(
+    target: ComponentSpec,
+    siblings: list[ComponentSpec],
+    *,
+    clearance_um: float = 500.0,
+) -> bool:
+    if target.geometry_type != "box":
+        return False
+    target_pos = _component_position(target)
+    target_hz = _component_half_z(target)
+    if target_hz <= 0:
+        return False
+
+    moved = False
+    for sibling in siblings:
+        if sibling is target or sibling.geometry_type != "box":
+            continue
+        if not _box_components_overlap(target, sibling):
+            continue
+        sibling_pos = _component_position(sibling)
+        sibling_hz = _component_half_z(sibling)
+        candidate_z = sibling_pos[2] + sibling_hz + target_hz + clearance_um
+        if candidate_z > target_pos[2]:
+            target_pos[2] = candidate_z
+            moved = True
+
+    if moved:
+        placement = target.placement
+        placement.position = target_pos
+        target.placement = placement
+    return moved
+
+
+def _box_components_overlap(left: ComponentSpec, right: ComponentSpec) -> bool:
+    left_pos = _component_position(left)
+    right_pos = _component_position(right)
+    left_half = _component_half_lengths(left)
+    right_half = _component_half_lengths(right)
+    return all(
+        abs(lp - rp) < (lh + rh)
+        for lp, rp, lh, rh in zip(left_pos, right_pos, left_half, right_half)
+    )
+
+
+def _component_position(comp: ComponentSpec) -> list[float]:
+    return [float(value) for value in comp.placement.position]
+
+
+def _component_half_lengths(comp: ComponentSpec) -> list[float]:
+    dims = comp.dimensions
+    return [
+        _dimension_half(dims, "x"),
+        _dimension_half(dims, "y"),
+        _dimension_half(dims, "z"),
+    ]
+
+
+def _component_half_z(comp: ComponentSpec) -> float:
+    return _component_half_lengths(comp)[2]
+
+
+def _dimension_half(dimensions: dict[str, float], axis: str) -> float:
+    half_key = f"half_{axis}"
+    full_key = f"d{axis}"
+    if _is_number(dimensions.get(half_key)):
+        return float(dimensions[half_key])
+    if _is_number(dimensions.get(full_key)):
+        return float(dimensions[full_key]) / 2.0
+    return 0.0
 
 
 def _normalize_material_name(value: str) -> str:

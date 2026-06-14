@@ -76,6 +76,60 @@ WRITE_FILE: dict[str, Any] = {
     },
 }
 
+LIST_FILES: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "list_files",
+        "description": (
+            "List project-relative source/config files matching a glob. Ignores "
+            "build artifacts. Use this to find headers or sources before reading."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "glob": {
+                    "type": "string",
+                    "description": "Relative glob such as 'include/*.hh' or 'src/*Detector*'.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum file paths to return (optional, default 50).",
+                },
+            },
+            "required": [],
+        },
+    },
+}
+
+SEARCH_TEXT: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "search_text",
+        "description": (
+            "Search project source/config files for a literal string. Returns "
+            "compact path/line/text matches and ignores build artifacts."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Literal text to search for, e.g. 'SensitiveDetector'.",
+                },
+                "glob": {
+                    "type": "string",
+                    "description": "Relative glob to limit search scope, e.g. 'src/*.cc'.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum matches to return (optional, default 50).",
+                },
+            },
+            "required": ["pattern"],
+        },
+    },
+}
+
 RUN_BASH: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -138,6 +192,8 @@ ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     READ_FILE,
     EDIT_FILE,
     WRITE_FILE,
+    LIST_FILES,
+    SEARCH_TEXT,
     RUN_BASH,
     BUILD_PROJECT,
     RUN_SMOKE,

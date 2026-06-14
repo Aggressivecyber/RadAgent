@@ -43,15 +43,29 @@ function text(value: unknown, fallback = ''): string {
 }
 
 function passFail(value: unknown): string {
-  return value === true ? 'passed' : 'failed'
+  return value === true ? '通过' : '失败'
 }
 
 function returnCodeStatus(value: unknown): string {
   const row = asRecord(value)
   if (!('returncode' in row)) {
-    return 'not run'
+    return '未运行'
   }
-  return Number(row.returncode) === 0 ? 'ok' : 'failed'
+  return Number(row.returncode) === 0 ? '通过' : '失败'
+}
+
+function yesNo(value: unknown): string {
+  return value ? '是' : '否'
+}
+
+function targetLabel(value: unknown, fallback: string): string {
+  const raw = text(value, fallback)
+  const labels: Record<string, string> = {
+    report: '报告交付',
+    artifacts: '产物列表',
+    artifact: '产物',
+  }
+  return labels[raw] || raw
 }
 
 function artifactRows(value: unknown): OperationArtifact[] {
@@ -73,15 +87,15 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
   const row = asRecord(data)
 
   if (view === 'build') {
-    const executable = text(row.executable_path, 'not available')
+    const executable = text(row.executable_path, '不可用')
     return {
-      title: 'Build result',
-      summary: text(row.errors, row.success === true ? 'Build completed.' : 'Build failed.'),
+      title: '构建结果',
+      summary: text(row.errors, row.success === true ? '构建已完成。' : '构建失败。'),
       metrics: [
-        { label: 'Result', value: passFail(row.success) },
-        { label: 'Configure', value: returnCodeStatus(row.configure) },
-        { label: 'Build', value: returnCodeStatus(row.build) },
-        { label: 'Executable', value: executable },
+        { label: '结果', value: passFail(row.success) },
+        { label: '配置', value: returnCodeStatus(row.configure) },
+        { label: '构建', value: returnCodeStatus(row.build) },
+        { label: '可执行文件', value: executable },
       ],
       preview: text(row.errors),
       artifacts: [],
@@ -89,12 +103,16 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
   }
 
   if (view === 'simulation') {
+    const events = text(row.events)
+    const visualEvents = text(row.visual_events, '100')
     return {
-      title: 'Simulation result',
-      summary: text(row.errors, row.success === true ? 'Simulation completed.' : 'Simulation failed.'),
+      title: '模拟结果',
+      summary: text(row.errors, row.success === true ? '模拟已完成。' : '模拟失败。'),
       metrics: [
-        { label: 'Result', value: passFail(row.success) },
-        { label: 'Output', value: text(row.output_dir, 'not available') },
+        { label: '结果', value: passFail(row.success) },
+        { label: `可视化 ${visualEvents}`, value: passFail(row.visual_success) },
+        { label: '生产批次', value: events ? `${events} 个事件` : passFail(row.production_success) },
+        { label: '输出目录', value: text(row.output_dir, '不可用') },
       ],
       preview: text(row.errors || row.log),
       artifacts: [],
@@ -105,14 +123,14 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
     const executable = text(row.executable)
     const workingDir = text(row.working_dir)
     return {
-      title: 'Visual workbench',
-      summary: text(row.errors, row.success === true ? 'Workbench prepared.' : 'Workbench failed.'),
+      title: '可视化工作台',
+      summary: text(row.errors, row.success === true ? '工作台已准备。' : '工作台准备失败。'),
       metrics: [
-        { label: 'Result', value: passFail(row.success) },
-        { label: 'Events', value: text(row.events, '0') },
-        { label: 'Launched', value: row.launched ? 'yes' : 'no' },
+        { label: '结果', value: passFail(row.success) },
+        { label: '事件数', value: text(row.events, '0') },
+        { label: '已启动', value: yesNo(row.launched) },
       ],
-      preview: [executable ? `Executable: ${executable}` : '', workingDir ? `Working dir: ${workingDir}` : '', text(row.errors)]
+      preview: [executable ? `可执行文件: ${executable}` : '', workingDir ? `工作目录: ${workingDir}` : '', text(row.errors)]
         .filter(Boolean)
         .join('\n'),
       artifacts: [],
@@ -121,11 +139,11 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
 
   if (view === 'visual-review') {
     return {
-      title: 'Visual review',
-      summary: text(row.status, 'unknown'),
+      title: '可视化审查',
+      summary: text(row.status, '未知'),
       metrics: [
-        { label: 'Status', value: text(row.status, 'unknown') },
-        { label: 'Blocking', value: row.blocking === false ? 'no' : 'yes' },
+        { label: '状态', value: text(row.status, '未知') },
+        { label: '阻塞', value: row.blocking === false ? '否' : '是' },
       ],
       preview: text(row.notes),
       artifacts: [],
@@ -135,11 +153,11 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
   if (view === 'report' || view === 'artifacts') {
     const artifacts = artifactRows(row.artifacts)
     return {
-      title: view === 'report' ? 'Report artifacts' : 'Artifact selection',
-      summary: artifacts.length ? `${artifacts.length} artifacts available.` : 'No artifacts available.',
+      title: view === 'report' ? '报告产物' : '产物选择',
+      summary: artifacts.length ? `${artifacts.length} 个产物可用。` : '暂无可用产物。',
       metrics: [
-        { label: 'Target', value: text(row.target, view) },
-        { label: 'Artifacts', value: String(artifacts.length) },
+        { label: '目标', value: targetLabel(row.target, view) },
+        { label: '产物', value: String(artifacts.length) },
       ],
       preview: '',
       artifacts,
@@ -148,9 +166,9 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
 
   if (view === 'demo') {
     return {
-      title: 'Demo template',
-      summary: text(row.message, 'Use an explicit run request for production workflows.'),
-      metrics: [{ label: 'Demo', value: text(row.demo, 'unknown') }],
+      title: '示例模板',
+      summary: text(row.message, '生产工作流建议使用明确的运行需求。'),
+      metrics: [{ label: '示例', value: text(row.demo, '未知') }],
       preview: text(row.command),
       artifacts: [],
     }
@@ -158,9 +176,9 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
 
   if (view === 'mode') {
     return {
-      title: 'Composer mode',
-      summary: 'Web workbench keeps composer controls visible.',
-      metrics: [{ label: 'Mode', value: text(row.mode, 'ask') }],
+      title: '输入模式',
+      summary: '网页工作台会保留结构化输入控件。',
+      metrics: [{ label: '模式', value: text(row.mode, '询问') }],
       preview: '',
       artifacts: [],
     }
@@ -168,7 +186,7 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
 
   if (view === 'history' || view === 'exit') {
     return {
-      title: view === 'history' ? 'Command history' : 'Exit workbench',
+      title: view === 'history' ? '历史记录' : '退出工作台',
       summary: text(row.message),
       metrics: [],
       preview: '',

@@ -62,10 +62,10 @@ describe('overview panel presentation', () => {
     const panel = createOverviewPanel({ status, events, commands })
 
     expect(panel.metrics).toEqual([
-      { label: '状态 State', value: 'paused' },
-      { label: '阶段 Phase', value: 'validation' },
-      { label: '已完成 Completed', value: '3 phases' },
-      { label: '模式 Mode', value: 'strict' },
+      { label: '状态', value: '暂停审查' },
+      { label: '阶段', value: '验证门禁' },
+      { label: '已完成', value: '3 个阶段' },
+      { label: '模式', value: '严格模式' },
     ])
     expect(panel.alerts[0]).toMatchObject({
       status: 'warning',
@@ -73,7 +73,7 @@ describe('overview panel presentation', () => {
     })
     expect(panel.actions[0]).toMatchObject({
       label: '处理确认',
-      labelEn: 'Review confirmation',
+      labelEn: 'Review',
       command: '/confirm',
       tone: 'primary',
       mode: 'execute',
@@ -82,6 +82,7 @@ describe('overview panel presentation', () => {
       title: 'gate blocked',
       status: 'warning',
       detail: 'Needs human confirmation',
+      meta: '验证门禁',
     })
   })
 
@@ -89,10 +90,11 @@ describe('overview panel presentation', () => {
     const panel = createOverviewPanel({ status: null, events: [], commands })
 
     expect(panel.title).toBe('暂无活动作业')
-    expect(panel.metrics[0]).toEqual({ label: '状态 State', value: 'idle' })
+    expect(panel.subtitle).toBe('从首页选择示例，或在工作台输入一个新的辐照防护仿真任务。')
+    expect(panel.metrics[0]).toEqual({ label: '状态', value: '待命' })
     expect(panel.actions[0]).toMatchObject({
       label: '开始工作流',
-      labelEn: 'Start workflow',
+      labelEn: 'Start',
       command: '/run',
       tone: 'primary',
       mode: 'compose',

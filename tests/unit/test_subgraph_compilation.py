@@ -138,6 +138,42 @@ async def test_human_confirmation_wrapper_preserves_unconfirmed_count(monkeypatc
     assert result["unconfirmed_assumptions_count"] == 3
 
 
+async def test_codegen_wrapper_passes_confirmation_status(monkeypatch) -> None:
+    """Main graph wrapper must pass confirmation_status into the codegen state."""
+    from agent_core.graph.main_graph import build_subgraph_nodes
+
+    captured_state = {}
+
+    class _FakeCompiled:
+        async def ainvoke(self, state):
+            captured_state.update(state)
+            return {"g4_codegen_status": "passed"}
+
+    class _FakeGraph:
+        def compile(self):
+            return _FakeCompiled()
+
+    fake_module = types.SimpleNamespace(build_g4_codegen_subgraph=lambda: _FakeGraph())
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agent_core.graph.subgraphs.g4_codegen_graph",
+        fake_module,
+    )
+
+    await build_subgraph_nodes()["g4_codegen"](
+        {
+            "job_id": "job",
+            "confirmation_status": "approved",
+            "confirmation_record_path": "record.json",
+            "confirmed_model_plan_path": "plan.json",
+        }
+    )
+
+    assert captured_state["human_confirmation_status"] == "approved"
+    assert captured_state["confirmation_record_path"] == "record.json"
+    assert captured_state["confirmed_model_plan_path"] == "plan.json"
+
+
 def test_main_state_has_path_fields() -> None:
     """Main state should have path-based fields, not inline data."""
     from agent_core.graph.main_state import RadAgentMainState

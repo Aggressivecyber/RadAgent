@@ -8,12 +8,12 @@ type Particle = {
 }
 
 const labels = [
-  '需求 Intent',
-  '模型 Model IR',
-  '门禁 Gates',
-  '生成 Codegen',
-  '构建 Build',
-  '产物 Artifacts',
+  { label: '需求', labelEn: 'Intent' },
+  { label: '模型', labelEn: 'Model IR' },
+  { label: '门禁', labelEn: 'Gates' },
+  { label: '生成', labelEn: 'Codegen' },
+  { label: '构建', labelEn: 'Build' },
+  { label: '产物', labelEn: 'Artifacts' },
 ]
 
 function makeParticles(count: number): Particle[] {
@@ -153,7 +153,10 @@ export default function HeroSphere({ variant = 'hero' }: { variant?: 'hero' | 'i
       pointer.current.active = false
     }
 
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null
+
     resize()
+    resizeObserver?.observe(container)
     window.addEventListener('resize', resize)
     container.addEventListener('pointermove', updatePointer)
     container.addEventListener('pointerleave', clearPointer)
@@ -161,6 +164,7 @@ export default function HeroSphere({ variant = 'hero' }: { variant?: 'hero' | 'i
 
     return () => {
       window.cancelAnimationFrame(frame)
+      resizeObserver?.disconnect()
       window.removeEventListener('resize', resize)
       container.removeEventListener('pointermove', updatePointer)
       container.removeEventListener('pointerleave', clearPointer)
@@ -171,9 +175,10 @@ export default function HeroSphere({ variant = 'hero' }: { variant?: 'hero' | 'i
     <div className={`hero-sphere hero-sphere-${variant}`} ref={wrap} aria-hidden="true">
       <canvas ref={backCanvas} />
       <canvas ref={frontCanvas} />
-      {labels.map((label, index) => (
-        <span className={`sphere-label sphere-label-${index + 1}`} key={label}>
-          {label}
+      {labels.map((item, index) => (
+        <span className={`sphere-label sphere-label-${index + 1}`} key={item.label}>
+          <strong>{item.label}</strong>
+          <small>{item.labelEn}</small>
         </span>
       ))}
     </div>

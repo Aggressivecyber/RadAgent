@@ -43,6 +43,19 @@ class FakeService:
         self.calls.append(("read_artifact", (path, max_chars)))
         return ArtifactContent(path=path, exists=True, kind="text", text="artifact body")
 
+    def get_visualization_payload(self, job_id: str | None = None) -> dict[str, object]:
+        self.calls.append(("get_visualization_payload", job_id))
+        return {
+            "status": "ready",
+            "job_id": job_id or "job-1",
+            "source": {"visual_events": 100},
+            "geometry": {"components": [{"id": "detector"}]},
+            "tracks": [{"event_id": 0, "track_id": 1, "points_mm": [[0, 0, -1], [0, 0, 1]]}],
+            "deposits": [{"event_id": 0, "position_mm": [0, 0, 0], "edep_MeV": 1.0}],
+            "stats": {"components": 1, "tracks": 1, "track_points": 2, "deposits": 1},
+            "warnings": [],
+        }
+
     def recent_events(self, limit: int = 80) -> list[RadAgentEvent]:
         self.calls.append(("recent_events", limit))
         return [RadAgentEvent(event_type="job_started", summary="started")]
@@ -637,6 +650,36 @@ def test_create_api_handler_serves_job_and_artifact_detail() -> None:
     ]
 
 
+def test_create_api_handler_serves_active_job_artifact_list() -> None:
+    from agent_core.web.server import create_api_handler
+
+    service = FakeService()
+    handler = create_api_handler(service)
+
+    status, body = handler("GET", "/api/artifacts?job_id=job-7", b"")
+
+    assert status == 200
+    assert body["artifacts"] == [
+        {"job_id": "job-7", "path": "/tmp/report.md", "kind": "report"}
+    ]
+    assert service.calls == [("list_artifacts", "job-7")]
+
+
+def test_create_api_handler_serves_visualization_payload() -> None:
+    from agent_core.web.server import create_api_handler
+
+    service = FakeService()
+    handler = create_api_handler(service)
+
+    status, body = handler("GET", "/api/visualization?job_id=job-visual", b"")
+
+    assert status == 200
+    assert body["visualization"]["status"] == "ready"
+    assert body["visualization"]["source"]["visual_events"] == 100
+    assert body["visualization"]["tracks"][0]["points_mm"][-1] == [0, 0, 1]
+    assert service.calls == [("get_visualization_payload", "job-visual")]
+
+
 def test_create_api_handler_rejects_missing_artifact_path() -> None:
     from agent_core.web.server import create_api_handler
 
@@ -675,6 +718,25 @@ def test_create_api_handler_updates_model_config_without_echoing_api_key() -> No
             },
         )
     ]
+
+
+def test_create_api_handler_forwards_agentic_repair_turn_config() -> None:
+    from agent_core.web.server import create_api_handler
+
+    service = FakeService()
+    handler = create_api_handler(service)
+
+    status, _body = handler(
+        "POST",
+        "/api/model",
+        b'{"agentic_repair_max_turns":12,"agentic_repair_history_chars":36000,"ignored":"x"}',
+    )
+
+    assert status == 200
+    assert service.calls[-1] == (
+        "update_model_config",
+        {"agentic_repair_max_turns": 12, "agentic_repair_history_chars": 36000},
+    )
 
 
 def test_build_server_serves_api_over_http(tmp_path) -> None:

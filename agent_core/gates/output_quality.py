@@ -16,6 +16,9 @@ REQUIRED_G4_OUTPUTS = (
     "dose_3d.csv",
     "event_table.csv",
     "provenance.json",
+    "geometry_view.json",
+    "particle_tracks.json",
+    "energy_deposits.json",
 )
 
 _SMOKE_ERROR_PATTERNS = (
@@ -78,6 +81,9 @@ def inspect_g4_output_quality(
     _inspect_event_table(output_dir / "event_table.csv", required_events, report)
     _inspect_quantity_csv(output_dir / "edep_3d.csv", "edep_MeV", report)
     _inspect_quantity_csv(output_dir / "dose_3d.csv", "dose_Gy", report)
+    _inspect_geometry_view(output_dir / "geometry_view.json", report)
+    _inspect_particle_tracks(output_dir / "particle_tracks.json", report)
+    _inspect_energy_deposits(output_dir / "energy_deposits.json", report)
     _inspect_smoke_errors(smoke_result, report)
     return report
 
@@ -101,6 +107,10 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
 
 
 def _positive_int(value: Any) -> int | None:
@@ -227,6 +237,82 @@ def _inspect_quantity_csv(path: Path, quantity: str, report: OutputQualityReport
         report.errors.append(f"{name} has no non-zero {quantity} bins")
 
 
+def _inspect_geometry_view(path: Path, report: OutputQualityReport) -> None:
+    if not path.is_file():
+        return
+    data = _read_json(path)
+    components = _as_list(data.get("components"))
+    usable = 0
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        component_id = str(component.get("id") or component.get("component_id") or "").strip()
+        size = component.get("size_mm") or component.get("size")
+        position = component.get("position_mm") or component.get("position")
+        if component_id and _has_three_numeric_values(size) and _has_three_numeric_values(position):
+            usable += 1
+    report.metrics["geometry_view_components"] = len(components)
+    report.metrics["geometry_view_usable_components"] = usable
+    if usable == 0:
+        report.errors.append(
+            "geometry_view.json has no components — write front-end renderable IR "
+            "geometry into components with id/name/shape/material/size_mm/position_mm/"
+            "rotation_deg/opacity. Do not emit an empty components array."
+        )
+
+
+def _inspect_particle_tracks(path: Path, report: OutputQualityReport) -> None:
+    if not path.is_file():
+        return
+    data = _read_json(path)
+    tracks = _as_list(data.get("tracks"))
+    usable = 0
+    point_count = 0
+    for track in tracks:
+        if not isinstance(track, dict):
+            continue
+        points = [
+            point
+            for point in _as_list(track.get("points_mm") or track.get("points"))
+            if _has_three_numeric_values(point)
+        ]
+        point_count += len(points)
+        if len(points) >= 2:
+            usable += 1
+    report.metrics["particle_tracks"] = len(tracks)
+    report.metrics["particle_track_points"] = point_count
+    report.metrics["particle_tracks_usable"] = usable
+    if usable == 0:
+        report.errors.append(
+            "particle_tracks.json has no usable tracks — record real Geant4 step "
+            "points in SteppingAction/trajectory data with at least two points per track."
+        )
+
+
+def _inspect_energy_deposits(path: Path, report: OutputQualityReport) -> None:
+    if not path.is_file():
+        return
+    data = _read_json(path)
+    deposits = _as_list(data.get("deposits"))
+    positive = 0
+    for deposit in deposits:
+        if not isinstance(deposit, dict):
+            continue
+        position = deposit.get("position_mm") or deposit.get("position")
+        if position is None:
+            position = [deposit.get("x_mm"), deposit.get("y_mm"), deposit.get("z_mm")]
+        edep = _finite_float(deposit.get("edep_MeV"))
+        if edep is not None and edep > 0.0 and _has_three_numeric_values(position):
+            positive += 1
+    report.metrics["energy_deposits"] = len(deposits)
+    report.metrics["energy_deposits_positive"] = positive
+    if positive == 0:
+        report.errors.append(
+            "energy_deposits.json has no positive deposits — record real edep_MeV > 0 "
+            "step/hit positions for red energy-deposition markers."
+        )
+
+
 def _inspect_smoke_errors(
     smoke_result: dict[str, Any] | None,
     report: OutputQualityReport,
@@ -251,3 +337,10 @@ def _finite_float(value: Any) -> float | None:
     if math.isnan(parsed) or math.isinf(parsed):
         return None
     return parsed
+
+
+def _has_three_numeric_values(value: Any) -> bool:
+    values = _as_list(value)
+    if len(values) != 3:
+        return False
+    return all(_finite_float(item) is not None for item in values)

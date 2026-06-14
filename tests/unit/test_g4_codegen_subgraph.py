@@ -55,7 +55,15 @@ class TestG4CodegenSubgraphCompilation:
         from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 
         annotations = G4CodegenSubgraphState.__annotations__
-        required = ["job_id", "g4_model_ir_path", "proposed_patch", "g4_codegen_status"]
+        required = [
+            "job_id",
+            "g4_model_ir_path",
+            "confirmation_record_path",
+            "confirmed_model_plan_path",
+            "human_confirmation_status",
+            "proposed_patch",
+            "g4_codegen_status",
+        ]
         for field in required:
             assert field in annotations, f"Missing field: {field}"
 
@@ -307,3 +315,86 @@ async def test_module_layer_preserves_pending_module_contexts(tmp_path, monkeypa
     assert update["module_contexts"]["runtime_app"]["module_contract"]["module_name"] == (
         "runtime_app"
     )
+
+
+@pytest.mark.asyncio
+async def test_build_module_contexts_injects_confirmed_human_constraints(
+    tmp_path, monkeypatch
+) -> None:
+    """Confirmed human constraints must reach module agents as hard context."""
+    from agent_core.g4_codegen import graph_nodes
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    confirmed_plan_path = tmp_path / "confirmed_model_plan.json"
+    confirmed_plan_path.write_text(
+        json.dumps(
+            {
+                "confirmation_status": "approved",
+                "agent_context": {
+                    "purpose": "codegen_hard_constraints",
+                    "status": "approved",
+                    "confirmed_constraints": [
+                        {
+                            "field_path": "components.water_tank.geometry",
+                            "value": {"shape": "cylinder", "radius": "50 cm"},
+                            "category": "dimension",
+                            "source": "human_confirmation",
+                            "status": "edited",
+                            "priority": "human_confirmed_hard",
+                        }
+                    ],
+                    "codegen_instruction": "Treat confirmed constraints as hard requirements.",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = await graph_nodes.build_module_contexts_node(
+        {
+            "job_id": "job_hc_constraints",
+            "run_mode": "strict",
+            "human_confirmation_status": "approved",
+            "confirmed_model_plan_path": str(confirmed_plan_path),
+            "g4_model_ir": {
+                "model_ir_id": "ir_hc",
+                "components": [{"component_id": "water_tank", "geometry": {}}],
+            },
+            "codegen_plan": {"required_modules": ["simulation_core"]},
+            "geometry_strategy_plan": {},
+            "code_architecture_plan": {},
+            "module_contracts": {
+                "simulation_core": {
+                    "module_name": "simulation_core",
+                    "output_files": ["include/DetectorConstruction.hh"],
+                }
+            },
+        }
+    )
+
+    ctx = result["module_contexts"]["simulation_core"]
+    human_context = ctx["human_confirmation_context"]
+    assert human_context["status"] == "approved"
+    assert human_context["source_path"] == str(confirmed_plan_path)
+    assert human_context["confirmed_constraints"][0]["field_path"] == (
+        "components.water_tank.geometry"
+    )
+    assert human_context["edited_constraint_count"] == 1
+    assert human_context["constraint_digest"] == [
+        "edited dimension components.water_tank.geometry = {\"radius\": \"50 cm\", \"shape\": \"cylinder\"}"
+    ]
+    assert "hard" in human_context["codegen_instruction"].lower()
+
+    persisted_context = json.loads(
+        (
+            tmp_path
+            / "jobs"
+            / "job_hc_constraints"
+            / "05_codegen"
+            / "module_contexts"
+            / "simulation_core.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert persisted_context["human_confirmation_context"]["confirmed_constraints"][0][
+        "field_path"
+    ] == "components.water_tank.geometry"

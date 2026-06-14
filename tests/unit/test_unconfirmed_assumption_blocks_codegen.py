@@ -239,6 +239,6 @@ class TestRouteAfterHumanConfirmationBlocking:
         assert route_after_human_confirmation(state) == "context_subgraph"
 
     def test_pending_routes_back_to_confirmation(self):
-        """Test that pending routes back to confirmation."""
+        """Test that pending routes to report in one-shot graph execution."""
         state = {"confirmation_status": "pending"}
-        assert route_after_human_confirmation(state) == "human_confirmation_subgraph"
+        assert route_after_human_confirmation(state) == "report_subgraph"

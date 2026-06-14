@@ -40,6 +40,60 @@ def _patch() -> dict[str, Any]:
     }
 
 
+def _write_visual_artifacts(output_dir: Path) -> None:
+    (output_dir / "geometry_view.json").write_text(
+        json.dumps(
+            {
+                "components": [
+                    {
+                        "id": "detector",
+                        "name": "Detector",
+                        "shape": "box",
+                        "material": "G4_Si",
+                        "size_mm": [1.0, 1.0, 1.0],
+                        "position_mm": [0.0, 0.0, 0.0],
+                        "rotation_deg": [0.0, 0.0, 0.0],
+                        "opacity": 0.7,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "particle_tracks.json").write_text(
+        json.dumps(
+            {
+                "tracks": [
+                    {
+                        "event_id": 0,
+                        "track_id": 1,
+                        "particle": "proton",
+                        "energy_MeV": 10.0,
+                        "points_mm": [[0.0, 0.0, -1.0], [0.0, 0.0, 0.0]],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "energy_deposits.json").write_text(
+        json.dumps(
+            {
+                "deposits": [
+                    {
+                        "event_id": 0,
+                        "track_id": 1,
+                        "volume": "detector",
+                        "position_mm": [0.0, 0.0, 0.0],
+                        "edep_MeV": 1.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_global_integration_normalizes_new_file_metadata() -> None:
     candidate = {
         "changed_files": [
@@ -246,6 +300,66 @@ def test_integration_query_includes_runtime_compile_error_text() -> None:
 
     assert "MissingWidgetType" in query
     assert "src/Consumer.cc" in query
+
+
+def test_model_context_includes_geant4_repair_memory_under_budget() -> None:
+    text = gia._model_context_json(
+        {
+            "job_id": "job_memory",
+            "available_modules": ["runtime_app"],
+            "project_files": [
+                {
+                    "path": "src/OutputManager.cc",
+                    "new_content": "x" * 80_000,
+                    "module_name": "runtime_app",
+                }
+            ],
+            "runtime_failure_context": {},
+            "integration_memory": {},
+            "write_contract": {},
+        },
+        max_chars=20_000,
+        max_project_file_chars=15_000,
+    )
+    context = json.loads(text)
+    memory_text = json.dumps(context.get("geant4_repair_memory", {}), ensure_ascii=False)
+
+    assert "fGeometryComponents" in memory_text
+    assert "geometry_view.json" in memory_text
+    assert "particle_tracks.json" in memory_text
+    assert "energy_deposits.json" in memory_text
+    assert "event_table.csv" in memory_text
+    assert "g4_summary.json" in memory_text
+
+
+def test_model_context_includes_agentic_repair_lessons() -> None:
+    text = gia._model_context_json(
+        {
+            "job_id": "job_memory",
+            "available_modules": ["runtime_app"],
+            "project_files": [],
+            "runtime_failure_context": {},
+            "integration_memory": {
+                "agentic_repair_lessons": {
+                    "lessons": [
+                        {
+                            "id": "geometry_view_phantom_member",
+                            "prompt_instruction": "Check OutputManager.hh before using fGeometryComponents.",
+                            "count": 2,
+                        }
+                    ]
+                }
+            },
+            "write_contract": {},
+        },
+        max_chars=20_000,
+        max_project_file_chars=15_000,
+    )
+    context = json.loads(text)
+    lessons = context["integration_memory"]["agentic_repair_lessons"]["lessons"]
+
+    assert lessons[0]["id"] == "geometry_view_phantom_member"
+    assert "fGeometryComponents" in lessons[0]["prompt_instruction"]
 
 
 def test_global_integration_qualifies_hit_type_in_sensitive_detector_patch() -> None:
@@ -849,6 +963,92 @@ def test_global_integration_writes_summary_events_requested_from_total_events() 
     assert "totalEvents << \",\"" in content
 
 
+def test_global_integration_postprocesses_runtime_output_manager_fallbacks() -> None:
+    output_manager = (
+        '#include "OutputManager.hh"\n'
+        "#include <fstream>\n"
+        "#include <iomanip>\n"
+        "#include <map>\n"
+        "void OutputManager::AddEnergyDeposit(G4int eventID, G4int trackID,\n"
+        "                                      const G4String& volume,\n"
+        "                                      G4double x, G4double y, G4double z,\n"
+        "                                      G4double edepMeV)\n"
+        "{\n"
+        "  if (edepMeV <= 0.0) return;\n"
+        "  std::lock_guard<std::mutex> lock(fMutex);\n"
+        "  fDeposits.push_back({eventID, trackID, volume, x, y, z, edepMeV});\n"
+        "}\n"
+        "void OutputManager::WriteSummaryJson()\n"
+        "{\n"
+        "  G4double totalEdep = 0.0;\n"
+        "  for (const auto& r : fEventRows) totalEdep += r.edepMeV;\n"
+        "}\n"
+        "void OutputManager::WriteEventTableCsv()\n"
+        "{\n"
+        "  for (const auto& r : fEventRows) { ofs << r.eventID << r.edepMeV << r.doseGy; }\n"
+        "}\n"
+        "void OutputManager::WriteEdep3dCsv()\n"
+        "{\n"
+        "  for (const auto& b : fVoxelBins) { ofs << b.x << b.y << b.z << b.edepMeV; }\n"
+        "}\n"
+        "void OutputManager::WriteDose3dCsv()\n"
+        "{\n"
+        "  for (const auto& b : fVoxelBins) { ofs << b.x << b.y << b.z << b.doseGy; }\n"
+        "}\n"
+    )
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/OutputManager.cc",
+                "operation": "create_or_replace",
+                "new_content": output_manager,
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, original_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert "_BuildEventRowsFromDeposits" in content
+    assert "_BuildVoxelBinsFromDeposits" in content
+    assert "for (const auto& r : eventRowsForOutput)" in content
+    assert "for (const auto& b : voxelBinsForOutput)" in content
+
+
+def test_global_integration_adds_vis_attributes_include_for_static_access() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/DetectorConstruction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "DetectorConstruction.hh"\n'
+                    "G4VPhysicalVolume* DetectorConstruction::Construct() {\n"
+                    "  worldLV->SetVisAttributes(G4VisAttributes::GetInvisible());\n"
+                    "  return worldPV;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, original_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert '#include "G4VisAttributes.hh"' in content
+    assert content.index('#include "G4VisAttributes.hh"') < content.index(
+        "G4VisAttributes::GetInvisible"
+    )
+
+
 def test_global_integration_postprocesses_generated_code_for_no_magic_number_gate() -> None:
     from agent_core.g4_codegen.validators.no_magic_number import check_magic_numbers
 
@@ -1055,6 +1255,61 @@ async def _empty_evidence(_query: str) -> list[dict[str, Any]]:
 
 
 @pytest.mark.asyncio
+async def test_global_integration_short_circuits_when_initial_runtime_gate_passes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
+        lambda: _FailIfCalledGateway(),
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_database",
+        _empty_evidence,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_web",
+        _empty_evidence,
+    )
+    gate_calls: list[int] = []
+
+    async def fake_runtime_gate(**kwargs: Any) -> dict[str, Any]:
+        gate_calls.append(int(kwargs["attempt"]))
+        return {
+            "status": "pass",
+            "attempt": kwargs["attempt"],
+            "errors": [],
+            "warnings": [],
+            "missing_outputs": [],
+            "output_quality": {"status": "pass", "errors": []},
+        }
+
+    async def fail_repair(*_args: Any, **_kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        raise AssertionError("repair should not run after an initial runtime gate pass")
+
+    monkeypatch.setattr(gia, "_run_integration_runtime_gate", fake_runtime_gate)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.agentic_repair.run_agentic_repair",
+        fail_repair,
+    )
+
+    repaired, report = await run_global_integration_agent(
+        _patch(),
+        job_id="global_integration_gate_short_circuit",
+        g4_model_ir={"sources": [{"events": 5}]},
+        module_results={"simulation_core": {}, "runtime_app": {}},
+    )
+
+    assert gate_calls == [0]
+    assert report["status"] == "passed"
+    assert report["runtime_gate_attempts"][0]["status"] == "pass"
+    assert report["changed_files"] == []
+    assert "agentic" not in report
+    assert repaired["metadata"]["global_integration_agent"]["runtime_gate_required"] is True
+
+
+@pytest.mark.asyncio
 async def test_integration_runtime_gate_uses_requested_ir_event_count(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1093,6 +1348,7 @@ async def test_integration_runtime_gate_uses_requested_ir_event_count(
             )
             (out / "edep_3d.csv").write_text("x,y,z,edep_MeV\n0,0,0,1.0\n", encoding="utf-8")
             (out / "dose_3d.csv").write_text("x,y,z,dose_Gy\n0,0,0,0.01\n", encoding="utf-8")
+            _write_visual_artifacts(out)
             return {
                 "success": True,
                 "cmake_configure_result": {"success": True},

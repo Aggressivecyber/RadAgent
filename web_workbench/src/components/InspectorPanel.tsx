@@ -24,6 +24,7 @@ import { createDetailPanel, isDetailPanelView } from '../lib/detailPanels'
 import { createDomainPanel, isDomainPanelView } from '../lib/domainPanels'
 import { createOperationPanel, isOperationPanelView } from '../lib/operationPanels'
 import { createOverviewPanel } from '../lib/overviewPanel'
+import { createStatusPanelSummary, presentConfirmationStatus } from '../lib/workbenchPresentation'
 
 type InspectorPanelProps = {
   active: string
@@ -41,36 +42,60 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
+const inspectorTitles: Record<string, { label: string; labelEn: string }> = {
+  overview: { label: '概览', labelEn: 'Overview' },
+  help: { label: '功能选择', labelEn: 'Actions' },
+  status: { label: '状态', labelEn: 'Status' },
+  jobs: { label: '作业', labelEn: 'Jobs' },
+  job: { label: '作业详情', labelEn: 'Job' },
+  artifacts: { label: '产物', labelEn: 'Artifacts' },
+  artifact: { label: '产物详情', labelEn: 'Artifact' },
+  gates: { label: '门禁', labelEn: 'Gates' },
+  gate: { label: '门禁详情', labelEn: 'Gate' },
+  logs: { label: '日志', labelEn: 'Logs' },
+  model: { label: '模型设置', labelEn: 'Model' },
+  confirmation: { label: '人工确认', labelEn: 'Review' },
+  memory: { label: '工作记忆', labelEn: 'Memory' },
+  credibility: { label: '可信度', labelEn: 'Credibility' },
+  revisions: { label: '修订', labelEn: 'Revisions' },
+  revision: { label: '修订详情', labelEn: 'Revision' },
+  projects: { label: '项目', labelEn: 'Projects' },
+  project: { label: '项目详情', labelEn: 'Project' },
+}
+
+function inspectorTitle(active: string) {
+  return inspectorTitles[active] || {
+    label: active.replaceAll('-', ' '),
+    labelEn: '',
+  }
+}
+
 function renderJson(value: unknown) {
   return <pre className="json-preview">{JSON.stringify(value ?? {}, null, 2)}</pre>
 }
 
 function StatusPanel({ status }: { status: JobStatus | null }) {
   if (!status) {
-    return <p className="empty-state">状态尚未加载。Status has not loaded yet.</p>
+    return <p className="empty-state">状态尚未加载。</p>
   }
 
-  const phases = ['prepare_workspace', 'context', 'g4_modeling', 'g4_codegen', 'validation', 'report']
+  const summary = createStatusPanelSummary(status)
 
   return (
     <div className="inspector-stack">
-      <article className="metric-tile">
-        <span>活动作业 Active job</span>
-        <strong>{status.job_id || '暂无活动作业'}</strong>
-      </article>
-      <article className="metric-tile">
-        <span>状态 State</span>
-        <strong>{status.status}</strong>
-      </article>
+      {summary.metrics.map((metric) => (
+        <article className="metric-tile" key={metric.label}>
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
+        </article>
+      ))}
       <div className="phase-list">
-        {phases.map((phase, index) => {
-          const completed = status.completed_phases.includes(phase)
-          const current = status.current_phase === phase
+        {summary.phases.map((phase, index) => {
           return (
-            <div className="phase-row" key={phase}>
-              {completed ? <CheckCircle2 size={16} /> : <CircleDot size={16} />}
-              <span>{phase}</span>
-              {current ? <em>当前</em> : <em>{index + 1}</em>}
+            <div className={`phase-row ${phase.state}`} key={phase.id}>
+              {phase.state === 'done' ? <CheckCircle2 size={16} /> : <CircleDot size={16} />}
+              <span>{phase.label}</span>
+              <em>{phase.marker || index + 1}</em>
             </div>
           )
         })}
@@ -97,7 +122,7 @@ function OverviewPanel({
   return (
     <div className="overview-panel">
       <header className="detail-header">
-        <span>概览 Overview</span>
+        <span>概览 <small>Overview</small></span>
         <strong>{panel.title}</strong>
         <p>{panel.subtitle}</p>
       </header>
@@ -142,8 +167,8 @@ function OverviewPanel({
       {panel.recentEvents.length > 0 ? (
         <section className="overview-events">
           <h3>最近活动 Recent activity</h3>
-          {panel.recentEvents.map((event) => (
-            <article className={`overview-event ${event.status}`} key={`${event.title}-${event.meta}-${event.detail}`}>
+          {panel.recentEvents.map((event, index) => (
+            <article className={`overview-event ${event.status}`} key={`${event.title}-${event.meta}-${event.detail}-${index}`}>
               <span>{event.status}</span>
               <div>
                 <strong>{event.title}</strong>
@@ -203,13 +228,13 @@ function CommandPanel({
 
 function EventPanel({ events }: { events: RadAgentEvent[] }) {
   if (events.length === 0) {
-    return <p className="empty-state">暂无服务事件。No service events yet.</p>
+    return <p className="empty-state">暂无服务事件。</p>
   }
 
   return (
     <div className="event-list">
-      {events.slice(-16).reverse().map((event) => (
-        <article className="event-row" key={`${event.created_at}-${event.event_type}-${event.summary}`}>
+      {events.slice(-16).reverse().map((event, index) => (
+        <article className="event-row" key={`${event.created_at}-${event.event_type}-${event.summary}-${index}`}>
           <AlertCircle size={15} />
           <div>
             <strong>{event.event_type.replaceAll('_', ' ')}</strong>
@@ -235,7 +260,7 @@ function CollectionPanel({
     return renderJson(data)
   }
   if (panel.rows.length === 0) {
-    return <p className="empty-state">暂无记录。No records available.</p>
+    return <p className="empty-state">暂无记录。</p>
   }
   return (
     <div className="collection-panel">
@@ -270,12 +295,12 @@ function ArtifactPanel({ data }: { data: unknown }) {
   return (
     <div className="inspector-stack">
       <article className="metric-tile">
-        <span>路径 Path</span>
+        <span>路径</span>
         <strong>{String(artifact.path || '未选择产物')}</strong>
       </article>
       <article className="metric-tile">
-        <span>类型 Kind</span>
-        <strong>{String(artifact.kind || 'unknown')}</strong>
+        <span>类型</span>
+        <strong>{String(artifact.kind || '未知')}</strong>
       </article>
       {text ? <pre className="artifact-preview">{text}</pre> : renderJson(data)}
     </div>
@@ -442,7 +467,7 @@ function ModelSettingsPanel({
         reduceModelSaveFailure(
           current,
           draft,
-          error instanceof Error ? error.message : 'Unable to save model settings.',
+          error instanceof Error ? error.message : '无法保存模型设置。',
         ),
       )
     } finally {
@@ -477,8 +502,73 @@ function ModelSettingsPanel({
         <input value={draft.pro_model} onChange={(event) => updateField('pro_model', event.target.value)} />
       </label>
       <label>
+        <span>Pro 输出 Token</span>
+        <input
+          value={draft.pro_max_tokens}
+          type="number"
+          min={1024}
+          max={64000}
+          step={512}
+          onChange={(event) => updateField('pro_max_tokens', event.target.value)}
+        />
+      </label>
+      <label>
+        <span>Pro 上下文窗口</span>
+        <input
+          value={draft.pro_context_window_tokens}
+          type="number"
+          min={16000}
+          max={400000}
+          step={1000}
+          onChange={(event) => updateField('pro_context_window_tokens', event.target.value)}
+        />
+      </label>
+      <label>
         <span>最大模型 Max model</span>
         <input value={draft.max_model} onChange={(event) => updateField('max_model', event.target.value)} />
+      </label>
+      <label>
+        <span>Max 输出 Token</span>
+        <input
+          value={draft.max_max_tokens}
+          type="number"
+          min={1024}
+          max={96000}
+          step={512}
+          onChange={(event) => updateField('max_max_tokens', event.target.value)}
+        />
+      </label>
+      <label>
+        <span>Max 上下文窗口</span>
+        <input
+          value={draft.max_context_window_tokens}
+          type="number"
+          min={16000}
+          max={400000}
+          step={1000}
+          onChange={(event) => updateField('max_context_window_tokens', event.target.value)}
+        />
+      </label>
+      <label>
+        <span>修复轮数上限 Repair turns</span>
+        <input
+          value={draft.agentic_repair_max_turns}
+          type="number"
+          min={1}
+          max={80}
+          onChange={(event) => updateField('agentic_repair_max_turns', event.target.value)}
+        />
+      </label>
+      <label>
+        <span>修复上下文窗口 Repair window</span>
+        <input
+          value={draft.agentic_repair_history_chars}
+          type="number"
+          min={4000}
+          max={200000}
+          step={1000}
+          onChange={(event) => updateField('agentic_repair_history_chars', event.target.value)}
+        />
       </label>
       {saveState.message ? (
         <p className={`model-save-message ${saveState.status}`}>{saveState.message}</p>
@@ -501,7 +591,7 @@ function ConfirmationPanel({
   const [rejectReason, setRejectReason] = useState('')
   const [question, setQuestion] = useState('')
   const preview = typeof review.preview === 'string' ? review.preview : ''
-  const status = String(review.status || 'unknown')
+  const status = presentConfirmationStatus(review.status)
 
   function run(command: string) {
     if (command) {
@@ -512,23 +602,23 @@ function ConfirmationPanel({
   return (
     <div className="confirmation-panel">
       <article className="metric-tile">
-        <span>状态 Status</span>
+        <span>状态</span>
         <strong>{status || '未加载确认项'}</strong>
       </article>
-      {preview ? <pre className="artifact-preview">{preview}</pre> : <p className="empty-state">暂无确认预览。No confirmation preview available.</p>}
+      {preview ? <pre className="artifact-preview">{preview}</pre> : <p className="empty-state">暂无确认预览。</p>}
       <div className="confirmation-actions">
         <button type="button" className="approve-button" onClick={() => run(buildConfirmationCommand())}>
           批准
         </button>
         <label>
-          <span>拒绝原因 Reject reason</span>
+          <span>拒绝原因</span>
           <textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} />
         </label>
         <button type="button" onClick={() => run(buildRejectCommand(rejectReason))} disabled={!rejectReason.trim()}>
           拒绝
         </button>
         <label>
-          <span>追问 Ask for more</span>
+          <span>追问补充</span>
           <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
         </label>
         <button type="button" onClick={() => run(buildAskMoreCommand(question))} disabled={!question.trim()}>
@@ -550,7 +640,7 @@ export default function InspectorPanel({
   onSaveModelConfig,
   onExecuteCommand,
 }: InspectorPanelProps) {
-  const title = active.replaceAll('-', ' ')
+  const title = inspectorTitle(active)
   const operationActive =
     isOperationPanelView(active) || (active === 'artifacts' && Array.isArray(asRecord(data).artifacts))
   const detailActive =
@@ -561,7 +651,8 @@ export default function InspectorPanel({
     <aside className="inspector">
       <div className="panel-title">
         <FileText size={16} />
-        {title}
+        {title.label}
+        {title.labelEn ? <small>{title.labelEn}</small> : null}
       </div>
       {active === 'overview' ? (
         <OverviewPanel

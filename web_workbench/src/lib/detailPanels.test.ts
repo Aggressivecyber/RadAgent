@@ -17,15 +17,16 @@ describe('detail inspector presentation', () => {
     expect(isDetailPanelView('job')).toBe(true)
     expect(panel).toMatchObject({
       title: 'Build a silicon slab detector',
-      status: 'paused',
+      status: '暂停审查',
       subtitle: 'job-1',
       metrics: [
-        { label: 'Phase', value: 'g4_codegen' },
-        { label: 'Project', value: 'Detector Workflows' },
-        { label: 'Completed', value: '2 phases' },
+        { label: '阶段', value: '工程生成' },
+        { label: '项目', value: 'Detector Workflows' },
+        { label: '已完成', value: '2 个阶段' },
       ],
     })
-    expect(panel?.sections[0].rows).toContainEqual({ label: 'Workspace', value: '/workspace/radagent' })
+    expect(panel?.sections[0].title).toBe('工作流')
+    expect(panel?.sections[0].rows).toContainEqual({ label: '工作区', value: '/workspace/radagent' })
   })
 
   it('formats gate, revision, and project records as first-class details', () => {
@@ -52,28 +53,28 @@ describe('detail inspector presentation', () => {
     })
 
     expect(gate).toMatchObject({
-      title: 'Gate 20',
-      status: 'pass',
-      subtitle: 'validation',
+      title: '门禁 20',
+      status: '通过',
+      subtitle: '验证门禁',
       preview: 'Credibility evidence is consistent.',
       metrics: [
-        { label: 'Level', value: 'high' },
-        { label: 'Phase', value: 'validation' },
+        { label: '级别', value: '高' },
+        { label: '阶段', value: '验证门禁' },
       ],
     })
     expect(revision).toMatchObject({
       title: 'rev-1',
-      status: 'ready',
+      status: '就绪',
       subtitle: 'Tighten detector spacing.',
       preview: 'Tighten detector spacing.',
     })
     expect(revision?.sections[0].rows).toContainEqual({
-      label: 'Candidate',
+      label: '候选目录',
       value: '/workspace/revisions/rev-1',
     })
     expect(project).toMatchObject({
       title: 'Default Project',
-      status: 'default',
+      status: '默认',
       subtitle: '/workspace',
       preview: 'Default RadAgent workspace project',
     })

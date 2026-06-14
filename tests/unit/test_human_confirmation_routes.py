@@ -96,12 +96,12 @@ class TestRouteAfterHumanConfirmation:
         assert result == "report_subgraph"
 
     def test_route_after_human_confirmation_pending(self):
-        """Test routing back to confirmation for next round."""
+        """Test routing to report when one-shot graph is pending user input."""
         state = {
             "confirmation_status": "pending",
         }
         result = route_after_human_confirmation(state)
-        assert result == "human_confirmation_subgraph"
+        assert result == "report_subgraph"
 
     def test_route_after_human_confirmation_expired(self):
         """Test routing to report after confirmation expired."""

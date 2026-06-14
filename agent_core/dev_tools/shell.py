@@ -151,6 +151,31 @@ _KNOWN_GEANT4_FIXES: tuple[tuple[str, str], ...] = (
         "non-null BEFORE constructing the logical volume. A null material must "
         "be a hard error, not silently passed to G4LogicalVolume.",
     ),
+    (
+        "no declaration matches", "OutputManager::WriteSummaryJson()",
+        "OUTPUTMANAGER SIGNATURE FIX: OutputManager.cc defines a no-argument "
+        "WriteSummaryJson() that OutputManager.hh does not declare. Remove the "
+        "stray empty overload and keep the declared WriteSummaryJson(G4int) "
+        "definition; do not add a new unused declaration to the header.",
+    ),
+    (
+        "G4ParticleTable::GetParticleTable()", "incomplete type",
+        "PARTICLE-TABLE INCLUDE FIX: code calls G4ParticleTable methods while "
+        "only seeing a forward declaration. Add #include \"G4ParticleTable.hh\" "
+        "to the source file using G4ParticleTable::GetParticleTable().",
+    ),
+    (
+        "G4Material", "has not been declared",
+        "GEANT4 INCLUDE FIX: a header/source uses G4Material* without including "
+        "\"G4Material.hh\". Add the include before editing signatures; the "
+        "compiler may display the missing type as int* in downstream notes.",
+    ),
+    (
+        "G4VSolid", "incomplete type",
+        "GEANT4 INCLUDE FIX: a source calls methods on G4VSolid through a "
+        "forward declaration. Add #include \"G4VSolid.hh\" before changing "
+        "scoring or geometry logic.",
+    ),
 )
 
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from agent_core.planning.nodes import parse_task, save_task_spec, validate_task_spec
+from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 
 
 @pytest.fixture
@@ -36,6 +37,100 @@ class TestParseTask:
         }
         result = await parse_task(state)
         assert result["task_spec"]["particle"]["type"] == "gamma"
+
+    async def test_neutron_showcase_query_extracts_particle_and_outputs(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        state = {
+            "job_id": "test_job",
+            "user_query": (
+                "Build a Geant4 shielding study for 14 MeV neutrons through "
+                "polyethylene, borated polyethylene, lead, and a downstream "
+                "silicon detector. Score neutron leakage, secondary gamma "
+                "production proxy, detector dose, and material stack sensitivity."
+            ),
+        }
+
+        result = await parse_task(state)
+
+        particle = result["task_spec"]["particle"]
+        assert particle["type"] == "neutron"
+        assert particle["pdg_code"] == 2112
+        assert particle["energy_MeV"] == 14.0
+        assert result["task_spec_errors"] == []
+        assert "particle_flux" in result["task_spec"]["outputs"]
+        assert "dose_distribution" in result["task_spec"]["outputs"]
+
+    async def test_muon_showcase_query_extracts_cosmic_source(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        state = {
+            "job_id": "test_job",
+            "user_query": (
+                "Build a Geant4 cosmic muon scattering tomography workflow with "
+                "two tracker planes above and below a dense object. Generate a "
+                "realistic angular muon source, score hit positions, scattering "
+                "angles, and reconstruction-ready CSV outputs."
+            ),
+        }
+
+        result = await parse_task(state)
+
+        particle = result["task_spec"]["particle"]
+        assert particle["type"] == "mu-"
+        assert particle["pdg_code"] == 13
+        assert particle["angular_distribution"] == "cosine"
+        assert "hit_data" in result["task_spec"]["outputs"]
+
+    async def test_model_assisted_parser_fills_particle_when_rules_do_not_cover(
+        self,
+        temp_workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[dict[str, object]] = []
+
+        class FakeGateway:
+            async def call(self, **kwargs):
+                calls.append(kwargs)
+                return ModelCallResult(
+                    task=kwargs["task"],
+                    tier=kwargs["tier"],
+                    provider=ModelProvider.MOCK,
+                    model_name="fake",
+                    content="{}",
+                    parsed_json={
+                        "particle": {
+                            "type": "alpha",
+                            "pdg_code": 1000020040,
+                            "energy_MeV": 5.5,
+                            "energy_unit": "MeV",
+                        },
+                        "outputs": ["energy_deposition"],
+                    },
+                )
+
+        monkeypatch.setattr(
+            "agent_core.models.gateway.get_model_gateway",
+            lambda: FakeGateway(),
+        )
+        state = {
+            "job_id": "test_job",
+            "user_query": (
+                "Build a Geant4 heavy charged particle telescope for alpha "
+                "response in a silicon detector and score energy deposition."
+            ),
+        }
+
+        result = await parse_task(state)
+
+        assert calls[0]["task"] == ModelTask.TASK_PLANNING
+        particle = result["task_spec"]["particle"]
+        assert particle["type"] == "alpha"
+        assert particle["pdg_code"] == 1000020040
+        assert particle["energy_MeV"] == 5.5
+        assert result["task_spec_errors"] == []
 
     async def test_simple_slab_query_normalizes_source_and_target(
         self,

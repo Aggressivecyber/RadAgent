@@ -91,6 +91,12 @@ class BuildResult(BaseModel):
 
 class SimulationResult(BaseModel):
     success: bool
+    events: int = 0
+    visual_events: int = 100
+    visual_success: bool = False
+    visual_output_dir: str = ""
+    production_success: bool = False
+    production_output_dir: str = ""
     output_dir: str = ""
     log: str = ""
     errors: str = ""
@@ -136,6 +142,8 @@ class ModelConfigView(BaseModel):
     env_path: str
     default_api_key_env: str = "RADAGENT_API_KEY"
     tiers: dict[str, ModelTierConfig] = Field(default_factory=dict)
+    agentic_repair_max_turns: int = 24
+    agentic_repair_history_chars: int = 48_000
 
 
 class StartupStatusView(BaseModel):
@@ -165,3 +173,5 @@ class ModelConfigUpdate(BaseModel):
     lite_context_window_tokens: int | None = None
     pro_context_window_tokens: int | None = None
     max_context_window_tokens: int | None = None
+    agentic_repair_max_turns: int | None = None
+    agentic_repair_history_chars: int | None = None

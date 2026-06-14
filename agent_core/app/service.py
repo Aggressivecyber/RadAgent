@@ -80,6 +80,20 @@ def _status_word(ok: bool) -> str:
     return "ok" if ok else "missing"
 
 
+def _agentic_repair_max_turns() -> int:
+    try:
+        return max(1, int(os.getenv("RADAGENT_AGENTIC_MAX_TURNS", "24")))
+    except ValueError:
+        return 24
+
+
+def _agentic_repair_history_chars() -> int:
+    try:
+        return max(4_000, int(os.getenv("RADAGENT_AGENTIC_HISTORY_CHARS", "48000")))
+    except ValueError:
+        return 48_000
+
+
 def _clip_short_text(value: Any, *, limit: int = 50) -> str:
     text = " ".join(str(value or "").split()).strip()
     return text[:limit]
@@ -234,6 +248,8 @@ class RadAgentAppService:
         return ModelConfigView(
             env_path=str(self.env_path),
             default_api_key_env="RADAGENT_API_KEY",
+            agentic_repair_max_turns=_agentic_repair_max_turns(),
+            agentic_repair_history_chars=_agentic_repair_history_chars(),
             tiers={
                 tier.value: ModelTierConfig(
                     tier=config.tier,
@@ -381,6 +397,12 @@ class RadAgentAppService:
         if update.max_context_window_tokens is not None:
             values["RADAGENT_MAX_CONTEXT_WINDOW_TOKENS"] = str(
                 update.max_context_window_tokens
+            )
+        if update.agentic_repair_max_turns is not None:
+            values["RADAGENT_AGENTIC_MAX_TURNS"] = str(update.agentic_repair_max_turns)
+        if update.agentic_repair_history_chars is not None:
+            values["RADAGENT_AGENTIC_HISTORY_CHARS"] = str(
+                update.agentic_repair_history_chars
             )
 
         if not values:
@@ -1161,6 +1183,26 @@ class RadAgentAppService:
             return None
         return json.loads(Path(path).read_text(encoding="utf-8"))
 
+    def get_visualization_payload(self, job_id: str | None = None) -> dict[str, Any]:
+        from agent_core.tools.geant4_workbench import VISUAL_WORKBENCH_EVENTS
+        from agent_core.web.visualization import build_visualization_payload
+
+        state = self._state_for_job(job_id)
+        output_dir = (
+            str(state.get("_visual_output_dir") or "")
+            or str(state.get("visual_output_dir") or "")
+            or str(state.get("_sim_output_dir") or "")
+        )
+        model_ir = state.get("g4_model_ir")
+        if not isinstance(model_ir, dict):
+            model_ir = self.get_model_ir(job_id) or {}
+        return build_visualization_payload(
+            output_dir=output_dir or None,
+            job_id=str(job_id or state.get("job_id", "")),
+            model_ir=model_ir,
+            visual_events=VISUAL_WORKBENCH_EVENTS,
+        )
+
     def get_gate_results(self, job_id: str | None = None) -> list[dict[str, Any]]:
         state = self._state_for_job(job_id)
         path = state.get("gate_results_path", "")
@@ -1418,35 +1460,105 @@ class RadAgentAppService:
         return result
 
     async def run_simulation(self, *, events: int = 1000) -> SimulationResult:
+        events = max(1, int(events or 1))
         executable = str(self.state.get("_executable_path", ""))
         if not executable or not Path(executable).exists():
             raise RuntimeError("No built executable in current state.")
+        code_dir = str(self.state.get("generated_code_dir", ""))
+        if not code_dir or not Path(code_dir).exists():
+            raise RuntimeError("No generated code directory in current state.")
         job_id = str(self.state.get("job_id", "repl_run"))
-        output_dir = str(self.workspace.get_job(job_id).output_dir())
+        production_output_dir = Path(self.workspace.get_job(job_id).output_dir())
+        visual_output_dir = production_output_dir / "visual_100"
 
         from agent_core.tools.geant4_runner import Geant4Runner
+        from agent_core.tools.geant4_workbench import VISUAL_WORKBENCH_EVENTS
 
         runner = Geant4Runner()
+        visual_events = VISUAL_WORKBENCH_EVENTS
+        self._emit(
+            "simulation_visual_started",
+            status="running",
+            summary=f"{visual_events} events for browser 3D view",
+            payload={
+                "events": visual_events,
+                "executable": executable,
+                "output_dir": str(visual_output_dir),
+            },
+        )
+        visual_raw = await self._run_simulation_batch(
+            runner=runner,
+            executable=executable,
+            code_dir=code_dir,
+            output_dir=visual_output_dir,
+            job_id=job_id,
+            events=visual_events,
+        )
+        visual_success = bool(visual_raw.get("success"))
+        self.state["_visual_output_dir"] = str(visual_raw.get("output_dir", visual_output_dir))
+        self._remember_visual_artifacts(Path(self.state["_visual_output_dir"]))
+        self._emit(
+            "simulation_visual_finished" if visual_success else "simulation_visual_failed",
+            status="success" if visual_success else "error",
+            summary=self.state["_visual_output_dir"]
+            if visual_success
+            else str(visual_raw.get("errors", "")),
+            payload={
+                "events": visual_events,
+                "output_dir": self.state["_visual_output_dir"],
+                "success": visual_success,
+            },
+        )
+
         self._emit(
             "simulation_started",
             status="running",
             summary=f"{events} events",
-            payload={"events": events, "executable": executable},
+            payload={
+                "events": events,
+                "executable": executable,
+                "output_dir": str(production_output_dir),
+            },
         )
-        raw = await runner.simulate(
+        production_raw = await self._run_simulation_batch(
+            runner=runner,
             executable=executable,
-            events=events,
-            output_dir=output_dir,
+            code_dir=code_dir,
+            output_dir=production_output_dir,
             job_id=job_id,
+            events=events,
+        )
+        production_success = bool(production_raw.get("success"))
+        production_result_dir = str(production_raw.get("output_dir", production_output_dir))
+        self.state["_sim_output_dir"] = production_result_dir
+        errors = "\n".join(
+            item
+            for item in [
+                str(visual_raw.get("errors", "")),
+                str(production_raw.get("errors", "")),
+            ]
+            if item
         )
         result = SimulationResult(
-            success=bool(raw.get("success")),
-            output_dir=str(raw.get("output_dir", output_dir)),
-            log=str(raw.get("log", "")),
-            errors=str(raw.get("errors", "")),
+            success=visual_success and production_success,
+            events=events,
+            visual_events=visual_events,
+            visual_success=visual_success,
+            visual_output_dir=self.state["_visual_output_dir"],
+            production_success=production_success,
+            production_output_dir=production_result_dir,
+            output_dir=production_result_dir,
+            log="\n".join(
+                item
+                for item in [
+                    str(visual_raw.get("log", "")),
+                    str(production_raw.get("log", "")),
+                ]
+                if item
+            ),
+            errors=errors,
         )
         if result.success:
-            self.state["_sim_output_dir"] = result.output_dir
             self.record_state_artifacts(job_id)
         self._emit(
             "simulation_finished" if result.success else "simulation_failed",
@@ -1455,6 +1567,47 @@ class RadAgentAppService:
             payload=result.model_dump(),
         )
         return result
+
+    async def _run_simulation_batch(
+        self,
+        *,
+        runner: Any,
+        executable: str,
+        code_dir: str,
+        output_dir: Path,
+        job_id: str,
+        events: int,
+    ) -> dict[str, Any]:
+        from agent_core.tools.geant4_workbench import prepare_self_check_macro
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        macro = prepare_self_check_macro(code_dir, events=events)
+        raw = await runner.simulate(
+            executable=executable,
+            macro=str(macro),
+            events=events,
+            output_dir=str(output_dir),
+            job_id=job_id,
+        )
+        runner.materialize_output_contract(
+            output_dir=str(raw.get("output_dir", output_dir)),
+            executable_dir=str(Path(executable).parent),
+            job_id=job_id,
+            events=events,
+            sim=raw,
+        )
+        return raw
+
+    def _remember_visual_artifacts(self, output_dir: Path) -> None:
+        for name, key in (
+            ("geometry_view.json", "visual_geometry_view_path"),
+            ("particle_tracks.json", "visual_particle_tracks_path"),
+            ("energy_deposits.json", "visual_energy_deposits_path"),
+            ("edep_3d.csv", "visual_edep_3d_path"),
+        ):
+            path = output_dir / name
+            if path.is_file():
+                self.state[key] = str(path)
 
     async def prepare_visualization_workbench(
         self,

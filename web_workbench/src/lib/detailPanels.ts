@@ -37,10 +37,6 @@ function text(value: unknown, fallback = ''): string {
   return normalized || fallback
 }
 
-function plural(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? '' : 's'}`
-}
-
 function fields(rows: DetailField[]): DetailField[] {
   return rows.filter((row) => row.value)
 }
@@ -48,6 +44,60 @@ function fields(rows: DetailField[]): DetailField[] {
 function titleFromTask(value: unknown): string {
   const task = asRecord(value)
   return text(task.en || task.zh)
+}
+
+const phaseLabels: Record<string, string> = {
+  prepare_workspace: '准备工作区',
+  context: '上下文收集',
+  task_planning: '任务规划',
+  g4_modeling: 'Geant4 建模',
+  human_confirmation: '人工确认',
+  g4_codegen: '工程生成',
+  patch: '修订补丁',
+  gate: '验证门禁',
+  validation: '验证门禁',
+  artifact: '产物归档',
+  report: '报告交付',
+}
+
+const statusLabels: Record<string, string> = {
+  paused: '暂停审查',
+  running: '运行中',
+  completed: '已完成',
+  failed: '失败',
+  pass: '通过',
+  passed: '通过',
+  ready: '就绪',
+  generated: '已生成',
+  project: '项目',
+  default: '默认',
+  unknown: '未知',
+}
+
+const levelLabels: Record<string, string> = {
+  high: '高',
+  medium: '中',
+  low: '低',
+  unknown: '未知',
+}
+
+function phaseLabel(value: unknown, fallback = '准备工作区'): string {
+  const raw = text(value, fallback)
+  return phaseLabels[raw] || raw
+}
+
+function statusLabel(value: unknown, fallback = '未知'): string {
+  const raw = text(value, fallback)
+  return statusLabels[raw] || raw
+}
+
+function levelLabel(value: unknown): string {
+  const raw = text(value, 'unknown')
+  return levelLabels[raw] || raw
+}
+
+function phaseCount(count: number): string {
+  return `${count} 个阶段`
 }
 
 export function isDetailPanelView(view: string): boolean {
@@ -62,22 +112,22 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
     const title = text(row.user_query || row.objective || row.summary || titleFromTask(row.task_summary), text(row.job_id, 'Job'))
     return {
       title,
-      status: text(row.status, 'unknown'),
+      status: statusLabel(row.status),
       subtitle: text(row.job_id),
       metrics: [
-        { label: 'Phase', value: text(row.current_phase || row.phase, 'idle') },
-        { label: 'Project', value: text(row.project_name || row.project_slug, 'default') },
-        { label: 'Completed', value: plural(completed, 'phase') },
+        { label: '阶段', value: phaseLabel(row.current_phase || row.phase) },
+        { label: '项目', value: text(row.project_name || row.project_slug, '默认') },
+        { label: '已完成', value: phaseCount(completed) },
       ],
       sections: [
         {
-          title: 'Workflow',
+          title: '工作流',
           rows: fields([
-            { label: 'Job ID', value: text(row.job_id) },
-            { label: 'Run mode', value: text(row.run_mode || row.execution_mode) },
-            { label: 'Workspace', value: text(row.workspace_root || row.project_dir) },
-            { label: 'Created', value: text(row.created_at) },
-            { label: 'Updated', value: text(row.updated_at || row.completed_at) },
+            { label: '作业 ID', value: text(row.job_id) },
+            { label: '运行模式', value: text(row.run_mode || row.execution_mode) },
+            { label: '工作区', value: text(row.workspace_root || row.project_dir) },
+            { label: '创建时间', value: text(row.created_at) },
+            { label: '更新时间', value: text(row.updated_at || row.completed_at) },
           ]),
         },
       ],
@@ -88,20 +138,20 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
   if (view === 'gate') {
     const gateId = text(row.gate_id ?? row.id, 'selected')
     return {
-      title: `Gate ${gateId}`,
-      status: text(row.status, 'unknown'),
-      subtitle: text(row.phase || row.credibility_level || row.level),
+      title: `门禁 ${gateId}`,
+      status: statusLabel(row.status),
+      subtitle: phaseLabel(row.phase || row.credibility_level || row.level, '未知'),
       metrics: [
-        { label: 'Level', value: text(row.credibility_level || row.level, 'unknown') },
-        { label: 'Phase', value: text(row.phase, 'unknown') },
+        { label: '级别', value: levelLabel(row.credibility_level || row.level) },
+        { label: '阶段', value: phaseLabel(row.phase, '未知') },
       ],
       sections: [
         {
-          title: 'Decision',
+          title: '审查决定',
           rows: fields([
-            { label: 'Gate ID', value: gateId },
-            { label: 'Reason', value: text(row.reason) },
-            { label: 'Evidence', value: text(row.evidence) },
+            { label: '门禁 ID', value: gateId },
+            { label: '原因', value: text(row.reason) },
+            { label: '证据', value: text(row.evidence) },
           ]),
         },
       ],
@@ -113,20 +163,20 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
     const request = text(row.user_request || row.summary)
     return {
       title: text(row.revision_id, 'Revision'),
-      status: text(row.status || row.patch_status, 'unknown'),
+      status: statusLabel(row.status || row.patch_status),
       subtitle: request,
       metrics: [
-        { label: 'Patch', value: text(row.patch_status, 'unknown') },
-        { label: 'Job', value: text(row.job_id, 'active') },
+        { label: '补丁', value: statusLabel(row.patch_status) },
+        { label: '作业', value: text(row.job_id, '当前') },
       ],
       sections: [
         {
-          title: 'Revision',
+          title: '修订',
           rows: fields([
-            { label: 'Revision ID', value: text(row.revision_id) },
-            { label: 'Request', value: request },
-            { label: 'Candidate', value: text(row.candidate_project_dir) },
-            { label: 'Created', value: text(row.created_at) },
+            { label: '修订 ID', value: text(row.revision_id) },
+            { label: '请求', value: request },
+            { label: '候选目录', value: text(row.candidate_project_dir) },
+            { label: '创建时间', value: text(row.created_at) },
           ]),
         },
       ],
@@ -138,19 +188,19 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
     const root = text(row.root_path || row.workspace_root)
     return {
       title: text(row.name || row.slug, 'Project'),
-      status: text(row.slug, 'project'),
+      status: statusLabel(row.slug, '项目'),
       subtitle: root,
       metrics: [
-        { label: 'Slug', value: text(row.slug, 'project') },
-        { label: 'Jobs', value: text(row.job_count || row.jobs, '0') },
+        { label: '标识', value: text(row.slug, '项目') },
+        { label: '作业数', value: text(row.job_count || row.jobs, '0') },
       ],
       sections: [
         {
-          title: 'Workspace',
+          title: '工作区',
           rows: fields([
-            { label: 'Root', value: root },
-            { label: 'Description', value: text(row.description) },
-            { label: 'Last opened', value: text(row.last_opened_at) },
+            { label: '根目录', value: root },
+            { label: '描述', value: text(row.description) },
+            { label: '最近打开', value: text(row.last_opened_at) },
           ]),
         },
       ],

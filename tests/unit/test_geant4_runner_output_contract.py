@@ -10,6 +10,7 @@ from agent_core.tools.geant4_runner import Geant4Runner
 from agent_core.tools.geant4_workbench import (
     prepare_self_check_macro,
     prepare_visual_workbench,
+    resolve_self_check_events,
     visual_workbench_environment,
 )
 
@@ -38,6 +39,13 @@ def test_prepare_self_check_macro_rewrites_beamon_count(tmp_path: Path) -> None:
     text = macro_path.read_text(encoding="utf-8")
     assert "/run/beamOn 1000" in text
     assert "/run/beamOn 10" not in text.splitlines()
+
+
+@pytest.mark.parametrize("event_key", ["events", "num_events", "requested_events"])
+def test_resolve_self_check_events_accepts_source_event_aliases(event_key: str) -> None:
+    g4_model_ir = {"sources": [{event_key: 11}, {event_key: "7"}]}
+
+    assert resolve_self_check_events(g4_model_ir=g4_model_ir) == 18
 
 
 def test_prepare_visual_workbench_writes_b1_b2_style_macros(tmp_path: Path) -> None:
@@ -223,6 +231,46 @@ def test_materialize_output_contract_replaces_unusable_zero_3d_outputs(
 
     assert _read_rows(output_dir / "edep_3d.csv")[0]["edep_MeV"] == "2.0"
     assert _read_rows(output_dir / "dose_3d.csv")[0]["dose_Gy"] == "0.02"
+
+
+def test_materialize_output_contract_rebuilds_bad_event_table_from_energy_deposits(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "out"
+    executable_dir = tmp_path / "build"
+    output_dir.mkdir()
+    executable_dir.mkdir()
+    (output_dir / "event_table.csv").write_text(
+        "EventID,edep_MeV,dose_Gy\n0,0.0,0.0\n",
+        encoding="utf-8",
+    )
+    (output_dir / "energy_deposits.json").write_text(
+        json.dumps(
+            {
+                "deposits": [
+                    {"event_id": 0, "edep_MeV": 0.25},
+                    {"event_id": 0, "edep_MeV": 0.75},
+                    {"event_id": 99, "edep_MeV": 2.0},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _runner()._materialize_output_contract(
+        output_dir=str(output_dir),
+        executable_dir=str(executable_dir),
+        job_id="job",
+        events=1000,
+        sim={"success": True},
+    )
+
+    rows = _read_rows(output_dir / "event_table.csv")
+    assert len(rows) == 1000
+    assert rows[0]["edep_MeV"] == "1"
+    assert float(rows[0]["dose_Gy"]) > 0.0
+    assert rows[99]["edep_MeV"] == "2"
+    assert rows[100]["edep_MeV"] == "0"
 
 
 @pytest.mark.asyncio

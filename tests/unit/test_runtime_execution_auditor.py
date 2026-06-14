@@ -20,6 +20,54 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
+def _write_visual_artifacts(output_dir: Path) -> None:
+    _write_json(
+        output_dir / "geometry_view.json",
+        {
+            "components": [
+                {
+                    "id": "detector",
+                    "name": "Detector",
+                    "shape": "box",
+                    "material": "G4_Si",
+                    "size_mm": [1.0, 1.0, 1.0],
+                    "position_mm": [0.0, 0.0, 0.0],
+                    "rotation_deg": [0.0, 0.0, 0.0],
+                    "opacity": 0.7,
+                }
+            ]
+        },
+    )
+    _write_json(
+        output_dir / "particle_tracks.json",
+        {
+            "tracks": [
+                {
+                    "event_id": 0,
+                    "track_id": 1,
+                    "particle": "proton",
+                    "energy_MeV": 10.0,
+                    "points_mm": [[0.0, 0.0, -1.0], [0.0, 0.0, 0.0]],
+                }
+            ]
+        },
+    )
+    _write_json(
+        output_dir / "energy_deposits.json",
+        {
+            "deposits": [
+                {
+                    "event_id": 0,
+                    "track_id": 1,
+                    "volume": "detector",
+                    "position_mm": [0.0, 0.0, 0.0],
+                    "edep_MeV": 1.0,
+                }
+            ]
+        },
+    )
+
+
 def _attempt_dirs(tmp_path: Path, job_id: str = "runtime_audit") -> tuple[Path, Path, Path]:
     attempt_dir = tmp_path / "jobs" / job_id / STAGE_CODEGEN / "integration" / "runtime_attempt_1"
     project_dir = attempt_dir / "geant4_project"
@@ -149,6 +197,7 @@ async def test_runtime_auditor_passes_native_nonzero_output_contract(
         "x,y,z,dose_Gy\n0,0,0,0.01\n1,0,0,0.005\n",
         encoding="utf-8",
     )
+    _write_visual_artifacts(output_dir)
 
     audit = await run_runtime_execution_auditor(
         job_id="runtime_audit",

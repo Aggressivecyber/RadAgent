@@ -191,7 +191,7 @@ class Geant4Runner:
             job_id=job_id,
         )
         self._write_smoke_result(_output_dir, sim)
-        self._materialize_output_contract(
+        self.materialize_output_contract(
             output_dir=_output_dir,
             executable_dir=str(Path(bld["executable_path"]).parent),
             job_id=job_id,
@@ -278,6 +278,23 @@ class Geant4Runner:
             encoding="utf-8",
         )
 
+    def materialize_output_contract(
+        self,
+        *,
+        output_dir: str,
+        executable_dir: str,
+        job_id: str,
+        events: int,
+        sim: dict[str, Any],
+    ) -> None:
+        self._materialize_output_contract(
+            output_dir=output_dir,
+            executable_dir=executable_dir,
+            job_id=job_id,
+            events=events,
+            sim=sim,
+        )
+
     def _materialize_output_contract(
         self,
         *,
@@ -305,6 +322,14 @@ class Geant4Runner:
                 event_table.write_text(text, encoding="utf-8")
 
         event_rows = self._read_event_table_rows(event_table)
+        if self._event_rows_need_materialization(event_rows, events):
+            derived_event_rows = self._event_rows_from_energy_deposits_json(
+                out_dir / "energy_deposits.json",
+                events=events,
+            )
+            if derived_event_rows:
+                self._write_event_table_rows(event_table, derived_event_rows)
+                event_rows = derived_event_rows
         if event_rows:
             for filename, quantity in (
                 ("edep_3d.csv", "edep_MeV"),
@@ -389,6 +414,75 @@ class Geant4Runner:
         except OSError:
             return []
 
+    def _event_rows_need_materialization(
+        self,
+        rows: list[dict[str, str]],
+        events: int,
+    ) -> bool:
+        if not rows:
+            return True
+        if events > 0 and len(rows) < events:
+            return True
+        return not any(self._positive_float(row.get("edep_MeV")) for row in rows)
+
+    def _event_rows_from_energy_deposits_json(
+        self,
+        path: Path,
+        *,
+        events: int,
+    ) -> list[dict[str, str]]:
+        if not path.is_file():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        deposits = data.get("deposits") if isinstance(data, dict) else None
+        if not isinstance(deposits, list):
+            return []
+        totals: dict[int, float] = {}
+        max_event = -1
+        for item in deposits:
+            if not isinstance(item, dict):
+                continue
+            event_id = self._int_or_none(item.get("event_id", item.get("EventID")))
+            edep_mev = self._float_or_none(item.get("edep_MeV", item.get("edepMeV")))
+            if event_id is None or event_id < 0:
+                continue
+            if edep_mev is None or edep_mev <= 0.0:
+                continue
+            totals[event_id] = totals.get(event_id, 0.0) + edep_mev
+            max_event = max(max_event, event_id)
+        if not totals:
+            return []
+        row_count = max(events if events > 0 else 0, max_event + 1)
+        return [
+            {
+                "EventID": str(event_id),
+                "edep_MeV": f"{totals.get(event_id, 0.0):.12g}",
+                "dose_Gy": f"{totals.get(event_id, 0.0) * 1.0e-12:.12g}",
+            }
+            for event_id in range(row_count)
+        ]
+
+    def _write_event_table_rows(
+        self,
+        path: Path,
+        rows: list[dict[str, str]],
+    ) -> None:
+        output = ["EventID,edep_MeV,dose_Gy"]
+        for row in rows:
+            output.append(
+                ",".join(
+                    [
+                        str(row.get("EventID", "")),
+                        str(row.get("edep_MeV", "0")),
+                        str(row.get("dose_Gy", "0")),
+                    ]
+                )
+            )
+        path.write_text("\n".join(output) + "\n", encoding="utf-8")
+
     def _quantity_csv_has_usable_nonzero_rows(self, path: Path, quantity: str) -> bool:
         if not path.is_file():
             return False
@@ -431,5 +525,11 @@ class Geant4Runner:
     def _float_or_none(self, value: Any) -> float | None:
         try:
             return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _int_or_none(self, value: Any) -> int | None:
+        try:
+            return int(value)
         except (TypeError, ValueError):
             return None

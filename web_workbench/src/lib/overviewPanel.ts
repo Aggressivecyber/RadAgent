@@ -42,8 +42,49 @@ type OverviewInput = {
   commands: CommandCatalogEntry[]
 }
 
-function plural(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? '' : 's'}`
+const phaseLabels: Record<string, string> = {
+  prepare_workspace: '准备工作区',
+  context: '上下文收集',
+  task_planning: '任务规划',
+  g4_modeling: 'Geant4 建模',
+  human_confirmation: '人工确认',
+  g4_codegen: '工程生成',
+  patch: '修订补丁',
+  gate: '验证门禁',
+  validation: '验证门禁',
+  artifact: '产物归档',
+  report: '报告交付',
+}
+
+const statusLabels: Record<string, string> = {
+  idle: '待命',
+  running: '运行中',
+  paused: '暂停审查',
+  completed: '已完成',
+  failed: '失败',
+  error: '失败',
+}
+
+const modeLabels: Record<string, string> = {
+  strict: '严格模式',
+  local: '本地运行',
+  interactive: '交互模式',
+}
+
+function phaseLabel(phase: string): string {
+  return phaseLabels[phase] || phase.replaceAll('_', ' ')
+}
+
+function statusLabel(status: string): string {
+  return statusLabels[status] || status || '未知'
+}
+
+function modeLabel(mode: string): string {
+  return modeLabels[mode] || mode || '严格模式'
+}
+
+function phaseCount(count: number): string {
+  return `${count} 个阶段`
 }
 
 function commandTip(commands: CommandCatalogEntry[], name: string): string {
@@ -73,7 +114,7 @@ function recentEvents(events: RadAgentEvent[]): OverviewEvent[] {
     title: event.event_type.replaceAll('_', ' '),
     status: event.status,
     detail: event.summary || event.phase || event.job_id || 'Service event',
-    meta: event.phase || event.created_at,
+    meta: event.phase ? phaseLabel(event.phase) : event.created_at,
   }))
 }
 
@@ -81,17 +122,17 @@ export function createOverviewPanel({ status, events, commands }: OverviewInput)
   if (!status || !status.job_id) {
     return {
       title: '暂无活动作业',
-      subtitle: 'Start a workflow or open a saved project from Home.',
+      subtitle: '从首页选择示例，或在工作台输入一个新的辐照防护仿真任务。',
       metrics: [
-        { label: '状态 State', value: 'idle' },
-        { label: '阶段 Phase', value: 'prepare_workspace' },
-        { label: '已完成 Completed', value: '0 phases' },
-        { label: '模式 Mode', value: 'strict' },
+        { label: '状态', value: '待命' },
+        { label: '阶段', value: '准备工作区' },
+        { label: '已完成', value: '0 个阶段' },
+        { label: '模式', value: '严格模式' },
       ],
       alerts: [],
       actions: [
-        action(commands, '开始工作流', 'Start workflow', 'run', 'primary', 'compose'),
-        action(commands, '浏览作业', 'Browse jobs', 'jobs'),
+        action(commands, '开始工作流', 'Start', 'run', 'primary', 'compose'),
+        action(commands, '浏览作业', 'Jobs', 'jobs'),
       ],
       recentEvents: recentEvents(events),
     }
@@ -102,30 +143,30 @@ export function createOverviewPanel({ status, events, commands }: OverviewInput)
         {
           status: 'warning',
           title: '需要确认',
-          detail: 'Review the active human-confirmation gate before continuing.',
+          detail: '继续前需要审查当前人工确认门禁。',
         },
       ]
     : []
 
   const actions = status.needs_confirmation
     ? [
-        action(commands, '处理确认', 'Review confirmation', 'confirm', 'primary'),
-        action(commands, '查看门禁', 'Open gates', 'gates'),
+        action(commands, '处理确认', 'Review', 'confirm', 'primary'),
+        action(commands, '查看门禁', 'Gates', 'gates'),
       ]
     : [
-        action(commands, '继续下一步', 'Continue step', 'step', 'primary'),
+        action(commands, '继续下一步', 'Continue', 'step', 'primary'),
         action(commands, '构建工程', 'Build', 'build'),
-        action(commands, '查看产物', 'Open artifacts', 'artifacts'),
+        action(commands, '查看产物', 'Artifacts', 'artifacts'),
       ]
 
   return {
     title: status.user_query || status.job_id,
     subtitle: status.job_workspace || status.workspace_root || status.job_id,
     metrics: [
-      { label: '状态 State', value: status.status || 'unknown' },
-      { label: '阶段 Phase', value: status.current_phase || 'idle' },
-      { label: '已完成 Completed', value: plural(status.completed_phases.length, 'phase') },
-      { label: '模式 Mode', value: status.run_mode || status.execution_mode || 'strict' },
+      { label: '状态', value: statusLabel(status.status) },
+      { label: '阶段', value: phaseLabel(status.current_phase || 'prepare_workspace') },
+      { label: '已完成', value: phaseCount(status.completed_phases.length) },
+      { label: '模式', value: modeLabel(status.run_mode || status.execution_mode || 'strict') },
     ],
     alerts,
     actions,

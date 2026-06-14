@@ -157,6 +157,8 @@ def test_service_exposes_frontend_safe_model_config(tmp_path, monkeypatch) -> No
     assert config.tiers[ModelTier.PRO.value].model_name == "mimo-v2.5-pro"
     assert config.tiers[ModelTier.PRO.value].base_url == "https://token-plan-cn.xiaomimimo.com/v1"
     assert config.tiers[ModelTier.PRO.value].api_key_configured is True
+    assert config.agentic_repair_max_turns == 24
+    assert config.agentic_repair_history_chars == 48_000
     assert "secret-key" not in config.model_dump_json()
 
 
@@ -205,14 +207,20 @@ def test_service_updates_model_config_for_frontend(tmp_path, monkeypatch) -> Non
             "lite_model": "mimo-v2.5",
             "pro_model": "mimo-v2.5-pro",
             "max_model": "mimo-v2.5-pro",
+            "agentic_repair_max_turns": 12,
+            "agentic_repair_history_chars": 36000,
         }
     )
 
     text = env_file.read_text(encoding="utf-8")
     assert "RADAGENT_MODEL_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1" in text
     assert "RADAGENT_API_KEY=tp-test-key" in text
+    assert "RADAGENT_AGENTIC_MAX_TURNS=12" in text
+    assert "RADAGENT_AGENTIC_HISTORY_CHARS=36000" in text
     assert config.tiers[ModelTier.LITE.value].model_name == "mimo-v2.5"
     assert config.tiers[ModelTier.PRO.value].api_key_configured is True
+    assert config.agentic_repair_max_turns == 12
+    assert config.agentic_repair_history_chars == 36000
     assert "provider" not in config.tiers[ModelTier.PRO.value].model_dump()
     assert events[-1].event_type == "model_config_updated"
 
@@ -283,6 +291,139 @@ def test_service_status_pauses_on_blocked_visual_review_gate(tmp_path) -> None:
 
     assert status.status == "paused"
     assert status.needs_confirmation is True
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_runs_visual_100_before_requested_events(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    events = []
+    service = RadAgentAppService(workspace_root=tmp_path, event_callback=events.append)
+    job_id = "job_split_sim"
+    project_dir = tmp_path / "jobs" / job_id / "06_patch" / "geant4_project"
+    executable = project_dir / "build" / "sim"
+    (project_dir / "macros").mkdir(parents=True)
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    executable.chmod(0o755)
+    (project_dir / "macros" / "run.mac").write_text(
+        "/run/initialize\n/run/beamOn 10\n",
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "generated_code_dir": str(project_dir),
+        "_executable_path": str(executable),
+    }
+    service.store.upsert_job(
+        job_id=job_id,
+        user_query="split simulation",
+        job_workspace=str(tmp_path / "jobs" / job_id),
+    )
+
+    calls: list[dict[str, object]] = []
+
+    class FakeRunner:
+        geant4_available = True
+
+        async def simulate(
+            self,
+            executable: str,
+            macro: str | None = None,
+            events: int = 100,
+            threads: int = 1,
+            output_dir: str | None = None,
+            job_id: str = "unknown",
+        ) -> dict[str, object]:
+            assert macro is not None
+            assert output_dir is not None
+            calls.append(
+                {
+                    "events": events,
+                    "macro": Path(macro).name,
+                    "macro_text": Path(macro).read_text(encoding="utf-8"),
+                    "output_dir": output_dir,
+                    "job_id": job_id,
+                }
+            )
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            return {
+                "success": True,
+                "process_success": True,
+                "output_dir": output_dir,
+                "log": f"BeamOn completed {events} events",
+                "errors": "",
+            }
+
+        def materialize_output_contract(
+            self,
+            *,
+            output_dir: str,
+            executable_dir: str,
+            job_id: str,
+            events: int,
+            sim: dict[str, object],
+        ) -> None:
+            out = Path(output_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "g4_summary.json").write_text(
+                f'{{"job_id": "{job_id}", "events_requested": {events}}}',
+                encoding="utf-8",
+            )
+            (out / "event_table.csv").write_text(
+                "EventID,edep_MeV,dose_Gy\n0,1.0,0.01\n",
+                encoding="utf-8",
+            )
+            (out / "edep_3d.csv").write_text(
+                "x_mm,y_mm,z_mm,edep_MeV\n0,0,0,1.0\n",
+                encoding="utf-8",
+            )
+            (out / "dose_3d.csv").write_text(
+                "x_mm,y_mm,z_mm,dose_Gy\n0,0,0,0.01\n",
+                encoding="utf-8",
+            )
+            (out / "provenance.json").write_text(
+                '{"source": "fake-runner"}',
+                encoding="utf-8",
+            )
+            if events == 100:
+                (out / "particle_tracks.json").write_text(
+                    '{"events": 100, "tracks": [{"event_id": 0, "track_id": 1, '
+                    '"particle": "proton", "points_mm": [[0, 0, -1], [0, 0, 1]]}]}',
+                    encoding="utf-8",
+                )
+                (out / "energy_deposits.json").write_text(
+                    '{"deposits": [{"event_id": 0, "track_id": 1, '
+                    '"position_mm": [0, 0, 0], "edep_MeV": 1.0}]}',
+                    encoding="utf-8",
+                )
+                (out / "geometry_view.json").write_text(
+                    '{"components": [{"id": "detector", "shape": "box", '
+                    '"size_mm": [1, 1, 1], "position_mm": [0, 0, 0]}]}',
+                    encoding="utf-8",
+                )
+
+    monkeypatch.setattr("agent_core.tools.geant4_runner.Geant4Runner", FakeRunner)
+
+    result = await service.run_simulation(events=250)
+
+    assert result.success is True
+    assert result.visual_events == 100
+    assert result.events == 250
+    assert [call["events"] for call in calls] == [100, 250]
+    assert "/run/beamOn 100" in str(calls[0]["macro_text"])
+    assert "/run/beamOn 250" in str(calls[1]["macro_text"])
+    assert Path(str(calls[0]["output_dir"])).name == "visual_100"
+    assert Path(service.state["_visual_output_dir"]).name == "visual_100"
+    assert Path(service.state["visual_particle_tracks_path"]).is_file()
+    assert service.state["_sim_output_dir"] == str(calls[1]["output_dir"])
+    assert [event.event_type for event in events if event.event_type.startswith("simulation_")] == [
+        "simulation_visual_started",
+        "simulation_visual_finished",
+        "simulation_started",
+        "simulation_finished",
+    ]
 
 
 @pytest.mark.asyncio

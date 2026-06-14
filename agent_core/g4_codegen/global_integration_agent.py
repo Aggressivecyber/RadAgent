@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_core.gates.output_quality import REQUIRED_G4_OUTPUTS, inspect_g4_output_quality
+from agent_core.g4_codegen.module_agents.base import _postprocess_generated_module_content
 from agent_core.models.gateway import _safe_parse_json, get_model_gateway
 from agent_core.models.schemas import ModelProvider, ModelTask, ModelTier
 from agent_core.observability import record_event
@@ -54,6 +55,57 @@ _COMPILE_DIAGNOSTIC_RE = re.compile(
 _LOCAL_INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"', re.MULTILINE)
 _HEADER_SUFFIXES = (".hh", ".hpp", ".hxx", ".h")
 _SOURCE_SUFFIXES = (".cc", ".cpp", ".cxx", ".c")
+
+GEANT4_REPAIR_MEMORY: dict[str, Any] = {
+    "purpose": (
+        "Recurring Geant4 codegen failures observed in real RadAgent runs; apply "
+        "these before spending model turns on broad investigation."
+    ),
+    "rules": [
+        {
+            "id": "runtime_geometry_view_no_phantom_member",
+            "symptom": "OutputManager::WriteGeometryViewJson compile error: fGeometryComponents was not declared",
+            "fix": (
+                "Only reference fGeometryComponents when OutputManager.hh declares "
+                "that member. Otherwise write non-empty geometry_view.json directly "
+                "from the G4ModelIR component list."
+            ),
+            "artifacts": ["geometry_view.json"],
+        },
+        {
+            "id": "visual_workbench_contract",
+            "symptom": "3D browser workbench is empty or particle overlay cannot render",
+            "fix": (
+                "Always produce non-empty geometry_view.json plus true step-derived "
+                "particle_tracks.json and edep>0 energy_deposits.json."
+            ),
+            "artifacts": [
+                "geometry_view.json",
+                "particle_tracks.json",
+                "energy_deposits.json",
+            ],
+        },
+        {
+            "id": "derived_event_rows_single_source",
+            "symptom": "summary reports energy but event_table.csv is zero, or summary/table disagree",
+            "fix": (
+                "When event rows are derived from energy deposit points, use the "
+                "same derived collection for event_table.csv and g4_summary.json. "
+                "Keep helper variables function-local and out of WriteProvenanceJson."
+            ),
+            "artifacts": ["event_table.csv", "g4_summary.json", "energy_deposits.json"],
+        },
+        {
+            "id": "output_manager_data_flow",
+            "symptom": "particle_tracks.json or energy_deposits.json exists but is empty",
+            "fix": (
+                "Pass OutputManager* through ActionInitialization into SteppingAction "
+                "and record real G4Step event/track/position/edep data."
+            ),
+            "artifacts": ["particle_tracks.json", "energy_deposits.json"],
+        },
+    ],
+}
 
 
 async def run_global_integration_agent(
@@ -154,6 +206,35 @@ async def run_global_integration_agent(
         )
 
     attempt_offset = max(0, int(runtime_attempt_offset or 0))
+    active_failure_context = runtime_failure_context
+
+    if not active_failure_context:
+        initial_gate = await _run_integration_runtime_gate(
+            job_id=job_id,
+            proposed_patch=original_patch,
+            attempt=attempt_offset,
+            expected_events=runtime_events,
+        )
+        report["runtime_gate_attempts"].append(initial_gate)
+        if initial_gate.get("status") == "pass":
+            report["status"] = "passed"
+            report["changed_files"] = []
+            original_patch.setdefault("metadata", {})
+            original_patch["metadata"]["global_integration_agent"] = {
+                "status": report["status"],
+                "issues_fixed": 0,
+                "changed_files": 0,
+                "report_path": GLOBAL_INTEGRATION_REPORT_PATH,
+                "runtime_gate_required": True,
+                "short_circuited_after_initial_gate": True,
+            }
+            original_patch["metadata"]["final_runtime_gate"] = _final_runtime_gate_metadata(
+                runtime_events
+            )
+            _persist_patch(original_patch, job_id)
+            _persist_report(report, job_id)
+            return original_patch, report
+        active_failure_context = initial_gate
 
     # Agentic build-fix loop: the model receives the assembled project plus
     # read/edit/write/bash/build/smoke tools and iterates until the Geant4
@@ -166,8 +247,8 @@ async def run_global_integration_agent(
     repaired_patch, agentic_report = await run_agentic_repair(
         original_patch,
         job_id=job_id,
-        attempt_index=attempt_offset,
-        runtime_failure_context=runtime_failure_context,
+        attempt_index=attempt_offset if runtime_failure_context else attempt_offset + 1,
+        runtime_failure_context=active_failure_context,
         expected_events=runtime_events,
     )
 
@@ -194,7 +275,16 @@ async def run_global_integration_agent(
         "report_path": GLOBAL_INTEGRATION_REPORT_PATH,
         "runtime_gate_required": True,
     }
-    repaired_patch["metadata"]["final_runtime_gate"] = {
+    repaired_patch["metadata"]["final_runtime_gate"] = _final_runtime_gate_metadata(
+        runtime_events
+    )
+    _persist_patch(repaired_patch, job_id)
+    _persist_report(report, job_id)
+    return repaired_patch, report
+
+
+def _final_runtime_gate_metadata(runtime_events: int) -> dict[str, Any]:
+    return {
         "required": True,
         "gates": [
             "Build/Parse",
@@ -205,9 +295,6 @@ async def run_global_integration_agent(
         "runner": "Geant4Runner.smoke_test",
         "events": runtime_events,
     }
-    _persist_patch(repaired_patch, job_id)
-    _persist_report(report, job_id)
-    return repaired_patch, report
 
 
 def _is_mock_gateway(gateway: Any) -> bool:
@@ -246,6 +333,7 @@ def _model_context_json(
         "module_context_summaries": _compact_module_context_summaries(
             integration_context.get("module_context_summaries", {})
         ),
+        "geant4_repair_memory": GEANT4_REPAIR_MEMORY,
         "integration_memory": _compact_integration_memory(
             integration_context.get("integration_memory", {})
         ),
@@ -1065,6 +1153,7 @@ def _compact_integration_memory(
         in {
             "previous_integration_report",
             "previous_runtime_gate",
+            "agentic_repair_lessons",
         }
     }
     if "failure_bundle" in integration_memory:
@@ -1377,6 +1466,9 @@ def _load_integration_memory(job_id: str) -> dict[str, Any]:
         ),
         "previous_integration_evidence": _read_json_tail(
             codegen_dir / "integration" / "global_integration_evidence.json"
+        ),
+        "agentic_repair_lessons": _read_json_tail(
+            codegen_dir / "integration" / "agentic_repair_lessons.json"
         ),
         "failure_bundle": _read_json_tail(job_dir / "logs" / "failure_bundle.json"),
     }
@@ -1838,6 +1930,7 @@ def _postprocess_patch_entry(entry: dict[str, Any]) -> None:
     if not isinstance(entry.get("new_content"), str):
         return
     content = entry["new_content"]
+    content = _postprocess_generated_module_content(path, content)
     if path == "src/SensitiveDetector.cc":
         content = _qualify_sensitive_detector_hit_type(content)
         content = content.replace("edep == 0.00", "edep == 0.0")

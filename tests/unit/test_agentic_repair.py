@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,145 @@ import pytest
 
 from agent_core.agent_loop.loop import AgentLoopResult
 from agent_core.models.schemas import ModelTier
+
+
+def test_reconstruct_patch_from_project_infers_metadata_for_new_files(
+    tmp_path: Path,
+) -> None:
+    from agent_core.g4_codegen.agentic_repair import _reconstruct_patch_from_project
+
+    project_dir = tmp_path / "geant4_project"
+    (project_dir / "macros").mkdir(parents=True)
+    (project_dir / "main.cc").write_text("int main(){return 0;}\n", encoding="utf-8")
+    (project_dir / "macros" / "radagent_self_check_5.mac").write_text(
+        "/run/beamOn 5\n",
+        encoding="utf-8",
+    )
+
+    repaired = _reconstruct_patch_from_project(
+        project_dir,
+        {
+            "changed_files": [
+                {
+                    "path": "main.cc",
+                    "operation": "create_or_replace",
+                    "new_content": "int main(){return 0;}\n",
+                    "zone": "green",
+                    "generated_by": "runtime_app_module_agent",
+                    "module_name": "runtime_app",
+                }
+            ]
+        },
+    )
+
+    by_path = {entry["path"]: entry for entry in repaired["changed_files"]}
+    self_check = by_path["macros/radagent_self_check_5.mac"]
+    assert self_check["zone"] == "runtime_macro"
+    assert self_check["generated_by"] == "agentic_repair"
+    assert self_check["module_name"] == "runtime_app"
+
+
+def test_reconstruct_patch_from_project_applies_generated_postprocess(
+    tmp_path: Path,
+) -> None:
+    from agent_core.g4_codegen.agentic_repair import _reconstruct_patch_from_project
+
+    project_dir = tmp_path / "geant4_project"
+    (project_dir / "src").mkdir(parents=True)
+    (project_dir / "src" / "SensitiveDetector.cc").write_text(
+        '#include "SensitiveDetector.hh"\n'
+        '#include "Hit.hh"\n'
+        "void SensitiveDetector::EndOfEvent(G4HCofThisEvent*) {\n"
+        "  for (std::size_t i = 0; i < fHitsCollection->entries(); ++i) {\n"
+        "    Hit* hit = dynamic_cast<Hit*>((*fHitsCollection)[i]);\n"
+        "    if (hit) { hit->SetEventID(1); }\n"
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    repaired = _reconstruct_patch_from_project(
+        project_dir,
+        {
+            "changed_files": [
+                {
+                    "path": "src/SensitiveDetector.cc",
+                    "operation": "create_or_replace",
+                    "new_content": "",
+                    "zone": "source",
+                    "generated_by": "agentic_repair",
+                    "module_name": "simulation_core",
+                }
+            ]
+        },
+    )
+
+    content = repaired["changed_files"][0]["new_content"]
+    assert "Hit* hit = dynamic_cast<Hit*>" not in content
+    assert "::Hit* hit = dynamic_cast<::Hit*>" in content
+
+
+def test_extract_initial_errors_includes_structured_repair_brief() -> None:
+    from agent_core.g4_codegen.agentic_repair import _extract_initial_errors
+
+    errors = (
+        "/tmp/job/geant4_project/src/DetectorConstruction.cc:123:22: error: "
+        "'class PlacementManager' has no member named 'PlaceComponent'\n"
+        "  123 |   fPlacementManager->PlaceComponent(\n"
+        "/tmp/job/geant4_project/src/DetectorConstruction.cc:238:22: error: "
+        "'class ScoringManager' has no member named 'RegisterRegionScoring'; "
+        "did you mean 'RegisterRegion'?\n"
+        "/tmp/job/geant4_project/src/EventAction.cc:41:62: error: "
+        "'fEventEdp' was not declared in this scope; did you mean 'fEventEdep'?\n"
+    )
+
+    text = _extract_initial_errors({"errors": [errors]})
+
+    assert "Structured repair brief" in text
+    assert "src/DetectorConstruction.cc:123" in text
+    assert "src/DetectorConstruction.cc:238" in text
+    assert "src/EventAction.cc:41" in text
+    assert "PlaceComponent" in text
+    assert "RegisterRegion" in text
+    assert "fEventEdep" in text
+    assert text.index("Structured repair brief") < text.index("Raw failure context")
+
+
+@pytest.mark.asyncio
+async def test_repair_toolkit_postprocesses_generated_edits_immediately(
+    tmp_path: Path,
+) -> None:
+    from agent_core.g4_codegen.agentic_repair import _Geant4RepairToolkit
+
+    source = (
+        '#include "SensitiveDetector.hh"\n'
+        '#include "Hit.hh"\n'
+        "void SensitiveDetector::EndOfEvent(G4HCofThisEvent*) {\n"
+        "  for (std::size_t i = 0; i < fHitsCollection->entries(); ++i) {\n"
+        "    auto* hit = (*fHitsCollection)[i];\n"
+        "    if (hit) { hit->SetEventID(1); }\n"
+        "  }\n"
+        "}\n"
+    )
+    target = tmp_path / "src" / "SensitiveDetector.cc"
+    target.parent.mkdir(parents=True)
+    target.write_text(source, encoding="utf-8")
+
+    toolkit = _Geant4RepairToolkit(tmp_path, tool_names=["edit_file"])
+    result = await toolkit.dispatch(
+        "edit_file",
+        {
+            "path": "src/SensitiveDetector.cc",
+            "old_string": "    auto* hit = (*fHitsCollection)[i];",
+            "new_string": "    Hit* hit = dynamic_cast<Hit*>((*fHitsCollection)[i]);",
+        },
+    )
+
+    content = target.read_text(encoding="utf-8")
+    assert result["ok"] is True
+    assert result["postprocessed"] is True
+    assert "Hit* hit = dynamic_cast<Hit*>" not in content
+    assert "::Hit* hit = dynamic_cast<::Hit*>" in content
 
 
 @pytest.mark.asyncio
@@ -19,6 +159,7 @@ async def test_agentic_repair_uses_pro_tier_tool_loop(
     from agent_core.g4_codegen import agentic_repair
 
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.delenv("RADAGENT_AGENTIC_HISTORY_CHARS", raising=False)
     seen: dict[str, Any] = {}
 
     class FakeGateway:
@@ -56,3 +197,271 @@ async def test_agentic_repair_uses_pro_tier_tool_loop(
 
     assert seen["tier"] == ModelTier.PRO
     assert seen["metadata"]["enable_thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_agentic_repair_defaults_to_bounded_turn_budget(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Repair should fail boundedly instead of spending 70+ calls by default."""
+    from agent_core.g4_codegen import agentic_repair
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.delenv("RADAGENT_AGENTIC_MAX_TURNS", raising=False)
+    seen: dict[str, Any] = {}
+
+    class FakeGateway:
+        pass
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        seen["max_turns"] = kwargs["max_turns"]
+        return AgentLoopResult(
+            content="",
+            stop_reason="max_turns",
+            n_turns=kwargs["max_turns"],
+            messages=[],
+            tool_audit=[],
+        )
+
+    async def fake_runtime_gate(**_: Any) -> dict[str, Any]:
+        return {"status": "fail", "errors": ["compile failed"]}
+
+    monkeypatch.setattr(
+        "agent_core.models.gateway.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(agentic_repair, "run_agent_loop", fake_run_agent_loop)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
+        fake_runtime_gate,
+    )
+
+    _patch, report = await agentic_repair.run_agentic_repair(
+        {"changed_files": [{"path": "main.cc", "new_content": "int main(){return 0;}\n"}]},
+        job_id="job_repair_budget",
+        attempt_index=0,
+    )
+
+    assert seen["max_turns"] == agentic_repair.DEFAULT_AGENTIC_REPAIR_MAX_TURNS
+    assert report["stop_reason"] == "max_turns"
+    assert any("agent loop exhausted max turns" in err for err in report["errors"])
+
+
+@pytest.mark.asyncio
+async def test_agentic_repair_enables_context_history_compaction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Long repair sessions should not resend every full build log forever."""
+    from agent_core.g4_codegen import agentic_repair
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.delenv("RADAGENT_AGENTIC_HISTORY_CHARS", raising=False)
+    seen: dict[str, Any] = {}
+
+    class FakeGateway:
+        pass
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        seen["max_history_chars"] = kwargs.get("max_history_chars")
+        seen["preserve_recent_tool_messages"] = kwargs.get("preserve_recent_tool_messages")
+        return AgentLoopResult(
+            content="BUILD AND SMOKE PASSED",
+            stop_reason="stop_hook",
+            n_turns=1,
+            messages=[],
+            tool_audit=[],
+        )
+
+    async def fake_runtime_gate(**_: Any) -> dict[str, Any]:
+        return {"status": "pass", "errors": []}
+
+    monkeypatch.setattr(
+        "agent_core.models.gateway.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(agentic_repair, "run_agent_loop", fake_run_agent_loop)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
+        fake_runtime_gate,
+    )
+
+    await agentic_repair.run_agentic_repair(
+        {"changed_files": [{"path": "main.cc", "new_content": "int main(){return 0;}\n"}]},
+        job_id="job_repair_history_compaction",
+        attempt_index=0,
+    )
+
+    assert seen["max_history_chars"] == agentic_repair.DEFAULT_AGENTIC_REPAIR_HISTORY_CHARS
+    assert seen["preserve_recent_tool_messages"] == 2
+
+
+@pytest.mark.asyncio
+async def test_agentic_repair_persists_failure_lessons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Repair failures should become job-local prompt lessons for later attempts."""
+    from agent_core.g4_codegen import agentic_repair
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+
+    class FakeGateway:
+        pass
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        return AgentLoopResult(
+            content="",
+            stop_reason="max_turns",
+            n_turns=kwargs["max_turns"],
+            messages=[],
+            tool_audit=[],
+        )
+
+    async def fake_runtime_gate(**_: Any) -> dict[str, Any]:
+        return {
+            "status": "fail",
+            "errors": [
+                "src/OutputManager.cc:264:7: error: 'fGeometryComponents' "
+                "was not declared in this scope",
+                "Missing output contract files: geometry_view.json, "
+                "particle_tracks.json, energy_deposits.json",
+            ],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        "agent_core.models.gateway.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(agentic_repair, "run_agent_loop", fake_run_agent_loop)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
+        fake_runtime_gate,
+    )
+
+    _patch, report = await agentic_repair.run_agentic_repair(
+        {"changed_files": [{"path": "main.cc", "new_content": "int main(){return 0;}\n"}]},
+        job_id="job_repair_lessons",
+        attempt_index=2,
+    )
+
+    lesson_ids = {lesson["id"] for lesson in report["failure_lessons"]}
+    assert "geometry_view_phantom_member" in lesson_ids
+    assert "missing_output_contract" in lesson_ids
+    assert "agent_loop_max_turns" in lesson_ids
+
+    lessons_path = (
+        tmp_path
+        / "jobs"
+        / "job_repair_lessons"
+        / "05_codegen"
+        / "integration"
+        / "agentic_repair_lessons.json"
+    )
+    memory = json.loads(lessons_path.read_text(encoding="utf-8"))
+    assert memory["schema_version"] == "agentic_repair_lessons_v1"
+    assert any(
+        lesson["id"] == "geometry_view_phantom_member"
+        and "WriteGeometryViewJson" in lesson["prompt_instruction"]
+        for lesson in memory["lessons"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_agentic_repair_loads_previous_lessons_into_prompt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Later repair attempts should see prior job-local failure lessons."""
+    from agent_core.g4_codegen import agentic_repair
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    lessons_path = (
+        tmp_path
+        / "jobs"
+        / "job_repair_prompt_lessons"
+        / "05_codegen"
+        / "integration"
+        / "agentic_repair_lessons.json"
+    )
+    lessons_path.parent.mkdir(parents=True)
+    lessons_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "agentic_repair_lessons_v1",
+                "job_id": "job_repair_prompt_lessons",
+                "lessons": [
+                    {
+                        "id": "geometry_view_phantom_member",
+                        "title": "Do not reference undeclared geometry members",
+                        "prompt_instruction": (
+                            "Before writing WriteGeometryViewJson, check OutputManager.hh; "
+                            "if fGeometryComponents is absent, use IR-derived geometry JSON."
+                        ),
+                        "count": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    seen: dict[str, Any] = {}
+
+    class FakeGateway:
+        pass
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        seen["user_message"] = kwargs["user_message"]
+        return AgentLoopResult(
+            content="BUILD AND SMOKE PASSED",
+            stop_reason="stop_hook",
+            n_turns=1,
+            messages=[],
+            tool_audit=[],
+        )
+
+    async def fake_runtime_gate(**_: Any) -> dict[str, Any]:
+        return {"status": "pass", "errors": []}
+
+    monkeypatch.setattr(
+        "agent_core.models.gateway.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(agentic_repair, "run_agent_loop", fake_run_agent_loop)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
+        fake_runtime_gate,
+    )
+
+    await agentic_repair.run_agentic_repair(
+        {"changed_files": [{"path": "main.cc", "new_content": "int main(){return 0;}\n"}]},
+        job_id="job_repair_prompt_lessons",
+        attempt_index=3,
+    )
+
+    assert "Previous repair lessons for this job" in seen["user_message"]
+    assert "geometry_view_phantom_member" in seen["user_message"]
+    assert "WriteGeometryViewJson" in seen["user_message"]
+
+
+def test_failure_lessons_label_geant4_missing_type_and_signature_mismatch() -> None:
+    from agent_core.g4_codegen import agentic_repair
+
+    lessons = agentic_repair._build_failure_lessons(
+        gate={
+            "status": "fail",
+            "errors": [
+                "include/PlacementManager.hh:48:31: error: 'G4Material' "
+                "has not been declared",
+                "src/PlacementManager.cc:20:20: error: no declaration matches "
+                "'G4VPhysicalVolume* PlacementManager::PlaceBox(...)'",
+            ],
+        },
+        loop_stop_reason="stop",
+        loop_turns=3,
+        loop_error=None,
+    )
+    lesson_ids = {lesson["id"] for lesson in lessons}
+
+    assert "geant4_missing_type_include" in lesson_ids
+    assert "signature_mismatch" in lesson_ids
+    assert any("G4Material.hh" in lesson["prompt_instruction"] for lesson in lessons)
+    assert any("header" in lesson["prompt_instruction"].lower() for lesson in lessons)

@@ -80,3 +80,28 @@ def test_known_fix_hint_for_null_material() -> None:
     )
     assert "MATERIAL FIX" in out
     assert "G4_POLYSTYRENE" in out
+
+
+def test_known_fix_hints_for_common_compile_diagnostics() -> None:
+    from agent_core.dev_tools.shell import _known_fix_hints
+
+    output_manager = _known_fix_hints(
+        "error: no declaration matches 'void OutputManager::WriteSummaryJson()'"
+    )
+    assert "OUTPUTMANAGER SIGNATURE FIX" in output_manager
+    assert "WriteSummaryJson(G4int)" in output_manager
+
+    particle_table = _known_fix_hints(
+        "error: incomplete type 'G4ParticleTable' used in nested name specifier\n"
+        "G4ParticleTable::GetParticleTable()->FindParticle(name);"
+    )
+    assert "PARTICLE-TABLE INCLUDE FIX" in particle_table
+    assert 'G4ParticleTable.hh' in particle_table
+
+    material = _known_fix_hints("error: 'G4Material' has not been declared")
+    assert "GEANT4 INCLUDE FIX" in material
+    assert "G4Material.hh" in material
+
+    solid = _known_fix_hints("error: invalid use of incomplete type 'class G4VSolid'")
+    assert "GEANT4 INCLUDE FIX" in solid
+    assert "G4VSolid.hh" in solid

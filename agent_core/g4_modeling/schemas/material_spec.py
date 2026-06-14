@@ -54,6 +54,15 @@ class MaterialSpec(BaseModel):
         default_factory=list,
         description="Unresolved questions about this material",
     )
+    requires_confirmation: bool = Field(
+        default=False,
+        description="Needs user confirmation before production code generation",
+    )
+    confirmed_by_user: bool = Field(default=False, description="User has confirmed")
+    confirmation_source: str | None = Field(
+        default=None,
+        description="Confirmation source reference",
+    )
 
     @field_validator("nist_name")
     @classmethod

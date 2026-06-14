@@ -146,6 +146,30 @@ async def build_proposed_model_completion(
             "requires_confirmation": False,
         }
 
+        for key in ("geometry", "placement"):
+            value = comp.get(key)
+            if not value:
+                continue
+            field_path = f"components.{cid}.{key}"
+            source_type = _get_field_source(field_path, evidence_map)
+            confidence = _get_field_confidence(source_type)
+            requires_conf = confidence < 1.0
+            param = {
+                "field_path": field_path,
+                "proposed_value": value,
+                "source_type": source_type,
+                "confidence": confidence,
+                "reason": _get_field_reason(field_path, evidence_map),
+                "requires_confirmation": requires_conf,
+            }
+            comp_data["parameters"].append(param)
+            if requires_conf:
+                comp_data["requires_confirmation"] = True
+                comp_data["confidence"] = min(comp_data["confidence"], confidence)
+                ai_fields[field_path] = {"source": source_type, "confidence": confidence}
+            else:
+                user_fields.add(field_path)
+
         # Check each component parameter
         for key, value in comp.items():
             if key in {"component_id", "component_type", "geometry", "placement", "roles"}:
@@ -373,6 +397,8 @@ async def generate_confirmation_request(
                         "options": [],
                         "required": True,
                         "reason": param.get("reason", ""),
+                        "category": _question_category(param["field_path"]),
+                        "impact": _question_impact(param["field_path"]),
                     }
                 )
 
@@ -389,6 +415,8 @@ async def generate_confirmation_request(
                     "options": [],
                     "required": True,
                     "reason": src.get("reason", ""),
+                    "category": _question_category(src["field_path"]),
+                    "impact": _question_impact(src["field_path"]),
                 }
             )
 
@@ -405,6 +433,8 @@ async def generate_confirmation_request(
                     "options": [],
                     "required": True,
                     "reason": sc.get("reason", ""),
+                    "category": _question_category(sc["field_path"]),
+                    "impact": _question_impact(sc["field_path"]),
                 }
             )
 
@@ -413,6 +443,12 @@ async def generate_confirmation_request(
 
     # Limit per round
     questions = questions[:MAX_QUESTIONS_PER_ROUND]
+    critical_confirmations = _critical_confirmations(questions)
+    agent_context = _confirmation_request_agent_context(
+        questions,
+        proposal=proposal,
+        critical_confirmations=critical_confirmations,
+    )
 
     # Build user-friendly summary
     summary = build_confirmation_summary(
@@ -421,6 +457,11 @@ async def generate_confirmation_request(
         proposal.get("proposed_scoring", []),
         proposal.get("assumptions", []),
         proposal.get("missing_information", []),
+    )
+    summary = _prepend_confirmation_focus_summary(
+        summary,
+        critical_confirmations=critical_confirmations,
+        agent_context=agent_context,
     )
 
     # Create confirmation request
@@ -432,6 +473,8 @@ async def generate_confirmation_request(
         "proposed_model_completion_path": str(proposal_path),
         "questions": questions,
         "approval_options": ["approve", "edit", "reject", "ask_more"],
+        "critical_confirmations": critical_confirmations,
+        "agent_context": agent_context,
     }
 
     # Save to file
@@ -471,8 +514,110 @@ def _build_question_text(param: dict[str, Any], parent: dict[str, Any] | None) -
 
     if reason:
         question += f"\n理由：{reason}"
+    impact = _question_impact(field_path)
+    if impact:
+        question += f"\n影响：{impact}"
 
     return question
+
+
+def _question_category(field_path: str) -> str:
+    path = field_path.lower()
+    if "source" in path:
+        return "source"
+    if "material" in path:
+        return "material"
+    if "geometry" in path or "dimension" in path or path.endswith((".x", ".y", ".z")):
+        return "dimension"
+    if "placement" in path or "position" in path or "rotation" in path:
+        return "placement"
+    if "scoring" in path:
+        return "scoring"
+    if "voxel" in path:
+        return "voxel"
+    if "output" in path:
+        return "output"
+    return "other"
+
+
+def _question_impact(field_path: str) -> str:
+    category = _question_category(field_path)
+    impacts = {
+        "dimension": (
+            "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+        ),
+        "placement": (
+            "影响 Geant4 体积放置、重叠检查、入射路径和可视化窗口位置。"
+        ),
+        "material": "影响材料密度、剂量换算和能量沉积可信度。",
+        "source": "影响粒子类型、能量、方向和 100 粒子轨迹预览。",
+        "scoring": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。",
+        "voxel": "影响 3D 剂量网格精度和内存分配风险。",
+        "output": "影响前端工作台 artifact 契约和后续门禁。",
+    }
+    return impacts.get(category, "影响后续 Geant4 代码生成约束。")
+
+
+def _critical_confirmations(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    critical_categories = {"source", "material", "dimension", "placement", "scoring", "voxel"}
+    items: list[dict[str, Any]] = []
+    for question in questions:
+        category = str(question.get("category") or _question_category(question.get("field_path", "")))
+        if category not in critical_categories:
+            continue
+        items.append(
+            {
+                "field_path": question.get("field_path"),
+                "category": category,
+                "proposed_value": question.get("proposed_value"),
+                "impact": question.get("impact") or _question_impact(str(question.get("field_path", ""))),
+                "reason": question.get("reason", ""),
+            }
+        )
+    return items
+
+
+def _confirmation_request_agent_context(
+    questions: list[dict[str, Any]],
+    *,
+    proposal: dict[str, Any],
+    critical_confirmations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "purpose": "human_confirmation_focus_for_codegen",
+        "source_query": proposal.get("source_query", ""),
+        "confirmation_focus": critical_confirmations,
+        "question_count": len(questions),
+        "critical_question_count": len(critical_confirmations),
+        "codegen_instruction": (
+            "Treat approved/edited values from these fields as hard constraints "
+            "for Geant4 geometry, source, scoring, and visual artifact generation."
+        ),
+    }
+
+
+def _prepend_confirmation_focus_summary(
+    summary: str,
+    *,
+    critical_confirmations: list[dict[str, Any]],
+    agent_context: dict[str, Any],
+) -> str:
+    if not critical_confirmations:
+        return summary
+    lines = [
+        "关键确认项（会直接影响 Geant4 代码生成和前端 3D 工作台）：",
+    ]
+    for item in critical_confirmations[:5]:
+        lines.append(
+            "- "
+            f"{item.get('field_path')}: {item.get('proposed_value')} "
+            f"({item.get('impact')})"
+        )
+    lines.append(
+        f"本轮共有 {agent_context.get('question_count', 0)} 个问题，"
+        f"其中 {agent_context.get('critical_question_count', 0)} 个会进入后续 agent 硬约束。"
+    )
+    return "\n".join(lines) + "\n\n" + summary
 
 
 def _sort_questions_by_priority(
@@ -481,6 +626,12 @@ def _sort_questions_by_priority(
     """Sort questions by priority using QUESTION_PRIORITY."""
 
     def get_priority_score(q: dict[str, Any]) -> int:
+        category = str(q.get("category") or "").lower()
+        if category:
+            for i, priority in enumerate(QUESTION_PRIORITY):
+                if category == priority:
+                    return len(QUESTION_PRIORITY) - i
+
         field_path = q.get("field_path", "").lower()
 
         for i, category in enumerate(QUESTION_PRIORITY):
@@ -809,6 +960,24 @@ async def merge_user_confirmation(
     unconfirmed_count = max(
         0, len(total_fields_requiring_confirmation) - len(confirmed_fields) - len(edited_fields)
     )
+    confirmed_constraints = _build_confirmed_constraints(
+        proposal or {},
+        response or {},
+        user_decision=user_decision,
+        confirmed_fields=confirmed_fields,
+        edited_fields=edited_fields,
+    )
+    confirmed_plan["agent_context"] = {
+        "purpose": "confirmed_human_constraints_for_codegen",
+        "status": confirmed_plan["confirmation_status"],
+        "confirmed_constraints": confirmed_constraints,
+        "codegen_instruction": (
+            "Use these user-confirmed values as hard constraints. Edited constraints override "
+            "the same field_path in g4_model_ir, defaults, examples, RAG, and model guesses. "
+            "Do not replace geometry, placement, source, material, or scoring values with "
+            "generic defaults."
+        ),
+    }
 
     # Save confirmed model plan
     plan_path = conf_dir / "confirmed_model_plan.json"
@@ -834,6 +1003,13 @@ async def merge_user_confirmation(
             }
         ],
         "confirmed_model_plan_path": str(plan_path),
+        "agent_context": {
+            "purpose": "confirmed_human_constraints_for_codegen",
+            "status": confirmed_plan["confirmation_status"],
+            "confirmed_constraint_count": len(confirmed_constraints),
+            "edited_constraint_count": len(edited_fields),
+            "confirmed_constraints": confirmed_constraints[:20],
+        },
     }
 
     # Save confirmation record
@@ -893,6 +1069,67 @@ def _apply_edit_to_component(comp: dict[str, Any], field_path: str, new_value: A
                     current[key] = {}
                 current = current[key]
             current[parts[-1]] = new_value
+
+
+def _build_confirmed_constraints(
+    proposal: dict[str, Any],
+    response: dict[str, Any],
+    *,
+    user_decision: str,
+    confirmed_fields: list[str],
+    edited_fields: list[str],
+) -> list[dict[str, Any]]:
+    edits = {
+        str(edit.get("field_path")): edit
+        for edit in response.get("edits", [])
+        if isinstance(edit, dict) and edit.get("field_path")
+    }
+    confirmed = set(confirmed_fields)
+    edited = set(edited_fields)
+    constraints: list[dict[str, Any]] = []
+    for param in _iter_proposed_parameters(proposal):
+        field_path = str(param.get("field_path", ""))
+        if not field_path:
+            continue
+        edit = edits.get(field_path)
+        if edit:
+            value = edit.get("new_value")
+            status = "edited"
+            source_type = "user"
+        elif user_decision == "approve" or field_path in confirmed:
+            value = param.get("proposed_value")
+            status = "approved"
+            source_type = param.get("source_type", "confirmed")
+        elif field_path in edited:
+            value = param.get("proposed_value")
+            status = "edited"
+            source_type = "user"
+        else:
+            continue
+        constraints.append(
+            {
+                "field_path": field_path,
+                "value": value,
+                "unit": edit.get("unit") if edit else param.get("unit"),
+                "category": _question_category(field_path),
+                "status": status,
+                "source_type": source_type,
+                "source": "human_confirmation",
+                "priority": "human_confirmed_hard",
+                "edited": status == "edited",
+                "confidence": 1.0 if status == "edited" else param.get("confidence", 1.0),
+                "impact": _question_impact(field_path),
+            }
+        )
+    return constraints
+
+
+def _iter_proposed_parameters(proposal: dict[str, Any]):
+    for comp in proposal.get("proposed_components", []):
+        if isinstance(comp, dict):
+            yield from comp.get("parameters", [])
+    yield from proposal.get("proposed_sources", [])
+    yield from proposal.get("proposed_scoring", [])
 
 
 async def validate_confirmation_completeness(

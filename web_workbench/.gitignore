@@ -1,5 +1,6 @@
 dist/
 node_modules/
+test-results/
 *.tsbuildinfo
 vite.config.d.ts
 vite.config.js

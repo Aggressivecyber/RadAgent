@@ -24,15 +24,15 @@ describe('domain inspector presentation', () => {
       },
     })
 
-    expect(panel?.title).toBe('Runtime tools')
+    expect(panel?.title).toBe('本地运行环境')
     expect(panel?.metrics).toEqual([
-      { label: 'Project', value: 'default' },
-      { label: 'Tools', value: '2' },
-      { label: 'Available', value: '0' },
+      { label: '项目', value: '默认' },
+      { label: '工具', value: '2' },
+      { label: '可用', value: '0' },
     ])
     expect(panel?.rows[0]).toMatchObject({
       title: 'Geant4',
-      status: 'configured',
+      status: '已配置',
       detail: 'cmake=ok',
       meta: '/opt/geant4/bin/geant4-config',
     })
@@ -47,11 +47,11 @@ describe('domain inspector presentation', () => {
       warnings: ['mesh coarse near source'],
     })
 
-    expect(panel?.title).toBe('Credibility')
+    expect(panel?.title).toBe('可信度审查')
     expect(panel?.metrics).toEqual([
-      { label: 'Status', value: 'pass' },
-      { label: 'Level', value: 'high' },
-      { label: 'Confidence', value: '0.91' },
+      { label: '状态', value: '通过' },
+      { label: '级别', value: '高' },
+      { label: '置信度', value: '0.91' },
     ])
     expect(panel?.summary).toBe('Evidence is consistent.')
     expect(panel?.rows[0].title).toBe('mesh coarse near source')
@@ -70,9 +70,9 @@ describe('domain inspector presentation', () => {
     expect(isDomainPanelView('memory')).toBe(true)
     expect(isDomainPanelView('status')).toBe(false)
     expect(panel?.metrics).toEqual([
-      { label: 'Job', value: 'job-1' },
-      { label: 'Phase', value: 'g4_modeling' },
-      { label: 'Memory', value: '2' },
+      { label: '作业', value: 'job-1' },
+      { label: '阶段', value: 'Geant4 建模' },
+      { label: '记忆', value: '2' },
     ])
     expect(panel?.rows.map((row) => row.title)).toEqual(['geometry', 'report'])
   })

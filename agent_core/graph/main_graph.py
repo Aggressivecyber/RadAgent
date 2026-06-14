@@ -268,7 +268,7 @@ def _make_g4_codegen_subgraph_node() -> Any:
                 "execution_mode": state.get("execution_mode", ""),
                 "confirmation_record_path": state.get("confirmation_record_path", ""),
                 "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
-                "human_confirmation_status": state.get("human_confirmation_status", ""),
+                "human_confirmation_status": state.get("confirmation_status", ""),
                 "runtime_failure_context": runtime_failure_context,
             }
         )

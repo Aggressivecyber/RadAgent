@@ -29,9 +29,11 @@ class _FakeGateway:
     def __init__(self, script: list[ModelCallResult]) -> None:
         self._script = list(script)
         self.calls = 0
+        self.call_kwargs: list[dict] = []
 
     async def call(self, **kwargs):  # noqa: ANN003 - matches gateway.call shape loosely
         self.calls += 1
+        self.call_kwargs.append(kwargs)
         if not self._script:
             pytest.fail("Fake gateway script exhausted")
         return self._script.pop(0)
@@ -236,6 +238,135 @@ async def test_loop_stall_nudge_retries_text_only_responses() -> None:
         if m.get("role") == "user" and "must call a tool" in m.get("content", "")
     ]
     assert len(nudge_msgs) == 2
+
+
+@pytest.mark.asyncio
+async def test_loop_stops_on_repeated_tool_result_fingerprint() -> None:
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir)
+    repeated_error = {
+        "ok": False,
+        "stage": "build",
+        "output": "src/SensitiveDetector.cc:31: error: invalid use of incomplete type",
+    }
+
+    async def repeated_dispatch(_name: str, _arguments: str):  # noqa: ANN001
+        return dict(repeated_error)
+
+    toolkit.dispatch = repeated_dispatch  # type: ignore[method-assign]
+    script = [
+        _result(tool_calls=[{"id": f"c{i}", "name": "build_project", "arguments": "{}"}])
+        for i in range(10)
+    ]
+    gw = _FakeGateway(script)
+
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="fix it",
+        toolkit=toolkit,
+        max_turns=10,
+        repeated_tool_result_limit=3,
+    )
+
+    assert result.stop_reason == "stalled_repeated_tool_result"
+    assert result.n_turns == 3
+    assert "SensitiveDetector.cc" in result.error
+    assert len(result.tool_audit) == 3
+
+
+@pytest.mark.asyncio
+async def test_loop_compacts_old_tool_results_before_next_model_call() -> None:
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir, tool_names=["build_project"])
+    large_error = {
+        "ok": False,
+        "output": (
+            "src/OutputManager.cc:264:7: error: 'fGeometryComponents' was not declared\n"
+            + ("detail line with generated source context\n" * 400)
+        ),
+    }
+
+    async def large_dispatch(_name: str, _arguments: str):  # noqa: ANN001
+        return dict(large_error)
+
+    toolkit.dispatch = large_dispatch  # type: ignore[method-assign]
+    script = [
+        _result(tool_calls=[{"id": "c1", "name": "build_project", "arguments": "{}"}]),
+        _result(tool_calls=[{"id": "c2", "name": "build_project", "arguments": "{}"}]),
+        _result(content="done"),
+    ]
+    gw = _FakeGateway(script)
+
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="fix it",
+        toolkit=toolkit,
+        max_turns=4,
+        max_history_chars=2_500,
+        preserve_recent_tool_messages=0,
+    )
+
+    assert result.stop_reason == "natural"
+    second_call_messages = gw.call_kwargs[1]["messages"]
+    tool_messages = [m for m in second_call_messages if m.get("role") == "tool"]
+    assert tool_messages
+    assert "compacted previous tool result" in tool_messages[0]["content"]
+    assert "fGeometryComponents" in tool_messages[0]["content"]
+    assert sum(len(str(m.get("content", ""))) for m in second_call_messages) < 2_500
+
+
+@pytest.mark.asyncio
+async def test_loop_compacts_large_write_file_tool_call_arguments() -> None:
+    """Provider history should not resend full file bodies from old write_file calls."""
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir, tool_names=["write_file"])
+    large_content = "int value = 1;\n" + ("// generated implementation detail\n" * 700)
+    script = [
+        _result(
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "name": "write_file",
+                    "arguments": '{"path": "src/OutputManager.cc", "content": '
+                    + repr(large_content).replace("'", '"')
+                    + "}",
+                }
+            ]
+        ),
+        _result(content="DONE"),
+    ]
+    gw = _FakeGateway(script)
+
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="write runtime output manager",
+        toolkit=toolkit,
+        max_turns=3,
+        max_history_chars=2_500,
+        preserve_recent_tool_messages=0,
+    )
+
+    assert result.stop_reason == "natural"
+    second_call_messages = gw.call_kwargs[1]["messages"]
+    assistant_messages = [
+        message for message in second_call_messages
+        if message.get("role") == "assistant" and message.get("tool_calls")
+    ]
+    assert assistant_messages
+    compacted_tool_call = assistant_messages[0]["tool_calls"][0]
+    compacted_arguments = compacted_tool_call["function"]["arguments"]
+    assert "src/OutputManager.cc" in compacted_arguments
+    assert "generated implementation detail" not in compacted_arguments
+    assert "content_chars" in compacted_arguments
 
 
 @pytest.mark.asyncio
