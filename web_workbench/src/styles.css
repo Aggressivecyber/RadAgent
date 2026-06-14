@@ -34,8 +34,27 @@ body {
   min-width: 320px;
 }
 
+.workbench-main {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(160, 150, 130, 0.55) transparent;
+}
+.workbench-main::-webkit-scrollbar {
+  width: 10px;
+}
+.workbench-main::-webkit-scrollbar-thumb {
+  background: rgba(160, 150, 130, 0.45);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.workbench-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(160, 150, 130, 0.7);
+  background-clip: padding-box;
+}
+
 body:has(.workbench-shell) {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 button,
@@ -1800,12 +1819,12 @@ p {
 .workbench-shell {
   display: grid;
   grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1.75fr) minmax(330px, 0.95fr);
+  align-items: start;
   gap: 14px;
   width: 100%;
-  height: 100vh;
-  min-height: 0;
+  min-height: 100vh;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 14px;
   background:
     radial-gradient(circle at 9% 12%, rgba(185, 65, 56, 0.08), transparent 28%),
@@ -1815,11 +1834,15 @@ p {
 }
 
 .agent-status-rail {
+  position: sticky;
+  top: 14px;
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 12px;
   min-width: 0;
-  min-height: 0;
+  height: calc(100vh - 28px);
+  max-height: calc(100vh - 28px);
+  min-height: calc(100vh - 28px);
   border: 1px solid rgba(222, 217, 207, 0.86);
   border-radius: 8px;
   padding: 14px;
@@ -1841,7 +1864,8 @@ p {
 }
 
 .agent-home-button:hover,
-.agent-quick-actions button:hover,
+.center-quick-actions button:hover,
+.agent-copilot-card button:hover,
 .artifact-workspace-header button:hover,
 .artifact-file-list button:hover {
   border-color: rgba(185, 65, 56, 0.38);
@@ -1849,15 +1873,54 @@ p {
   background: #fffaf8;
 }
 
+.copilot-rail-header,
 .agent-briefing,
 .agent-focus-card,
+.agent-workflow-status,
+.agent-copilot-card,
 .agent-rail-metrics article,
 .agent-activity-list,
+.copilot-history-window,
+.agent-activity-panel,
 .artifact-workspace,
 .artifact-preview-pane {
   border: 1px solid rgba(222, 217, 207, 0.88);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.78);
+}
+
+.copilot-rail-header {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 16% 12%, rgba(185, 65, 56, 0.1), transparent 32%),
+    rgba(255, 255, 255, 0.78);
+}
+
+.copilot-rail-header > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.copilot-rail-header strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: var(--radagent-promo-font);
+  font-size: clamp(24px, 2vw, 34px);
+  font-weight: 700;
+  line-height: 0.98;
+}
+
+.copilot-rail-header p {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.36;
 }
 
 .agent-briefing {
@@ -1873,7 +1936,10 @@ p {
 .agent-section-title,
 .artifact-workspace-header span,
 .artifact-preview-heading span,
+.agent-activity-summary span,
 .agent-focus-card span,
+.agent-workflow-status span,
+.agent-copilot-card span,
 .agent-rail-metrics span {
   color: rgba(104, 98, 90, 0.76);
   font-size: 11px;
@@ -1898,6 +1964,7 @@ p {
 
 .agent-briefing p,
 .agent-focus-card strong,
+.agent-workflow-status strong,
 .agent-rail-metrics strong,
 .agent-activity-list strong,
 .artifact-workspace-header strong,
@@ -1923,6 +1990,139 @@ p {
   line-height: 1.35;
 }
 
+.agent-workflow-status,
+.agent-copilot-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.agent-workflow-status {
+  background: rgba(251, 250, 247, 0.82);
+}
+
+.agent-workflow-status.running {
+  border-color: rgba(35, 120, 90, 0.26);
+  background: rgba(35, 120, 90, 0.07);
+}
+
+.agent-workflow-status.paused {
+  border-color: rgba(154, 106, 23, 0.28);
+  background: rgba(154, 106, 23, 0.08);
+}
+
+.agent-workflow-status.error {
+  border-color: rgba(185, 65, 56, 0.3);
+  background: rgba(185, 65, 56, 0.08);
+}
+
+.agent-workflow-status strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.28;
+}
+
+.agent-workflow-status p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.42;
+}
+
+.agent-copilot-card label {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-copilot-card input {
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid rgba(222, 217, 207, 0.92);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.agent-copilot-card input:focus {
+  outline: 0;
+  border-color: rgba(35, 120, 90, 0.42);
+  box-shadow: 0 0 0 3px rgba(35, 120, 90, 0.1);
+}
+
+.agent-copilot-card button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid rgba(35, 120, 90, 0.34);
+  border-radius: 8px;
+  color: var(--green);
+  background: rgba(35, 120, 90, 0.07);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.agent-copilot-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.copilot-history-window {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.copilot-history-message {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid rgba(222, 217, 207, 0.76);
+  padding-top: 10px;
+}
+
+.copilot-history-message:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.copilot-history-message > span {
+  justify-self: start;
+  border: 1px solid rgba(35, 120, 90, 0.22);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--green);
+  background: rgba(35, 120, 90, 0.06);
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.copilot-history-message.error > span {
+  border-color: rgba(185, 65, 56, 0.3);
+  color: var(--accent);
+  background: rgba(185, 65, 56, 0.08);
+}
+
+.copilot-history-message strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.copilot-history-message p,
+.copilot-empty-state {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.42;
+  white-space: pre-wrap;
+}
+
 .agent-rail-metrics {
   display: grid;
   grid-template-columns: 1fr;
@@ -1943,13 +2143,15 @@ p {
   line-height: 1.32;
 }
 
-.agent-quick-actions {
+.agent-quick-actions,
+.center-quick-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.agent-quick-actions button {
+.agent-quick-actions button,
+.center-quick-actions button {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   gap: 7px;
@@ -1963,31 +2165,37 @@ p {
   text-align: left;
 }
 
-.agent-quick-actions button.active {
+.agent-quick-actions button.active,
+.center-quick-actions button.active {
   border-color: rgba(185, 65, 56, 0.34);
   color: var(--accent-dark);
   background: rgba(185, 65, 56, 0.07);
 }
 
-.agent-quick-actions span {
+.agent-quick-actions span,
+.center-quick-actions span {
   display: grid;
   gap: 1px;
   min-width: 0;
 }
 
 .agent-quick-actions strong,
-.agent-quick-actions small {
+.agent-quick-actions small,
+.center-quick-actions strong,
+.center-quick-actions small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-quick-actions strong {
+.agent-quick-actions strong,
+.center-quick-actions strong {
   font-size: 12px;
   font-weight: 780;
 }
 
-.agent-quick-actions small {
+.agent-quick-actions small,
+.center-quick-actions small {
   color: rgba(104, 98, 90, 0.62);
   font-size: 10px;
   font-weight: 650;
@@ -2095,11 +2303,16 @@ p {
 
 .workbench-main {
   display: grid;
-  grid-template-rows: auto auto minmax(300px, 42vh) minmax(0, 1fr) auto auto auto;
-  height: 100vh;
-  min-width: 0;
+  grid-template-rows: auto auto auto auto auto auto auto;
+  justify-content: start;
+  align-content: start;
+  height: auto;
+  max-height: none;
   min-height: 0;
-  overflow: hidden;
+  min-width: 0;
+  overflow: visible;
+  overscroll-behavior: auto;
+  scroll-behavior: smooth;
   border: 1px solid rgba(222, 217, 207, 0.86);
   border-radius: 8px;
   background: rgba(251, 250, 247, 0.82);
@@ -2107,11 +2320,14 @@ p {
 }
 
 .workbench-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-  min-height: 104px;
+  min-height: 96px;
   border-bottom: 1px solid var(--line);
   padding: 18px 24px 16px;
   background:
@@ -2127,6 +2343,75 @@ p {
   font-size: clamp(20px, 2vw, 28px);
   font-weight: 700;
   line-height: 1.12;
+}
+
+.workbench-command-strip {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.center-command-top-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.center-workspace-metrics {
+  display: grid;
+  grid-template-columns: minmax(92px, 116px) minmax(112px, 156px);
+  gap: 8px;
+  min-width: 0;
+}
+
+.center-workspace-metrics article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgba(222, 217, 207, 0.88);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.center-workspace-metrics span {
+  color: rgba(104, 98, 90, 0.76);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.center-workspace-metrics strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.center-quick-actions {
+  min-width: 0;
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.center-quick-actions.top {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.center-quick-actions.bottom {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.center-quick-actions button {
+  min-height: 42px;
 }
 
 .workbench-header p {
@@ -2147,8 +2432,8 @@ p {
 
 .simulation-viewport {
   position: relative;
-  min-height: 320px;
-  margin: 18px 18px 0;
+  min-height: 260px;
+  margin: 12px 14px 0;
   overflow: hidden;
   border: 1px solid rgba(222, 217, 207, 0.88);
   border-radius: 8px;
@@ -2359,7 +2644,7 @@ p {
 
 .phase-track {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   border-bottom: 1px solid var(--line);
   padding: 10px 18px;
@@ -2425,12 +2710,150 @@ p {
   box-shadow: 0 0 0 5px rgba(185, 65, 56, 0.12);
 }
 
-.timeline-panel {
+.agent-activity-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
+  gap: 12px;
+  max-height: 260px;
+  min-height: 132px;
+  margin: 10px 14px 0;
+  padding: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.agent-activity-summary {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  border-right: 1px solid rgba(222, 217, 207, 0.82);
+  padding-right: 12px;
+}
+
+.agent-activity-summary strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 820;
+  line-height: 1.28;
+}
+
+.agent-activity-summary p {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.38;
+}
+
+.agent-activity-feed {
+  display: grid;
+  align-content: start;
+  gap: 8px;
   min-height: 0;
-  margin: 12px 18px 18px;
-  padding: 18px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.agent-activity-feed article {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  border-bottom: 1px solid rgba(222, 217, 207, 0.72);
+  padding-bottom: 8px;
+}
+
+.agent-activity-feed article svg {
+  margin-top: 2px;
+  color: var(--green);
+}
+
+.agent-activity-feed div {
+  min-width: 0;
+}
+
+.agent-activity-feed strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.agent-activity-feed span,
+.agent-activity-feed p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.confirmation-callout {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(154, 106, 23, 0.26);
+  padding: 12px 18px;
+  background:
+    radial-gradient(circle at 12% 24%, rgba(154, 106, 23, 0.11), transparent 28%),
+    rgba(255, 250, 240, 0.86);
+}
+
+.confirmation-callout div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.confirmation-callout span {
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.confirmation-callout strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.28;
+}
+
+.confirmation-callout p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.confirmation-callout button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  border: 1px solid rgba(154, 106, 23, 0.42);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #fff;
+  background: var(--amber);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.timeline-panel {
+  min-height: 260px;
+  max-height: 360px;
+  margin: 10px 14px 14px;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.timeline-scroll {
+  min-height: 0;
+  max-height: 300px;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-right: 4px;
 }
 
 .panel-title {
@@ -2571,6 +2994,7 @@ p {
 }
 
 .workflow-console {
+  position: relative;
   display: grid;
   gap: 12px;
   min-width: 0;
@@ -2580,6 +3004,185 @@ p {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(249, 246, 239, 0.96)),
     var(--paper);
+}
+
+.workflow-direct-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.28fr);
+  gap: 12px;
+  align-items: stretch;
+  border: 1px solid rgba(222, 217, 207, 0.9);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.workflow-instruction-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.workflow-instruction-field span,
+.workflow-action-column > small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.workflow-instruction-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 112px;
+  resize: vertical;
+  border: 1px solid rgba(222, 217, 207, 0.92);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workflow-instruction-field textarea:focus {
+  outline: 0;
+  border-color: rgba(185, 65, 56, 0.48);
+  box-shadow: 0 0 0 3px rgba(185, 65, 56, 0.1);
+}
+
+.workflow-action-column {
+  display: grid;
+  gap: 8px;
+  align-content: stretch;
+  min-width: 0;
+}
+
+.workflow-start-button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: center;
+  min-height: 72px;
+  border: 1px solid rgba(185, 65, 56, 0.72);
+  border-radius: 8px;
+  padding: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #bc4038, #8f302d);
+  box-shadow: 0 14px 28px rgba(137, 44, 39, 0.18);
+  text-align: left;
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.workflow-start-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 32px rgba(137, 44, 39, 0.24);
+}
+
+.workflow-start-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  transform: none;
+  box-shadow: none;
+}
+
+.workflow-start-button svg {
+  grid-row: 1 / span 2;
+}
+
+.workflow-start-button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 820;
+  line-height: 1.1;
+}
+
+.workflow-start-button small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.workflow-start-button.running {
+  border-color: rgba(35, 120, 90, 0.72);
+  background: linear-gradient(135deg, #23785a, #155f45);
+  box-shadow: 0 14px 28px rgba(35, 120, 90, 0.18);
+}
+
+.workflow-start-button.paused {
+  border-color: rgba(154, 106, 23, 0.58);
+  background: linear-gradient(135deg, #b94138, #9a6a17);
+}
+
+.workflow-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(23, 22, 20, 0.36);
+}
+
+.workflow-confirm-dialog {
+  display: grid;
+  gap: 10px;
+  width: min(460px, 100%);
+  border: 1px solid rgba(222, 217, 207, 0.9);
+  border-radius: 8px;
+  padding: 18px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(40, 34, 24, 0.24);
+}
+
+.workflow-confirm-dialog > span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.workflow-confirm-dialog strong {
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.workflow-confirm-dialog p {
+  max-height: 168px;
+  overflow: auto;
+  border: 1px solid rgba(222, 217, 207, 0.74);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--muted);
+  background: rgba(251, 250, 247, 0.78);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workflow-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.workflow-confirm-actions button {
+  min-height: 36px;
+  border: 1px solid rgba(222, 217, 207, 0.9);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: var(--ink);
+  background: #fff;
+  font-weight: 780;
+}
+
+.workflow-confirm-actions button:last-child {
+  border-color: rgba(185, 65, 56, 0.72);
+  color: #fff;
+  background: var(--accent);
 }
 
 .preset-control-grid {
@@ -2826,9 +3429,10 @@ p {
 
 .workflow-request {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 118px auto;
+  grid-template-columns: auto 118px;
   gap: 10px;
   align-items: end;
+  justify-content: start;
 }
 
 .workflow-request label,
@@ -3080,10 +3684,14 @@ p {
 }
 
 .artifact-workspace {
+  position: sticky;
+  top: 14px;
   display: grid;
-  grid-template-rows: auto minmax(180px, 0.92fr) minmax(220px, 1fr);
+  grid-template-rows: auto minmax(160px, 0.86fr) minmax(220px, 1fr);
   gap: 12px;
   min-width: 0;
+  height: calc(100vh - 28px);
+  max-height: calc(100vh - 28px);
   min-height: 0;
   padding: 14px;
   overflow: hidden;
@@ -3128,7 +3736,8 @@ p {
 
 .artifact-tree {
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid rgba(222, 217, 207, 0.76);
   border-radius: 8px;
   padding: 10px;
@@ -3225,6 +3834,42 @@ p {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.42;
+}
+
+.artifact-empty-state {
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  align-content: center;
+  text-align: left;
+}
+
+.artifact-empty-state strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.artifact-empty-state p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.42;
+}
+
+.artifact-empty-state div {
+  display: grid;
+  gap: 7px;
+}
+
+.artifact-empty-state span {
+  display: block;
+  border: 1px dashed rgba(222, 217, 207, 0.92);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: rgba(104, 98, 90, 0.82);
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  font-weight: 760;
 }
 
 .artifact-preview-pane {
@@ -3340,6 +3985,41 @@ p {
   display: grid;
   gap: 12px;
   margin-top: 16px;
+}
+
+.detail-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detail-actions button {
+  display: grid;
+  gap: 2px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+}
+
+.detail-actions button.primary {
+  border-color: rgba(35, 120, 90, 0.36);
+  color: var(--green);
+  background: rgba(35, 120, 90, 0.07);
+}
+
+.detail-actions button span {
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.detail-actions button small {
+  color: rgba(104, 98, 90, 0.62);
+  font-size: 10px;
+  font-weight: 680;
 }
 
 .overview-panel {
@@ -3827,12 +4507,25 @@ p {
   background: rgba(185, 65, 56, 0.08);
 }
 
+.model-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .model-settings-form button {
   min-height: 38px;
   border: 1px solid rgba(185, 65, 56, 0.45);
   border-radius: 8px;
+  padding: 0 12px;
   color: #fff;
   background: var(--accent);
+}
+
+.model-settings-form button[type='button'] {
+  border-color: rgba(31, 105, 160, 0.34);
+  color: #18567e;
+  background: rgba(31, 105, 160, 0.08);
 }
 
 .model-settings-form button:disabled {
@@ -3840,10 +4533,134 @@ p {
   opacity: 0.65;
 }
 
+.model-health-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.model-health-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.model-health-row > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.model-health-row strong,
+.model-health-row p,
+.model-health-row em {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.model-health-row strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.model-health-row p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-health-row em {
+  margin-top: 3px;
+  color: var(--green);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.model-health-row.error {
+  border-color: rgba(185, 65, 56, 0.3);
+}
+
+.model-health-row.skipped {
+  background: #fbfaf7;
+}
+
 .confirmation-panel {
   display: grid;
   gap: 12px;
   margin-top: 16px;
+}
+
+.confirmation-summary-card,
+.confirmation-review-section {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.confirmation-summary-card span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.confirmation-summary-card strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 820;
+}
+
+.confirmation-summary-card p,
+.confirmation-review-section p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.44;
+}
+
+.confirmation-review-section.warning {
+  border-color: rgba(154, 106, 23, 0.32);
+  background: rgba(154, 106, 23, 0.07);
+}
+
+.confirmation-review-section h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.confirmation-review-section article {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid rgba(222, 217, 207, 0.82);
+  padding-top: 8px;
+}
+
+.confirmation-review-section article span {
+  justify-self: start;
+  border: 1px solid rgba(35, 120, 90, 0.22);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--green);
+  background: rgba(35, 120, 90, 0.06);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.confirmation-review-section article strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .confirmation-actions {
@@ -3917,13 +4734,20 @@ p {
   }
 
   .workbench-shell {
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
     grid-template-columns: 1fr;
     width: 100%;
     height: auto;
     min-width: 0;
     min-height: 100vh;
     overflow: visible;
+  }
+
+  .agent-status-rail,
+  .artifact-workspace {
+    position: static;
+    max-height: none;
+    min-height: 0;
   }
 
   .project-grid {
@@ -3959,8 +4783,12 @@ p {
   }
 
   .phase-track {
-    grid-template-columns: repeat(10, minmax(136px, 1fr));
-    overflow-x: auto;
+    grid-template-columns: repeat(5, minmax(112px, 1fr));
+  }
+
+  .center-quick-actions.top,
+  .center-quick-actions.bottom {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .workbench-sidebar nav {
@@ -4206,6 +5034,12 @@ body:has(.workbench-shell) {
     grid-template-rows: auto auto minmax(220px, 32vh) auto auto;
   }
 
+  .center-workspace-metrics,
+  .center-quick-actions.top,
+  .center-quick-actions.bottom {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .simulation-viewport {
     min-height: 220px;
   }
@@ -4233,9 +5067,24 @@ body:has(.workbench-shell) {
     min-height: 32px;
   }
 
+  .phase-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflow-direct-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .confirmation-callout {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .confirmation-callout button {
+    width: 100%;
+  }
+
   .workflow-request,
-  .preset-control-grid,
-  .preset-summary,
   .control-section-grid {
     grid-template-columns: 1fr;
   }

@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 import subprocess
+import threading
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from agent_core.app.schemas import (
     JobStatus,
     ModelConfigUpdate,
     ModelConfigView,
+    ModelHealthReport,
+    ModelHealthTierResult,
     ModelTierConfig,
     PhaseResult,
     RadAgentEvent,
@@ -31,15 +34,18 @@ from agent_core.app.schemas import (
 from agent_core.config.environment import (
     DEFAULT_ENV_PATH,
     load_environment,
+    model_endpoint_requires_api_key,
     write_project_env_values,
 )
 from agent_core.gates.gate_runner import normalize_run_mode
+from agent_core.graph.main_routes import route_after_context, route_after_gates
 from agent_core.models.registry import thinking_for_task
 from agent_core.models.schemas import ModelTask, ModelTier
 from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.storage import RadAgentStore
 from agent_core.workspace.manager import WorkspaceManager
 from agent_core.workspace.paths import (
+    HC_REQUEST_TEMPLATE,
     HC_REPORT,
     STAGE_GATE_VALIDATION,
     STAGE_HUMAN_CONFIRMATION,
@@ -232,6 +238,8 @@ class RadAgentAppService:
         self._events: list[RadAgentEvent] = []
         self._event_callback = event_callback
         self._subscribers: list[asyncio.Queue[RadAgentEvent]] = []
+        self._background_continue_lock = threading.Lock()
+        self._background_continue_thread: threading.Thread | None = None
 
     # ------------------------------------------------------------------
     # Model configuration
@@ -422,6 +430,172 @@ class RadAgentAppService:
             payload=updated.model_dump(mode="json"),
         )
         return updated
+
+    async def test_model_health(
+        self,
+        *,
+        per_tier_timeout_s: float = 12.0,
+    ) -> ModelHealthReport:
+        """Run a small, frontend-safe model connectivity and latency probe."""
+        config = self.get_model_config()
+        tiers: dict[str, ModelHealthTierResult] = {}
+        for tier in (ModelTier.LITE, ModelTier.PRO, ModelTier.MAX):
+            tier_config = config.tiers.get(tier.value)
+            if tier_config is None:
+                tiers[tier.value] = ModelHealthTierResult(
+                    tier=tier.value,
+                    status="skipped",
+                    error="Model tier is not configured.",
+                )
+                continue
+
+            base = {
+                "tier": tier.value,
+                "model_name": tier_config.model_name,
+                "base_url": tier_config.base_url,
+                "api_key_env": tier_config.api_key_env,
+            }
+            if not tier_config.base_url:
+                tiers[tier.value] = ModelHealthTierResult(
+                    **base,
+                    status="skipped",
+                    error="Missing model base URL.",
+                )
+                continue
+            if (
+                model_endpoint_requires_api_key(tier_config.base_url)
+                and not tier_config.api_key_configured
+            ):
+                tiers[tier.value] = ModelHealthTierResult(
+                    **base,
+                    status="skipped",
+                    error=f"Missing API key env: {tier_config.api_key_env}",
+                )
+                continue
+
+            try:
+                result = await asyncio.wait_for(
+                    self._probe_model_health_tier(tier),
+                    timeout=max(0.1, float(per_tier_timeout_s)),
+                )
+            except TimeoutError:
+                tiers[tier.value] = ModelHealthTierResult(
+                    **base,
+                    status="error",
+                    error=f"Model health check timed out after {per_tier_timeout_s:.1f}s.",
+                )
+                continue
+            tiers[tier.value] = ModelHealthTierResult(
+                **base,
+                status="error" if result.error else "ok",
+                latency_ms=float(result.latency_ms or 0.0),
+                response_preview=_clip_short_text(result.content, limit=120),
+                error=result.error or "",
+            )
+
+        report = ModelHealthReport(tiers=tiers)
+        self._emit(
+            "model_health_checked",
+            status="success" if all(row.status == "ok" for row in tiers.values()) else "warning",
+            summary="Model health test completed.",
+            payload=report.model_dump(mode="json"),
+        )
+        return report
+
+    async def _probe_model_health_tier(self, tier: ModelTier) -> Any:
+        from agent_core.models.gateway import get_model_gateway
+
+        gateway = get_model_gateway()
+        return await gateway.call(
+            ModelTask.SIMPLE_EXTRACTION,
+            "Reply with exactly OK.",
+            "Health check. Reply OK.",
+            tier=tier,
+            temperature=0.0,
+            max_tokens=8,
+            metadata={
+                "module_name": "model_health",
+                "job_id": str(self.state.get("job_id", "")),
+            },
+        )
+
+    def continue_in_background(self, *, reason: str = "") -> bool:
+        """Continue the active workflow without blocking a UI request."""
+        with self._background_continue_lock:
+            if (
+                self._background_continue_thread is not None
+                and self._background_continue_thread.is_alive()
+            ):
+                self._emit(
+                    "workflow_continue_busy",
+                    status="warning",
+                    summary="Workflow continuation is already running.",
+                    payload={"reason": reason},
+                )
+                return False
+            thread = threading.Thread(
+                target=self._run_background_continue,
+                args=(reason,),
+                name=f"radagent-continue-{self.run_id[:8]}",
+                daemon=True,
+            )
+            self._background_continue_thread = thread
+
+        self._emit(
+            "workflow_continue_queued",
+            status="running",
+            summary=reason or "continue",
+            payload={"reason": reason},
+        )
+        thread.start()
+        return True
+
+    def _run_background_continue(self, reason: str) -> None:
+        self._emit(
+            "workflow_continue_started",
+            status="running",
+            summary=reason or "continue",
+            payload={"reason": reason},
+        )
+        try:
+            status = asyncio.run(self.run_until_blocked())
+        except Exception as exc:
+            self._set_termination_reason(str(exc))
+            self._emit(
+                "workflow_continue_failed",
+                status="error",
+                summary=str(exc),
+                payload={"reason": reason},
+            )
+            logger.exception("Background workflow continuation failed")
+        else:
+            status_value = str(getattr(status, "status", "") or "")
+            if status_value == "failed":
+                failure_reason = str(
+                    self.state.get("termination_reason", "") or "Workflow continuation failed."
+                )
+                self._emit(
+                    "workflow_continue_failed",
+                    status="error",
+                    summary=failure_reason,
+                    payload={
+                        "reason": failure_reason,
+                        "trigger": reason,
+                        "status": status_value,
+                        "current_phase": str(getattr(status, "current_phase", "")),
+                    },
+                )
+                return
+            self._emit(
+                "workflow_continue_finished",
+                status="success",
+                summary=reason or "continue",
+                payload={"reason": reason},
+            )
+        finally:
+            with self._background_continue_lock:
+                if self._background_continue_thread is threading.current_thread():
+                    self._background_continue_thread = None
 
     # ------------------------------------------------------------------
     # Event stream
@@ -771,6 +945,8 @@ class RadAgentAppService:
                 return self.get_status()
             result = await self.run_phase(phase)
             if not result.success:
+                if self._route_after_failed_phase(phase):
+                    continue
                 return result.status
             if (
                 phase == "g4_modeling"
@@ -791,6 +967,55 @@ class RadAgentAppService:
                 return self.get_status()
         self._emit("job_finished", status="success", summary="Pipeline complete.")
         return self.get_status()
+
+    def _route_after_failed_phase(self, phase: str) -> bool:
+        if phase == "gate":
+            return self._route_failed_gate()
+        return False
+
+    def _route_failed_gate(self) -> bool:
+        target_node = route_after_gates(self.state)
+        target_phase = self._phase_for_route_node(target_node)
+        if target_phase is None or target_phase == "report":
+            return False
+        if bool(self.state.get("max_retries_reached")):
+            return False
+        self._clear_previous_failure()
+        self.current_phase_idx = PIPELINE_PHASES.index(target_phase)
+        self.completed_phases = [
+            completed_phase
+            for completed_phase in self.completed_phases
+            if PIPELINE_PHASES.index(completed_phase) < self.current_phase_idx
+        ]
+        self._emit(
+            "phase_retry_routed",
+            status="warning",
+            phase="gate",
+            summary=f"Gate failure routed to {target_phase}.",
+            payload={
+                "from_phase": "gate",
+                "target_phase": target_phase,
+                "target_node": target_node,
+                "failed_gates": self.state.get("failed_gates", []),
+                "retry_count": self.state.get("retry_count", 0),
+            },
+        )
+        self._persist_phase_state(target_phase, status_override="running")
+        return True
+
+    def _phase_for_route_node(self, node: str) -> str | None:
+        if node == "artifact_subgraph":
+            return "artifact"
+        if node == "report_subgraph":
+            return "report"
+        suffix = "_subgraph"
+        if node.endswith(suffix):
+            phase = node[: -len(suffix)]
+            if phase in PIPELINE_PHASES:
+                return phase
+        if node in PIPELINE_PHASES:
+            return node
+        return None
 
     async def step(self) -> PhaseResult:
         if not self.state:
@@ -884,16 +1109,31 @@ class RadAgentAppService:
     ) -> JobStatus:
         if not self.state.get("job_id"):
             raise RuntimeError("No active job.")
+        decision = str(response.get("user_decision", "") or "")
+        confirmation_idx = PIPELINE_PHASES.index("human_confirmation")
+        if (
+            decision == "approve"
+            and self.state.get("confirmation_status") == "approved"
+            and self.current_phase_idx > confirmation_idx
+        ):
+            self._emit(
+                "human_confirmation_already_approved",
+                status="info",
+                phase="human_confirmation",
+                summary="Approval already recorded.",
+                payload=response,
+            )
+            return self.get_status()
         self.state["raw_human_response"] = response
         self._emit(
             "human_confirmation_submitted",
             status="info",
             phase="human_confirmation",
-            summary=str(response.get("user_decision", "")),
+            summary=decision,
             payload=response,
         )
-        if self.current_phase_idx != PIPELINE_PHASES.index("human_confirmation"):
-            self.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+        if self.current_phase_idx != confirmation_idx:
+            self.current_phase_idx = confirmation_idx
         await self.run_phase("human_confirmation")
         if auto_continue:
             await self.run_until_blocked()
@@ -908,6 +1148,8 @@ class RadAgentAppService:
 
     def _phase_failure_reason(self, phase: str) -> str:
         """Return a blocking phase-level failure reason, or empty string."""
+        if phase == "context" and route_after_context(self.state) != "task_planning_subgraph":
+            return f"context status is {self.state.get('context_decision') or 'missing'}"
         expectations = {
             "task_planning": ("task_planning_status", {"passed"}),
             "g4_modeling": ("g4_modeling_status", {"passed"}),
@@ -1066,7 +1308,7 @@ class RadAgentAppService:
             for gate in gate_results
         )
 
-    def resume_job(self, job_id: str) -> JobStatus:
+    def resume_job(self, job_id: str, *, clear_failure: bool = False) -> JobStatus:
         snapshot = self.store.latest_state_snapshot(job_id)
         job = self.store.get_job(job_id)
         if snapshot is None and job is None:
@@ -1089,9 +1331,36 @@ class RadAgentAppService:
             }
             self.current_phase_idx = int(job["current_phase_idx"])
             self.completed_phases = list(PIPELINE_PHASES[: self.current_phase_idx])
+        self._normalize_resumed_progress()
+        if clear_failure:
+            self._clear_previous_failure()
         self.execution_mode = str(self.state.get("execution_mode", self.execution_mode))
         self._emit("job_resumed", status="success", summary=job_id)
         return self.get_status()
+
+    def _normalize_resumed_progress(self) -> None:
+        highest_completed_idx = -1
+        for phase in self.completed_phases:
+            if phase in PIPELINE_PHASES:
+                highest_completed_idx = max(highest_completed_idx, PIPELINE_PHASES.index(phase))
+        if highest_completed_idx >= 0:
+            self.current_phase_idx = max(self.current_phase_idx, highest_completed_idx + 1)
+        self.current_phase_idx = min(self.current_phase_idx, len(PIPELINE_PHASES))
+        if "g4_codegen" in self.completed_phases:
+            self.state["g4_codegen_status"] = "passed"
+        if "patch" in self.completed_phases:
+            self.state["patch_status"] = "applied"
+        if "gate" in self.completed_phases:
+            self.state["validation_status"] = "passed"
+        if "artifact" in self.completed_phases:
+            self.state["artifact_status"] = "collected"
+        if self.current_phase_idx < len(PIPELINE_PHASES):
+            current_phase = PIPELINE_PHASES[self.current_phase_idx]
+            self.state["current_node"] = f"{current_phase}_subgraph"
+
+    def _clear_previous_failure(self) -> None:
+        self.state.pop("termination_reason", None)
+        self.state["errors"] = []
 
     def list_jobs(self, *, include_all_projects: bool = False) -> list[dict[str, Any]]:
         self.store.import_existing_jobs()
@@ -1245,23 +1514,58 @@ class RadAgentAppService:
 
     def get_confirmation_review(self, job_id: str | None = None) -> dict[str, Any]:
         state = self._state_for_job(job_id)
+        confirmation_dir = (
+            Path(str(state["job_workspace"])) / STAGE_HUMAN_CONFIRMATION
+            if state.get("job_workspace")
+            else None
+        )
         report_path = str(state.get("confirmation_report_path", ""))
-        if not report_path and state.get("job_workspace"):
-            candidate = Path(str(state["job_workspace"])) / STAGE_HUMAN_CONFIRMATION / HC_REPORT
+        if not report_path and confirmation_dir is not None:
+            candidate = confirmation_dir / HC_REPORT
             if candidate.is_file():
                 report_path = str(candidate)
         preview = ""
         if report_path and Path(report_path).is_file():
             preview = Path(report_path).read_text(encoding="utf-8", errors="replace")[:8000]
+        request_path = str(state.get("confirmation_request_path", ""))
+        if not request_path and confirmation_dir is not None:
+            round_n = int(state.get("human_confirmation_round", 1) or 1)
+            candidate = confirmation_dir / HC_REQUEST_TEMPLATE.format(round=round_n)
+            if not candidate.is_file():
+                candidates = sorted(confirmation_dir.glob("confirmation_request_round_*.json"))
+                candidate = candidates[-1] if candidates else candidate
+            if candidate.is_file():
+                request_path = str(candidate)
+        proposal_path = str(state.get("proposed_model_completion_path", ""))
+        if not proposal_path and confirmation_dir is not None:
+            candidate = confirmation_dir / "proposed_model_completion.json"
+            if candidate.is_file():
+                proposal_path = str(candidate)
         return {
             "status": state.get("confirmation_status", ""),
             "required": bool(state.get("human_confirmation_required")),
             "unconfirmed_assumptions_count": state.get("unconfirmed_assumptions_count", 0),
             "report_path": report_path,
+            "request_path": request_path,
             "record_path": state.get("confirmation_record_path", ""),
             "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
+            "confirmation_request": self._read_json_file(request_path),
+            "proposed_model_completion": self._read_json_file(proposal_path),
             "preview": preview,
         }
+
+    def _read_json_file(self, path: str) -> dict[str, Any]:
+        if not path:
+            return {}
+        target = Path(path)
+        if not target.is_file():
+            return {}
+        try:
+            data = json.loads(target.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.debug("Failed to read JSON file %s: %s", path, exc)
+            return {}
+        return data if isinstance(data, dict) else {}
 
     def get_credibility_report(self, job_id: str | None = None) -> dict[str, Any]:
         state = self._state_for_job(job_id)

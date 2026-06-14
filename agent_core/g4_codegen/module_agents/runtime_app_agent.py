@@ -600,12 +600,6 @@ def _ir_geometry_components_for_output(g4_model_ir_subset: dict[str, Any]) -> li
 
 
 def _geometry_size_mm(dimensions: dict[str, Any], factor: float) -> list[float]:
-    if any(key in dimensions for key in ("dx", "dy", "dz")):
-        return [
-            _scaled_float(dimensions.get("dx"), factor, 1.0),
-            _scaled_float(dimensions.get("dy"), factor, 1.0),
-            _scaled_float(dimensions.get("dz"), factor, 1.0),
-        ]
     radius = _float_or_none(
         dimensions.get("rmax")
         if dimensions.get("rmax") is not None
@@ -617,6 +611,12 @@ def _geometry_size_mm(dimensions: dict[str, Any], factor: float) -> list[float]:
             diameter,
             diameter,
             _scaled_float(dimensions.get("dz") or dimensions.get("height"), factor, 1.0),
+        ]
+    if any(key in dimensions for key in ("dx", "dy", "dz")):
+        return [
+            _scaled_float(dimensions.get("dx"), factor, 1.0),
+            _scaled_float(dimensions.get("dy"), factor, 1.0),
+            _scaled_float(dimensions.get("dz"), factor, 1.0),
         ]
     return [
         _scaled_float(dimensions.get("x"), factor, 1.0),

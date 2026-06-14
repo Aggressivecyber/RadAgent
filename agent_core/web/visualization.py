@@ -30,6 +30,7 @@ def build_visualization_payload(
         warnings=warnings,
     )
     deposits = _load_deposits(root, warnings)
+    source_rays = _source_rays_from_model_ir(model_ir or {}, geometry)
 
     if not deposits and root is not None:
         deposits = _load_deposits_from_edep_csv(root / "edep_3d.csv", warnings)
@@ -54,6 +55,7 @@ def build_visualization_payload(
             },
         },
         "geometry": geometry,
+        "source_rays": source_rays,
         "tracks": tracks,
         "deposits": deposits,
         "stats": stats,
@@ -88,13 +90,16 @@ def _load_geometry(
         components = [_normalize_component(item) for item in _as_list(data.get("components"))]
         components = [item for item in components if item]
         if components:
+            components = _repair_geometry_components_from_model_ir(components, model_ir, warnings)
             units = data.get("units") if isinstance(data.get("units"), dict) else {"length": "mm"}
             return {"units": units, "components": components}
 
     if root is not None:
         warnings.append("geometry_view.json missing")
+    length_factor = _model_ir_length_factor(model_ir)
+    coordinate_factor = _model_ir_coordinate_factor(model_ir)
     components = [
-        _normalize_ir_component(item)
+        _normalize_ir_component(item, length_factor=length_factor, coordinate_factor=coordinate_factor)
         for item in _as_list(model_ir.get("components"))
     ]
     return {
@@ -175,6 +180,107 @@ def _load_deposits_from_edep_csv(path: Path, warnings: list[str]) -> list[dict[s
     return deposits
 
 
+def _source_rays_from_model_ir(
+    model_ir: dict[str, Any],
+    geometry: dict[str, Any],
+) -> list[dict[str, Any]]:
+    coordinate_factor = _model_ir_coordinate_factor(model_ir)
+    extent = _geometry_extent_mm(geometry)
+    rays: list[dict[str, Any]] = []
+    for source in _as_list(model_ir.get("sources")):
+        row = _as_dict(source)
+        beam = _as_dict(row.get("beam"))
+        start = _scaled_vector_mm(beam.get("position"), coordinate_factor)
+        direction = _normalize_direction(_vector(beam.get("direction"), fallback=[0.0, 0.0, 1.0]))
+        if not direction:
+            continue
+        length = _source_ray_length_mm(start, direction, geometry, extent)
+        end = [start[index] + direction[index] * length for index in range(3)]
+        rays.append(
+            {
+                "source_id": _text(row.get("source_id") or row.get("id"), f"source_{len(rays) + 1}"),
+                "particle": _text(row.get("particle_type") or row.get("particle"), "particle"),
+                "energy": _as_dict(row.get("energy")),
+                "start_mm": [_round_mm(value) for value in start],
+                "end_mm": [_round_mm(value) for value in end],
+            }
+        )
+    return rays
+
+
+def _source_ray_length_mm(
+    start: list[float],
+    direction: list[float],
+    geometry: dict[str, Any],
+    extent: float,
+) -> float:
+    bounds = _geometry_bounds_mm(geometry)
+    if bounds is None:
+        return max(extent * 1.5, 80.0)
+    min_point, max_point = bounds
+    corners = [
+        [x, y, z]
+        for x in (min_point[0], max_point[0])
+        for y in (min_point[1], max_point[1])
+        for z in (min_point[2], max_point[2])
+    ]
+    far_projection = max(
+        sum((corner[index] - start[index]) * direction[index] for index in range(3))
+        for corner in corners
+    )
+    return max(far_projection + extent * 0.08, 80.0)
+
+
+def _geometry_extent_mm(geometry: dict[str, Any]) -> float:
+    bounds = _geometry_bounds_mm(geometry)
+    if bounds is None:
+        return 50.0
+    min_point, max_point = bounds
+    return max(abs(max_point[index] - min_point[index]) for index in range(3)) or 50.0
+
+
+def _geometry_bounds_mm(geometry: dict[str, Any]) -> tuple[list[float], list[float]] | None:
+    components = [
+        item
+        for item in _as_list(geometry.get("components"))
+        if isinstance(item, dict) and "world" not in _text(item.get("role") or item.get("id")).lower()
+    ]
+    if not components:
+        components = [item for item in _as_list(geometry.get("components")) if isinstance(item, dict)]
+    if not components:
+        return None
+    min_point = [float("inf"), float("inf"), float("inf")]
+    max_point = [float("-inf"), float("-inf"), float("-inf")]
+    for component in components:
+        size = _vector(component.get("size_mm") or component.get("size"), fallback=[0.0, 0.0, 0.0])
+        position = _vector(component.get("position_mm") or component.get("position"))
+        for index in range(3):
+            half = abs(size[index]) / 2.0
+            min_point[index] = min(min_point[index], position[index] - half)
+            max_point[index] = max(max_point[index], position[index] + half)
+    if any(value == float("inf") for value in min_point):
+        return None
+    return min_point, max_point
+
+
+
+def _scaled_vector_mm(value: Any, length_factor: float) -> list[float]:
+    vector = _vector(value)
+    return [item * length_factor for item in vector]
+
+
+def _normalize_direction(value: list[float]) -> list[float]:
+    magnitude = sum(item * item for item in value) ** 0.5
+    if magnitude <= 0.0:
+        return []
+    return [item / magnitude for item in value]
+
+
+def _round_mm(value: float) -> float:
+    rounded = round(value, 6)
+    return 0.0 if rounded == -0.0 else rounded
+
+
 def _normalize_component(value: Any) -> dict[str, Any]:
     row = _as_dict(value)
     component_id = _text(row.get("id") or row.get("component_id"))
@@ -195,7 +301,112 @@ def _normalize_component(value: Any) -> dict[str, Any]:
     }
 
 
-def _normalize_ir_component(value: Any) -> dict[str, Any]:
+def _repair_geometry_components_from_model_ir(
+    components: list[dict[str, Any]],
+    model_ir: dict[str, Any],
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    ir_components = {
+        str(item.get("component_id") or item.get("id") or ""): item
+        for item in _as_list(model_ir.get("components"))
+        if isinstance(item, dict)
+    }
+    if not ir_components:
+        return components
+    length_factor = _model_ir_length_factor(model_ir)
+    repaired: list[dict[str, Any]] = []
+    for component in components:
+        row = dict(component)
+        component_id = _text(row.get("id"))
+        ir_component = _as_dict(ir_components.get(component_id))
+        if _should_repair_cylinder_radius(row, ir_component):
+            repaired_size = _cylinder_size_from_ir(ir_component, length_factor)
+            if repaired_size:
+                row["size_mm"] = repaired_size
+                warnings.append(f"geometry_view.json cylinder radius repaired from model IR for {component_id}")
+        repaired.append(row)
+    return repaired
+
+
+def _model_ir_length_factor(model_ir: dict[str, Any]) -> float:
+    unit_contract = _as_dict(model_ir.get("unit_contract"))
+    global_units = _as_dict(model_ir.get("global_units"))
+    unit = _text(unit_contract.get("length_unit") or global_units.get("length"), "mm")
+    return _length_unit_to_mm_factor(unit)
+
+
+def _model_ir_coordinate_factor(model_ir: dict[str, Any]) -> float:
+    unit_contract = _as_dict(model_ir.get("unit_contract"))
+    coordinate_system = _as_dict(model_ir.get("coordinate_system"))
+    global_units = _as_dict(model_ir.get("global_units"))
+    unit = _text(
+        unit_contract.get("coordinate_unit")
+        or coordinate_system.get("unit")
+        or unit_contract.get("length_unit")
+        or global_units.get("length"),
+        "mm",
+    )
+    return _length_unit_to_mm_factor(unit)
+
+
+def _length_unit_to_mm_factor(unit: str) -> float:
+    normalized = unit.strip().lower().replace("µ", "u")
+    if normalized in {"um", "micrometer", "micrometers", "micron", "microns"}:
+        return 0.001
+    if normalized in {"cm", "centimeter", "centimeters"}:
+        return 10.0
+    if normalized in {"m", "meter", "meters"}:
+        return 1000.0
+    return 1.0
+
+
+def _should_repair_cylinder_radius(component: dict[str, Any], ir_component: dict[str, Any]) -> bool:
+    shape = _text(component.get("shape") or component.get("geometry_type")).lower()
+    ir_shape = _text(ir_component.get("geometry_type") or ir_component.get("shape")).lower()
+    if "cylinder" not in shape and "tube" not in shape and "cylinder" not in ir_shape and "tube" not in ir_shape:
+        return False
+    size = component.get("size_mm")
+    if not isinstance(size, list) or len(size) < 3:
+        return False
+    radius_value = _ir_radius_value(_as_dict(ir_component.get("dimensions")))
+    if radius_value is None:
+        return False
+    radial_size = max(_float(size[0], 0.0), _float(size[1], 0.0))
+    return radial_size <= 1.01
+
+
+def _cylinder_size_from_ir(ir_component: dict[str, Any], length_factor: float) -> list[float]:
+    dimensions = _as_dict(ir_component.get("dimensions"))
+    radius = _ir_radius_value(dimensions)
+    if radius is None:
+        return []
+    height = dimensions.get("dz")
+    if height is None:
+        height = dimensions.get("height")
+    if height is None:
+        height = dimensions.get("z")
+    diameter_mm = float(radius) * 2.0 * length_factor
+    height_mm = _float(height, 1.0) * length_factor
+    return [diameter_mm, diameter_mm, height_mm]
+
+
+def _ir_radius_value(dimensions: dict[str, Any]) -> float | None:
+    for key in ("rmax", "radius", "r"):
+        if dimensions.get(key) is None:
+            continue
+        try:
+            return float(dimensions[key])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _normalize_ir_component(
+    value: Any,
+    *,
+    length_factor: float = 1.0,
+    coordinate_factor: float = 1.0,
+) -> dict[str, Any]:
     row = _as_dict(value)
     component_id = _text(row.get("component_id") or row.get("id"))
     if not component_id:
@@ -208,30 +419,39 @@ def _normalize_ir_component(value: Any) -> dict[str, Any]:
         "shape": _text(row.get("geometry_type") or row.get("shape"), "box"),
         "material": _text(row.get("material_id") or row.get("material")),
         "role": ",".join(str(item) for item in _as_list(row.get("roles"))),
-        "size_mm": _dimension_size(dimensions),
-        "position_mm": _vector(placement.get("position") or row.get("position")),
+        "size_mm": _dimension_size(dimensions, length_factor),
+        "position_mm": _scaled_vector_mm(placement.get("position") or row.get("position"), coordinate_factor),
         "rotation_deg": _vector(placement.get("rotation") or row.get("rotation")),
         "color": "",
         "opacity": 0.22 if component_id.lower() == "world" else 0.42,
     }
 
 
-def _dimension_size(dimensions: dict[str, Any]) -> list[float]:
+def _dimension_size(dimensions: dict[str, Any], factor: float = 1.0) -> list[float]:
+    radius = _ir_radius_value(dimensions)
+    if radius is not None:
+        height = dimensions.get("dz")
+        if height is None:
+            height = dimensions.get("height")
+        if height is None:
+            height = dimensions.get("z")
+        diameter = radius * 2.0 * factor
+        return [diameter, diameter, _float(height, 1.0) * factor]
     return [
-        _dimension_axis(dimensions, "x"),
-        _dimension_axis(dimensions, "y"),
-        _dimension_axis(dimensions, "z"),
+        _dimension_axis(dimensions, "x", factor),
+        _dimension_axis(dimensions, "y", factor),
+        _dimension_axis(dimensions, "z", factor),
     ]
 
 
-def _dimension_axis(dimensions: dict[str, Any], axis: str) -> float:
+def _dimension_axis(dimensions: dict[str, Any], axis: str, factor: float = 1.0) -> float:
     if f"d{axis}" in dimensions:
-        return _float(dimensions.get(f"d{axis}"), 1.0)
+        return _float(dimensions.get(f"d{axis}"), 1.0) * factor
     if f"half_{axis}" in dimensions:
-        return _float(dimensions.get(f"half_{axis}"), 0.5) * 2.0
+        return _float(dimensions.get(f"half_{axis}"), 0.5) * 2.0 * factor
     if axis in dimensions:
-        return _float(dimensions.get(axis), 1.0)
-    return 1.0
+        return _float(dimensions.get(axis), 1.0) * factor
+    return 1.0 * factor
 
 
 def _normalize_track(value: Any) -> dict[str, Any]:

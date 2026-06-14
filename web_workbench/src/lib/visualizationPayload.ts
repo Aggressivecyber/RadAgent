@@ -29,10 +29,19 @@ export type VisualizationDeposit = {
   edepMeV: number
 }
 
+export type VisualizationSourceRay = {
+  sourceId: string
+  particle: string
+  energy: Record<string, unknown>
+  start: Vector3
+  end: Vector3
+}
+
 export type VisualizationPayload = {
   status: 'waiting' | 'partial' | 'ready'
   visualEvents: number
   components: VisualizationComponent[]
+  sourceRays: VisualizationSourceRay[]
   tracks: VisualizationTrack[]
   deposits: VisualizationDeposit[]
   warnings: string[]
@@ -128,6 +137,23 @@ function normalizeDeposit(value: unknown): VisualizationDeposit | null {
   }
 }
 
+function normalizeSourceRay(value: unknown): VisualizationSourceRay | null {
+  const row = asRecord(value)
+  const sourceId = text(row.source_id ?? row.sourceId ?? row.id)
+  const start = vector(row.start_mm ?? row.start)
+  const end = vector(row.end_mm ?? row.end)
+  if (!sourceId || start.every((item, index) => item === end[index])) {
+    return null
+  }
+  return {
+    sourceId,
+    particle: text(row.particle, 'particle'),
+    energy: asRecord(row.energy),
+    start,
+    end,
+  }
+}
+
 export function normalizeVisualizationPayload(value: unknown): VisualizationPayload {
   const row = asRecord(value)
   const source = asRecord(row.source)
@@ -141,11 +167,15 @@ export function normalizeVisualizationPayload(value: unknown): VisualizationPayl
   const deposits = asArray(row.deposits)
     .map(normalizeDeposit)
     .filter((deposit): deposit is VisualizationDeposit => Boolean(deposit))
+  const sourceRays = asArray(row.source_rays ?? row.sourceRays)
+    .map(normalizeSourceRay)
+    .filter((sourceRay): sourceRay is VisualizationSourceRay => Boolean(sourceRay))
 
   return {
     status: normalizeStatus(row.status),
     visualEvents: numberValue(source.visual_events ?? row.visualEvents, 100),
     components,
+    sourceRays,
     tracks,
     deposits,
     warnings: asArray(row.warnings).map((item) => text(item)).filter(Boolean),

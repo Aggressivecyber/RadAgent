@@ -13,6 +13,13 @@ export type DetailSection = {
   rows: DetailField[]
 }
 
+export type DetailAction = {
+  label: string
+  labelEn: string
+  command: string
+  intent: 'primary' | 'neutral'
+}
+
 export type DetailPanel = {
   title: string
   status: string
@@ -20,6 +27,7 @@ export type DetailPanel = {
   metrics: DetailMetric[]
   sections: DetailSection[]
   preview: string
+  actions: DetailAction[]
 }
 
 const detailViews = new Set(['job', 'gate', 'revision', 'project'])
@@ -132,6 +140,22 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
         },
       ],
       preview: text(row.user_query || row.objective || row.summary),
+      actions: text(row.job_id)
+        ? [
+            {
+              label: '切换到工作区',
+              labelEn: 'Switch workspace',
+              command: `/resume ${text(row.job_id)}`,
+              intent: 'neutral',
+            },
+            {
+              label: '继续运行',
+              labelEn: 'Continue run',
+              command: `/retry ${text(row.job_id)}`,
+              intent: 'primary',
+            },
+          ]
+        : [],
     }
   }
 
@@ -156,6 +180,7 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
         },
       ],
       preview: text(row.message || row.summary || row.reason),
+      actions: [],
     }
   }
 
@@ -181,6 +206,7 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
         },
       ],
       preview: request,
+      actions: [],
     }
   }
 
@@ -205,6 +231,7 @@ export function createDetailPanel(view: string, data: unknown): DetailPanel | nu
         },
       ],
       preview: text(row.description),
+      actions: [],
     }
   }
 

@@ -27,6 +27,20 @@ describe('detail inspector presentation', () => {
     })
     expect(panel?.sections[0].title).toBe('工作流')
     expect(panel?.sections[0].rows).toContainEqual({ label: '工作区', value: '/workspace/radagent' })
+    expect(panel?.actions).toEqual([
+      {
+        label: '切换到工作区',
+        labelEn: 'Switch workspace',
+        command: '/resume job-1',
+        intent: 'neutral',
+      },
+      {
+        label: '继续运行',
+        labelEn: 'Continue run',
+        command: '/retry job-1',
+        intent: 'primary',
+      },
+    ])
   })
 
   it('formats gate, revision, and project records as first-class details', () => {

@@ -1,4 +1,5 @@
 import type { CommandCatalogEntry, JobStatus, RadAgentEvent } from './api'
+import { createReviewCallout } from './workbenchPresentation'
 
 export type OverviewMetric = {
   label: string
@@ -138,19 +139,39 @@ export function createOverviewPanel({ status, events, commands }: OverviewInput)
     }
   }
 
-  const alerts: OverviewAlert[] = status.needs_confirmation
+  const reviewCallout = createReviewCallout(status)
+  const alerts: OverviewAlert[] = reviewCallout
     ? [
         {
           status: 'warning',
-          title: '需要确认',
-          detail: '继续前需要审查当前人工确认门禁。',
+          title: reviewCallout.eyebrow,
+          detail: reviewCallout.detail,
         },
       ]
     : []
 
-  const actions = status.needs_confirmation
+  const actions = reviewCallout
     ? [
-        action(commands, '处理确认', 'Review', 'confirm', 'primary'),
+        {
+          label: reviewCallout.primaryLabel,
+          labelEn: reviewCallout.kind === 'visual-review' ? 'Workbench' : 'Review',
+          command: reviewCallout.primaryCommand,
+          tip: reviewCallout.title,
+          tone: 'primary' as const,
+          mode: 'execute' as const,
+        },
+        ...(reviewCallout.secondaryCommand
+          ? [
+              {
+                label: reviewCallout.secondaryLabel || '记录通过',
+                labelEn: 'Approve',
+                command: reviewCallout.secondaryCommand,
+                tip: reviewCallout.title,
+                tone: 'neutral' as const,
+                mode: 'execute' as const,
+              },
+            ]
+          : []),
         action(commands, '查看门禁', 'Gates', 'gates'),
       ]
     : [

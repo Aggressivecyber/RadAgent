@@ -3,17 +3,24 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import {
+  VISIBLE_PARTICLE_TRACK_LIMIT,
   layerStats,
-  visibleParticleTracks,
   type Vector3,
   type VisualizationComponent,
   type VisualizationPayload,
+  type VisualizationSourceRay,
+  type VisualizationTrack,
 } from '../lib/visualizationPayload'
 
 type SimulationViewportProps = {
   payload: VisualizationPayload | null
   loading?: boolean
   onRefresh: () => void
+}
+
+type ViewportBounds = {
+  min: Vector3
+  max: Vector3
 }
 
 const materialColors: Record<string, number> = {
@@ -34,6 +41,7 @@ const emptyPayload: VisualizationPayload = {
   status: 'waiting',
   visualEvents: 100,
   components: [],
+  sourceRays: [],
   tracks: [],
   deposits: [],
   warnings: [],
@@ -65,16 +73,190 @@ function toVector3(point: Vector3): THREE.Vector3 {
   return new THREE.Vector3(point[0], point[1], point[2])
 }
 
-function componentMesh(component: VisualizationComponent): THREE.Object3D {
+function componentText(component: VisualizationComponent): string {
+  return `${component.id} ${component.name} ${component.material} ${component.role ?? ''}`.toLowerCase()
+}
+
+export function isWorldComponent(component: VisualizationComponent): boolean {
+  const text = componentText(component)
+  return text.includes('world') || component.role?.toLowerCase().includes('world') === true
+}
+
+function isShellComponent(component: VisualizationComponent): boolean {
+  const text = componentText(component)
+  return (
+    isWorldComponent(component) ||
+    text.includes('shield') ||
+    text.includes('veto') ||
+    text.includes('container') ||
+    text.includes('housing') ||
+    text.includes('dead_layer') ||
+    text.includes('dead layer')
+  )
+}
+
+export function focusComponentsForViewport(payload: VisualizationPayload): VisualizationComponent[] {
+  const focusComponents = payload.components.filter((component) => !isWorldComponent(component))
+  return focusComponents.length > 0 ? focusComponents : payload.components
+}
+
+export function depositPointSizeForExtent(extent: number): number {
+  return Math.max(0.75, Math.min(1.8, extent * 0.006))
+}
+
+function trackPathLength(track: VisualizationTrack): number {
+  return track.points.reduce((total, point, index) => {
+    if (index === 0) {
+      return total
+    }
+    const previous = track.points[index - 1]
+    return total + Math.hypot(point[0] - previous[0], point[1] - previous[1], point[2] - previous[2])
+  }, 0)
+}
+
+function isPrimaryLikeParticle(particle: string): boolean {
+  const normalized = particle.toLowerCase()
+  return (
+    normalized.includes('gamma') ||
+    normalized.includes('photon') ||
+    normalized.includes('proton') ||
+    normalized.includes('ion') ||
+    normalized.includes('neutron')
+  )
+}
+
+function trackPriority(track: VisualizationTrack): number {
+  const particle = track.particle.toLowerCase()
+  const incomingBonus = particle.includes('gamma') || particle.includes('photon') || particle.includes('neutron') ? 2200 : 0
+  const chargedPrimaryBonus = particle.includes('proton') || particle.includes('ion') ? 900 : 0
+  return incomingBonus + chargedPrimaryBonus + trackPathLength(track) * 12 + track.energyMeV * 35 + track.points.length
+}
+
+export function orderedParticleTracks(
+  payload: VisualizationPayload,
+  showParticles: boolean,
+  limit = VISIBLE_PARTICLE_TRACK_LIMIT,
+): VisualizationTrack[] {
+  if (!showParticles) {
+    return []
+  }
+  return [...payload.tracks]
+    .sort((left, right) => {
+      const scoreDelta = trackPriority(right) - trackPriority(left)
+      if (scoreDelta !== 0) {
+        return scoreDelta
+      }
+      return left.eventId - right.eventId || left.trackId - right.trackId
+    })
+    .slice(0, limit)
+}
+
+export function highlightedParticleTracks(
+  payload: VisualizationPayload,
+  showParticles: boolean,
+  limit = 12,
+): VisualizationTrack[] {
+  if (!showParticles) {
+    return []
+  }
+  return orderedParticleTracks(payload, true, VISIBLE_PARTICLE_TRACK_LIMIT)
+    .filter((track) => isPrimaryLikeParticle(track.particle))
+    .slice(0, limit)
+}
+
+function rounded(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(3) : '0.000'
+}
+
+function vectorSignature(point: Vector3): string {
+  return `${rounded(point[0])},${rounded(point[1])},${rounded(point[2])}`
+}
+
+function hashText(value: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+export function visualizationSceneSignature(payload: VisualizationPayload): string {
+  const parts: string[] = [payload.status, String(payload.visualEvents)]
+  for (const component of payload.components) {
+    parts.push(
+      [
+        'c',
+        component.id,
+        component.shape,
+        component.material,
+        component.role ?? '',
+        vectorSignature(component.size),
+        vectorSignature(component.position),
+        vectorSignature(component.rotation),
+        rounded(component.opacity),
+      ].join(':'),
+    )
+  }
+  for (const sourceRay of payload.sourceRays ?? []) {
+    parts.push(
+      [
+        's',
+        sourceRay.sourceId,
+        sourceRay.particle,
+        vectorSignature(sourceRay.start),
+        vectorSignature(sourceRay.end),
+      ].join(':'),
+    )
+  }
+  for (const track of payload.tracks) {
+    parts.push(
+      [
+        't',
+        track.eventId,
+        track.trackId,
+        track.particle,
+        rounded(track.energyMeV),
+        track.points.map(vectorSignature).join('|'),
+      ].join(':'),
+    )
+  }
+  for (const deposit of payload.deposits) {
+    parts.push(
+      [
+        'd',
+        deposit.eventId,
+        deposit.trackId,
+        deposit.volume,
+        vectorSignature(deposit.position),
+        rounded(deposit.edepMeV),
+      ].join(':'),
+    )
+  }
+  return `${payload.components.length}:${payload.tracks.length}:${payload.deposits.length}:${hashText(parts.join('\n'))}`
+}
+
+function componentOpacity(component: VisualizationComponent): number {
+  if (isWorldComponent(component)) {
+    return 0.035
+  }
+  if (isShellComponent(component)) {
+    return Math.min(component.opacity, 0.24)
+  }
+  return Math.min(component.opacity, 0.56)
+}
+
+function componentMesh(component: VisualizationComponent, focusExtent: number): THREE.Object3D {
   const lowerShape = component.shape.toLowerCase()
-  const isWorld = component.id.toLowerCase() === 'world' || component.role?.toLowerCase().includes('world')
-  const opacity = isWorld ? 0.08 : component.opacity
+  const isWorld = isWorldComponent(component)
   const material = new THREE.MeshStandardMaterial({
     color: colorFor(component),
     transparent: true,
-    opacity,
+    opacity: componentOpacity(component),
     roughness: 0.52,
     metalness: 0.08,
+    depthWrite: false,
+    side: THREE.DoubleSide,
     wireframe: isWorld || component.role?.toLowerCase().includes('container'),
   })
 
@@ -82,7 +264,10 @@ function componentMesh(component: VisualizationComponent): THREE.Object3D {
   if (lowerShape.includes('sphere')) {
     geometry = new THREE.SphereGeometry(Math.max(component.size[0], component.size[1], component.size[2]) / 2, 32, 18)
   } else if (lowerShape.includes('tube') || lowerShape.includes('cylinder')) {
-    const radius = Math.max(component.size[0], component.size[1]) / 2
+    const radius = Math.max(
+      Math.max(component.size[0], component.size[1]) / 2,
+      isWorld ? 0 : Math.min(3.5, Math.max(0.75, focusExtent * 0.01)),
+    )
     geometry = new THREE.CylinderGeometry(radius, radius, Math.max(component.size[2], 0.1), 36)
     geometry.rotateX(Math.PI / 2)
   } else {
@@ -93,28 +278,63 @@ function componentMesh(component: VisualizationComponent): THREE.Object3D {
     )
   }
 
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.position.set(...component.position)
-  mesh.rotation.set(
+  const group = new THREE.Group()
+  group.position.set(...component.position)
+  group.rotation.set(
     THREE.MathUtils.degToRad(component.rotation[0]),
     THREE.MathUtils.degToRad(component.rotation[1]),
     THREE.MathUtils.degToRad(component.rotation[2]),
   )
-  return mesh
+
+  const mesh = new THREE.Mesh(geometry, material)
+  group.add(mesh)
+
+  if (!isWorld) {
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geometry, 12),
+      new THREE.LineBasicMaterial({
+        color: colorFor(component),
+        transparent: true,
+        opacity: 0.86,
+        depthTest: false,
+      }),
+    )
+    group.add(edges)
+  }
+
+  return group
 }
 
-function boundsFor(payload: VisualizationPayload): THREE.Box3 {
+function modelBoundsFor(payload: VisualizationPayload): THREE.Box3 {
   const box = new THREE.Box3()
-  for (const component of payload.components) {
+  for (const component of focusComponentsForViewport(payload)) {
     const half = new THREE.Vector3(component.size[0] / 2, component.size[1] / 2, component.size[2] / 2)
     const center = toVector3(component.position)
     box.expandByPoint(center.clone().sub(half))
     box.expandByPoint(center.clone().add(half))
   }
+  return box
+}
+
+function boundsFor(payload: VisualizationPayload): THREE.Box3 {
+  const box = modelBoundsFor(payload)
   for (const track of payload.tracks) {
-    for (const point of track.points) {
-      box.expandByPoint(toVector3(point))
+    if (isPrimaryLikeParticle(track.particle)) {
+      for (const point of track.points) {
+        box.expandByPoint(toVector3(point))
+      }
     }
+  }
+  if (box.isEmpty()) {
+    for (const track of payload.tracks) {
+      for (const point of track.points) {
+        box.expandByPoint(toVector3(point))
+      }
+    }
+  }
+  for (const sourceRay of payload.sourceRays ?? []) {
+    box.expandByPoint(toVector3(sourceRay.start))
+    box.expandByPoint(toVector3(sourceRay.end))
   }
   for (const deposit of payload.deposits) {
     box.expandByPoint(toVector3(deposit.position))
@@ -124,6 +344,143 @@ function boundsFor(payload: VisualizationPayload): THREE.Box3 {
     box.expandByPoint(new THREE.Vector3(5, 5, 5))
   }
   return box
+}
+
+function pointInsideBounds(point: Vector3, bounds: ViewportBounds): boolean {
+  return (
+    point[0] >= bounds.min[0] &&
+    point[0] <= bounds.max[0] &&
+    point[1] >= bounds.min[1] &&
+    point[1] <= bounds.max[1] &&
+    point[2] >= bounds.min[2] &&
+    point[2] <= bounds.max[2]
+  )
+}
+
+export function trackPointsForViewport(track: VisualizationTrack, bounds: ViewportBounds): Vector3[] {
+  if (isPrimaryLikeParticle(track.particle)) {
+    return track.points
+  }
+  const visiblePoints = track.points.filter((point) => pointInsideBounds(point, bounds))
+  return visiblePoints.length >= 2 ? visiblePoints : []
+}
+
+function compactTrackPoints(track: VisualizationTrack, viewportBounds: ViewportBounds): THREE.Vector3[] {
+  const points: THREE.Vector3[] = []
+  for (const point of trackPointsForViewport(track, viewportBounds)) {
+    const vector = toVector3(point)
+    const previous = points[points.length - 1]
+    if (!previous || previous.distanceToSquared(vector) > 1e-8) {
+      points.push(vector)
+    }
+  }
+  return points
+}
+
+function colorForTrack(track: VisualizationTrack): number {
+  const particle = track.particle.toLowerCase()
+  if (particle.includes('gamma') || particle.includes('photon')) {
+    return 0xf2cf3a
+  }
+  if (particle.includes('proton') || particle.includes('ion')) {
+    return 0xff8d3a
+  }
+  if (particle.includes('neutron')) {
+    return 0x7c5cff
+  }
+  return 0x20a4ff
+}
+
+function sourceRayColor(ray: VisualizationSourceRay): number {
+  const particle = ray.particle.toLowerCase()
+  if (particle.includes('gamma') || particle.includes('photon')) {
+    return 0xf0c929
+  }
+  if (particle.includes('proton') || particle.includes('ion')) {
+    return 0xff8d3a
+  }
+  if (particle.includes('neutron')) {
+    return 0x7c5cff
+  }
+  return 0x1b7fce
+}
+
+function addSourceRay(root: THREE.Group, ray: VisualizationSourceRay, extent: number): void {
+  const start = toVector3(ray.start)
+  const end = toVector3(ray.end)
+  const delta = end.clone().sub(start)
+  const length = delta.length()
+  if (length <= 1e-8) {
+    return
+  }
+  const color = sourceRayColor(ray)
+  const radius = Math.max(0.45, Math.min(1.8, extent * 0.008))
+  const curve = new THREE.LineCurve3(start, end)
+  root.add(
+    new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 16, radius, 8, false),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.88,
+        depthTest: false,
+      }),
+    ),
+  )
+  root.add(
+    new THREE.ArrowHelper(
+      delta.normalize(),
+      start,
+      length,
+      color,
+      Math.max(5, Math.min(14, extent * 0.07)),
+      Math.max(2, Math.min(7, extent * 0.035)),
+    ),
+  )
+}
+
+function addParticleTrack(
+  root: THREE.Group,
+  track: VisualizationTrack,
+  index: number,
+  extent: number,
+  viewportBounds: ViewportBounds,
+): void {
+  const points = compactTrackPoints(track, viewportBounds)
+  if (points.length < 2) {
+    return
+  }
+  const color = colorForTrack(track)
+  const geometry = new THREE.BufferGeometry().setFromPoints(points)
+  const isHighlighted = isPrimaryLikeParticle(track.particle)
+  const opacity = isHighlighted ? 0.74 : 0.3
+  root.add(
+    new THREE.Line(
+      geometry,
+      new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        depthTest: true,
+      }),
+    ),
+  )
+
+  if (isHighlighted && index < 12) {
+    const tubeRadius = Math.max(0.18, Math.min(1.25, extent * 0.004))
+    const curve = new THREE.CatmullRomCurve3(points)
+    root.add(
+      new THREE.Mesh(
+        new THREE.TubeGeometry(curve, Math.max(points.length * 4, 8), tubeRadius, 6, false),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.46,
+          depthTest: false,
+        }),
+      ),
+    )
+  }
 }
 
 function disposeObjectTree(object: THREE.Object3D): void {
@@ -148,10 +505,16 @@ export default function SimulationViewport({
   onRefresh,
 }: SimulationViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const cameraStateRef = useRef<{
+    position: THREE.Vector3
+    target: THREE.Vector3
+  } | null>(null)
+  const previousSceneSignatureRef = useRef<string | null>(null)
   const [showParticles, setShowParticles] = useState(true)
   const [showReferenceGrid, setShowReferenceGrid] = useState(true)
   const data = payload ?? emptyPayload
   const stats = useMemo(() => layerStats(data, showParticles), [data, showParticles])
+  const sceneSignature = useMemo(() => visualizationSceneSignature(data), [data])
 
   useEffect(() => {
     const container = containerRef.current
@@ -186,21 +549,30 @@ export default function SimulationViewport({
     root.add(new THREE.AxesHelper(8))
     const hasSceneData = data.components.length > 0 || data.tracks.length > 0 || data.deposits.length > 0
 
-    for (const component of data.components) {
-      root.add(componentMesh(component))
+    const bounds = boundsFor(data)
+    const center = new THREE.Vector3()
+    const size = new THREE.Vector3()
+    bounds.getCenter(center)
+    bounds.getSize(size)
+    const extent = Math.max(size.x, size.y, size.z, 12)
+    const modelBounds = modelBoundsFor(data)
+    const clipBounds = modelBounds.isEmpty() ? bounds : modelBounds
+    const viewportBounds: ViewportBounds = {
+      min: [clipBounds.min.x, clipBounds.min.y, clipBounds.min.z],
+      max: [clipBounds.max.x, clipBounds.max.y, clipBounds.max.z],
     }
 
-    const visibleTracks = visibleParticleTracks(data, showParticles)
+    for (const component of data.components) {
+      root.add(componentMesh(component, extent))
+    }
+
+    const visibleTracks = orderedParticleTracks(data, showParticles)
     if (showParticles) {
-      for (const track of visibleTracks) {
-        const points = track.points.map(toVector3)
-        const geometry = new THREE.BufferGeometry().setFromPoints(points)
-        const material = new THREE.LineBasicMaterial({
-          color: track.particle.toLowerCase().includes('gamma') ? 0xe5cf4a : 0x9fd2ff,
-          transparent: true,
-          opacity: 0.78,
-        })
-        root.add(new THREE.Line(geometry, material))
+      for (const sourceRay of data.sourceRays) {
+        addSourceRay(root, sourceRay, extent)
+      }
+      for (const [index, track] of visibleTracks.entries()) {
+        addParticleTrack(root, track, index, extent, viewportBounds)
       }
     }
 
@@ -215,19 +587,15 @@ export default function SimulationViewport({
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
       const material = new THREE.PointsMaterial({
         color: 0xff3b30,
-        size: 7,
-        sizeAttenuation: false,
-        depthTest: false,
+        size: depositPointSizeForExtent(extent),
+        sizeAttenuation: true,
+        depthTest: true,
+        transparent: true,
+        opacity: 0.78,
       })
       root.add(new THREE.Points(geometry, material))
     }
 
-    const bounds = boundsFor(data)
-    const center = new THREE.Vector3()
-    const size = new THREE.Vector3()
-    bounds.getCenter(center)
-    bounds.getSize(size)
-    const extent = Math.max(size.x, size.y, size.z, 12)
     if (showReferenceGrid) {
       const grid = new THREE.GridHelper(extent * 1.9, 24, 0xb94138, 0x8f867b)
       const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material]
@@ -261,11 +629,27 @@ export default function SimulationViewport({
       root.add(marker)
     }
 
-    controls.target.copy(center)
-    camera.position.set(center.x + extent * 1.35, center.y + extent * 0.9, center.z + extent * 1.55)
+    const canReuseCamera = previousSceneSignatureRef.current === sceneSignature && cameraStateRef.current
+    if (canReuseCamera && cameraStateRef.current) {
+      camera.position.copy(cameraStateRef.current.position)
+      controls.target.copy(cameraStateRef.current.target)
+    } else {
+      controls.target.copy(center)
+      camera.position.set(center.x + extent * 1.35, center.y + extent * 0.9, center.z + extent * 1.55)
+    }
     camera.near = Math.max(extent / 10000, 0.01)
     camera.far = extent * 100
     camera.updateProjectionMatrix()
+    controls.update()
+
+    const saveCameraState = () => {
+      cameraStateRef.current = {
+        position: camera.position.clone(),
+        target: controls.target.clone(),
+      }
+    }
+    controls.addEventListener('change', saveCameraState)
+    previousSceneSignatureRef.current = sceneSignature
 
     let frame = 0
     const resize = () => {
@@ -288,14 +672,16 @@ export default function SimulationViewport({
     frame = window.requestAnimationFrame(render)
 
     return () => {
+      saveCameraState()
       window.cancelAnimationFrame(frame)
       observer.disconnect()
+      controls.removeEventListener('change', saveCameraState)
       controls.dispose()
       renderer.dispose()
       disposeObjectTree(root)
       container.removeChild(renderer.domElement)
     }
-  }, [data, showParticles, showReferenceGrid])
+  }, [sceneSignature, showParticles, showReferenceGrid])
 
   return (
     <section className="simulation-viewport" aria-label="Geant4 3D visualization">

@@ -1,13 +1,14 @@
 import {
   Activity,
-  Home,
+  CircleDot,
   PanelRightOpen,
+  Pause,
   Play,
   Send,
   TerminalSquare,
   X,
 } from 'lucide-react'
-import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { FormEvent, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchCommandCatalog,
   fetchArtifactContent,
@@ -17,28 +18,24 @@ import {
   fetchStatus,
   fetchVisualization,
   sendCommand,
+  testModelHealth,
   updateModelConfig,
   type ArtifactContent,
   type ArtifactSummary,
   type CommandCatalogEntry,
   type JobStatus,
+  type ModelHealthReport,
   type RadAgentEvent,
   type ModelUpdatePayload,
 } from '../lib/api'
 import { buildRunCommand, buildSimulateCommand, composeCommandTemplate } from '../lib/commandAssist'
 import { commandPresentation } from '../lib/commandPresentation'
-import {
-  buildSimulationPresetPrompt,
-  createSimulationPresetSummary,
-  defaultSimulationPresetSelection,
-  simulationPresetGroups,
-  type SimulationPresetSelection,
-} from '../lib/simulationPresets'
 import { createSubmissionFeedback, type SubmissionStatus } from '../lib/submissionFeedback'
 import { createWorkbenchControlSections } from '../lib/workbenchControls'
 import {
   createAgentCockpit,
   createPhaseTrack,
+  createReviewCallout,
   createWorkbenchHero,
   presentTimelineRow,
 } from '../lib/workbenchPresentation'
@@ -55,7 +52,6 @@ import type { HomeLaunchTarget } from '../lib/homeNavigation'
 import AgentStatusRail from './AgentStatusRail'
 import ArtifactWorkspace from './ArtifactWorkspace'
 import InspectorPanel from './InspectorPanel'
-import PresetTaskPreview from './PresetTaskPreview'
 import SimulationViewportFallback from './SimulationViewportFallback'
 
 const SimulationViewport = lazy(() => import('./SimulationViewport'))
@@ -65,9 +61,11 @@ type WorkbenchShellProps = {
   launchTarget?: HomeLaunchTarget | null
 }
 
+type WorkflowRunState = 'idle' | 'confirming' | 'running' | 'paused'
+
 const navItems = [
   { label: '概览', labelEn: 'Overview', command: '', inspector: 'overview', icon: Activity },
-  { label: '运行', labelEn: 'Run', command: '/help', inspector: 'help', icon: Play },
+  { label: '运行', labelEn: 'Run', command: '', inspector: 'overview', icon: Play },
   { label: '状态', labelEn: 'Status', command: '/status', inspector: 'status', icon: Activity },
   { label: '作业', labelEn: 'Jobs', command: '/jobs', inspector: 'jobs', icon: TerminalSquare },
   { label: '产物', labelEn: 'Files', command: '/artifacts', inspector: 'artifacts', icon: TerminalSquare },
@@ -100,6 +98,30 @@ function timelineDetails(row: TimelineRow) {
   )
 }
 
+function compactWorkspaceLabel(path: string) {
+  return path.split('/').filter(Boolean).at(-1) || path
+}
+
+const selectedJobStorageKey = 'radagent:selected-job-id'
+
+function readStoredSelectedJobId() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  return window.localStorage.getItem(selectedJobStorageKey) || ''
+}
+
+function rememberSelectedJobId(jobId: string) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  if (jobId) {
+    window.localStorage.setItem(selectedJobStorageKey, jobId)
+  } else {
+    window.localStorage.removeItem(selectedJobStorageKey)
+  }
+}
+
 function TimelineItem({ row }: { row: TimelineRow }) {
   const presented = presentTimelineRow(row)
   return (
@@ -126,12 +148,12 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
   const [events, setEvents] = useState<RadAgentEvent[]>([])
   const [state, setState] = useState<WorkbenchState>(() => createInitialWorkbenchState())
   const [composerText, setComposerText] = useState('')
-  const [runRequest, setRunRequest] = useState('重点评估屏蔽后硅敏感体剂量')
-  const [presetSelection, setPresetSelection] = useState<SimulationPresetSelection>(defaultSimulationPresetSelection)
+  const [runRequest, setRunRequest] = useState('')
   const [simulationEvents, setSimulationEvents] = useState(1000)
   const [loadState, setLoadState] = useState('连接中')
   const [visualization, setVisualization] = useState<VisualizationPayload | null>(null)
   const [visualizationLoading, setVisualizationLoading] = useState(false)
+  const [selectedJobId, setSelectedJobIdState] = useState(() => readStoredSelectedJobId())
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([])
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactContent | null>(null)
   const [artifactLoading, setArtifactLoading] = useState(false)
@@ -140,7 +162,18 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
   const [submission, setSubmission] = useState<{ status: SubmissionStatus; command?: string; message?: string }>({
     status: 'idle',
   })
+  const [workflowRunState, setWorkflowRunState] = useState<WorkflowRunState>('idle')
+  const workflowRunStateRef = useRef<WorkflowRunState>('idle')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    workflowRunStateRef.current = workflowRunState
+  }, [workflowRunState])
+
+  function setSelectedJobId(jobId: string) {
+    setSelectedJobIdState(jobId)
+    rememberSelectedJobId(jobId)
+  }
 
   async function refreshVisualization(jobId = '') {
     setVisualizationLoading(true)
@@ -193,22 +226,35 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
 
     async function loadInitialData() {
       try {
-        const [catalog, currentStatus, currentEvents, currentVisualization] = await Promise.all([
+        const [catalog, currentStatus, currentEvents] = await Promise.all([
           fetchCommandCatalog(),
           fetchStatus(),
           fetchEvents(),
-          fetchVisualization().catch(() => null),
         ])
+        if (cancelled) {
+          return
+        }
+        let initialJobId = selectedJobId || currentStatus.job_id
+        if (!initialJobId) {
+          const jobs = await sendCommand('/jobs').catch(() => null)
+          const firstJob =
+            jobs?.ok && Array.isArray(jobs.data) && jobs.data[0] && typeof jobs.data[0] === 'object'
+              ? String((jobs.data[0] as { job_id?: unknown }).job_id || '')
+              : ''
+          initialJobId = firstJob
+        }
+        const currentVisualization = await fetchVisualization(initialJobId).catch(() => null)
         if (cancelled) {
           return
         }
         setCommands(catalog)
         setStatus(currentStatus)
+        setSelectedJobId(initialJobId)
         setEvents(currentEvents)
         if (currentVisualization) {
           setVisualization(normalizeVisualizationPayload(currentVisualization))
         }
-        await refreshArtifacts(currentStatus.job_id)
+        await refreshArtifacts(initialJobId)
         setState((current) => reduceEvents(current, currentEvents))
         setLoadState(`${catalog.length} 个功能可用`)
       } catch (error) {
@@ -234,11 +280,10 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       return
     }
     setRunRequest(launchTarget.prompt)
-    setComposerText(composeCommandTemplate('/run'))
     setLoadState(`示例已载入 ${launchTarget.exampleId}`)
     setState((current) => ({
       ...current,
-      activeInspector: 'help',
+      activeInspector: 'overview',
       timeline: [
         ...current.timeline,
         {
@@ -263,9 +308,13 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           setStatus(nextStatus)
           setEvents(nextEvents)
           setState((current) => reduceEvents(current, nextEvents))
-          await refreshArtifacts(nextStatus.job_id)
+          const refreshJobId = selectedJobId || nextStatus.job_id
+          if (!selectedJobId && nextStatus.job_id) {
+            setSelectedJobId(nextStatus.job_id)
+          }
+          await refreshArtifacts(refreshJobId)
           try {
-            const nextVisualization = await fetchVisualization(nextStatus.job_id)
+            const nextVisualization = await fetchVisualization(refreshJobId)
             setVisualization(normalizeVisualizationPayload(nextVisualization))
           } catch {
             // Keep the last rendered 3D payload during transient polling failures.
@@ -277,7 +326,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     }, 2000)
 
     return () => window.clearInterval(timer)
-  }, [])
+  }, [selectedJobId])
 
   const activeData = state.activeInspector === 'status' ? status : state.inspectorData[state.activeInspector]
   const workbenchHero = createWorkbenchHero(status)
@@ -292,15 +341,9 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       }),
     [status, events, artifacts, selectedArtifact],
   )
-  const generatedRunRequest = useMemo(
-    () => buildSimulationPresetPrompt(presetSelection, runRequest),
-    [presetSelection, runRequest],
-  )
-  const presetSummary = useMemo(
-    () => createSimulationPresetSummary(presetSelection, runRequest),
-    [presetSelection, runRequest],
-  )
   const submissionFeedback = useMemo(() => createSubmissionFeedback(submission), [submission])
+  const workflowInstruction = runRequest.trim()
+  const reviewCallout = createReviewCallout(status)
 
   const controlSections = useMemo(() => createWorkbenchControlSections(commands), [commands])
   const quickActions = useMemo(
@@ -308,8 +351,15 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       navItems.map((item) => ({
         label: item.label,
         labelEn: item.labelEn,
-        active: state.activeInspector === item.inspector,
+        active:
+          item.labelEn === 'Run'
+            ? workflowRunState === 'confirming' || workflowRunState === 'running'
+            : state.activeInspector === item.inspector,
         onSelect: () => {
+          if (item.labelEn === 'Run') {
+            focusWorkflowConsole()
+            return
+          }
           if (item.command) {
             selectCommand(item.command)
           } else {
@@ -318,17 +368,21 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           }
         },
       })),
-    [state.activeInspector],
+    [state.activeInspector, workflowRunState],
   )
+  const topQuickActions = quickActions.slice(0, 3)
+  const bottomQuickActions = quickActions.slice(3)
 
-  async function executeCommand(text: string) {
+  async function executeCommand(text: string, options: { workflow?: boolean } = {}) {
     const trimmed = text.trim()
     if (!trimmed || busy) {
       return
     }
     const commandName = trimmed.replace(/^\//, '').split(/\s+/)[0]
     setBusy(true)
-    setSubmission({ status: 'running', command: commandName })
+    if (options.workflow) {
+      setSubmission({ status: 'running', command: commandName })
+    }
     setLoadState(`执行中 ${commandPresentation({ name: commandName, description: commandName }).primary}`)
     try {
       const result = await sendCommand(trimmed)
@@ -336,15 +390,39 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       const [nextStatus, nextEvents] = await Promise.all([fetchStatus(), fetchEvents()])
       setStatus(nextStatus)
       setEvents(nextEvents)
-      await refreshVisualization(nextStatus.job_id)
-      await refreshArtifacts(nextStatus.job_id)
+      const resultJobId =
+        result.data && typeof result.data === 'object' && 'job_id' in result.data
+          ? String((result.data as { job_id?: unknown }).job_id || '')
+          : ''
+      const refreshJobId = resultJobId || nextStatus.job_id || selectedJobId
+      if (refreshJobId) {
+        setSelectedJobId(refreshJobId)
+      }
+      await refreshVisualization(refreshJobId)
+      await refreshArtifacts(refreshJobId)
       setState((current) => reduceEvents(current, nextEvents))
       setLoadState(result.ok ? `${result.command || '功能'} 已完成` : result.error || '执行失败')
-      setSubmission({
-        status: result.ok ? 'success' : 'error',
-        command: result.command || commandName,
-        message: result.ok ? undefined : result.error || '执行失败',
-      })
+      if (options.workflow) {
+        if (result.ok) {
+          if (workflowRunStateRef.current !== 'paused') {
+            setWorkflowRunState('running')
+            setSubmission({
+              status: 'running',
+              command: result.command || commandName,
+              message: '仿真工作流正在运行，状态已同步到侧边栏。',
+            })
+          }
+        } else {
+          setWorkflowRunState('idle')
+          setSubmission({
+            status: 'error',
+            command: result.command || commandName,
+            message: result.error || '执行失败',
+          })
+        }
+      } else {
+        setLoadState(result.ok ? `${result.command || '功能'} 已完成` : result.error || '执行失败')
+      }
     } catch (error) {
       setState((current) =>
         reduceCommandResponse(current, {
@@ -356,7 +434,10 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       )
       const message = error instanceof Error ? error.message : '执行失败'
       setLoadState(message)
-      setSubmission({ status: 'error', command: commandName, message })
+      if (options.workflow) {
+        setSubmission({ status: 'error', command: commandName, message })
+        setWorkflowRunState('idle')
+      }
     } finally {
       setBusy(false)
     }
@@ -382,21 +463,92 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
 
   function executeNamedAction(name: string) {
     if (name === 'run') {
-      executeCommand(buildRunCommand(generatedRunRequest))
+      requestWorkflowStart()
       return
     }
     executeCommand(`/${name}`)
   }
 
-  function updatePreset(kind: keyof SimulationPresetSelection, id: string) {
-    setPresetSelection((current) => ({ ...current, [kind]: id }))
+  function focusWorkflowConsole() {
+    const consoleElement = document.getElementById('workflow-console')
+    consoleElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const input = document.getElementById('simulation-instruction')
+    if (input instanceof HTMLTextAreaElement) {
+      input.focus()
+    }
+  }
+
+  function requestWorkflowStart() {
+    if (!workflowInstruction || (busy && workflowRunState !== 'running')) {
+      return
+    }
+    if (workflowRunState === 'running') {
+      pauseWorkflow()
+      return
+    }
+    setWorkflowRunState('confirming')
+  }
+
+  function cancelWorkflowStart() {
+    setWorkflowRunState('idle')
+  }
+
+  function confirmWorkflowStart() {
+    const command = buildRunCommand(workflowInstruction)
+    if (!command) {
+      setWorkflowRunState('idle')
+      setSubmission({ status: 'idle' })
+      return
+    }
+    workflowRunStateRef.current = 'running'
+    setWorkflowRunState('running')
+    setSubmission({ status: 'running', command: 'run' })
+    setLoadState('仿真工作流正在运行')
+    void executeCommand(command, { workflow: true })
+  }
+
+  function pauseWorkflow() {
+    workflowRunStateRef.current = 'paused'
+    setWorkflowRunState('paused')
+    setSubmission({ status: 'paused', command: 'run' })
+    setLoadState('工作流已暂停')
+    setState((current) => ({
+      ...current,
+      timeline: [
+        ...current.timeline,
+        {
+          id: `workflow:paused:${Date.now()}:${current.timeline.length}`,
+          kind: 'system',
+          title: '工作流已暂停',
+          body: '用户从工作台暂停了当前仿真工作流。',
+          status: 'warning',
+          meta: 'workflow',
+        },
+      ],
+    }))
+  }
+
+  function askCopilot(message: string) {
+    executeCommand(`/chat ${message}`)
+  }
+
+  function executeReviewCommand(command: string) {
+    if (command === '/confirm') {
+      setState((current) => ({ ...current, activeInspector: 'confirmation' }))
+      setInspectorOpen(true)
+    }
+    executeCommand(command)
   }
 
   async function selectRecord(view: string, record: Record<string, unknown>) {
     try {
       if (view === 'jobs' && typeof record.job_id === 'string') {
         const detail = await fetchJobDetail(record.job_id)
+        setSelectedJobId(record.job_id)
         setState((current) => reduceDetailSelection(current, 'job', detail))
+        await refreshArtifacts(record.job_id)
+        await refreshVisualization(record.job_id)
+        setLoadState(`已切换到作业 ${record.job_id}`)
         return
       }
       if (view === 'artifacts' && typeof record.path === 'string') {
@@ -436,9 +588,36 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     }
   }
 
+  async function runModelHealthTest(): Promise<ModelHealthReport> {
+    try {
+      const health = await testModelHealth()
+      setLoadState('模型健康测试已完成')
+      return health
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '模型健康测试失败'
+      setState((current) =>
+        reduceCommandResponse(current, {
+          ok: false,
+          view: 'model',
+          command: 'model-health',
+          error: message,
+        }),
+      )
+      setLoadState(message)
+      throw new Error(message)
+    }
+  }
+
   return (
     <main className="workbench-shell">
-      <AgentStatusRail cockpit={cockpit} quickActions={quickActions} onHome={onHome} />
+      <AgentStatusRail
+        cockpit={cockpit}
+        timeline={state.timeline}
+        submissionFeedback={submissionFeedback}
+        copilotDisabled={busy}
+        onAskCopilot={askCopilot}
+        onHome={onHome}
+      />
       <section className="workbench-main">
         <header className="workbench-header">
           <div>
@@ -465,6 +644,53 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           </div>
         </header>
 
+        <section className="workbench-command-strip" aria-label="工作区与工作台导航">
+          <div className="center-command-top-row">
+            <div className="center-workspace-metrics">
+              <article>
+                <span>文件变更</span>
+                <strong>{cockpit.agent.changedFiles}</strong>
+              </article>
+              <article title={cockpit.agent.workspace}>
+                <span>工作区</span>
+                <strong>{compactWorkspaceLabel(cockpit.agent.workspace)}</strong>
+              </article>
+            </div>
+            <nav className="center-quick-actions top" aria-label="Workbench primary actions">
+              {topQuickActions.map((action) => (
+                <button
+                  className={action.active ? 'active' : ''}
+                  type="button"
+                  key={`${action.label}-${action.labelEn}`}
+                  onClick={action.onSelect}
+                >
+                  <Activity size={15} />
+                  <span>
+                    <strong>{action.label}</strong>
+                    <small>{action.labelEn}</small>
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </div>
+          <nav className="center-quick-actions bottom" aria-label="Workbench secondary actions">
+            {bottomQuickActions.map((action) => (
+              <button
+                className={action.active ? 'active' : ''}
+                type="button"
+                key={`${action.label}-${action.labelEn}`}
+                onClick={action.onSelect}
+              >
+                <Activity size={15} />
+                <span>
+                  <strong>{action.label}</strong>
+                  <small>{action.labelEn}</small>
+                </span>
+              </button>
+            ))}
+          </nav>
+        </section>
+
         <section className="phase-track" aria-label="RadAgent 工作流阶段">
           {phaseTrack.map((phase) => (
             <div className={`phase-track-item ${phase.state}`} key={phase.id}>
@@ -475,11 +701,54 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           ))}
         </section>
 
+        <section className="agent-activity-panel" aria-label="Agent 活动状态">
+          <div className="agent-activity-summary">
+            <span>{cockpit.agent.stateLabel}</span>
+            <strong>{cockpit.agent.currentAction}</strong>
+            <p>{cockpit.agent.phaseLabel}</p>
+          </div>
+          <div className="agent-activity-feed">
+            {cockpit.recentActivity.length > 0 ? (
+              cockpit.recentActivity.map((item, index) => (
+                <article key={`${item.title}-${item.phaseLabel}-${index}`}>
+                  <CircleDot size={13} />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>
+                      {item.statusLabel} · {item.phaseLabel}
+                    </span>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p>等待 Agent 运行记录。</p>
+            )}
+          </div>
+        </section>
+
+        {reviewCallout ? (
+          <section className="confirmation-callout" aria-live="polite">
+            <div>
+              <span>{reviewCallout.eyebrow}</span>
+              <strong>{reviewCallout.title}</strong>
+              <p>{reviewCallout.detail}</p>
+            </div>
+            <button type="button" onClick={() => executeReviewCommand(reviewCallout.primaryCommand)}>
+              {reviewCallout.primaryLabel}
+            </button>
+            {reviewCallout.secondaryCommand ? (
+              <button type="button" onClick={() => executeReviewCommand(reviewCallout.secondaryCommand || '')}>
+                {reviewCallout.secondaryLabel}
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+
         <Suspense fallback={<SimulationViewportFallback />}>
           <SimulationViewport
             payload={visualization}
             loading={visualizationLoading}
-            onRefresh={() => refreshVisualization(status?.job_id || '')}
+            onRefresh={() => refreshVisualization(selectedJobId || status?.job_id || '')}
           />
         </Suspense>
 
@@ -489,44 +758,80 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
             Agent 时间线
             <small>Auditable Timeline</small>
           </div>
-          {state.timeline.map((row) => (
-            <TimelineItem row={row} key={row.id} />
-          ))}
-        </section>
-
-        <section className="workflow-console" aria-label="仿真工作流控制台">
-          <div className="preset-control-grid" aria-label="仿真任务选型">
-            {simulationPresetGroups.map((group) => (
-              <fieldset className="preset-control-group" key={group.kind}>
-                <legend>
-                  {group.label}
-                  <small>{group.labelEn}</small>
-                </legend>
-                <div className="preset-option-list">
-                  {group.options.map((option) => (
-                    <button
-                      className={presetSelection[group.kind] === option.id ? 'active' : ''}
-                      type="button"
-                      key={option.id}
-                      title={option.description}
-                      onClick={() => updatePreset(group.kind, option.id)}
-                    >
-                      <strong>{option.label}</strong>
-                      <small>{option.labelEn}</small>
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
+          <div className="timeline-scroll">
+            {state.timeline.map((row) => (
+              <TimelineItem row={row} key={row.id} />
             ))}
           </div>
-          <PresetTaskPreview summary={presetSummary} fullPrompt={generatedRunRequest} />
-          <div className="workflow-request">
-            <label>
-              <span>补充要求</span>
-              <input value={runRequest} onChange={(event) => setRunRequest(event.target.value)} />
+        </section>
+
+        <section className="workflow-console" id="workflow-console" aria-label="仿真工作流控制台">
+          <div className="workflow-direct-panel">
+            <label className="workflow-instruction-field" htmlFor="simulation-instruction">
+              <span>仿真指令</span>
+              <textarea
+                id="simulation-instruction"
+                value={runRequest}
+                rows={4}
+                onChange={(event) => setRunRequest(event.target.value)}
+                placeholder="输入要仿真的目标、几何条件、入射条件、材料约束、计分输出和报告要求"
+              />
             </label>
+            <div className="workflow-action-column">
+              <button
+                className={`workflow-start-button ${workflowRunState}`}
+                type="button"
+                title={
+                  workflowRunState === 'running'
+                    ? '暂停当前仿真工作流'
+                    : '确认后开始执行 RadAgent 仿真工作流'
+                }
+                onClick={requestWorkflowStart}
+                disabled={workflowRunState !== 'running' && (busy || !workflowInstruction)}
+              >
+                {workflowRunState === 'running' ? <Pause size={15} /> : <Play size={15} />}
+                <span>{workflowRunState === 'running' ? '暂停工作流' : workflowRunState === 'paused' ? '继续工作流' : '开始工作流'}</span>
+                <small>{workflowRunState === 'running' ? 'Running' : 'Start'}</small>
+              </button>
+              {workflowRunState === 'paused' ? <small>暂停中，可继续提交当前指令。</small> : null}
+            </div>
+          </div>
+          {workflowRunState === 'confirming' ? (
+            <div className="workflow-confirm-backdrop" role="presentation">
+              <section
+                className="workflow-confirm-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="workflow-confirm-title"
+              >
+                <span>确认提交</span>
+                <strong id="workflow-confirm-title">确认开始工作流</strong>
+                <p>{workflowInstruction}</p>
+                <div className="workflow-confirm-actions">
+                  <button type="button" onClick={cancelWorkflowStart}>
+                    取消
+                  </button>
+                  <button type="button" onClick={confirmWorkflowStart}>
+                    开始
+                  </button>
+                </div>
+              </section>
+            </div>
+          ) : null}
+          <div className="workflow-request">
+            <button
+              className="primary-action"
+              type="button"
+              title={commandPresentation({ name: 'simulate', description: 'simulate', visible: true }).tip}
+              onClick={() => executeCommand(buildSimulateCommand(simulationEvents))}
+              disabled={busy}
+            >
+              <Play size={15} />
+              <span>运行模拟</span>
+              <small>{simulationEvents} events</small>
+            </button>
             <label className="events-field">
-              <span>粒子事件</span>
+              <span>事件数</span>
               <input
                 type="number"
                 min={1}
@@ -534,21 +839,6 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
                 onChange={(event) => setSimulationEvents(Math.max(1, Number(event.target.value) || 1))}
               />
             </label>
-            <button
-              className="primary-action"
-              type="button"
-              title={commandPresentation({ name: 'run', description: 'run', visible: true }).tip}
-              onClick={() => executeCommand(buildRunCommand(generatedRunRequest))}
-              disabled={busy || !generatedRunRequest.trim()}
-            >
-              <Play size={15} />
-              <span>启动 Agent</span>
-              <small>Start</small>
-            </button>
-            <div className={`submission-feedback ${submissionFeedback.tone}`} role="status">
-              <strong>{submissionFeedback.title}</strong>
-              <span>{submissionFeedback.detail}</span>
-            </div>
           </div>
           <div className="control-section-grid">
             {controlSections.map((section) => (
@@ -629,6 +919,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           onSelectCommand={composeIntoComposer}
           onSelectRecord={selectRecord}
           onSaveModelConfig={saveModelConfig}
+          onTestModelHealth={runModelHealthTest}
           onExecuteCommand={executeCommand}
         />
       </div>

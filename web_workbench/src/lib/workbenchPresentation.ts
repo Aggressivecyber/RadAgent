@@ -69,6 +69,17 @@ export type AgentCockpit = {
   recentActivity: AgentCockpitActivity[]
 }
 
+export type ReviewCallout = {
+  kind: 'human-confirmation' | 'visual-review'
+  eyebrow: string
+  title: string
+  detail: string
+  primaryLabel: string
+  primaryCommand: string
+  secondaryLabel?: string
+  secondaryCommand?: string
+}
+
 const pipelinePhases = [
   'prepare_workspace',
   'context',
@@ -217,6 +228,63 @@ function artifactKindLabel(kind?: string, path = ''): string {
     return '报告'
   }
   return normalized || '产物'
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+function statusValue(status: JobStatus, key: string): string {
+  return String(status.key_statuses?.[key] ?? status.state?.[key] ?? '').trim()
+}
+
+function isBlockedVisualReview(status: JobStatus): boolean {
+  const visualReviewStatus = statusValue(status, 'visual_review_status')
+  if (visualReviewStatus === 'pending' || visualReviewStatus === 'rejected') {
+    return true
+  }
+  const failedGates = Array.isArray(status.state?.failed_gates) ? status.state.failed_gates : []
+  return failedGates.some((value) => {
+    const gate = record(value)
+    return Number(gate.gate_id) === 21 && ['block', 'blocked'].includes(String(gate.status || ''))
+  })
+}
+
+export function createReviewCallout(status: JobStatus | null): ReviewCallout | null {
+  if (!status || !status.job_id) {
+    return null
+  }
+
+  const confirmationStatus = statusValue(status, 'confirmation_status')
+  const humanConfirmationRequired = Boolean(status.state?.human_confirmation_required)
+  const humanConfirmationPending =
+    confirmationStatus === 'pending' || status.current_phase === 'human_confirmation' || humanConfirmationRequired
+
+  if (humanConfirmationPending && confirmationStatus !== 'approved') {
+    return {
+      kind: 'human-confirmation',
+      eyebrow: '需要人工确认',
+      title: '当前工作流正在等待你确认模型假设、关键参数或继续执行条件。',
+      detail: '打开确认面板后，可以查看到底要确认什么；如果参数含糊，填写补充说明让 Agent 继续追问。',
+      primaryLabel: '查看确认项',
+      primaryCommand: '/confirm',
+    }
+  }
+
+  if (isBlockedVisualReview(status)) {
+    return {
+      kind: 'visual-review',
+      eyebrow: '需要可视化复核',
+      title: 'Geant4 可视化门禁正在等待 100-event 工作台检查。',
+      detail: '先打开工作台检查几何和轨迹；确认无误后记录通过，门禁才会继续推进。',
+      primaryLabel: '打开工作台',
+      primaryCommand: '/workbench 100',
+      secondaryLabel: '记录通过',
+      secondaryCommand: '/visual-approve',
+    }
+  }
+
+  return null
 }
 
 function stageId(artifact: ArtifactSummary): string {

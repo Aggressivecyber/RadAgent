@@ -146,6 +146,22 @@ class ModelConfigView(BaseModel):
     agentic_repair_history_chars: int = 48_000
 
 
+class ModelHealthTierResult(BaseModel):
+    tier: str
+    status: Literal["ok", "error", "skipped"]
+    model_name: str = ""
+    base_url: str = ""
+    api_key_env: str = ""
+    latency_ms: float = 0.0
+    response_preview: str = ""
+    error: str = ""
+
+
+class ModelHealthReport(BaseModel):
+    tested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    tiers: dict[str, ModelHealthTierResult] = Field(default_factory=dict)
+
+
 class StartupStatusView(BaseModel):
     product_name: str = "RadAgent"
     project_slug: str = "default"

@@ -4,6 +4,7 @@ import type { TimelineRow } from './workbenchState'
 import {
   createAgentCockpit,
   createPhaseTrack,
+  createReviewCallout,
   createWorkbenchHero,
   createStatusPanelSummary,
   presentConfirmationStatus,
@@ -146,6 +147,73 @@ describe('workbench presentation', () => {
     expect(presentConfirmationStatus('pending')).toBe('等待审查')
     expect(presentConfirmationStatus('approved')).toBe('已批准')
     expect(presentConfirmationStatus(undefined)).toBe('未加载确认项')
+  })
+
+  it('does not show human approval again after model confirmation is approved', () => {
+    const callout = createReviewCallout({
+      ...activeStatus,
+      status: 'paused',
+      current_phase: 'gate',
+      current_phase_idx: 7,
+      completed_phases: [
+        'prepare_workspace',
+        'context',
+        'task_planning',
+        'g4_modeling',
+        'human_confirmation',
+        'g4_codegen',
+        'patch',
+      ],
+      needs_confirmation: true,
+      key_statuses: {
+        confirmation_status: 'approved',
+        validation_status: 'blocked',
+      },
+      state: {
+        confirmation_status: 'approved',
+        human_confirmation_required: false,
+        failed_gates: [
+          {
+            gate_id: 21,
+            name: 'G4 Visual Review',
+            status: 'blocked',
+          },
+        ],
+      },
+    })
+
+    expect(callout).toMatchObject({
+      kind: 'visual-review',
+      eyebrow: '需要可视化复核',
+      primaryLabel: '打开工作台',
+      primaryCommand: '/workbench 100',
+      secondaryLabel: '记录通过',
+      secondaryCommand: '/visual-approve',
+    })
+  })
+
+  it('prompts for model confirmation only while ordinary confirmation is pending', () => {
+    const callout = createReviewCallout({
+      ...activeStatus,
+      status: 'paused',
+      current_phase: 'human_confirmation',
+      current_phase_idx: 4,
+      needs_confirmation: true,
+      key_statuses: {
+        confirmation_status: 'pending',
+      },
+      state: {
+        confirmation_status: 'pending',
+        human_confirmation_required: true,
+      },
+    })
+
+    expect(callout).toMatchObject({
+      kind: 'human-confirmation',
+      eyebrow: '需要人工确认',
+      primaryLabel: '查看确认项',
+      primaryCommand: '/confirm',
+    })
   })
 
   it('builds a VS Code style agent cockpit model with RadAgent artifact groups', () => {

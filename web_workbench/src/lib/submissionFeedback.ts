@@ -1,4 +1,4 @@
-export type SubmissionStatus = 'idle' | 'running' | 'success' | 'error'
+export type SubmissionStatus = 'idle' | 'running' | 'paused' | 'success' | 'error'
 
 export type SubmissionFeedbackInput = {
   status: SubmissionStatus
@@ -16,8 +16,16 @@ export function createSubmissionFeedback(input: SubmissionFeedbackInput): Submis
   if (input.status === 'running') {
     return {
       tone: 'running',
-      title: '任务已提交',
-      detail: '正在启动工作流，Agent 会先规划模型并写入时间线。',
+      title: '正在仿真',
+      detail: 'Agent 正在执行仿真工作流，状态会同步到侧边栏。',
+    }
+  }
+
+  if (input.status === 'paused') {
+    return {
+      tone: 'paused',
+      title: '工作流已暂停',
+      detail: '再次点击开始按钮可继续提交仿真工作流。',
     }
   }
 
@@ -40,6 +48,6 @@ export function createSubmissionFeedback(input: SubmissionFeedbackInput): Submis
   return {
     tone: 'idle',
     title: '等待提交',
-    detail: '选择任务模板、源项和材料后启动 Agent。',
+    detail: '输入仿真指令后启动工作流。',
   }
 }

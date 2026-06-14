@@ -68,6 +68,13 @@ def test_runtime_app_prompt_requires_browser_visualization_artifacts() -> None:
     assert "同一个" in prompt
 
 
+def test_runtime_geometry_size_uses_radius_for_cylinders_with_dz() -> None:
+    assert runtime_app_agent._geometry_size_mm(
+        {"r": 40000.0, "dz": 60000.0},
+        0.001,
+    ) == [80.0, 80.0, 60.0]
+
+
 def test_module_prompts_prevent_common_geant4_repair_failures() -> None:
     """Initial generation should avoid recurring compile/runtime repair patterns."""
     combined = "\n".join(

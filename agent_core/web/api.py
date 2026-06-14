@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.tui.commands import CommandParseError, command_suggestions, parse_command
 
 
@@ -40,6 +41,7 @@ _REQUIRED_COMMANDS: dict[str, str] = {
     "logs": "Open service event log",
     "memory": "Open workflow memory",
     "model": "View or update model settings",
+    "model-health": "Test model API health and latency",
     "options": "Open workbench options",
     "project": "Switch project",
     "projects": "List projects",
@@ -63,7 +65,7 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "module": "human_confirmation",
         "connection": "service",
         "visible": True,
-        "tip": "Approve the active human-confirmation gate and continue the job.",
+        "tip": "Approve the active human-confirmation gate without blocking the web request.",
     },
     "check": {
         "module": "runtime/tools",
@@ -220,6 +222,12 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "connection": "service",
         "visible": True,
         "tip": "View or update model endpoint and tier settings without exposing secrets.",
+    },
+    "model-health": {
+        "module": "model_config/health",
+        "connection": "service",
+        "visible": True,
+        "tip": "Run a small model API request and report status plus latency.",
     },
     "options": {
         "module": "client/options",
@@ -555,6 +563,15 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+def _should_continue_after_approval(value: Any) -> bool:
+    status = _as_dict(value)
+    try:
+        current_idx = int(status.get("current_phase_idx", 0))
+    except (TypeError, ValueError):
+        return True
+    return current_idx <= PIPELINE_PHASES.index("g4_codegen")
+
+
 async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
     """Dispatch one web composer command through the UI-neutral app service."""
     try:
@@ -609,18 +626,22 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                 data = await _maybe_await(
                     service.submit_confirmation(
                         {"user_decision": "approve", "feedback": "approve"},
-                        auto_continue=True,
+                        auto_continue=False,
                     )
                 )
+                if _should_continue_after_approval(data):
+                    service.continue_in_background(reason="human_confirmation_approved")
                 view = "status"
             case "confirm":
                 if command.args.strip().lower() in {"approve", "approved", "yes", "y", "确认", "同意"}:
                     data = await _maybe_await(
                         service.submit_confirmation(
                             {"user_decision": "approve", "feedback": command.args},
-                            auto_continue=True,
+                            auto_continue=False,
                         )
                     )
+                    if _should_continue_after_approval(data):
+                        service.continue_in_background(reason="human_confirmation_approved")
                     view = "status"
                 else:
                     data = service.get_confirmation_review(None)
@@ -653,6 +674,9 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
             case "model":
                 data = service.get_model_config()
                 view = "model"
+            case "model-health":
+                data = await _maybe_await(service.test_model_health())
+                view = "model-health"
             case "project":
                 data = service.set_current_project(command.args)
                 view = "projects"
@@ -728,8 +752,8 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                 data = service.resume_job(command.args)
                 view = "status"
             case "retry":
-                service.resume_job(command.args)
-                data = await _maybe_await(service.run_until_blocked())
+                data = service.resume_job(command.args, clear_failure=True)
+                service.continue_in_background(reason="retry")
                 view = "status"
             case "build":
                 try:

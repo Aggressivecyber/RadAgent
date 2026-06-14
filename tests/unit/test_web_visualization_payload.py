@@ -80,6 +80,133 @@ def test_visualization_payload_loads_real_tracks_deposits_and_geometry(
     }
 
 
+def test_visualization_payload_repairs_default_cylinder_radius_from_model_ir(
+    tmp_path: Path,
+) -> None:
+    _write_json(
+        tmp_path / "geometry_view.json",
+        {
+            "units": {"length": "mm"},
+            "components": [
+                {
+                    "id": "hpge_crystal",
+                    "name": "Coaxial HPGe Crystal",
+                    "shape": "cylinder",
+                    "material": "G4_Ge",
+                    "size_mm": [1.0, 1.0, 60.0],
+                    "position_mm": [0.0, 0.0, 0.0],
+                }
+            ],
+        },
+    )
+    model_ir = {
+        "unit_contract": {"length_unit": "um", "coordinate_unit": "um"},
+        "components": [
+            {
+                "component_id": "hpge_crystal",
+                "display_name": "Coaxial HPGe Crystal",
+                "geometry_type": "cylinder",
+                "material_id": "G4_Ge",
+                "dimensions": {"r": 40000.0, "dz": 60000.0},
+                "placement": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+            }
+        ],
+    }
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-visual",
+        model_ir=model_ir,
+        visual_events=100,
+    )
+
+    component = payload["geometry"]["components"][0]
+    assert component["size_mm"] == [80.0, 80.0, 60.0]
+    assert "geometry_view.json cylinder radius repaired from model IR for hpge_crystal" in payload["warnings"]
+
+
+def test_visualization_payload_includes_source_rays_from_model_ir(
+    tmp_path: Path,
+) -> None:
+    model_ir = {
+        "global_units": {"length": "um"},
+        "sources": [
+            {
+                "source_id": "primary_gamma",
+                "particle_type": "gamma",
+                "energy": {"value": 662.0, "unit": "keV"},
+                "beam": {
+                    "position": [0.0, 0.0, -150500.0],
+                    "direction": [0.0, 0.0, 1.0],
+                },
+            }
+        ],
+        "components": [
+            {
+                "component_id": "hpge_crystal",
+                "geometry_type": "cylinder",
+                "dimensions": {"r": 40000.0, "dz": 60000.0},
+                "placement": {"position": [0.0, 0.0, 0.0]},
+            }
+        ],
+    }
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-source-ray",
+        model_ir=model_ir,
+        visual_events=100,
+    )
+
+    assert payload["source_rays"] == [
+        {
+            "source_id": "primary_gamma",
+            "particle": "gamma",
+            "energy": {"value": 662.0, "unit": "keV"},
+            "start_mm": [0.0, 0.0, -150.5],
+            "end_mm": [0.0, 0.0, 36.4],
+        }
+    ]
+
+
+def test_visualization_payload_uses_coordinate_unit_for_source_ray_position(
+    tmp_path: Path,
+) -> None:
+    model_ir = {
+        "global_units": {"length": "mm"},
+        "coordinate_system": {"unit": "um"},
+        "sources": [
+            {
+                "source_id": "primary_gamma",
+                "particle_type": "gamma",
+                "energy": {"value": 662.0, "unit": "keV"},
+                "beam": {
+                    "position": [0.0, 0.0, -150500.0],
+                    "direction": [0.0, 0.0, 1.0],
+                },
+            }
+        ],
+        "components": [
+            {
+                "component_id": "bgo_crystal",
+                "geometry_type": "box",
+                "dimensions": {"dx": 80.0, "dy": 80.0, "dz": 60.0},
+                "placement": {"position": [0.0, 0.0, 0.0]},
+            }
+        ],
+    }
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-source-ray-units",
+        model_ir=model_ir,
+        visual_events=100,
+    )
+
+    assert payload["source_rays"][0]["start_mm"] == [0.0, 0.0, -150.5]
+    assert payload["source_rays"][0]["end_mm"][2] > 30.0
+
+
 def test_visualization_payload_marks_missing_tracks_without_inventing_fake_data(
     tmp_path: Path,
 ) -> None:

@@ -119,6 +119,10 @@ def _create_api_handler(get_service: ServiceProvider) -> ApiHandler:
                     update = {key: value for key, value in payload.items() if key in allowed_keys}
                     model = service.update_model_config(update)
                     return HTTPStatus.OK, {"model": to_jsonable(model)}
+                case "POST", "/api/model/health":
+                    service = get_service()
+                    health = asyncio.run(service.test_model_health())
+                    return HTTPStatus.OK, {"health": to_jsonable(health)}
                 case _:
                     return HTTPStatus.NOT_FOUND, {"ok": False, "error": f"Unknown API path: {path}"}
         except (json.JSONDecodeError, ValueError) as exc:

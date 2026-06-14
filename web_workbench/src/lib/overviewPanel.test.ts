@@ -43,8 +43,14 @@ describe('overview panel presentation', () => {
       workspace_root: '/workspace',
       job_workspace: '/workspace/job-1',
       needs_confirmation: true,
-      key_statuses: {},
-      state: { project_slug: 'detectors' },
+      key_statuses: {
+        confirmation_status: 'pending',
+      },
+      state: {
+        project_slug: 'detectors',
+        confirmation_status: 'pending',
+        human_confirmation_required: true,
+      },
     }
     const events: RadAgentEvent[] = [
       {
@@ -69,10 +75,10 @@ describe('overview panel presentation', () => {
     ])
     expect(panel.alerts[0]).toMatchObject({
       status: 'warning',
-      title: '需要确认',
+      title: '需要人工确认',
     })
     expect(panel.actions[0]).toMatchObject({
-      label: '处理确认',
+      label: '查看确认项',
       labelEn: 'Review',
       command: '/confirm',
       tone: 'primary',
@@ -84,6 +90,55 @@ describe('overview panel presentation', () => {
       detail: 'Needs human confirmation',
       meta: '验证门禁',
     })
+  })
+
+  it('promotes visual review separately from ordinary confirmation', () => {
+    const status: JobStatus = {
+      job_id: 'job-visual',
+      user_query: 'Build HPGe visual review workflow',
+      status: 'paused',
+      current_phase: 'gate',
+      current_phase_idx: 7,
+      completed_phases: [
+        'prepare_workspace',
+        'context',
+        'task_planning',
+        'g4_modeling',
+        'human_confirmation',
+        'g4_codegen',
+        'patch',
+      ],
+      execution_mode: 'strict',
+      run_mode: 'strict',
+      workspace_root: '/workspace',
+      job_workspace: '/workspace/job-visual',
+      needs_confirmation: true,
+      key_statuses: {
+        confirmation_status: 'approved',
+        validation_status: 'blocked',
+      },
+      state: {
+        confirmation_status: 'approved',
+        human_confirmation_required: false,
+        failed_gates: [{ gate_id: 21, name: 'G4 Visual Review', status: 'blocked' }],
+      },
+    }
+
+    const panel = createOverviewPanel({ status, events: [], commands })
+
+    expect(panel.alerts[0]).toMatchObject({
+      title: '需要可视化复核',
+    })
+    expect(panel.actions[0]).toMatchObject({
+      label: '打开工作台',
+      command: '/workbench 100',
+      tone: 'primary',
+    })
+    expect(panel.actions[1]).toMatchObject({
+      label: '记录通过',
+      command: '/visual-approve',
+    })
+    expect(panel.actions.map((action) => action.command)).not.toContain('/confirm')
   })
 
   it('offers a run action when no job is active', () => {

@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle2, CircleDot, Database, FileText } from 'lucide-react'
 import { FormEvent, useEffect, useState } from 'react'
-import type { CommandCatalogEntry, JobStatus, RadAgentEvent } from '../lib/api'
+import type { CommandCatalogEntry, JobStatus, ModelHealthReport, RadAgentEvent } from '../lib/api'
 import { groupCommandCatalog } from '../lib/commands'
 import { commandGroupPresentation, commandPresentation } from '../lib/commandPresentation'
 import {
@@ -8,6 +8,7 @@ import {
   buildConfirmationCommand,
   buildRejectCommand,
 } from '../lib/confirmationActions'
+import { createConfirmationReviewView } from '../lib/confirmationReview'
 import {
   buildModelUpdate,
   createModelSaveState,
@@ -35,6 +36,7 @@ type InspectorPanelProps = {
   onSelectCommand: (command: string) => void
   onSelectRecord: (view: string, record: Record<string, unknown>) => void
   onSaveModelConfig: (update: ReturnType<typeof buildModelUpdate>) => Promise<void>
+  onTestModelHealth: () => Promise<ModelHealthReport>
   onExecuteCommand: (command: string) => Promise<void>
 }
 
@@ -307,7 +309,15 @@ function ArtifactPanel({ data }: { data: unknown }) {
   )
 }
 
-function DetailPanelView({ active, data }: { active: string; data: unknown }) {
+function DetailPanelView({
+  active,
+  data,
+  onExecuteCommand,
+}: {
+  active: string
+  data: unknown
+  onExecuteCommand: (command: string) => Promise<void>
+}) {
   const panel = createDetailPanel(active, data)
   if (!panel) {
     return renderJson(data)
@@ -320,6 +330,21 @@ function DetailPanelView({ active, data }: { active: string; data: unknown }) {
         <strong>{panel.title}</strong>
         {panel.subtitle ? <p>{panel.subtitle}</p> : null}
       </header>
+      {panel.actions.length > 0 ? (
+        <div className="detail-actions">
+          {panel.actions.map((action) => (
+            <button
+              className={action.intent === 'primary' ? 'primary' : ''}
+              type="button"
+              key={action.command}
+              onClick={() => onExecuteCommand(action.command)}
+            >
+              <span>{action.label}</span>
+              <small>{action.labelEn}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
       {panel.metrics.length > 0 ? (
         <div className="operation-metrics">
           {panel.metrics.map((metric) => (
@@ -436,12 +461,19 @@ function DomainPanelView({ active, data }: { active: string; data: unknown }) {
 function ModelSettingsPanel({
   data,
   onSave,
+  onTestHealth,
 }: {
   data: unknown
   onSave: (update: ReturnType<typeof buildModelUpdate>) => Promise<void>
+  onTestHealth: () => Promise<ModelHealthReport>
 }) {
   const [draft, setDraft] = useState<ModelSettingsDraft>(() => createModelSettingsDraft(data))
   const [saveState, setSaveState] = useState<ModelSaveState>(() => createModelSaveState())
+  const [healthState, setHealthState] = useState<{
+    status: 'idle' | 'testing' | 'ready' | 'error'
+    message: string
+    report: ModelHealthReport | null
+  }>({ status: 'idle', message: '', report: null })
 
   useEffect(() => {
     setDraft(createModelSettingsDraft(data))
@@ -473,6 +505,22 @@ function ModelSettingsPanel({
     } finally {
     }
   }
+
+  async function runHealthTest() {
+    setHealthState({ status: 'testing', message: '测试中', report: null })
+    try {
+      const report = await onTestHealth()
+      setHealthState({ status: 'ready', message: '测试完成', report })
+    } catch (error) {
+      setHealthState({
+        status: 'error',
+        message: error instanceof Error ? error.message : '模型健康测试失败。',
+        report: null,
+      })
+    }
+  }
+
+  const healthRows = healthState.report ? Object.values(healthState.report.tiers) : []
 
   return (
     <form className="model-settings-form" onSubmit={submit}>
@@ -573,9 +621,35 @@ function ModelSettingsPanel({
       {saveState.message ? (
         <p className={`model-save-message ${saveState.status}`}>{saveState.message}</p>
       ) : null}
-      <button type="submit" disabled={saveState.status === 'saving'}>
-        {saveState.status === 'saving' ? '保存中' : '保存模型设置'}
-      </button>
+      <div className="model-settings-actions">
+        <button type="submit" disabled={saveState.status === 'saving'}>
+          {saveState.status === 'saving' ? '保存中' : '保存模型设置'}
+        </button>
+        <button type="button" onClick={runHealthTest} disabled={healthState.status === 'testing'}>
+          {healthState.status === 'testing' ? '测试中' : '模型健康测试'}
+        </button>
+      </div>
+      {healthState.message ? (
+        <p className={`model-save-message ${healthState.status === 'error' ? 'error' : 'saved'}`}>
+          {healthState.message}
+        </p>
+      ) : null}
+      {healthRows.length > 0 ? (
+        <div className="model-health-list">
+          {healthRows.map((row) => (
+            <article className={`model-health-row ${row.status}`} key={row.tier}>
+              <span>{row.tier.toUpperCase()}</span>
+              <div>
+                <strong>{row.model_name || '未配置'}</strong>
+                <p>
+                  {row.status === 'ok' ? `${Math.round(row.latency_ms)} ms` : row.error || row.status}
+                </p>
+                {row.response_preview ? <em>{row.response_preview}</em> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
     </form>
   )
 }
@@ -588,14 +662,20 @@ function ConfirmationPanel({
   onExecuteCommand: (command: string) => Promise<void>
 }) {
   const review = asRecord(data)
+  const view = createConfirmationReviewView(data)
   const [rejectReason, setRejectReason] = useState('')
   const [question, setQuestion] = useState('')
-  const preview = typeof review.preview === 'string' ? review.preview : ''
+  const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | 'ask-more' | ''>('')
   const status = presentConfirmationStatus(review.status)
 
-  function run(command: string) {
+  async function run(command: string, action: 'approve' | 'reject' | 'ask-more') {
     if (command) {
-      onExecuteCommand(command)
+      setPendingAction(action)
+      try {
+        await onExecuteCommand(command)
+      } finally {
+        setPendingAction('')
+      }
     }
   }
 
@@ -605,26 +685,80 @@ function ConfirmationPanel({
         <span>状态</span>
         <strong>{status || '未加载确认项'}</strong>
       </article>
-      {preview ? <pre className="artifact-preview">{preview}</pre> : <p className="empty-state">暂无确认预览。</p>}
-      <div className="confirmation-actions">
-        <button type="button" className="approve-button" onClick={() => run(buildConfirmationCommand())}>
-          批准
-        </button>
-        <label>
-          <span>拒绝原因</span>
-          <textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} />
-        </label>
-        <button type="button" onClick={() => run(buildRejectCommand(rejectReason))} disabled={!rejectReason.trim()}>
-          拒绝
-        </button>
-        <label>
-          <span>追问补充</span>
-          <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
-        </label>
-        <button type="button" onClick={() => run(buildAskMoreCommand(question))} disabled={!question.trim()}>
-          追问
-        </button>
-      </div>
+      <section className="confirmation-summary-card">
+        <span>确认对象</span>
+        <strong>确认 Geant4 模型参数与继续执行条件</strong>
+        <p>{view.summary}</p>
+      </section>
+      {view.missingInformation.length > 0 ? (
+        <section className="confirmation-review-section warning">
+          <h3>仍需补充的参数</h3>
+          {view.missingInformation.map((item, index) => (
+            <p key={`${item}-${index}`}>{item}</p>
+          ))}
+        </section>
+      ) : null}
+      {view.criticalConfirmations.length > 0 ? (
+        <section className="confirmation-review-section">
+          <h3>关键确认项</h3>
+          {view.criticalConfirmations.map((item) => (
+            <article key={`${item.title}-${item.meta}`}>
+              <span>{item.meta}</span>
+              <strong>{item.title}</strong>
+              {item.detail ? <p>{item.detail}</p> : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {view.questions.length > 0 ? (
+        <section className="confirmation-review-section">
+          <h3>需要你确认的问题</h3>
+          {view.questions.map((item) => (
+            <article key={`${item.title}-${item.meta}`}>
+              <span>{item.meta}</span>
+              <strong>{item.title}</strong>
+              {item.detail ? <p>{item.detail}</p> : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {view.preview ? <pre className="artifact-preview">{view.preview}</pre> : <p className="empty-state">暂无确认预览。</p>}
+      {view.actionable ? (
+        <div className="confirmation-actions">
+          <button
+            type="button"
+            className="approve-button"
+            onClick={() => run(buildConfirmationCommand(), 'approve')}
+            disabled={Boolean(pendingAction)}
+          >
+            {pendingAction === 'approve' ? '批准中' : '批准'}
+          </button>
+          <label>
+            <span>拒绝原因</span>
+            <textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} />
+          </label>
+          <button
+            type="button"
+            onClick={() => run(buildRejectCommand(rejectReason), 'reject')}
+            disabled={Boolean(pendingAction) || !rejectReason.trim()}
+          >
+            {pendingAction === 'reject' ? '提交中' : '拒绝'}
+          </button>
+          <label>
+            <span>补充说明或要求 Agent 继续追问</span>
+            <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
+          </label>
+          <button
+            type="button"
+            onClick={() => run(buildAskMoreCommand(question), 'ask-more')}
+            disabled={Boolean(pendingAction) || !question.trim()}
+          >
+            {pendingAction === 'ask-more' ? '发送中' : '发送补充'}
+          </button>
+        </div>
+      ) : (
+        <p className="empty-state">该确认项已经处理，无需再次审批。</p>
+      )}
     </div>
   )
 }
@@ -638,6 +772,7 @@ export default function InspectorPanel({
   onSelectCommand,
   onSelectRecord,
   onSaveModelConfig,
+  onTestModelHealth,
   onExecuteCommand,
 }: InspectorPanelProps) {
   const title = inspectorTitle(active)
@@ -665,8 +800,10 @@ export default function InspectorPanel({
       ) : null}
       {active === 'status' ? <StatusPanel status={status} /> : null}
       {active === 'artifact' ? <ArtifactPanel data={data} /> : null}
-      {detailActive ? <DetailPanelView active={detailView} data={data} /> : null}
-      {active === 'model' ? <ModelSettingsPanel data={data} onSave={onSaveModelConfig} /> : null}
+      {detailActive ? <DetailPanelView active={detailView} data={data} onExecuteCommand={onExecuteCommand} /> : null}
+      {active === 'model' ? (
+        <ModelSettingsPanel data={data} onSave={onSaveModelConfig} onTestHealth={onTestModelHealth} />
+      ) : null}
       {active === 'confirmation' ? (
         <ConfirmationPanel data={data} onExecuteCommand={onExecuteCommand} />
       ) : null}

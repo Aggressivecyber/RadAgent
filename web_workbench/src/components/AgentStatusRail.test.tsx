@@ -19,25 +19,41 @@ const cockpit: AgentCockpit = {
 }
 
 describe('AgentStatusRail', () => {
-  it('renders a promo-style agent cockpit status summary', () => {
+  it('renders a fixed Copilot conversation rail without workspace navigation', () => {
     const markup = renderToStaticMarkup(
       <AgentStatusRail
         cockpit={cockpit}
-        onHome={() => {}}
-        quickActions={[
-          { label: '状态', labelEn: 'Status', active: true, onSelect: () => {} },
-          { label: '产物', labelEn: 'Files', active: false, onSelect: () => {} },
+        timeline={[
+          {
+            id: 'command:chat',
+            kind: 'command',
+            title: '对话',
+            body: '当前工作流下一步是什么？',
+            status: 'success',
+            meta: 'chat',
+          },
         ]}
+        onHome={() => {}}
+        submissionFeedback={{
+          tone: 'running',
+          title: '正在仿真',
+          detail: 'Agent 正在执行仿真工作流，状态会同步到侧边栏。',
+        }}
+        onAskCopilot={() => {}}
       />,
     )
 
-    expect(markup).toContain('Agent Cockpit')
-    expect(markup).toContain('运行中')
-    expect(markup).toContain('Geant4 工程生成')
-    expect(markup).toContain('Generating detector construction module')
-    expect(markup).toContain('3 个文件')
-    expect(markup).toContain('/tmp/radagent/job-42')
-    expect(markup).toContain('model call start')
-    expect(markup).toContain('状态')
+    expect(markup).toContain('Copilot')
+    expect(markup).toContain('对话历史')
+    expect(markup).toContain('当前工作流下一步是什么？')
+    expect(markup).toContain('仿真协作助手')
+    expect(markup).toContain('仿真工作流')
+    expect(markup).toContain('正在仿真')
+    expect(markup).toContain('问 Copilot')
+    expect(markup).not.toContain('文件变更')
+    expect(markup).not.toContain('/tmp/radagent/job-42')
+    expect(markup).not.toContain('Geant4 工程生成')
+    expect(markup).not.toContain('model call start')
+    expect(markup).not.toContain('状态</strong>')
   })
 })

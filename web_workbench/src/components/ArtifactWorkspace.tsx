@@ -24,6 +24,8 @@ function previewText(artifact: ArtifactContent | null): string {
   return artifact.text || JSON.stringify(artifact.json_data ?? {}, null, 2)
 }
 
+const waitingStages = ['Geant4 源码', '运行日志', '门禁摘要', '结果报告'] as const
+
 export default function ArtifactWorkspace({
   cockpit,
   selectedArtifact,
@@ -80,7 +82,15 @@ export default function ArtifactWorkspace({
             </div>
           ))
         ) : (
-          <p className="artifact-empty">Agent 运行后会在这里显示创建的文件、日志和报告。</p>
+          <div className="artifact-empty-state">
+            <strong>等待 Agent 产物</strong>
+            <p>产物生成后会在这里按阶段归档。</p>
+            <div>
+              {waitingStages.map((stage) => (
+                <span key={stage}>{stage}</span>
+              ))}
+            </div>
+          </div>
         )}
       </section>
 

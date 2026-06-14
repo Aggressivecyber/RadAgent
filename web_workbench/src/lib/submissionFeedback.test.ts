@@ -6,19 +6,24 @@ describe('submission feedback', () => {
     expect(createSubmissionFeedback({ status: 'idle' })).toEqual({
       tone: 'idle',
       title: '等待提交',
-      detail: '选择任务模板、源项和材料后启动 Agent。',
+      detail: '输入仿真指令后启动工作流。',
     })
   })
 
   it('presents a running state with the submitted command name', () => {
     expect(createSubmissionFeedback({ status: 'running', command: 'run' })).toEqual({
       tone: 'running',
-      title: '任务已提交',
-      detail: '正在启动工作流，Agent 会先规划模型并写入时间线。',
+      title: '正在仿真',
+      detail: 'Agent 正在执行仿真工作流，状态会同步到侧边栏。',
     })
   })
 
-  it('presents success and error states without leaking slash commands', () => {
+  it('presents paused, success and error states without leaking slash commands', () => {
+    expect(createSubmissionFeedback({ status: 'paused' })).toEqual({
+      tone: 'paused',
+      title: '工作流已暂停',
+      detail: '再次点击开始按钮可继续提交仿真工作流。',
+    })
     expect(createSubmissionFeedback({ status: 'success', command: 'run' })).toMatchObject({
       tone: 'success',
       title: '工作流已启动',

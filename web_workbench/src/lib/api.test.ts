@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchCommandCatalog, fetchStatus, updateModelConfig, type ModelUpdatePayload } from './api'
+import {
+  fetchCommandCatalog,
+  fetchStatus,
+  testModelHealth,
+  updateModelConfig,
+  type ModelUpdatePayload,
+} from './api'
 
 describe('api helpers', () => {
   afterEach(() => {
@@ -42,6 +48,27 @@ describe('api helpers', () => {
     )
 
     await expect(fetchStatus()).rejects.toThrow('本地 RadAgent 服务未连接')
+  })
+
+  it('posts model health test requests to the dedicated endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ health: { tiers: { pro: { status: 'ok', latency_ms: 35 } } } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const health = await testModelHealth()
+
+    expect(health.tiers.pro.latency_ms).toBe(35)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/model/health',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
   })
 
   it('reports a friendly message for non-JSON API responses', async () => {

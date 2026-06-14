@@ -22,6 +22,15 @@ describe('visualization payload helpers', () => {
           },
         ],
       },
+      source_rays: [
+        {
+          source_id: 'primary_gamma',
+          particle: 'gamma',
+          energy: { value: 662, unit: 'keV' },
+          start_mm: [0, 0, -150.5],
+          end_mm: [0, 0, 75.25],
+        },
+      ],
       tracks: [
         {
           event_id: 1,
@@ -40,6 +49,8 @@ describe('visualization payload helpers', () => {
     expect(payload.status).toBe('ready')
     expect(payload.visualEvents).toBe(100)
     expect(payload.components[0].size).toEqual([10, 10, 0.3])
+    expect(payload.sourceRays[0].start).toEqual([0, 0, -150.5])
+    expect(payload.sourceRays[0].end).toEqual([0, 0, 75.25])
     expect(payload.tracks[0].points.at(-1)).toEqual([0.1, 0, 5])
     expect(payload.deposits[0].edepMeV).toBe(0.5)
   })
@@ -49,6 +60,7 @@ describe('visualization payload helpers', () => {
       status: 'ready',
       visualEvents: 100,
       components: [{ id: 'detector', name: 'Detector', shape: 'box', material: 'G4_Si', size: [1, 1, 1], position: [0, 0, 0], rotation: [0, 0, 0], opacity: 0.4 }],
+      sourceRays: [],
       tracks: [{ eventId: 0, trackId: 1, particle: 'proton', energyMeV: 10, points: [[0, 0, -1], [0, 0, 1]] }],
       deposits: [{ eventId: 0, trackId: 1, volume: 'detector', position: [0, 0, 0], edepMeV: 1 }],
       warnings: [],
@@ -83,6 +95,7 @@ describe('visualization payload helpers', () => {
       status: 'ready',
       visualEvents: 100,
       components: [],
+      sourceRays: [],
       tracks,
       deposits: [{ eventId: 3, trackId: 4, volume: 'detector', position: [0, 0, 0], edepMeV: 0.2 }],
       warnings: [],

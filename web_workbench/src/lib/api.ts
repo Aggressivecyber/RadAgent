@@ -84,6 +84,22 @@ export type ModelUpdatePayload = {
   agentic_repair_history_chars?: number
 }
 
+export type ModelHealthTierResult = {
+  tier: string
+  status: 'ok' | 'error' | 'skipped'
+  model_name: string
+  base_url: string
+  api_key_env: string
+  latency_ms: number
+  response_preview: string
+  error: string
+}
+
+export type ModelHealthReport = {
+  tested_at: string
+  tiers: Record<string, ModelHealthTierResult>
+}
+
 export type WorkflowCapability = {
   name: string
   description: string
@@ -233,4 +249,15 @@ export async function updateModelConfig(update: ModelUpdatePayload): Promise<Rec
     }),
   )
   return payload.model
+}
+
+export async function testModelHealth(): Promise<ModelHealthReport> {
+  const payload = await readJson<{ health: ModelHealthReport }>(
+    await fetch('/api/model/health', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }),
+  )
+  return payload.health
 }
