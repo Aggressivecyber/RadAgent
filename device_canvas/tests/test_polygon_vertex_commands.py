@@ -70,7 +70,7 @@ def main():
 
     assert all(values["hasFns"].values()), values
     assert all(values["hasButtons"].values()), values
-    assert values["selectedBefore"] == {"state": 2, "row": True, "anchor": "#155eef"}, values
+    assert values["selectedBefore"] == {"state": 2, "row": True, "anchor": "#8f2924"}, values
     assert values["afterUp"]["selected"] == 1, values
     assert values["afterUp"]["polygon"][1] == values["before"][2], values
     assert values["afterUp"]["polygon"][2] == values["before"][1], values

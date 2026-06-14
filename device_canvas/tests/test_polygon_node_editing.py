@@ -95,7 +95,7 @@ def main():
     assert values["insertedPointBeforeDrag"] == [0, -50, 0], values
     assert values["anchorCount"] == 5, values
     assert values["style"]["radius"] <= 3, values
-    assert values["style"]["fill"] == "#1d4ed8", values
+    assert values["style"]["fill"] == "#8f2924", values
     assert values["style"]["stroke"] == "#ffffff", values
     assert 0 < values["style"]["strokeWidth"] <= 1, values
     assert values["style"]["hitStrokeWidth"] >= 12, values

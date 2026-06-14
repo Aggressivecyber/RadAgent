@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = [
     ["node", "device_canvas/tests/core_geometry.test.js"],
+    [sys.executable, "device_canvas/tests/test_brand_theme_alignment.py"],
     [sys.executable, "device_canvas/tests/test_cad_status_bar.py"],
     [sys.executable, "device_canvas/tests/test_clipboard_copy_paste.py"],
     [sys.executable, "device_canvas/tests/test_2d_edit_world_constraints.py"],

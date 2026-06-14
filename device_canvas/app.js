@@ -269,7 +269,7 @@ function cadLineProps(strokeWidth,extra={}){
 }
 function gridLineProps(){
   const thin=thinProjectionMinPx();
-  return cadLineProps(thin===null?0.75:sectionHairlineCap(0.35),{stroke:"#e0e6ef",opacity:thin===null?1:0.3});
+  return cadLineProps(thin===null?0.75:sectionHairlineCap(0.35),{stroke:BRAND_LINE,opacity:thin===null?1:0.3});
 }
 
 /* ---------- Konva 舞台 ---------- */
@@ -279,7 +279,7 @@ const stage=new Konva.Stage({container:"konva-container",width:stageW(),height:s
 const bgLayer=new Konva.Layer();stage.add(bgLayer);
 const compLayer=new Konva.Layer();stage.add(compLayer);
 const uiLayer=new Konva.Layer();stage.add(uiLayer);   // 参考线 / 顶点
-const tr=new Konva.Transformer({rotateEnabled:false,keepRatio:false,borderStroke:"#2563eb",anchorStroke:"#2563eb",anchorFill:"#2563eb",anchorSize:9,ignoreStroke:true});
+const tr=new Konva.Transformer({rotateEnabled:false,keepRatio:false,borderStroke:ACCENT,anchorStroke:ACCENT,anchorFill:ACCENT,anchorSize:9,ignoreStroke:true});
 uiLayer.add(tr);
 const snapGroup=new Konva.Group();uiLayer.add(snapGroup);
 const overlapGroup=new Konva.Group();uiLayer.add(overlapGroup);
@@ -293,17 +293,17 @@ let bgGroup=new Konva.Group();bgLayer.add(bgGroup);
 function niceStep(raw){const p=Math.pow(10,Math.floor(Math.log10(raw)));const n=raw/p;return(n<1.5?1:n<3?2:n<7?5:10)*p;}
 function drawBackground(){
   bgGroup.destroyChildren();const W=stage.width(),H=stage.height();
-  bgGroup.add(new Konva.Rect({x:0,y:0,width:W,height:H,fill:"#f7f9fc",listening:false}));
+  bgGroup.add(new Konva.Rect({x:0,y:0,width:W,height:H,fill:BRAND_PAPER,listening:false}));
   const lineProps=gridLineProps();
   const viewSpanLat=(camera.maxLat-camera.minLat)/(stage.scaleX()||1);
   const configuredStep=gridStep();
   const step=configuredStep>0?configuredStep:niceStep(viewSpanLat/10);
   const latOrigin=configuredStep>0?gridOriginLat():0;
-  for(let v=latOrigin+Math.ceil((camera.minLat-latOrigin)/step)*step;v<=camera.maxLat;v+=step){const px=X(v);bgGroup.add(new Konva.Line({points:[px,0,px,H],...lineProps}));bgGroup.add(new Konva.Text({x:px+4,y:H-16,text:fmt(v),fontSize:9,fill:"#667085",listening:false}));}
+  for(let v=latOrigin+Math.ceil((camera.minLat-latOrigin)/step)*step;v<=camera.maxLat;v+=step){const px=X(v);bgGroup.add(new Konva.Line({points:[px,0,px,H],...lineProps}));bgGroup.add(new Konva.Text({x:px+4,y:H-16,text:fmt(v),fontSize:9,fill:BRAND_MUTED,listening:false}));}
   const viewSpanDep=(camera.maxDep-camera.minDep)/(stage.scaleY()||1);
   const stepD=configuredStep>0?configuredStep:niceStep(viewSpanDep/8);
   const depOrigin=configuredStep>0?gridOriginDep():0;
-  for(let v=depOrigin+Math.ceil((camera.minDep-depOrigin)/stepD)*stepD;v<=camera.maxDep;v+=stepD){const py=Y(v);bgGroup.add(new Konva.Line({points:[0,py,W,py],...lineProps}));bgGroup.add(new Konva.Text({x:6,y:py-13,text:fmt(v),fontSize:9,fill:"#667085",listening:false}));}
+  for(let v=depOrigin+Math.ceil((camera.minDep-depOrigin)/stepD)*stepD;v<=camera.maxDep;v+=stepD){const py=Y(v);bgGroup.add(new Konva.Line({points:[0,py,W,py],...lineProps}));bgGroup.add(new Konva.Text({x:6,y:py-13,text:fmt(v),fontSize:9,fill:BRAND_MUTED,listening:false}));}
   bgLayer.batchDraw();
 }
 
@@ -333,7 +333,7 @@ function drawComponents(){
     const ovlp=ov.ids.has(c.component_id);
     const col=c.color?`rgb(${c.color.map(v=>Math.round(v*255)).join(",")})`:matColor(c.material_id);
     // 当前截面投影重叠只作为提示；真实模型检查用 3D AABB。
-    const strokeC=world?"#98a2b3":(ovlp?"#b7791f":(sel?ACCENT:OUTLINE));
+    const strokeC=world?BRAND_LINE_STRONG:(ovlp?BRAND_AMBER:(sel?ACCENT:OUTLINE));
     const dash=world?[5,4]:(sel?[6,3]:undefined);  // 仅选中用虚线(流动);其余实线
     let shape;
     const usePoly=c.polygon&&polygonAxesMatch(c);
@@ -362,11 +362,11 @@ function drawComponents(){
     let label=null,matLabel=null,depLabel=null;
     if(bb.w>36&&bb.h>16&&!world){
       const suffix=c.polygon?` ◇${c.polygon.length}pt`:(c.geometry_type!=="box"?` (${c.geometry_type})`:"");
-      label=new Konva.Text({x:bb.x+5,y:bb.y+4,text:c.display_name,fontSize:12,fontStyle:600,fill:"#101828",listening:false});
-      matLabel=new Konva.Text({x:bb.x+5,y:bb.y+20,text:c.material_id+suffix,fontSize:10.5,fill:"#344054",listening:false});
+      label=new Konva.Text({x:bb.x+5,y:bb.y+4,text:c.display_name,fontSize:12,fontStyle:600,fill:BRAND_INK,listening:false});
+      matLabel=new Konva.Text({x:bb.x+5,y:bb.y+20,text:c.material_id+suffix,fontSize:10.5,fill:BRAND_MUTED,listening:false});
       const dk=DIM_KEY[axes.depth];
       const depTxt=c.polygon?`${fmt(bb.h/camera.sDep)}μm`:`${fmt(c.dimensions[dk])}μm`;
-      depLabel=new Konva.Text({x:bb.x+bb.w-6,y:bb.y+bb.h/2-6,width:Math.max(bb.w-10,20),align:"right",text:depTxt,fontSize:10,fill:"#475467",listening:false});
+      depLabel=new Konva.Text({x:bb.x+bb.w-6,y:bb.y+bb.h/2-6,width:Math.max(bb.w-10,20),align:"right",text:depTxt,fontSize:10,fill:BRAND_MUTED_2,listening:false});
       compLayer.add(label);compLayer.add(matLabel);compLayer.add(depLabel);
     }
     rectNodes.set(c.component_id,{shape,kind:usePoly?"poly":"rect",label,matLabel,depLabel});
@@ -482,7 +482,7 @@ function drawPolyAnchors(){
   const li=AXIS_IDX[axes.lateral],di=AXIS_IDX[axes.depth];
   c.polygon.forEach((p,idx)=>{
     const active=idx===selectedPolygonVertexIndex;
-    const a=new Konva.Circle({x:X(p[li]),y:Y(p[di]),radius:active?POLY_NODE_RADIUS_PX+0.8:POLY_NODE_RADIUS_PX,fill:active?"#155eef":ACCENT,stroke:"#ffffff",strokeWidth:0.8,strokeScaleEnabled:false,draggable:true,name:"anchor",hitStrokeWidth:POLY_NODE_HIT_PX});
+    const a=new Konva.Circle({x:X(p[li]),y:Y(p[di]),radius:active?POLY_NODE_RADIUS_PX+0.8:POLY_NODE_RADIUS_PX,fill:ACCENT,stroke:BRAND_PANEL,strokeWidth:0.8,strokeScaleEnabled:false,draggable:true,name:"anchor",hitStrokeWidth:POLY_NODE_HIT_PX});
     a.setAttr("pidx",idx);
     a.on("click tap",e=>{e.cancelBubble=true;selectPolygonVertex(+a.getAttr("pidx"));});
     a.on("dragmove",()=>{
@@ -559,7 +559,7 @@ function refreshSelectionCanvasDecorations(){
     const sel=selectedIds.has(id);
     const ovlp=lastOverlapIds.has(id);
     const bb=shapeBBoxPx(c);
-    const strokeC=world?"#98a2b3":(ovlp?"#b7791f":(sel?ACCENT:OUTLINE));
+    const strokeC=world?BRAND_LINE_STRONG:(ovlp?BRAND_AMBER:(sel?ACCENT:OUTLINE));
     const dash=world?[5,4]:(sel?[6,3]:undefined);
     n.shape.stroke(strokeC);
     n.shape.strokeWidth(sectionStrokeWidth(bb.w,bb.h,{selected:sel,world,overlap:ovlp}));
@@ -767,16 +767,16 @@ function drawMeasurement(){
   measureGroup.destroyChildren();
   const a=measureState.start,b=measureState.end||measureState.preview;
   if(a&&b){
-    measureGroup.add(new Konva.Line({points:[X(a.lat),Y(a.dep),X(b.lat),Y(b.dep)],...cadLineProps(sectionHairlineCap(0.8),{stroke:"#111827",dash:[5,4]})}));
-    measureGroup.add(new Konva.Circle({x:X(a.lat),y:Y(a.dep),radius:4,fill:"#111827",listening:false}));
-    measureGroup.add(new Konva.Circle({x:X(b.lat),y:Y(b.dep),radius:4,fill:"#111827",listening:false}));
+    measureGroup.add(new Konva.Line({points:[X(a.lat),Y(a.dep),X(b.lat),Y(b.dep)],...cadLineProps(sectionHairlineCap(0.8),{stroke:BRAND_INK,dash:[5,4]})}));
+    measureGroup.add(new Konva.Circle({x:X(a.lat),y:Y(a.dep),radius:4,fill:BRAND_INK,listening:false}));
+    measureGroup.add(new Konva.Circle({x:X(b.lat),y:Y(b.dep),radius:4,fill:BRAND_INK,listening:false}));
     const mid={x:(X(a.lat)+X(b.lat))/2,y:(Y(a.dep)+Y(b.dep))/2};
     measureGroup.add(new Konva.Label({x:mid.x+8,y:mid.y-18,listening:false}));
     const label=measureGroup.children[measureGroup.children.length-1];
-    label.add(new Konva.Tag({fill:"#ffffff",stroke:"#b9c3d0",strokeWidth:sectionHairlineCap(0.7),cornerRadius:4,shadowColor:"rgba(16,24,40,.16)",shadowBlur:6,shadowOffset:{x:0,y:2}}));
-    label.add(new Konva.Text({text:`L ${fmt(Math.hypot(b.lat-a.lat,b.dep-a.dep))} μm`,fontSize:11,fill:"#101828",padding:5}));
+    label.add(new Konva.Tag({fill:BRAND_PANEL,stroke:BRAND_LINE,strokeWidth:sectionHairlineCap(0.7),cornerRadius:4,shadowColor:"rgba(40,34,24,.16)",shadowBlur:6,shadowOffset:{x:0,y:2}}));
+    label.add(new Konva.Text({text:`L ${fmt(Math.hypot(b.lat-a.lat,b.dep-a.dep))} μm`,fontSize:11,fill:BRAND_INK,padding:5}));
   }else if(a){
-    measureGroup.add(new Konva.Circle({x:X(a.lat),y:Y(a.dep),radius:4,fill:"#111827",listening:false}));
+    measureGroup.add(new Konva.Circle({x:X(a.lat),y:Y(a.dep),radius:4,fill:BRAND_INK,listening:false}));
   }
   measureGroup.moveToTop();
   uiLayer.batchDraw();
@@ -984,7 +984,7 @@ function drawAnnotations(){
   for(const ann of dimensionAnnotations){
     const g=annotationGeometry(ann);
     if(!g)continue;
-    const stroke=g.kind==="pair_gap"?"#c2410c":(g.kind==="component_dimension"?"#155eef":"#0f172a");
+    const stroke=g.kind==="pair_gap"?"#c2410c":(g.kind==="component_dimension"?ACCENT:BRAND_INK);
     const thin=thinProjectionMinPx();
     for(const pts of g.extensions){
       annotationGroup.add(new Konva.Line({points:pts,...cadLineProps(sectionHairlineCap(0.55),{stroke,opacity:thin===null?0.65:0.5,dash:[3,3]})}));
@@ -995,8 +995,8 @@ function drawAnnotations(){
     annotationGroup.add(new Konva.Circle({x:bx,y:by,radius:2.5,fill:"#ffffff",stroke,strokeWidth:sectionHairlineCap(0.7),strokeScaleEnabled:false,listening:false}));
     const mid={x:(ax+bx)/2,y:(ay+by)/2};
     const label=new Konva.Label({x:mid.x+8,y:mid.y+8,listening:false});
-    label.add(new Konva.Tag({fill:"#fff",stroke:g.kind==="pair_gap"?"#fdba74":(g.kind==="component_dimension"?"#93c5fd":"#667085"),strokeWidth:sectionHairlineCap(0.7),cornerRadius:4}));
-    label.add(new Konva.Text({text:g.label,fontSize:11,fill:"#0f172a",padding:5}));
+    label.add(new Konva.Tag({fill:BRAND_PANEL,stroke:g.kind==="pair_gap"?"#fdba74":(g.kind==="component_dimension"?BRAND_ACCENT_LINE:BRAND_LINE_STRONG),strokeWidth:sectionHairlineCap(0.7),cornerRadius:4}));
+    label.add(new Konva.Text({text:g.label,fontSize:11,fill:BRAND_INK,padding:5}));
     annotationGroup.add(label);
   }
   annotationGroup.moveToTop();uiLayer.batchDraw();
@@ -1688,7 +1688,7 @@ function drawOverlapRegions(regions){
 function updateOverlapHUD(n){
   const el=document.getElementById("hudOverlap");
   if(!el)return;
-  if(n>0){el.style.display="";el.innerHTML=`截面投影 ${n}`;el.style.cssText="display:inline;padding:3px 7px;background:#fffbeb;color:#92400e;border:1px solid #fde68a;border-radius:999px;font-family:var(--mono);font-size:11px;font-weight:600";}
+  if(n>0){el.style.display="";el.innerHTML=`截面投影 ${n}`;el.style.cssText=`display:inline;padding:3px 7px;background:${BRAND_AMBER_SOFT};color:${BRAND_AMBER};border:1px solid #fde68a;border-radius:999px;font-family:var(--mono);font-size:11px;font-weight:600`;}
   else{el.style.display="none";}
 }
 function updateSliceUI(){
@@ -1707,7 +1707,7 @@ function updateSliceUI(){
     const s=sliceBounds();
     badge.style.display="";
     badge.innerHTML=`剖切 ${s.axis}=${fmt(s.pos)} · 厚${fmt(s.thickness)} μm · ±${fmt(s.thickness/2)}`;
-    badge.style.cssText="display:inline;padding:3px 7px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:999px;font-family:var(--mono);font-size:11px;font-weight:600";
+    badge.style.cssText=`display:inline;padding:3px 7px;background:${BRAND_ACCENT_SOFT};color:${ACCENT};border:1px solid ${BRAND_ACCENT_LINE};border-radius:999px;font-family:var(--mono);font-size:11px;font-weight:600`;
   }else{
     badge.style.display="none";
   }
@@ -2900,9 +2900,9 @@ function drawSlicePlane3D(ctx,project,bounds){
   ctx.beginPath();ctx.moveTo(pp[0][0],pp[0][1]);
   for(let i=1;i<pp.length;i++)ctx.lineTo(pp[i][0],pp[i][1]);
   ctx.closePath();
-  ctx.fillStyle="rgba(37,99,235,.08)";ctx.fill();
-  ctx.strokeStyle="rgba(37,99,235,.65)";ctx.lineWidth=1.3;ctx.setLineDash([5,4]);ctx.stroke();
-  ctx.setLineDash([]);ctx.fillStyle="#1d4ed8";ctx.font="11px sans-serif";
+  ctx.fillStyle="rgba(185,65,56,.08)";ctx.fill();
+  ctx.strokeStyle="rgba(143,41,36,.65)";ctx.lineWidth=1.3;ctx.setLineDash([5,4]);ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle=ACCENT;ctx.font="11px sans-serif";
   ctx.fillText(`${s.axis}=${fmt(s.pos)} μm`,pp[0][0]+6,pp[0][1]-6);
   ctx.restore();
 }
@@ -2957,7 +2957,7 @@ function drawBox3D(ctx,project,c,labelIndex=0){
     last3DHitRegions.push({id:c.component_id,hull,depth,center});
   }
   const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]];
-  const col=isWorld(c)?"#98a2b3":matColor(c.material_id);
+  const col=isWorld(c)?BRAND_LINE_STRONG:matColor(c.material_id);
   ctx.save();
   ctx.globalAlpha=isWorld(c)?0.08:0.26;
   for(const f of faces){
@@ -2969,7 +2969,7 @@ function drawBox3D(ctx,project,c,labelIndex=0){
   const selected=selectedIds.has(c.component_id);
   const overlap=last3DOverlapIds.has(c.component_id);
   const projected=previewProjectedBoxPx(pts);
-  ctx.strokeStyle=overlap?"#c2410c":(selected?"#1d4ed8":(isWorld(c)?"#98a2b3":"#344054"));
+  ctx.strokeStyle=overlap?"#c2410c":(selected?ACCENT:(isWorld(c)?BRAND_LINE_STRONG:BRAND_MUTED));
   ctx.lineWidth=preview3DLineWidth(projected.minPx,{selected,world:isWorld(c),overlap});
   last3DStrokeSamples.push({id:c.component_id,projectedMinPx:projected.minPx,lineWidth:ctx.lineWidth});
   const edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
@@ -2978,7 +2978,7 @@ function drawBox3D(ctx,project,c,labelIndex=0){
   if(selectedIds.has(c.component_id)&&labelIndex<4){
     const p=project([(bbox3D(c).min[0]+bbox3D(c).max[0])/2,(bbox3D(c).min[1]+bbox3D(c).max[1])/2,bbox3D(c).max[2]]);
     const text=c.display_name.length>18?c.display_name.slice(0,17)+"…":c.display_name;
-    ctx.fillStyle="#101828";ctx.font="12px sans-serif";ctx.fillText(text,p[0]+8,p[1]-8-labelIndex*14);
+    ctx.fillStyle=BRAND_INK;ctx.font="12px sans-serif";ctx.fillText(text,p[0]+8,p[1]-8-labelIndex*14);
     drewLabel=true;
   }
   ctx.restore();
@@ -2986,7 +2986,7 @@ function drawBox3D(ctx,project,c,labelIndex=0){
 }
 function draw3DGrid(ctx,project,bounds){
   const z=bounds.min[2],steps=4;
-  ctx.save();ctx.strokeStyle="#e0e6ef";ctx.lineWidth=1;
+  ctx.save();ctx.strokeStyle=BRAND_LINE;ctx.lineWidth=1;
   for(let i=0;i<=steps;i++){
     const t=i/steps;
     const x=bounds.min[0]+(bounds.max[0]-bounds.min[0])*t;
@@ -3000,7 +3000,7 @@ function draw3DGrid(ctx,project,bounds){
 }
 function draw3DAxes(ctx,project,bounds){
   const o=[bounds.min[0],bounds.min[1],bounds.min[2]];
-  const axis=[["x",[bounds.max[0],bounds.min[1],bounds.min[2]],"#2563eb"],["y",[bounds.min[0],bounds.max[1],bounds.min[2]],"#047857"],["z",[bounds.min[0],bounds.min[1],bounds.max[2]],"#c2410c"]];
+  const axis=[["x",[bounds.max[0],bounds.min[1],bounds.min[2]],ACCENT],["y",[bounds.min[0],bounds.max[1],bounds.min[2]],BRAND_GREEN],["z",[bounds.min[0],bounds.min[1],bounds.max[2]],BRAND_AMBER]];
   const po=project(o);
   ctx.save();ctx.font="11px sans-serif";
   for(const [label,end,color] of axis){
@@ -3055,8 +3055,8 @@ function drawMarquee(){
   const r=normalizeMarqueeRect({x1:marqueeState.start.x,y1:marqueeState.start.y,x2:marqueeState.current.x,y2:marqueeState.current.y});
   marqueeGroup.add(new Konva.Rect({
     x:r.x,y:r.y,width:r.w,height:r.h,
-    fill:"rgba(37,99,235,0.08)",
-    stroke:"#2563eb",
+    fill:"rgba(185,65,56,0.08)",
+    stroke:ACCENT,
     strokeWidth:1,
     strokeScaleEnabled:false,
     dash:[5,3],
@@ -4299,14 +4299,14 @@ function buildSectionSVG(){
     `<metadata>${svgText(JSON.stringify(metadata))}</metadata>`,
     `<title>${svgAttr(model.meta.target_system||model.meta.job_id||"Device section")}</title>`,
     `<desc>Device Canvas section export in micrometer data coordinates. SVG y = -${svgAttr(axes.depth)}.</desc>`,
-    `<rect x="${svgNum(minLat)}" y="${svgNum(-maxDep)}" width="${svgNum(width)}" height="${svgNum(height)}" fill="#ffffff"/>`,
+    `<rect x="${svgNum(minLat)}" y="${svgNum(-maxDep)}" width="${svgNum(width)}" height="${svgNum(height)}" fill="${svgAttr(BRAND_PANEL)}"/>`,
     `<g id="components">`,
   ];
   const li=AXIS_IDX[axes.lateral],di=AXIS_IDX[axes.depth];
   for(const c of comps){
     const world=isWorld(c);
     const fill=world?"none":(c.color?`rgb(${c.color.map(v=>Math.round(v*255)).join(",")})`:matColor(c.material_id));
-    const stroke=world?"#98a2b3":OUTLINE;
+    const stroke=world?BRAND_LINE_STRONG:OUTLINE;
     const common=`data-component-id="${svgAttr(c.component_id)}" data-name="${svgAttr(c.display_name)}" data-material="${svgAttr(c.material_id||"")}"`;
     if(c.polygon&&polygonAxesMatch(c)){
       const pts=c.polygon.map(p=>svgPoint(p[li],p[di])).join(" ");
@@ -4328,10 +4328,10 @@ function buildSectionSVG(){
       const kind=svgAttr(ann.kind||"free_dimension");
       lines.push(`<g data-annotation-id="${id}" data-annotation-kind="${kind}"${comp}${pair}>`);
       for(const ex of g.extensions){
-        lines.push(`<line x1="${svgNum(ex.start.lat)}" y1="${svgNum(-ex.start.dep)}" x2="${svgNum(ex.end.lat)}" y2="${svgNum(-ex.end.dep)}" fill="none" ${svgLineAttrs({stroke:"#155eef",strokeWidth:0.45,dash:"3 3"})}/>`);
+        lines.push(`<line x1="${svgNum(ex.start.lat)}" y1="${svgNum(-ex.start.dep)}" x2="${svgNum(ex.end.lat)}" y2="${svgNum(-ex.end.dep)}" fill="none" ${svgLineAttrs({stroke:ACCENT,strokeWidth:0.45,dash:"3 3"})}/>`);
       }
-      lines.push(`<line x1="${svgNum(g.start.lat)}" y1="${svgNum(-g.start.dep)}" x2="${svgNum(g.end.lat)}" y2="${svgNum(-g.end.dep)}" fill="none" ${svgLineAttrs({stroke:"#155eef",strokeWidth:0.6})}/>`);
-      lines.push(`<text x="${svgNum(g.labelPoint.lat)}" y="${svgNum(-g.labelPoint.dep)}" font-size="${svgNum(height*0.025)}" fill="#0f172a" text-anchor="middle">${svgText(String(g.labelText||"").replace(/μm/g,"um"))}</text>`);
+      lines.push(`<line x1="${svgNum(g.start.lat)}" y1="${svgNum(-g.start.dep)}" x2="${svgNum(g.end.lat)}" y2="${svgNum(-g.end.dep)}" fill="none" ${svgLineAttrs({stroke:ACCENT,strokeWidth:0.6})}/>`);
+      lines.push(`<text x="${svgNum(g.labelPoint.lat)}" y="${svgNum(-g.labelPoint.dep)}" font-size="${svgNum(height*0.025)}" fill="${svgAttr(BRAND_INK)}" text-anchor="middle">${svgText(String(g.labelText||"").replace(/μm/g,"um"))}</text>`);
       lines.push(`</g>`);
     }
     lines.push(`</g>`);
