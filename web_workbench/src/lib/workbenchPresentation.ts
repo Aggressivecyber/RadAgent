@@ -6,7 +6,7 @@ export type WorkbenchHero = {
   title: string
   subtitle: string
   statusText: string
-  modeText: string
+  statusTone: 'idle' | 'running' | 'paused' | 'error'
 }
 
 export type PhaseTrackItem = {
@@ -53,8 +53,33 @@ export type AgentCockpitFileGroup = {
 
 export type AgentCockpitActivity = {
   title: string
+  detail: string
   statusLabel: string
   phaseLabel: string
+}
+
+export type AgentCockpitStatusChip = {
+  label: string
+  value: string
+  tone: 'neutral' | 'running' | 'warning' | 'error' | 'success'
+}
+
+export type LlmDebugCall = {
+  id: string
+  phase: string
+  phaseLabel: string
+  moduleName: string
+  moduleLabel: string
+  modelName: string
+  status: 'running' | 'success' | 'error' | 'info'
+  statusLabel: string
+  durationLabel: string
+  promptSummary: string
+  promptCharsLabel: string
+  outputSummary: string
+  outputCharsLabel: string
+  artifactPath: string
+  createdAt: string
 }
 
 export type AgentCockpit = {
@@ -64,13 +89,15 @@ export type AgentCockpit = {
     currentAction: string
     workspace: string
     changedFiles: string
+    statusChips: AgentCockpitStatusChip[]
   }
   fileGroups: AgentCockpitFileGroup[]
   recentActivity: AgentCockpitActivity[]
+  llmDebugCalls: LlmDebugCall[]
 }
 
 export type ReviewCallout = {
-  kind: 'human-confirmation' | 'visual-review'
+  kind: 'human-confirmation' | 'repair-continuation'
   eyebrow: string
   title: string
   detail: string
@@ -115,6 +142,13 @@ const statusLabels: Record<TimelineRow['status'], string> = {
   error: '失败',
 }
 
+const llmStatusLabels: Record<LlmDebugCall['status'], string> = {
+  info: '记录',
+  running: '运行中',
+  success: '通过',
+  error: '失败',
+}
+
 const runtimeStatusLabels: Record<string, string> = {
   idle: '待命',
   running: '运行中',
@@ -134,6 +168,13 @@ const confirmationStatusLabels: Record<string, string> = {
   completed: '已完成',
 }
 
+const codegenStatusLabels: Record<string, { value: string; tone: AgentCockpitStatusChip['tone'] }> = {
+  passed: { value: '已通过', tone: 'success' },
+  failed: { value: '失败', tone: 'error' },
+  needs_user_input: { value: '等待人工确认', tone: 'warning' },
+  running: { value: '运行中', tone: 'running' },
+}
+
 function phaseLabel(phase?: string): string {
   if (!phase) {
     return '准备工作区'
@@ -148,21 +189,24 @@ function heroPhaseLabel(phase?: string): string {
   return phaseLabel(phase)
 }
 
-function runModeLabel(mode?: string): string {
-  if (!mode || mode === 'local') {
-    return '本地运行'
-  }
-  if (mode === 'remote') {
-    return '远程运行'
-  }
-  return mode
-}
-
 function runtimeStatusLabel(status?: string): string {
   if (!status) {
     return '待命'
   }
   return runtimeStatusLabels[status] || status.replaceAll('_', ' ')
+}
+
+function runtimeStatusTone(status?: string): WorkbenchHero['statusTone'] {
+  if (status === 'running' || status === 'completed') {
+    return 'running'
+  }
+  if (status === 'paused' || status === 'blocked') {
+    return 'paused'
+  }
+  if (status === 'failed' || status === 'error') {
+    return 'error'
+  }
+  return 'idle'
 }
 
 function humanizeIdentifier(value?: string): string {
@@ -238,20 +282,33 @@ function statusValue(status: JobStatus, key: string): string {
   return String(status.key_statuses?.[key] ?? status.state?.[key] ?? '').trim()
 }
 
-function isBlockedVisualReview(status: JobStatus): boolean {
-  const visualReviewStatus = statusValue(status, 'visual_review_status')
-  if (visualReviewStatus === 'pending' || visualReviewStatus === 'rejected') {
-    return true
-  }
-  const failedGates = Array.isArray(status.state?.failed_gates) ? status.state.failed_gates : []
-  return failedGates.some((value) => {
-    const gate = record(value)
-    return Number(gate.gate_id) === 21 && ['block', 'blocked'].includes(String(gate.status || ''))
-  })
+function repairContinuationRequest(status: JobStatus): Record<string, unknown> {
+  const request = status.state?.repair_continuation_request
+  return record(request)
 }
 
 export function createReviewCallout(status: JobStatus | null): ReviewCallout | null {
   if (!status || !status.job_id) {
+    return null
+  }
+
+  const repairStatus = statusValue(status, 'repair_continuation_status')
+  const repairRequest = repairContinuationRequest(status)
+  if (repairStatus === 'pending' && repairRequest.status === 'pending') {
+    const increment = Number(repairRequest.increment_turns || 12)
+    return {
+      kind: 'repair-continuation',
+      eyebrow: '需要批准继续修复',
+      title: `修复 Agent 已耗尽当前轮数，是否追加 ${increment} 轮继续修复？`,
+      detail: '这不是普通下一步。批准后会继续当前 Geant4 工程修复；拒绝则保留当前失败/暂停状态。',
+      primaryLabel: `批准追加 ${increment} 轮`,
+      primaryCommand: '/confirm approve',
+      secondaryLabel: '查看确认项',
+      secondaryCommand: '/confirm',
+    }
+  }
+
+  if (statusValue(status, 'g4_modeling_status') === 'failed') {
     return null
   }
 
@@ -268,19 +325,6 @@ export function createReviewCallout(status: JobStatus | null): ReviewCallout | n
       detail: '打开确认面板后，可以查看到底要确认什么；如果参数含糊，填写补充说明让 Agent 继续追问。',
       primaryLabel: '查看确认项',
       primaryCommand: '/confirm',
-    }
-  }
-
-  if (isBlockedVisualReview(status)) {
-    return {
-      kind: 'visual-review',
-      eyebrow: '需要可视化复核',
-      title: 'Geant4 可视化门禁正在等待 100-event 工作台检查。',
-      detail: '先打开工作台检查几何和轨迹；确认无误后记录通过，门禁才会继续推进。',
-      primaryLabel: '打开工作台',
-      primaryCommand: '/workbench 100',
-      secondaryLabel: '记录通过',
-      secondaryCommand: '/visual-approve',
     }
   }
 
@@ -305,13 +349,72 @@ function stageSortValue(stage: string): number {
   return 99
 }
 
+function eventField(event: RadAgentEvent, key: string): unknown {
+  const payloadValue = event.payload?.[key]
+  if (payloadValue !== undefined) {
+    return payloadValue
+  }
+  return (event as unknown as Record<string, unknown>)[key]
+}
+
 function eventArtifacts(event: RadAgentEvent): Array<{ path?: unknown }> {
-  const raw = event.payload?.artifacts
+  const raw = eventField(event, 'artifacts')
   return Array.isArray(raw) ? (raw as Array<{ path?: unknown }>) : []
 }
 
+function eventMetrics(event: RadAgentEvent): Record<string, unknown> {
+  return record(eventField(event, 'metrics'))
+}
+
+function eventDetails(event: RadAgentEvent): Record<string, unknown> {
+  return record(eventField(event, 'details'))
+}
+
+function eventDurationMs(event: RadAgentEvent): number {
+  const value = Number(eventField(event, 'duration_ms'))
+  return Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+function eventErrors(event: RadAgentEvent): string[] {
+  const raw = eventField(event, 'errors')
+  return Array.isArray(raw) ? raw.map((item) => String(item || '').trim()).filter(Boolean) : []
+}
+
+function eventTimestamp(event: RadAgentEvent): string {
+  return (
+    String(event.created_at || '').trim() ||
+    String((event as unknown as Record<string, unknown>).timestamp || '').trim()
+  )
+}
+
 function latestEvent(events: RadAgentEvent[]): RadAgentEvent | undefined {
-  return [...events].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).at(0)
+  return events
+    .map((event, index) => ({ event, index }))
+    .sort((a, b) => {
+      const byTime = eventTimestamp(b.event).localeCompare(eventTimestamp(a.event))
+      return byTime || b.index - a.index
+    })
+    .at(0)?.event
+}
+
+function workflowEvents(events: RadAgentEvent[]): RadAgentEvent[] {
+  return events.filter((event) => !event.event_type.startsWith('copilot_'))
+}
+
+function sortEventsNewestFirst(events: RadAgentEvent[]): RadAgentEvent[] {
+  return events
+    .map((event, index) => ({ event, index }))
+    .sort((a, b) => {
+      const byTime = eventTimestamp(b.event).localeCompare(eventTimestamp(a.event))
+      return byTime || b.index - a.index
+    })
+    .map((item) => item.event)
+}
+
+function latestWorkflowEvent(events: RadAgentEvent[], phase = ''): RadAgentEvent | undefined {
+  const candidates = workflowEvents(events)
+  const phaseMatches = phase ? candidates.filter((event) => event.phase === phase) : []
+  return latestEvent(phaseMatches.length > 0 ? phaseMatches : candidates)
 }
 
 function changedFileLabel(events: RadAgentEvent[]): string {
@@ -331,6 +434,278 @@ function changedFileLabel(events: RadAgentEvent[]): string {
     }
   }
   return artifactPaths.size > 0 ? `${artifactPaths.size} 个文件` : '暂无文件变更'
+}
+
+function statusRawValue(status: JobStatus | null, key: string): string {
+  return String(status?.key_statuses?.[key] ?? status?.state?.[key] ?? '').trim()
+}
+
+function compactNodeLabel(status: JobStatus | null, fallbackPhase: string): string {
+  return humanizeIdentifier(statusRawValue(status, 'current_node') || fallbackPhase)
+}
+
+function codegenStatusChip(status: JobStatus | null): AgentCockpitStatusChip | null {
+  if (status?.current_phase !== 'g4_codegen' && !statusRawValue(status, 'g4_codegen_status')) {
+    return null
+  }
+  const raw = statusRawValue(status, 'g4_codegen_status') || status?.status || 'running'
+  const mapped = codegenStatusLabels[raw] || {
+    value: humanizeIdentifier(raw) || '运行中',
+    tone: raw === 'failed' ? 'error' : raw === 'paused' ? 'warning' : 'running',
+  }
+  return { label: 'Codegen', value: mapped.value, tone: mapped.tone }
+}
+
+function latestModuleLabel(event: RadAgentEvent | undefined): string {
+  const details = event ? eventDetails(event) : {}
+  const metadata = record(details.metadata)
+  const moduleName = String(
+    (event ? eventField(event, 'module_name') : '') || metadata.module_name || '',
+  ).trim()
+  return humanizeIdentifier(moduleName || event?.event_type || '')
+}
+
+function repairTurnsChip(status: JobStatus | null): AgentCockpitStatusChip | null {
+  const request = record(status?.state?.repair_continuation_request)
+  const report = record(status?.state?.global_integration_agent_report)
+  const agentic = record(report.agentic)
+  const currentTurns = Number(request.current_turns ?? agentic.n_turns)
+  const requestedTotal = Number(request.requested_total_turns)
+  if (!Number.isFinite(currentTurns) || currentTurns <= 0) {
+    return null
+  }
+  return {
+    label: '修复轮数',
+    value: Number.isFinite(requestedTotal) && requestedTotal > 0 ? `${currentTurns}/${requestedTotal}` : String(currentTurns),
+    tone: 'warning',
+  }
+}
+
+function waitingChip(status: JobStatus | null): AgentCockpitStatusChip | null {
+  const repairStatus = statusRawValue(status, 'repair_continuation_status')
+  const request = record(status?.state?.repair_continuation_request)
+  if (repairStatus === 'pending' && request.status === 'pending') {
+    return { label: '等待事项', value: '批准继续修复', tone: 'warning' }
+  }
+  if (status?.needs_confirmation) {
+    return { label: '等待事项', value: '人工确认', tone: 'warning' }
+  }
+  return null
+}
+
+function agentStatusChips(
+  status: JobStatus | null,
+  activePhase: string,
+  currentEvent: RadAgentEvent | undefined,
+): AgentCockpitStatusChip[] {
+  const chips: AgentCockpitStatusChip[] = [
+    { label: '当前节点', value: compactNodeLabel(status, activePhase), tone: 'neutral' },
+  ]
+  const codegen = codegenStatusChip(status)
+  if (codegen) {
+    chips.push(codegen)
+  }
+  const moduleLabel = latestModuleLabel(currentEvent)
+  if (moduleLabel) {
+    chips.push({ label: '构建模块', value: moduleLabel, tone: 'running' })
+  }
+  const repairTurns = repairTurnsChip(status)
+  if (repairTurns) {
+    chips.push(repairTurns)
+  }
+  const waiting = waitingChip(status)
+  if (waiting) {
+    chips.push(waiting)
+  }
+  return chips
+}
+
+function eventStatusLabel(status: unknown): string {
+  const raw = String(status || '').trim()
+  if (raw in statusLabels) {
+    return statusLabels[raw as TimelineRow['status']]
+  }
+  if (['passed', 'complete', 'completed', 'succeeded'].includes(raw)) {
+    return '通过'
+  }
+  if (['failed', 'failure'].includes(raw)) {
+    return '失败'
+  }
+  return humanizeIdentifier(raw) || '记录'
+}
+
+function normalizeLlmStatus(status: unknown): LlmDebugCall['status'] {
+  const raw = String(status || '').trim().toLowerCase()
+  if (raw === 'running') {
+    return 'running'
+  }
+  if (['passed', 'success', 'succeeded', 'complete', 'completed'].includes(raw)) {
+    return 'success'
+  }
+  if (['failed', 'error', 'failure'].includes(raw)) {
+    return 'error'
+  }
+  return 'info'
+}
+
+function numberValue(value: unknown): number {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : 0
+}
+
+function characterLabel(count: number): string {
+  return count > 0 ? `${count.toLocaleString('en-US')} 字符` : ''
+}
+
+function durationLabel(durationMs: number, status: LlmDebugCall['status']): string {
+  if (durationMs > 0) {
+    if (durationMs < 1000) {
+      return `${Math.round(durationMs)} ms`
+    }
+    if (durationMs < 600_000) {
+      return `${(durationMs / 1000).toFixed(1)} 秒`
+    }
+    return `${(durationMs / 60_000).toFixed(1)} 分钟`
+  }
+  return status === 'running' ? '进行中' : '未记录'
+}
+
+function modelCallId(event: RadAgentEvent): string {
+  const details = eventDetails(event)
+  const metadata = record(details.metadata)
+  const artifactPath = eventArtifacts(event)
+    .map((artifact) => String(artifact.path || '').trim())
+    .find(Boolean)
+  return (
+    String(metadata.model_call_id || eventField(event, 'model_call_id') || '').trim() ||
+    artifactPath ||
+    [eventTimestamp(event), event.event_type, event.phase, event.summary].join(':')
+  )
+}
+
+function modelCallModuleName(event: RadAgentEvent): string {
+  const details = eventDetails(event)
+  const metadata = record(details.metadata)
+  return String(
+    eventField(event, 'module_name') || metadata.module_name || details.module_name || '',
+  ).trim()
+}
+
+function modelCallModelName(event: RadAgentEvent): string {
+  const details = eventDetails(event)
+  return String(details.model_name || eventField(event, 'model_name') || '').trim()
+}
+
+type LlmCallDraft = {
+  id: string
+  phase: string
+  moduleName: string
+  modelName: string
+  status: LlmDebugCall['status']
+  durationMs: number
+  promptSummary: string
+  promptChars: number
+  outputSummary: string
+  outputChars: number
+  artifactPath: string
+  createdAt: string
+  order: number
+}
+
+function mergeModelCallEvent(draft: LlmCallDraft, event: RadAgentEvent, index: number): LlmCallDraft {
+  const metrics = eventMetrics(event)
+  const artifactPath = eventArtifacts(event)
+    .map((artifact) => String(artifact.path || '').trim())
+    .find(Boolean)
+  const moduleName = modelCallModuleName(event)
+  const modelName = modelCallModelName(event)
+  const createdAt = eventTimestamp(event)
+  const isStart = event.event_type === 'model_call_start'
+  const status = normalizeLlmStatus(event.status)
+  const systemPromptChars = numberValue(metrics.system_prompt_chars)
+  const userPromptChars = numberValue(metrics.user_prompt_chars)
+  const contentLength = numberValue(metrics.content_length)
+  const errors = eventErrors(event)
+
+  return {
+    ...draft,
+    phase: event.phase || draft.phase,
+    moduleName: moduleName || draft.moduleName,
+    modelName: modelName || draft.modelName,
+    artifactPath: artifactPath || draft.artifactPath,
+    createdAt: createdAt && createdAt >= draft.createdAt ? createdAt : draft.createdAt,
+    order: Math.max(draft.order, index),
+    status:
+      status === 'running' && (draft.status === 'success' || draft.status === 'error')
+        ? draft.status
+        : status,
+    durationMs: eventDurationMs(event) || draft.durationMs,
+    promptSummary: isStart && event.summary ? event.summary : draft.promptSummary,
+    promptChars: systemPromptChars + userPromptChars || draft.promptChars,
+    outputSummary: !isStart
+      ? errors[0] || event.summary || draft.outputSummary
+      : draft.outputSummary,
+    outputChars: contentLength || draft.outputChars,
+  }
+}
+
+function createEmptyModelCallDraft(id: string): LlmCallDraft {
+  return {
+    id,
+    phase: '',
+    moduleName: '',
+    modelName: '',
+    status: 'info',
+    durationMs: 0,
+    promptSummary: '',
+    promptChars: 0,
+    outputSummary: '',
+    outputChars: 0,
+    artifactPath: '',
+    createdAt: '',
+    order: 0,
+  }
+}
+
+function createLlmDebugCalls(events: RadAgentEvent[]): LlmDebugCall[] {
+  const calls = new Map<string, LlmCallDraft>()
+
+  events.forEach((event, index) => {
+    if (event.event_type !== 'model_call_start' && event.event_type !== 'model_call') {
+      return
+    }
+    const id = modelCallId(event)
+    const draft = calls.get(id) || createEmptyModelCallDraft(id)
+    calls.set(id, mergeModelCallEvent(draft, event, index))
+  })
+
+  return [...calls.values()]
+    .sort((left, right) => {
+      const byTime = right.createdAt.localeCompare(left.createdAt)
+      return byTime || right.order - left.order
+    })
+    .slice(0, 5)
+    .map((call) => {
+      const status = call.status
+      return {
+        id: call.id,
+        phase: call.phase || 'unknown',
+        phaseLabel: phaseLabel(call.phase || 'unknown'),
+        moduleName: call.moduleName || 'unknown',
+        moduleLabel: humanizeIdentifier(call.moduleName) || 'Unknown',
+        modelName: call.modelName || '未知模型',
+        status,
+        statusLabel: llmStatusLabels[status],
+        durationLabel: durationLabel(call.durationMs, status),
+        promptSummary: call.promptSummary || '未收到 prompt 摘要',
+        promptCharsLabel: characterLabel(call.promptChars) || '未知字符数',
+        outputSummary:
+          call.outputSummary || (status === 'running' ? '等待模型输出' : '未收到输出摘要'),
+        outputCharsLabel: characterLabel(call.outputChars),
+        artifactPath: call.artifactPath || '未记录 artifact 路径',
+        createdAt: call.createdAt,
+      }
+    })
 }
 
 function extractPromptField(prompt: string, label: string): string {
@@ -364,7 +739,7 @@ export function createWorkbenchHero(status: JobStatus | null): WorkbenchHero {
       title: '等待仿真任务',
       subtitle: '输入辐照防护目标，Agent 会规划模型、构建工程、运行门禁并归档结果。',
       statusText: '待命 · 准备工作区',
-      modeText: '本地环境 · strict',
+      statusTone: 'idle',
     }
   }
 
@@ -378,7 +753,7 @@ export function createWorkbenchHero(status: JobStatus | null): WorkbenchHero {
     title: workbenchTitle(status),
     subtitle: `当前推进到 ${currentPhase}，已完成 ${done}/${total} 个阶段。`,
     statusText: `${runtimeStatusLabel(status.status)} · ${currentPhase}`,
-    modeText: `${runModeLabel(status.run_mode)} · ${status.execution_mode || 'strict'}`,
+    statusTone: runtimeStatusTone(status.status),
   }
 }
 
@@ -472,8 +847,8 @@ export function createAgentCockpit({
   artifacts: ArtifactSummary[]
   selectedPath?: string
 }): AgentCockpit {
-  const currentEvent = latestEvent(events)
-  const activePhase = status?.current_phase || currentEvent?.phase || 'prepare_workspace'
+  const activePhase = status?.current_phase || 'prepare_workspace'
+  const currentEvent = latestWorkflowEvent(events, activePhase)
   const grouped = new Map<string, AgentCockpitFile[]>()
 
   for (const artifact of artifacts) {
@@ -509,12 +884,12 @@ export function createAgentCockpit({
       }
     })
 
-  const recentActivity = [...events]
-    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+  const recentActivity = sortEventsNewestFirst(workflowEvents(events))
     .slice(0, 4)
     .map((event) => ({
       title: event.event_type.replaceAll('_', ' '),
-      statusLabel: statusLabels[event.status],
+      detail: event.summary,
+      statusLabel: eventStatusLabel(event.status),
       phaseLabel: phaseLabel(event.phase),
     }))
 
@@ -522,11 +897,13 @@ export function createAgentCockpit({
     agent: {
       stateLabel: runtimeStatusLabel(status?.status),
       phaseLabel: heroPhaseLabel(activePhase),
-      currentAction: currentEvent?.summary || '等待新的 Agent 操作',
+      currentAction: currentEvent?.summary || phaseLabel(activePhase),
       workspace: status?.job_workspace || status?.workspace_root || '尚未创建工作区',
       changedFiles: changedFileLabel(events),
+      statusChips: agentStatusChips(status, activePhase, currentEvent),
     },
     fileGroups,
     recentActivity,
+    llmDebugCalls: createLlmDebugCalls(events),
   }
 }

@@ -10,12 +10,12 @@ describe('home intro state', () => {
     expect(createHomeIntroState({ reducedMotion: true })).toEqual({ stage: 'collapsed' })
   })
 
-  it('moves through a transition before collapsing after click, wheel, or touch intent', () => {
+  it('moves through a transition before collapsing after click only', () => {
     const state = createHomeIntroState({ reducedMotion: false })
 
     expect(reduceHomeIntro(state, { type: 'click' })).toEqual({ stage: 'transitioning' })
-    expect(reduceHomeIntro(state, { type: 'wheel' })).toEqual({ stage: 'transitioning' })
-    expect(reduceHomeIntro(state, { type: 'touch' })).toEqual({ stage: 'transitioning' })
+    expect(reduceHomeIntro(state, { type: 'wheel' })).toEqual({ stage: 'expanded' })
+    expect(reduceHomeIntro(state, { type: 'touch' })).toEqual({ stage: 'expanded' })
   })
 
   it('collapses after the transition animation finishes', () => {

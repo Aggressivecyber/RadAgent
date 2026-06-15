@@ -39,7 +39,27 @@ describe('workbench state reducer', () => {
       kind: 'command',
       title: '查看状态',
       status: 'success',
+      meta: 'status',
       details: { job_id: 'job-1', status: 'paused', current_phase: 'context' },
+    })
+  })
+
+  it('marks only chat commands as Copilot history rows', () => {
+    const state = createInitialWorkbenchState()
+
+    const next = reduceCommandResponse(state, {
+      ok: true,
+      command: 'chat',
+      args: '当前状态',
+      view: 'timeline',
+      data: { message: '当前正在 g4_codegen 阶段。' },
+    })
+
+    expect(next.timeline.at(-1)).toMatchObject({
+      kind: 'command',
+      title: '对话',
+      meta: 'chat',
+      body: '当前正在 g4_codegen 阶段。',
     })
   })
 

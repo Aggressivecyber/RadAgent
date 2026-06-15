@@ -159,7 +159,7 @@ def test_service_exposes_frontend_safe_model_config(tmp_path, monkeypatch) -> No
     assert config.tiers[ModelTier.PRO.value].model_name == "mimo-v2.5-pro"
     assert config.tiers[ModelTier.PRO.value].base_url == "https://token-plan-cn.xiaomimimo.com/v1"
     assert config.tiers[ModelTier.PRO.value].api_key_configured is True
-    assert config.agentic_repair_max_turns == 24
+    assert config.agentic_repair_max_turns == 48
     assert config.agentic_repair_history_chars == 48_000
     assert "secret-key" not in config.model_dump_json()
 
@@ -186,6 +186,282 @@ def test_startup_status_reports_tools_and_models_without_secrets(tmp_path, monke
     assert status.models["max"].model_name == "max-test"
     assert status.models["lite"].api_key_configured is True
     assert "secret-value" not in status.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_repair_continuation_confirmation_sets_turn_override(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    request = {
+        "status": "pending",
+        "reason": "agent_loop_max_turns",
+        "current_turns": 48,
+        "increment_turns": 12,
+        "requested_total_turns": 60,
+        "message": "修复 Agent 已耗尽 48 轮但仍未通过运行门禁，是否增加 12 轮继续修复？",
+    }
+    service.state = {
+        "job_id": "job_repair_continue",
+        "user_query": "build detector",
+        "job_workspace": str(tmp_path / "jobs" / "job_repair_continue"),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "strict",
+        "run_mode": "strict",
+        "g4_codegen_status": "needs_user_input",
+        "repair_continuation_status": "pending",
+        "repair_continuation_request": request,
+        "codegen_errors": ["compile failed"],
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
+
+    status = service.get_status()
+    review = service.get_confirmation_review()
+
+    assert status.status == "paused"
+    assert status.needs_confirmation is True
+    assert review["type"] == "repair_continuation"
+    assert "是否增加 12 轮" in review["summary"]
+
+    approved = await service.submit_confirmation(
+        {"user_decision": "approve", "feedback": "continue"},
+        auto_continue=False,
+    )
+
+    assert approved.status == "running"
+    assert approved.needs_confirmation is False
+    assert approved.current_phase == "g4_codegen"
+    assert service.state["repair_continuation_status"] == "approved"
+    assert service.state["repair_continuation_request"]["status"] == "approved"
+    assert service.state["agentic_repair_max_turns_override"] == 60
+    assert service.state["g4_codegen_status"] == ""
+
+
+@pytest.mark.asyncio
+async def test_submit_confirmation_does_not_advance_when_modeling_failed(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {
+        "job_id": "job_failed_modeling",
+        "user_query": "build Bragg benchmark",
+        "g4_modeling_status": "failed",
+        "termination_reason": "g4_modeling status is failed",
+        "errors": ["world volume does not contain daughter layers"],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+
+    async def fail_if_called(_: str) -> None:
+        raise AssertionError("failed modeling should not rerun human confirmation")
+
+    monkeypatch.setattr(service, "run_phase", fail_if_called)
+
+    status = await service.submit_confirmation(
+        {"user_decision": "approve", "feedback": "approve"},
+        auto_continue=True,
+    )
+
+    assert status.status == "failed"
+    assert status.current_phase == "human_confirmation"
+    assert service.current_phase_idx == PIPELINE_PHASES.index("human_confirmation")
+    assert any(
+        event.event_type == "human_confirmation_blocked_by_modeling_failure"
+        for event in service.recent_events()
+    )
+
+
+def test_modeling_failure_does_not_surface_empty_actionable_confirmation(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_dir = tmp_path / "jobs" / "job_failed_modeling"
+    model_dir = job_dir / "03_model_ir"
+    model_dir.mkdir(parents=True)
+    report_path = model_dir / "validation_report.json"
+    report_path.write_text(
+        """
+        {
+          "failed": 1,
+          "total_errors": 1,
+          "results": [
+            {
+              "validator": "NoSimplification",
+              "passed": false,
+              "errors": ["Complex model requested but no oxide component found."]
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": "job_failed_modeling",
+        "job_workspace": str(job_dir),
+        "g4_modeling_status": "failed",
+        "human_confirmation_required": True,
+        "validation_report_path": str(report_path),
+        "termination_reason": "g4_modeling status is failed",
+        "errors": ["g4_modeling status is failed"],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+
+    status = service.get_status()
+    review = service.get_confirmation_review()
+
+    assert status.status == "failed"
+    assert status.needs_confirmation is False
+    assert review["type"] == "modeling_failure"
+    assert review["required"] is False
+    assert review["actionable"] is False
+    assert "Complex model requested but no oxide component found" in review["summary"]
+    assert "validation_report.json" in review["preview"]
+
+
+@pytest.mark.asyncio
+async def test_workflow_diagnosis_uses_lite_model_without_overriding_hard_actions(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_dir = tmp_path / "jobs" / "job_failed_modeling"
+    model_dir = job_dir / "03_model_ir"
+    model_dir.mkdir(parents=True)
+    report_path = model_dir / "validation_report.json"
+    report_path.write_text(
+        """
+        {
+          "results": [
+            {
+              "validator": "NoSimplification",
+              "passed": false,
+              "errors": ["Complex model requested but no oxide component found."]
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": "job_failed_modeling",
+        "job_workspace": str(job_dir),
+        "g4_modeling_status": "failed",
+        "human_confirmation_required": True,
+        "validation_report_path": str(report_path),
+        "termination_reason": "g4_modeling status is failed",
+        "errors": ["g4_modeling status is failed"],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+
+    class FakeGateway:
+        async def call(self, *args, **kwargs):
+            from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
+
+            return ModelCallResult(
+                task=ModelTask.FAILURE_DIAGNOSIS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="fake-lite",
+                content='{"user_message":"模型误判为需要 oxide。","allowed_actions":["approve"],"next_step_hint":"重新运行建模"}',
+                parsed_json={
+                    "user_message": "模型误判为需要 oxide。",
+                    "allowed_actions": ["approve"],
+                    "next_step_hint": "重新运行建模",
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    diagnosis = await service.get_workflow_diagnosis()
+
+    assert diagnosis["ui_state"] == "modeling_failed"
+    assert diagnosis["confirmation_actionable"] is False
+    assert diagnosis["allowed_actions"] == ["view_modeling_report", "retry_modeling"]
+    assert diagnosis["model_enhanced"] is True
+    assert diagnosis["user_message"] == "模型误判为需要 oxide。"
+
+
+@pytest.mark.asyncio
+async def test_workflow_diagnosis_explains_codegen_failure(tmp_path, monkeypatch) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_dir = tmp_path / "jobs" / "job_failed_codegen"
+    codegen_dir = job_dir / "05_codegen"
+    codegen_dir.mkdir(parents=True)
+    patch_path = codegen_dir / "proposed_patch.json"
+    patch_path.write_text("{}", encoding="utf-8")
+    service.state = {
+        "job_id": "job_failed_codegen",
+        "job_workspace": str(job_dir),
+        "g4_codegen_status": "failed",
+        "proposed_patch_path": str(patch_path),
+        "current_node": "g4_codegen_subgraph",
+        "termination_reason": "g4_codegen状态失败",
+        "codegen_errors": [
+            "simulation_core did not pass layer gate",
+            "proposed_patch.changed_files is empty",
+        ],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
+
+    class FakeGateway:
+        async def call(self, *args, **kwargs):
+            from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
+
+            return ModelCallResult(
+                task=ModelTask.FAILURE_DIAGNOSIS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="fake-lite",
+                content="{}",
+                parsed_json={},
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    diagnosis = await service.get_workflow_diagnosis()
+
+    assert diagnosis["ui_state"] == "codegen_failed"
+    assert diagnosis["phase"] == "g4_codegen"
+    assert diagnosis["confirmation_actionable"] is False
+    assert diagnosis["allowed_actions"] == ["view_codegen_patch", "view_logs", "retry_codegen"]
+    assert "simulation_core did not pass layer gate" in diagnosis["blocking_reason"]
+    assert str(patch_path) in diagnosis["artifacts"]
+
+
+@pytest.mark.asyncio
+async def test_step_does_not_advance_pending_repair_continuation(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    request = {
+        "status": "pending",
+        "reason": "agent_loop_max_turns",
+        "current_turns": 48,
+        "increment_turns": 12,
+        "requested_total_turns": 60,
+        "message": "修复 Agent 已耗尽 48 轮但仍未通过运行门禁，是否增加 12 轮继续修复？",
+    }
+    service.state = {
+        "job_id": "job_repair_step_block",
+        "user_query": "build detector",
+        "g4_codegen_status": "needs_user_input",
+        "repair_continuation_status": "pending",
+        "repair_continuation_request": request,
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
+
+    async def fail_if_called(_: str) -> None:
+        raise AssertionError("step must not rerun g4_codegen while repair approval is pending")
+
+    monkeypatch.setattr(service, "run_phase", fail_if_called)
+
+    result = await service.step()
+
+    assert result.success is False
+    assert result.status.status == "paused"
+    assert result.status.needs_confirmation is True
+    assert result.status.current_phase == "g4_codegen"
+    assert service.current_phase_idx == PIPELINE_PHASES.index("g4_codegen")
+    assert result.events[0].event_type == "repair_continuation_required"
 
 
 def test_service_updates_model_config_for_frontend(tmp_path, monkeypatch) -> None:
@@ -482,46 +758,7 @@ def test_service_rejects_provider_in_frontend_model_config(tmp_path) -> None:
         service.update_model_config({"provider": "mock"})
 
 
-@pytest.mark.asyncio
-async def test_service_prepares_visualization_workbench_and_records_blocking_verdict(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    events = []
-    service = RadAgentAppService(workspace_root=tmp_path, event_callback=events.append)
-    project_dir = tmp_path / "jobs" / "job_visual" / "06_patch" / "geant4_project"
-    executable = project_dir / "build" / "sim"
-    executable.parent.mkdir(parents=True)
-    executable.write_text("", encoding="utf-8")
-    executable.chmod(0o755)
-    service.state = {
-        "job_id": "job_visual",
-        "generated_code_dir": str(project_dir),
-        "_executable_path": str(executable),
-    }
-    monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
-
-    workbench = await service.prepare_visualization_workbench(events=100)
-    rejected = service.record_visual_verdict(approved=False, notes="target offset wrong")
-    approved = service.record_visual_verdict(approved=True)
-
-    assert workbench.success is True
-    assert workbench.events == 100
-    assert Path(workbench.init_macro).is_file()
-    assert Path(workbench.vis_macro).is_file()
-    assert workbench.environment["QT_QPA_PLATFORM"] == "xcb"
-    assert service.state["visual_review_status"] == "approved"
-    assert rejected.status == "rejected"
-    assert rejected.blocking is True
-    assert approved.status == "approved"
-    assert [event.event_type for event in events][-3:] == [
-        "visualization_workbench_ready",
-        "visualization_review_rejected",
-        "visualization_review_approved",
-    ]
-
-
-def test_service_status_pauses_on_blocked_visual_review_gate(tmp_path) -> None:
+def test_service_status_ignores_retired_blocked_visual_review_gate(tmp_path) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
     job_id = "job_visual_blocked"
     gate_dir = tmp_path / "jobs" / job_id / STAGE_GATE_VALIDATION
@@ -539,8 +776,30 @@ def test_service_status_pauses_on_blocked_visual_review_gate(tmp_path) -> None:
 
     status = service.get_status()
 
-    assert status.status == "paused"
-    assert status.needs_confirmation is True
+    assert status.status == "running"
+    assert status.needs_confirmation is False
+
+
+def test_gate_results_hide_retired_visual_review_gate(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_id = "job_visual_results"
+    gate_dir = tmp_path / "jobs" / job_id / STAGE_GATE_VALIDATION
+    gate_dir.mkdir(parents=True)
+    gate_path = gate_dir / "gate_results.json"
+    gate_path.write_text(
+        """
+        [
+          {"gate_id": 20, "name": "Credibility/Plausibility Assessment", "status": "pass"},
+          {"gate_id": 21, "name": "G4 Visual Review", "status": "blocked"}
+        ]
+        """,
+        encoding="utf-8",
+    )
+    service.state = {"job_id": job_id, "gate_results_path": str(gate_path)}
+
+    results = service.get_gate_results()
+
+    assert [gate["gate_id"] for gate in results] == [20]
 
 
 @pytest.mark.asyncio
@@ -791,6 +1050,108 @@ async def test_preapproved_job_does_not_block_after_g4_modeling_requires_confirm
 
 
 @pytest.mark.asyncio
+async def test_patch_phase_auto_builds_and_runs_visual_simulation_before_gate(tmp_path, monkeypatch) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_patch_auto_visual"
+    project_dir = tmp_path / "jobs" / job_id / "06_patch" / "geant4_project"
+    project_dir.mkdir(parents=True)
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "build detector",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "generated_code_dir": str(project_dir),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.store.upsert_job(
+        job_id=job_id,
+        user_query="build detector",
+        job_workspace=str(tmp_path / "jobs" / job_id),
+    )
+    service.current_phase_idx = PIPELINE_PHASES.index("patch")
+
+    async def patch_node(state: dict) -> dict:
+        return {"patch_status": "applied"}
+
+    service._subgraph_nodes = {"patch": patch_node}
+    calls: list[str] = []
+
+    async def fake_build_generated_code(*, threads: int = 4):
+        calls.append(f"build:{threads}")
+        executable = project_dir / "build" / "sim"
+        executable.parent.mkdir(parents=True)
+        executable.write_text("", encoding="utf-8")
+        executable.chmod(0o755)
+        service.state["_executable_path"] = str(executable)
+        from agent_core.app.schemas import BuildResult
+
+        return BuildResult(success=True, executable_path=str(executable))
+
+    async def fake_run_simulation(*, events: int = 1000):
+        calls.append(f"simulate:{events}")
+        visual_dir = tmp_path / "jobs" / job_id / "output" / "visual_100"
+        visual_dir.mkdir(parents=True)
+        tracks = visual_dir / "particle_tracks.json"
+        tracks.write_text('{"tracks": []}', encoding="utf-8")
+        service.state["_visual_output_dir"] = str(visual_dir)
+        service.state["visual_particle_tracks_path"] = str(tracks)
+        from agent_core.app.schemas import SimulationResult
+
+        return SimulationResult(
+            success=True,
+            events=events,
+            visual_events=100,
+            visual_success=True,
+            visual_output_dir=str(visual_dir),
+        )
+
+    monkeypatch.setattr(service, "build_generated_code", fake_build_generated_code)
+    monkeypatch.setattr(service, "run_simulation", fake_run_simulation)
+
+    result = await service.run_phase("patch")
+
+    assert result.success is True
+    assert calls == ["build:4", "simulate:1000"]
+    assert service.state["auto_visualization_status"] == "ready"
+    assert Path(service.state["visual_particle_tracks_path"]).is_file()
+    assert service.current_phase_idx == PIPELINE_PHASES.index("gate")
+
+
+@pytest.mark.asyncio
+async def test_patch_phase_reports_auto_visualization_build_setup_failure(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_patch_auto_visual_missing_dir"
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "build detector",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("patch")
+
+    async def patch_node(state: dict) -> dict:
+        return {"patch_status": "applied"}
+
+    service._subgraph_nodes = {"patch": patch_node}
+
+    result = await service.run_phase("patch")
+
+    assert result.success is False
+    assert result.status.key_statuses["patch_status"] == "failed"
+    assert result.status.state["auto_visualization_status"] == "failed"
+    assert any("No generated code directory" in error for error in result.status.state["errors"])
+
+
+@pytest.mark.asyncio
 async def test_run_phase_stops_when_codegen_status_is_failed(tmp_path) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
     project = service.current_project()
@@ -806,6 +1167,7 @@ async def test_run_phase_stops_when_codegen_status_is_failed(tmp_path) -> None:
         "execution_mode": "test",
         "run_mode": "test",
         "errors": [],
+        "auto_visualization_status": "ready",
         "raw_human_response": {"user_decision": "approve", "feedback": "approve"},
     }
     service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
@@ -847,6 +1209,7 @@ async def test_run_until_blocked_routes_failed_gate_to_retry_phase(
         "execution_mode": "test",
         "run_mode": "test",
         "errors": [],
+        "auto_visualization_status": "ready",
         "raw_human_response": {"user_decision": "approve", "feedback": "approve"},
     }
     service.current_phase_idx = PIPELINE_PHASES.index("gate")

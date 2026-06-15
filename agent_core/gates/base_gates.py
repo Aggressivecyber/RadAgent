@@ -41,7 +41,6 @@ GATE_NAMES: dict[int, str] = {
     18: "G4-G No Magic Number",
     19: "G4-H Human Confirmation",
     20: "Credibility/Plausibility Assessment",
-    21: "G4 Visual Review",
 }
 
 

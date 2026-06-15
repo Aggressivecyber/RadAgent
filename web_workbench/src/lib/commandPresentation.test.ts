@@ -32,6 +32,37 @@ describe('command presentation', () => {
     expect(action.internalCommand).toBe('/custom-tool')
   })
 
+  it('presents workflow diagnosis as an explanatory review action', () => {
+    const action = commandPresentation({
+      name: 'diagnose',
+      description: 'Explain current workflow block',
+      tip: 'Use a lite model to explain the current block while hard workflow rules remain authoritative.',
+      module: 'workflow/diagnosis',
+      connection: 'service',
+      visible: true,
+    })
+
+    expect(action.primary).toBe('诊断阻塞')
+    expect(action.secondary).toBe('Diagnose')
+    expect(action.tip).toContain('失败或等待')
+    expect(action.internalCommand).toBe('/diagnose')
+  })
+
+  it('presents retry as a current-stage action', () => {
+    const action = commandPresentation({
+      name: 'retry',
+      description: 'Retry current stage',
+      module: 'job_control',
+      connection: 'service',
+      visible: true,
+    })
+
+    expect(action.primary).toBe('重试阶段')
+    expect(action.secondary).toBe('Retry stage')
+    expect(action.tip).toContain('当前作业')
+    expect(action.internalCommand).toBe('/retry')
+  })
+
   it('localizes command groups for the web command picker', () => {
     expect(commandGroupPresentation('Workflow')).toEqual({
       primary: '工作流',

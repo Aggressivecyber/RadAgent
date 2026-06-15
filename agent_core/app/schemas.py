@@ -102,28 +102,6 @@ class SimulationResult(BaseModel):
     errors: str = ""
 
 
-class VisualizationWorkbenchResult(BaseModel):
-    success: bool
-    project_dir: str = ""
-    executable: str = ""
-    working_dir: str = ""
-    events: int = 100
-    init_macro: str = ""
-    vis_macro: str = ""
-    gui_macro: str = ""
-    launch_command: list[str] = Field(default_factory=list)
-    environment: dict[str, str] = Field(default_factory=dict)
-    launched: bool = False
-    pid: int | None = None
-    errors: str = ""
-
-
-class VisualReviewResult(BaseModel):
-    status: Literal["approved", "rejected"]
-    blocking: bool = True
-    notes: str = ""
-
-
 class ModelTierConfig(BaseModel):
     tier: ModelTier
     model_name: str
@@ -142,7 +120,7 @@ class ModelConfigView(BaseModel):
     env_path: str
     default_api_key_env: str = "RADAGENT_API_KEY"
     tiers: dict[str, ModelTierConfig] = Field(default_factory=dict)
-    agentic_repair_max_turns: int = 24
+    agentic_repair_max_turns: int = 48
     agentic_repair_history_chars: int = 48_000
 
 

@@ -174,6 +174,10 @@ def _make_task_planning_subgraph_node() -> Any:
             "task_spec_path": result.get("task_spec_path", ""),
             "simulation_scope": result.get("simulation_scope", ["geant4"]),
             "task_planning_status": result.get("task_planning_status", "failed"),
+            "task_spec_errors": result.get("task_spec_errors", []),
+            "clarification_request": result.get("clarification_request", {}),
+            "termination_reason": result.get("termination_reason", ""),
+            "errors": list(state.get("errors", [])) + result.get("task_spec_errors", []),
             "current_node": "task_planning_subgraph",
         }
 
@@ -270,6 +274,9 @@ def _make_g4_codegen_subgraph_node() -> Any:
                 "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
                 "human_confirmation_status": state.get("confirmation_status", ""),
                 "runtime_failure_context": runtime_failure_context,
+                "agentic_repair_max_turns_override": state.get(
+                    "agentic_repair_max_turns_override", 0
+                ),
             }
         )
         return {
@@ -277,6 +284,8 @@ def _make_g4_codegen_subgraph_node() -> Any:
             "proposed_patch_path": result.get("proposed_patch_path", ""),
             "generated_code_dir": result.get("generated_code_dir", ""),
             "g4_codegen_status": result.get("g4_codegen_status", "failed"),
+            "repair_continuation_request": result.get("repair_continuation_request", {}),
+            "repair_continuation_status": result.get("repair_continuation_status", ""),
             "current_node": "g4_codegen_subgraph",
         }
 
@@ -487,9 +496,6 @@ def _make_gate_subgraph_node() -> Any:
                 "task_spec_path": state.get("task_spec_path", ""),
                 "context_decision": state.get("context_decision", ""),
                 "retry_count": state.get("retry_count", 0),
-                "visual_review_status": state.get("visual_review_status", ""),
-                "visual_review_notes": state.get("visual_review_notes", ""),
-                "visual_review_blocking": state.get("visual_review_blocking", True),
             }
         )
         new_retry = state.get("retry_count", 0) + (
@@ -557,6 +563,8 @@ def _make_report_subgraph_node() -> Any:
                 "simulation_scope": state.get("simulation_scope", []),
                 "failed_gates": state.get("failed_gates", []),
                 "errors": state.get("errors", []),
+                "termination_reason": state.get("termination_reason", ""),
+                "clarification_request": state.get("clarification_request", {}),
             }
         )
         return {

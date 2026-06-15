@@ -30,6 +30,7 @@ GLOBAL_INTEGRATION_REPORT_PATH = f"{STAGE_CODEGEN}/global_integration_agent_repo
 GLOBAL_INTEGRATION_EVIDENCE_PATH = (
     f"{STAGE_CODEGEN}/integration/global_integration_evidence.json"
 )
+GLOBAL_INTEGRATION_ATTEMPT_HISTORY_FILENAME = "global_integration_attempts.jsonl"
 GLOBAL_INTEGRATION_ALLOWED_PATH_PATTERNS = [
     "src/*.cc",
     "include/*.hh",
@@ -104,6 +105,18 @@ GEANT4_REPAIR_MEMORY: dict[str, Any] = {
             ),
             "artifacts": ["particle_tracks.json", "energy_deposits.json"],
         },
+        {
+            "id": "declared_interface_only",
+            "symptom": "Build fails with no member named / constructor argument mismatch / guessed helper APIs",
+            "fix": (
+                "Treat generated headers as source of truth. For struct fields, "
+                "constructors, and helper methods, read the declaring header and "
+                "align all call sites to the declared API in one edit. Prefer an "
+                "existing helper suggested by the compiler over inventing aggregate "
+                "methods such as BuildComponents."
+            ),
+            "artifacts": ["include/*.hh", "src/*.cc", "main.cc"],
+        },
     ],
 }
 
@@ -120,6 +133,7 @@ async def run_global_integration_agent(
     runtime_failure_context: dict[str, Any] | None = None,
     runtime_repair_rounds: int = 0,
     runtime_attempt_offset: int = 0,
+    agentic_max_turns: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the final global integration agent over module-generated files."""
     original_patch = deepcopy(proposed_patch or {})
@@ -166,6 +180,7 @@ async def run_global_integration_agent(
             if g4_model_ir
             else "default_self_check_events",
         },
+        "interface_audit": _interface_audit_from_patch(original_patch),
         "integration_memory": _load_integration_memory(job_id),
         "project_files": _project_files_from_patch(original_patch),
         "write_contract": _global_integration_write_contract(original_patch),
@@ -207,6 +222,7 @@ async def run_global_integration_agent(
 
     attempt_offset = max(0, int(runtime_attempt_offset or 0))
     active_failure_context = runtime_failure_context
+    interface_audit = integration_context.get("interface_audit")
 
     if not active_failure_context:
         initial_gate = await _run_integration_runtime_gate(
@@ -235,6 +251,11 @@ async def run_global_integration_agent(
             _persist_report(report, job_id)
             return original_patch, report
         active_failure_context = initial_gate
+    if isinstance(active_failure_context, dict) and isinstance(interface_audit, dict):
+        active_failure_context = {
+            **active_failure_context,
+            "interface_audit": interface_audit,
+        }
 
     # Agentic build-fix loop: the model receives the assembled project plus
     # read/edit/write/bash/build/smoke tools and iterates until the Geant4
@@ -250,6 +271,7 @@ async def run_global_integration_agent(
         attempt_index=attempt_offset if runtime_failure_context else attempt_offset + 1,
         runtime_failure_context=active_failure_context,
         expected_events=runtime_events,
+        max_turns=agentic_max_turns,
     )
 
     gate = agentic_report.get("runtime_gate", {})
@@ -266,6 +288,8 @@ async def run_global_integration_agent(
         report.setdefault("warnings", []).append(f"agent loop: {agentic_report['loop_error']}")
     if agentic_report.get("errors"):
         report["errors"].extend(agentic_report["errors"])
+    if agentic_report.get("continuation_request"):
+        report["continuation_request"] = agentic_report["continuation_request"]
 
     repaired_patch.setdefault("metadata", {})
     repaired_patch["metadata"]["global_integration_agent"] = {
@@ -324,6 +348,7 @@ def _model_context_json(
         ),
         "web_search": _compact_search_evidence(integration_context.get("web_search", {})),
         "interface_contracts": integration_context.get("interface_contracts", {}),
+        "interface_audit": integration_context.get("interface_audit", {}),
         "module_contracts": _compact_module_contracts(
             integration_context.get("module_contracts", {})
         ),
@@ -1343,6 +1368,10 @@ def _summarize_runtime_gate_result(
     cfg = result.get("cmake_configure_result", {})
     build = result.get("build_result", {})
     unit = result.get("unit_test_result", {})
+    smoke_result = _load_json_file(output_dir / "smoke_simulation_result.json")
+    runtime_fatal = _runtime_fatal_error_text(result, smoke_result)
+    if runtime_fatal:
+        errors.append(runtime_fatal[-12000:])
     if cfg and cfg.get("success") is not True:
         errors.append(str(cfg.get("errors") or "cmake configure failed")[-8000:])
     if build and build.get("success") is not True:
@@ -1353,7 +1382,6 @@ def _summarize_runtime_gate_result(
         errors.extend(warnings or ["Geant4 smoke test failed"])
     if missing_outputs:
         errors.append(f"Missing output contract files: {', '.join(missing_outputs)}")
-    smoke_result = _load_json_file(output_dir / "smoke_simulation_result.json")
     quality = inspect_g4_output_quality(
         output_dir,
         smoke_result=smoke_result,
@@ -1365,7 +1393,7 @@ def _summarize_runtime_gate_result(
         if not error.startswith("Missing output contract files:")
     ]
     if quality_errors:
-        errors.extend(quality_errors)
+        errors.extend(_dedupe_runtime_quality_errors(quality_errors, runtime_fatal))
     warnings.extend(quality.warnings)
     artifacts = [
         str(path)
@@ -1408,6 +1436,53 @@ def _summarize_runtime_gate_result(
     }
 
 
+def _runtime_fatal_error_text(
+    result: dict[str, Any],
+    smoke_result: dict[str, Any],
+) -> str:
+    candidates: list[str] = []
+    for value in (result.get("run_errors"), result.get("errors")):
+        if isinstance(value, list):
+            candidates.extend(str(item) for item in value if item)
+        elif value:
+            candidates.append(str(value))
+    smoke_errors = smoke_result.get("errors")
+    if smoke_errors:
+        candidates.append(str(smoke_errors))
+    for candidate in candidates:
+        text = str(candidate)
+        if _looks_like_runtime_fatal(text):
+            return text
+    return ""
+
+
+def _looks_like_runtime_fatal(text: str) -> bool:
+    if not text.strip():
+        return False
+    markers = (
+        "G4Exception",
+        "FatalException",
+        "Segmentation fault",
+        "core dumped",
+        "COMMAND NOT FOUND",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _dedupe_runtime_quality_errors(
+    quality_errors: list[str],
+    runtime_fatal: str,
+) -> list[str]:
+    if not runtime_fatal:
+        return quality_errors
+    deduped: list[str] = []
+    for error in quality_errors:
+        if error.startswith("Smoke simulation stderr contains:"):
+            continue
+        deduped.append(error)
+    return deduped
+
+
 def _load_json_file(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
@@ -1436,6 +1511,14 @@ def _project_files_from_patch(proposed_patch: dict[str, Any]) -> list[dict[str, 
             }
         )
     return files
+
+
+def _interface_audit_from_patch(proposed_patch: dict[str, Any]) -> dict[str, Any]:
+    metadata = proposed_patch.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    audit = metadata.get("interface_audit")
+    return audit if isinstance(audit, dict) else {}
 
 
 def _summarize_module_contexts(module_contexts: dict[str, Any]) -> dict[str, Any]:
@@ -2417,3 +2500,31 @@ def _persist_report(report: dict[str, Any], job_id: str) -> None:
         json.dumps(report, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    _append_report_history(report, codegen_dir)
+
+
+def _append_report_history(report: dict[str, Any], codegen_dir: Path) -> None:
+    integration_dir = codegen_dir / "integration"
+    integration_dir.mkdir(parents=True, exist_ok=True)
+    history_entry = _report_history_entry(report)
+    history_path = integration_dir / GLOBAL_INTEGRATION_ATTEMPT_HISTORY_FILENAME
+    with history_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(history_entry, ensure_ascii=False, default=str) + "\n")
+
+
+def _report_history_entry(report: dict[str, Any]) -> dict[str, Any]:
+    runtime_attempts = report.get("runtime_gate_attempts")
+    if not isinstance(runtime_attempts, list):
+        runtime_attempts = []
+    return {
+        "job_id": report.get("job_id"),
+        "status": report.get("status"),
+        "agent_name": report.get("agent_name"),
+        "issues_fixed": report.get("issues_fixed", []),
+        "changed_files": report.get("changed_files", []),
+        "errors": report.get("errors", []),
+        "warnings": report.get("warnings", []),
+        "runtime_gate_attempts": runtime_attempts,
+        "agentic": report.get("agentic"),
+        "continuation_request": report.get("continuation_request"),
+    }

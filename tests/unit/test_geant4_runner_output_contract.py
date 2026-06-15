@@ -87,6 +87,37 @@ def test_visual_workbench_environment_defaults_qt_to_xcb(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
+async def test_runner_prepends_geant4_lib_to_ld_library_path(tmp_path: Path) -> None:
+    runner = _runner()
+    runner.geant4_setup_script = str(tmp_path / "geant4.sh")
+    runner.geant4_dir = str(tmp_path / "geant4")
+    (tmp_path / "geant4" / "lib").mkdir(parents=True)
+    seen: dict[str, str] = {}
+
+    class FakeProc:
+        returncode = 0
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            return b"", b""
+
+    async def fake_shell(cmd: str, **kwargs: object) -> FakeProc:
+        seen["cmd"] = cmd
+        return FakeProc()
+
+    import asyncio
+
+    original = asyncio.create_subprocess_shell
+    asyncio.create_subprocess_shell = fake_shell  # type: ignore[assignment]
+    try:
+        await runner._run("RadAgentG4")
+    finally:
+        asyncio.create_subprocess_shell = original  # type: ignore[assignment]
+
+    assert f"export LD_LIBRARY_PATH={tmp_path / 'geant4' / 'lib'}" in seen["cmd"]
+    assert "RadAgentG4" in seen["cmd"]
+
+
+@pytest.mark.asyncio
 async def test_configure_resolves_relative_source_before_running_from_build_dir(
     tmp_path: Path,
 ) -> None:
@@ -352,3 +383,114 @@ async def test_smoke_test_uses_controlled_macro_with_requested_event_count(
     assert result["success"] is True
     assert seen["events"] == 1000
     assert Path(str(seen["macro"])).name == "radagent_self_check_1000.mac"
+
+
+@pytest.mark.asyncio
+async def test_smoke_test_exposes_full_runtime_diagnostics(tmp_path: Path) -> None:
+    """Tool-facing smoke results must preserve the fatal Geant4 stderr."""
+    project_dir = tmp_path / "geant4_project"
+    project_dir.mkdir(parents=True)
+    runner = _runner()
+    runner.geant4_available = True
+    g4_exception = (
+        "*** G4Exception : GeomMgt0002\n"
+        "Logical volume <WorldLV>\n"
+        "does not have a valid material pointer.\n"
+        "*** Fatal Exception *** core dump ***\n"
+    )
+
+    async def fake_configure(source_dir: str, build_dir: str) -> dict[str, object]:
+        return {"success": True}
+
+    async def fake_build(build_dir: str) -> dict[str, object]:
+        exe = Path(build_dir) / "sim"
+        exe.parent.mkdir(parents=True, exist_ok=True)
+        exe.write_text("", encoding="utf-8")
+        return {"success": True, "executable_path": str(exe)}
+
+    async def fake_ctest(build_dir: str, output_dir: str) -> dict[str, object]:
+        return {"success": True}
+
+    async def fake_simulate(
+        executable: str,
+        macro: str | None = None,
+        events: int = 100,
+        threads: int = 1,
+        output_dir: str | None = None,
+        job_id: str = "unknown",
+    ) -> dict[str, object]:
+        return {
+            "success": False,
+            "process_success": False,
+            "returncode": 134,
+            "log": "run started\n",
+            "errors": g4_exception,
+            "runtime_error_patterns": ["FatalException", "core dumped"],
+        }
+
+    runner.configure = fake_configure  # type: ignore[method-assign]
+    runner.build = fake_build  # type: ignore[method-assign]
+    runner._run_ctest = fake_ctest  # type: ignore[method-assign]
+    runner.simulate = fake_simulate  # type: ignore[method-assign]
+
+    result = await runner.smoke_test(
+        str(project_dir),
+        output_dir=str(tmp_path / "out"),
+        events=5,
+    )
+
+    assert result["success"] is False
+    assert result["run_success"] is False
+    assert result["returncode"] == 134
+    assert result["runtime_error_patterns"] == ["FatalException", "core dumped"]
+    assert "GeomMgt0002" in result["run_errors"]
+    assert "WorldLV" in result["run_errors"]
+    assert "run started" in result["run_log"]
+
+
+@pytest.mark.asyncio
+async def test_smoke_test_treats_no_ctest_tests_as_skipped_success(tmp_path: Path) -> None:
+    """Generated Geant4 projects often have no CTest tests; that must not trigger repair."""
+    project_dir = tmp_path / "geant4_project"
+    project_dir.mkdir(parents=True)
+    runner = _runner()
+    runner.geant4_available = True
+
+    async def fake_configure(source_dir: str, build_dir: str) -> dict[str, object]:
+        return {"success": True}
+
+    async def fake_build(build_dir: str) -> dict[str, object]:
+        exe = Path(build_dir) / "sim"
+        exe.parent.mkdir(parents=True, exist_ok=True)
+        exe.write_text("", encoding="utf-8")
+        return {"success": True, "executable_path": str(exe)}
+
+    async def fake_run(command: str, cwd: str | None = None) -> tuple[int, str, str]:
+        if command == "ctest --output-on-failure":
+            return 1, "No tests were found!!!\n", ""
+        return 0, "", ""
+
+    async def fake_simulate(
+        executable: str,
+        macro: str | None = None,
+        events: int = 100,
+        threads: int = 1,
+        output_dir: str | None = None,
+        job_id: str = "unknown",
+    ) -> dict[str, object]:
+        return {"success": True, "process_success": True, "log": "run ok", "errors": ""}
+
+    runner.configure = fake_configure  # type: ignore[method-assign]
+    runner.build = fake_build  # type: ignore[method-assign]
+    runner._run = fake_run  # type: ignore[method-assign]
+    runner.simulate = fake_simulate  # type: ignore[method-assign]
+
+    result = await runner.smoke_test(
+        str(project_dir),
+        output_dir=str(tmp_path / "out"),
+        events=3,
+    )
+
+    assert result["success"] is True
+    assert result["unit_test_result"]["success"] is True
+    assert result["unit_test_result"]["skipped"] is True

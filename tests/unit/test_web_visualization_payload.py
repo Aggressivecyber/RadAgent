@@ -207,6 +207,53 @@ def test_visualization_payload_uses_coordinate_unit_for_source_ray_position(
     assert payload["source_rays"][0]["end_mm"][2] > 30.0
 
 
+def test_visualization_payload_expands_rectangle_source_into_parallel_preview_rays(
+    tmp_path: Path,
+) -> None:
+    model_ir = {
+        "global_units": {"length": "um"},
+        "sources": [
+            {
+                "source_id": "gamma_face",
+                "particle_type": "gamma",
+                "energy": {"value": 662.0, "unit": "keV"},
+                "beam": {
+                    "position": [0.0, 0.0, -100000.0],
+                    "direction": [0.0, 0.0, 1.0],
+                    "surface_shape": "rectangle",
+                    "surface_size": [20000.0, 10000.0],
+                },
+            }
+        ],
+        "components": [
+            {
+                "component_id": "detector",
+                "geometry_type": "box",
+                "dimensions": {"dx": 40000.0, "dy": 40000.0, "dz": 10000.0},
+                "placement": {"position": [0.0, 0.0, 0.0]},
+            }
+        ],
+    }
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-face-source",
+        model_ir=model_ir,
+        visual_events=100,
+    )
+
+    starts = sorted(ray["start_mm"] for ray in payload["source_rays"])
+    assert starts == [
+        [-10.0, -5.0, -100.0],
+        [-10.0, 5.0, -100.0],
+        [0.0, 0.0, -100.0],
+        [10.0, -5.0, -100.0],
+        [10.0, 5.0, -100.0],
+    ]
+    assert {ray["particle"] for ray in payload["source_rays"]} == {"gamma"}
+    assert {ray["end_mm"][2] > 0.0 for ray in payload["source_rays"]} == {True}
+
+
 def test_visualization_payload_marks_missing_tracks_without_inventing_fake_data(
     tmp_path: Path,
 ) -> None:

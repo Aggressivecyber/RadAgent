@@ -152,6 +152,15 @@ _KNOWN_GEANT4_FIXES: tuple[tuple[str, str], ...] = (
         "be a hard error, not silently passed to G4LogicalVolume.",
     ),
     (
+        "does not have a valid material pointer", "Logical volume <",
+        "MATERIAL FIX: a G4LogicalVolume was constructed with a null material "
+        "pointer. For the world volume, build or fetch G4_Galactic with "
+        "G4NistManager::FindOrBuildMaterial(\"G4_Galactic\") before creating "
+        "WorldLV; for detector volumes, verify each IR material_id maps to a "
+        "valid NIST name in MaterialRegistry. Never pass nullptr to "
+        "G4LogicalVolume; fail immediately or use a valid explicit fallback.",
+    ),
+    (
         "no declaration matches", "OutputManager::WriteSummaryJson()",
         "OUTPUTMANAGER SIGNATURE FIX: OutputManager.cc defines a no-argument "
         "WriteSummaryJson() that OutputManager.hh does not declare. Remove the "
@@ -244,7 +253,7 @@ async def run_smoke(project_dir: Path, *, events: int = 5, job_id: str = "agenti
 
 def _join_errors(result: dict[str, Any]) -> str:
     parts = []
-    for key in ("cmake_errors", "build_errors", "run_errors", "errors"):
+    for key in ("run_errors", "runtime_error_patterns", "cmake_errors", "build_errors", "errors"):
         value = result.get(key)
         if isinstance(value, list):
             parts.extend(str(x) for x in value)

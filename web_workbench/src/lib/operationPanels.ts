@@ -20,8 +20,6 @@ export type OperationPanel = {
 const operationViews = new Set([
   'build',
   'simulation',
-  'workbench',
-  'visual-review',
   'report',
   'demo',
   'mode',
@@ -52,10 +50,6 @@ function returnCodeStatus(value: unknown): string {
     return '未运行'
   }
   return Number(row.returncode) === 0 ? '通过' : '失败'
-}
-
-function yesNo(value: unknown): string {
-  return value ? '是' : '否'
 }
 
 function targetLabel(value: unknown, fallback: string): string {
@@ -115,37 +109,6 @@ export function createOperationPanel(view: string, data: unknown): OperationPane
         { label: '输出目录', value: text(row.output_dir, '不可用') },
       ],
       preview: text(row.errors || row.log),
-      artifacts: [],
-    }
-  }
-
-  if (view === 'workbench') {
-    const executable = text(row.executable)
-    const workingDir = text(row.working_dir)
-    return {
-      title: '可视化工作台',
-      summary: text(row.errors, row.success === true ? '工作台已准备。' : '工作台准备失败。'),
-      metrics: [
-        { label: '结果', value: passFail(row.success) },
-        { label: '事件数', value: text(row.events, '0') },
-        { label: '已启动', value: yesNo(row.launched) },
-      ],
-      preview: [executable ? `可执行文件: ${executable}` : '', workingDir ? `工作目录: ${workingDir}` : '', text(row.errors)]
-        .filter(Boolean)
-        .join('\n'),
-      artifacts: [],
-    }
-  }
-
-  if (view === 'visual-review') {
-    return {
-      title: '可视化审查',
-      summary: text(row.status, '未知'),
-      metrics: [
-        { label: '状态', value: text(row.status, '未知') },
-        { label: '阻塞', value: row.blocking === false ? '否' : '是' },
-      ],
-      preview: text(row.notes),
       artifacts: [],
     }
   }

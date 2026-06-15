@@ -255,17 +255,15 @@ async def build_proposed_model_completion(
                 ai_fields[field_path] = {"source": source_type, "confidence": confidence}
 
     # Collect assumptions from evidence map
-    assumptions = evidence_map.get("assumptions", [])
-    if isinstance(assumptions, list):
-        proposed["assumptions"] = assumptions
+    assumptions = _collect_assumptions(evidence_map)
+    proposed["assumptions"] = assumptions
 
     # Collect missing information
-    missing = evidence_map.get("missing_information", [])
-    if isinstance(missing, list):
-        proposed["missing_information"] = missing
+    missing = _collect_missing_information(evidence_map, model_ir)
+    proposed["missing_information"] = missing
 
     # Calculate overall readiness
-    proposed["requires_human_confirmation"] = len(ai_fields) > 0
+    proposed["requires_human_confirmation"] = bool(ai_fields or assumptions or missing)
     proposed["readiness_score"] = _calculate_readiness_score(user_fields, ai_fields, assumptions)
 
     # Save to file
@@ -301,6 +299,66 @@ def _get_field_source(field_path: str, evidence_map: dict[str, Any]) -> str:
         return "default"
 
     return "assumption"
+
+
+def _collect_assumptions(evidence_map: dict[str, Any]) -> list[str]:
+    assumptions: list[str] = []
+    _extend_unique_strings(assumptions, evidence_map.get("assumptions", []))
+    _extend_unique_strings(
+        assumptions,
+        as_dict(evidence_map.get("user_context_requirements")).get("assumptions", []),
+    )
+    field_assumptions = evidence_map.get("assumptions_by_field", {})
+    if isinstance(field_assumptions, dict):
+        _extend_unique_strings(assumptions, field_assumptions.values())
+    return assumptions
+
+
+def _collect_missing_information(
+    evidence_map: dict[str, Any],
+    model_ir: dict[str, Any],
+) -> list[str]:
+    missing: list[str] = []
+    _extend_unique_strings(missing, evidence_map.get("missing_information", []))
+    _extend_unique_strings(
+        missing,
+        as_dict(evidence_map.get("user_context_requirements")).get("missing_information", []),
+    )
+    _extend_unique_strings(
+        missing,
+        as_dict(evidence_map.get("context_report")).get("missing_information", []),
+    )
+    _extend_unique_strings(missing, model_ir.get("open_issues", []))
+    for section in ("components", "sources", "scoring", "materials", "sensitive_detectors"):
+        values = model_ir.get(section, [])
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if isinstance(item, dict):
+                _extend_unique_strings(missing, item.get("open_issues", []))
+    return missing
+
+
+def as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _extend_unique_strings(target: list[str], values: Any) -> None:
+    if isinstance(values, str):
+        candidates = [values]
+    elif isinstance(values, dict):
+        candidates = [
+            values.get(key, "")
+            for key in ("message", "description", "field", "reason", "question")
+        ]
+    elif isinstance(values, (list, tuple, set)):
+        candidates = list(values)
+    else:
+        candidates = []
+    for item in candidates:
+        text = str(item).strip()
+        if text and text not in target:
+            target.append(text)
 
 
 def _get_field_confidence(source_type: str) -> float:
@@ -435,8 +493,11 @@ async def generate_confirmation_request(
                     "reason": sc.get("reason", ""),
                     "category": _question_category(sc["field_path"]),
                     "impact": _question_impact(sc["field_path"]),
-                }
-            )
+                    }
+                )
+
+    if not questions:
+        questions.extend(_fallback_context_questions(proposal, start_index=len(questions)))
 
     # Sort by priority
     questions = _sort_questions_by_priority(questions)
@@ -523,6 +584,10 @@ def _build_question_text(param: dict[str, Any], parent: dict[str, Any] | None) -
 
 def _question_category(field_path: str) -> str:
     path = field_path.lower()
+    if "missing_information" in path:
+        return "missing_information"
+    if "assumption" in path:
+        return "assumption"
     if "source" in path:
         return "source"
     if "material" in path:
@@ -554,12 +619,23 @@ def _question_impact(field_path: str) -> str:
         "scoring": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。",
         "voxel": "影响 3D 剂量网格精度和内存分配风险。",
         "output": "影响前端工作台 artifact 契约和后续门禁。",
+        "missing_information": "影响模型默认补全是否可以作为后续 Geant4 代码生成硬约束。",
+        "assumption": "影响 Agent 补全假设是否可以进入后续 Geant4 代码生成。",
     }
     return impacts.get(category, "影响后续 Geant4 代码生成约束。")
 
 
 def _critical_confirmations(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    critical_categories = {"source", "material", "dimension", "placement", "scoring", "voxel"}
+    critical_categories = {
+        "source",
+        "material",
+        "dimension",
+        "placement",
+        "scoring",
+        "voxel",
+        "missing_information",
+        "assumption",
+    }
     items: list[dict[str, Any]] = []
     for question in questions:
         category = str(question.get("category") or _question_category(question.get("field_path", "")))
@@ -575,6 +651,61 @@ def _critical_confirmations(questions: list[dict[str, Any]]) -> list[dict[str, A
             }
         )
     return items
+
+
+def _fallback_context_questions(
+    proposal: dict[str, Any],
+    *,
+    start_index: int = 0,
+) -> list[dict[str, Any]]:
+    questions: list[dict[str, Any]] = []
+    missing = proposal.get("missing_information", [])
+    assumptions = proposal.get("assumptions", [])
+    if isinstance(missing, list):
+        for index, item in enumerate(missing):
+            text = str(item).strip()
+            if not text:
+                continue
+            field_path = f"missing_information.{index}"
+            questions.append(
+                {
+                    "question_id": f"q_{start_index + len(questions) + 1}",
+                    "field_path": field_path,
+                    "question": f"请确认或补充这个缺失信息：{text}",
+                    "proposed_value": text,
+                    "unit": None,
+                    "options": [],
+                    "required": True,
+                    "reason": "模型草案包含缺失信息，需要人工确认是否接受默认补全或补充真实参数。",
+                    "category": "missing_information",
+                    "impact": _question_impact(field_path),
+                }
+            )
+            if len(questions) >= MAX_QUESTIONS_PER_ROUND:
+                return questions
+    if isinstance(assumptions, list):
+        for index, item in enumerate(assumptions):
+            text = str(item).strip()
+            if not text:
+                continue
+            field_path = f"assumptions.{index}"
+            questions.append(
+                {
+                    "question_id": f"q_{start_index + len(questions) + 1}",
+                    "field_path": field_path,
+                    "question": f"请确认这个模型假设是否可接受：{text}",
+                    "proposed_value": text,
+                    "unit": None,
+                    "options": [],
+                    "required": True,
+                    "reason": "模型使用了默认假设，需要人工确认后才能作为代码生成约束。",
+                    "category": "assumption",
+                    "impact": _question_impact(field_path),
+                }
+            )
+            if len(questions) >= MAX_QUESTIONS_PER_ROUND:
+                return questions
+    return questions
 
 
 def _confirmation_request_agent_context(

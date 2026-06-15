@@ -28,7 +28,7 @@ export function reduceHomeIntro(state: HomeIntroState, action: HomeIntroAction):
   if (state.stage === 'collapsed') {
     return state
   }
-  if (action.type === 'click' || action.type === 'wheel' || action.type === 'touch') {
+  if (action.type === 'click') {
     return { stage: 'transitioning' }
   }
   return state

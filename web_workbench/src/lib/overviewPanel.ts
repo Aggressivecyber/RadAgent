@@ -154,7 +154,7 @@ export function createOverviewPanel({ status, events, commands }: OverviewInput)
     ? [
         {
           label: reviewCallout.primaryLabel,
-          labelEn: reviewCallout.kind === 'visual-review' ? 'Workbench' : 'Review',
+          labelEn: reviewCallout.kind === 'repair-continuation' ? 'Approve repair' : 'Review',
           command: reviewCallout.primaryCommand,
           tip: reviewCallout.title,
           tone: 'primary' as const,
@@ -175,8 +175,8 @@ export function createOverviewPanel({ status, events, commands }: OverviewInput)
         action(commands, '查看门禁', 'Gates', 'gates'),
       ]
     : [
-        action(commands, '继续下一步', 'Continue', 'step', 'primary'),
-        action(commands, '构建工程', 'Build', 'build'),
+        action(commands, '构建工程', 'Build', 'build', 'primary'),
+        action(commands, '运行模拟', 'Simulate', 'simulate'),
         action(commands, '查看产物', 'Artifacts', 'artifacts'),
       ]
 

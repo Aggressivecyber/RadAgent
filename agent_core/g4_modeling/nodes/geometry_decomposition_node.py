@@ -66,6 +66,7 @@ async def geometry_decomposition_node(
 
         model_ir.components = components
         _resolve_sibling_box_overlaps(model_ir.components)
+        _ensure_box_mothers_contain_children(model_ir.components)
         interfaces = _generate_interfaces(components)
         model_ir.interfaces = interfaces
         model_ir.ledger.add_entry(
@@ -172,6 +173,7 @@ async def geometry_decomposition_node(
     # Update model IR
     model_ir.components = components
     _resolve_sibling_box_overlaps(model_ir.components)
+    _ensure_box_mothers_contain_children(model_ir.components)
 
     # Generate interfaces from parent-child relationships
     interfaces = _generate_interfaces(components)
@@ -297,7 +299,12 @@ def _fallback_components(
         component_type = str(raw.get("component_type") or "volume")
         is_world = component_type == "world"
         component_id = str(raw.get("component_id") or ("world" if is_world else "component"))
-        material = str(raw.get("material") or ("Air" if is_world else target_material or "Silicon"))
+        material_raw = raw.get("material")
+        material_missing = not is_world and not material_raw and not target_material
+        material = str(
+            material_raw
+            or ("Air" if is_world else target_material or "material_pending_user_selection")
+        )
         role_text = str(raw.get("role") or "")
         dimensions = _component_dimensions(
             raw,
@@ -313,6 +320,11 @@ def _fallback_components(
         ]
         open_issues: list[str] = []
         requires_confirmation = False
+        if material_missing:
+            open_issues.append(
+                f"No material was specified for component '{component_id}'"
+            )
+            requires_confirmation = True
         if (
             not is_world
             and target_size
@@ -494,6 +506,76 @@ def _resolve_sibling_box_overlaps(components: list[ComponentSpec]) -> None:
                 child.source_evidence.append(
                     "geometry_decomposition:placed downstream of shielding stack to avoid overlap"
                 )
+
+
+def _ensure_box_mothers_contain_children(
+    components: list[ComponentSpec],
+    *,
+    clearance_um: float = 1000.0,
+) -> None:
+    by_id = {comp.component_id: comp for comp in components}
+    children_by_mother: dict[str, list[ComponentSpec]] = {}
+    for comp in components:
+        if comp.mother_volume:
+            children_by_mother.setdefault(comp.mother_volume, []).append(comp)
+
+    changed = True
+    iterations = 0
+    while changed and iterations < len(components):
+        changed = False
+        iterations += 1
+        for mother_id, children in children_by_mother.items():
+            mother = by_id.get(mother_id)
+            if mother is None or mother.geometry_type != "box":
+                continue
+            box_children = [child for child in children if child.geometry_type == "box"]
+            if not box_children:
+                continue
+            if _expand_box_mother_for_children(
+                mother,
+                box_children,
+                clearance_um=clearance_um,
+            ):
+                changed = True
+
+
+def _expand_box_mother_for_children(
+    mother: ComponentSpec,
+    children: list[ComponentSpec],
+    *,
+    clearance_um: float,
+) -> bool:
+    dimensions = dict(mother.dimensions)
+    expanded_axes: list[str] = []
+    for axis_index, axis in enumerate(("x", "y", "z")):
+        current_half = _dimension_half(dimensions, axis)
+        required_half = max(
+            abs(child_pos + sign * child_half)
+            for child in children
+            for child_pos, child_half in [
+                (_component_position(child)[axis_index], _component_half_lengths(child)[axis_index])
+            ]
+            for sign in (-1.0, 1.0)
+        )
+        if required_half <= 0:
+            continue
+        if required_half > current_half:
+            target_full = 2.0 * (required_half + clearance_um)
+            dimensions[f"d{axis}"] = target_full
+            dimensions.pop(f"half_{axis}", None)
+            expanded_axes.append(axis)
+
+    if not expanded_axes:
+        return False
+
+    mother.dimensions = dimensions
+    evidence = (
+        "geometry_decomposition:expanded mother volume to contain daughter "
+        f"placements on {', '.join(expanded_axes)}"
+    )
+    if evidence not in mother.source_evidence:
+        mother.source_evidence.append(evidence)
+    return True
 
 
 def _looks_like_downstream_detector(comp: ComponentSpec) -> bool:

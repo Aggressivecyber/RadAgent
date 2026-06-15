@@ -23,7 +23,8 @@ from agent_core.workspace.io import get_job_dir
 from agent_core.workspace.paths import STAGE_CODEGEN
 
 GEANT4_PROJECT_DIRNAME = "geant4_project"
-DEFAULT_AGENTIC_REPAIR_MAX_TURNS = 24
+DEFAULT_AGENTIC_REPAIR_MAX_TURNS = 48
+AGENTIC_REPAIR_CONTINUATION_INCREMENT_TURNS = 12
 DEFAULT_AGENTIC_REPAIR_HISTORY_CHARS = 48_000
 AGENTIC_REPAIR_LESSONS_PATH = (
     Path(STAGE_CODEGEN) / "integration" / "agentic_repair_lessons.json"
@@ -64,7 +65,10 @@ Tools (this is your whole loop — no shell):
 - edit_file(path, old_string, new_string): replace ONE unique match. Copy
   old_string verbatim from what read_file/build output showed. If the match
   fails, the tool returns the nearby actual lines — correct old_string from that
-  and retry (no need to read_file again).
+  and retry once (no need to read_file again). If you see `old_string not found`
+  twice for the same file, stop using edit_file for that file and use write_file
+  to rewrite the full file from its current content with the intended minimal
+  fix applied.
 - write_file(path, content): full file rewrite — only for a file that needs many
   changes at once.
 - run_smoke(events?): build + run a tiny simulation. Call ONCE, only after
@@ -95,6 +99,13 @@ Geant4 quick fixes (cover ~90% of errors):
   header/source before changing signatures.
 - constructor argument mismatch → read the class header once, then update ALL call
   sites from the same build output to match the exact constructor signature.
+- `struct X has no member named Y` or `class X has no member named Y` → do not add
+  guessed fields/methods at the call site. Read the declaring header, then either
+  use the existing member/API exactly or update the struct/class declaration and
+  every initializer/call site in the same edit.
+- If a helper call is suggested by the compiler, e.g. `did you mean AddComponent?`,
+  prefer the existing helper API and adapt the loop to it. Do not invent aggregate
+  helpers such as BuildComponents unless the header already declares them.
 - includes ALWAYS go at the very top, before constexpr/namespace blocks.
 - Never put `#include` lines inside a function body. If a generated class such as
   SensitiveDetector is used in DetectorConstruction.cc, include its header at the
@@ -243,7 +254,7 @@ async def run_agentic_repair(
             "job_id": job_id,
             "module_name": "agentic_repair",
             "agentic_attempt": attempt_index,
-            "enable_thinking": False,
+            "enable_thinking": True,
         },
         max_stalls=3,
         repeated_tool_result_limit=3,
@@ -295,6 +306,9 @@ async def run_agentic_repair(
         "failure_lessons": failure_lessons,
         "errors": [] if status == "passed" else _collect_errors(gate, loop_result),
     }
+    continuation_request = _build_continuation_request(loop_result, gate)
+    if continuation_request:
+        report["continuation_request"] = continuation_request
     return repaired_patch, report
 
 
@@ -657,6 +671,34 @@ def _build_failure_lessons(
                 evidence="Missing output contract files",
             )
         )
+    if "old_string not found" in lowered or "repeated failing tool result" in lowered:
+        lessons.append(
+            _lesson(
+                "exact_edit_failed",
+                "Use write_file after repeated exact-edit failures",
+                (
+                    "If edit_file reports old_string not found for the same file, do not "
+                    "spend more turns trying variants. Read the current file once if needed, "
+                    "then use write_file to rewrite the full same file with the intended "
+                    "minimal fix applied."
+                ),
+                evidence="edit_file old_string not found",
+            )
+        )
+    if "no member named" in lowered:
+        lessons.append(
+            _lesson(
+                "declared_interface_only",
+                "Use declared struct fields and helper methods only",
+                (
+                    "For 'no member named' compile errors, read the owning header "
+                    "and align every initializer/call site with the declared API. "
+                    "Do not keep guessed fields such as posX/rotX or aggregate "
+                    "helpers such as BuildComponents unless they are declared."
+                ),
+                evidence="no member named",
+            )
+        )
     if (
         "geometry_view.json" in lowered
         or "particle_tracks.json" in lowered
@@ -817,3 +859,21 @@ def _collect_errors(gate: dict[str, Any], loop_result: Any) -> list[str]:
     if loop_result.stop_reason == "max_turns":
         errors.append(f"agent loop exhausted max turns ({loop_result.n_turns})")
     return errors
+
+
+def _build_continuation_request(loop_result: Any, gate: dict[str, Any]) -> dict[str, Any]:
+    if loop_result.stop_reason != "max_turns" or gate.get("status") == "pass":
+        return {}
+    current_turns = int(getattr(loop_result, "n_turns", 0) or 0)
+    next_turns = current_turns + AGENTIC_REPAIR_CONTINUATION_INCREMENT_TURNS
+    return {
+        "status": "pending",
+        "reason": "agent_loop_max_turns",
+        "current_turns": current_turns,
+        "increment_turns": AGENTIC_REPAIR_CONTINUATION_INCREMENT_TURNS,
+        "requested_total_turns": next_turns,
+        "message": (
+            f"修复 Agent 已耗尽 {current_turns} 轮但仍未通过运行门禁，"
+            f"是否增加 {AGENTIC_REPAIR_CONTINUATION_INCREMENT_TURNS} 轮继续修复？"
+        ),
+    }

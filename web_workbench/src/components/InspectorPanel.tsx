@@ -44,6 +44,15 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function text(value: unknown, fallback = ''): string {
+  const normalized = String(value ?? '').trim()
+  return normalized || fallback
+}
+
 const inspectorTitles: Record<string, { label: string; labelEn: string }> = {
   overview: { label: '概览', labelEn: 'Overview' },
   help: { label: '功能选择', labelEn: 'Actions' },
@@ -57,6 +66,7 @@ const inspectorTitles: Record<string, { label: string; labelEn: string }> = {
   logs: { label: '日志', labelEn: 'Logs' },
   model: { label: '模型设置', labelEn: 'Model' },
   confirmation: { label: '人工确认', labelEn: 'Review' },
+  diagnosis: { label: '诊断', labelEn: 'Workflow diagnosis' },
   memory: { label: '工作记忆', labelEn: 'Memory' },
   credibility: { label: '可信度', labelEn: 'Credibility' },
   revisions: { label: '修订', labelEn: 'Revisions' },
@@ -305,6 +315,74 @@ function ArtifactPanel({ data }: { data: unknown }) {
         <strong>{String(artifact.kind || '未知')}</strong>
       </article>
       {text ? <pre className="artifact-preview">{text}</pre> : renderJson(data)}
+    </div>
+  )
+}
+
+function DiagnosisPanel({ data }: { data: unknown }) {
+  const diagnosis = asRecord(data)
+  const allowedActions = asArray(diagnosis.allowed_actions).map((item) => text(item)).filter(Boolean)
+  const artifacts = asArray(diagnosis.artifacts).map((item) => text(item)).filter(Boolean)
+  const hardRules = asRecord(diagnosis.hard_rules)
+  const actionable = diagnosis.confirmation_actionable === true
+  const modelEnhanced = diagnosis.model_enhanced === true
+  const severity = text(diagnosis.severity, 'info')
+
+  return (
+    <div className={`diagnosis-panel ${severity}`}>
+      <section className="confirmation-summary-card">
+        <span>{modelEnhanced ? 'Lite 模型辅助说明' : '规则诊断'}</span>
+        <strong>{text(diagnosis.user_message, '当前没有可用诊断。')}</strong>
+        <p>{text(diagnosis.blocking_reason, '未检测到明确阻塞原因。')}</p>
+      </section>
+      <div className="operation-metrics">
+        <article className="metric-tile">
+          <span>阶段</span>
+          <strong>{text(diagnosis.phase, '未知')}</strong>
+        </article>
+        <article className="metric-tile">
+          <span>审批状态</span>
+          <strong>{actionable ? '可审批' : '不可审批'}</strong>
+        </article>
+        <article className="metric-tile">
+          <span>状态</span>
+          <strong>{text(diagnosis.ui_state, 'unknown').replaceAll('_', ' ')}</strong>
+        </article>
+      </div>
+      <section className="confirmation-review-section">
+        <h3>下一步</h3>
+        <p>{text(diagnosis.next_step_hint, '查看状态和日志确认下一步。')}</p>
+      </section>
+      {allowedActions.length > 0 ? (
+        <section className="confirmation-review-section">
+          <h3>允许动作</h3>
+          {allowedActions.map((action) => (
+            <article key={action}>
+              <span>action</span>
+              <strong>{action}</strong>
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {Object.keys(hardRules).length > 0 ? (
+        <section className="confirmation-review-section">
+          <h3>硬规则</h3>
+          {Object.entries(hardRules).map(([key, value]) => (
+            <article key={key}>
+              <span>{key}</span>
+              <strong>{text(value, 'false')}</strong>
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {artifacts.length > 0 ? (
+        <section className="confirmation-review-section">
+          <h3>相关产物</h3>
+          {artifacts.map((artifact) => (
+            <p key={artifact}>{artifact}</p>
+          ))}
+        </section>
+      ) : null}
     </div>
   )
 }
@@ -690,6 +768,26 @@ function ConfirmationPanel({
         <strong>确认 Geant4 模型参数与继续执行条件</strong>
         <p>{view.summary}</p>
       </section>
+      {view.proposedItems.length > 0 ? (
+        <section className="confirmation-review-section">
+          <h3>模型草案</h3>
+          {view.proposedItems.map((item) => (
+            <article key={`${item.title}-${item.meta}`}>
+              <span>{item.meta}</span>
+              <strong>{item.title}</strong>
+              {item.detail ? <p>{item.detail}</p> : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {view.assumptions.length > 0 ? (
+        <section className="confirmation-review-section warning">
+          <h3>默认补全与模型假设</h3>
+          {view.assumptions.map((item, index) => (
+            <p key={`${item}-${index}`}>{item}</p>
+          ))}
+        </section>
+      ) : null}
       {view.missingInformation.length > 0 ? (
         <section className="confirmation-review-section warning">
           <h3>仍需补充的参数</h3>
@@ -807,6 +905,7 @@ export default function InspectorPanel({
       {active === 'confirmation' ? (
         <ConfirmationPanel data={data} onExecuteCommand={onExecuteCommand} />
       ) : null}
+      {active === 'diagnosis' ? <DiagnosisPanel data={data} /> : null}
       {active === 'help' ? <CommandPanel commands={commands} onSelectCommand={onSelectCommand} /> : null}
       {active === 'logs' ? <EventPanel events={events} /> : null}
       {isDomainPanelView(active) ? <DomainPanelView active={active} data={data} /> : null}
@@ -823,10 +922,11 @@ export default function InspectorPanel({
         ...['job', 'gate', 'revision', 'project'],
         'model',
         'confirmation',
+        'diagnosis',
         'help',
         'logs',
         ...['tools', 'credibility', 'memory'],
-        ...['build', 'simulation', 'workbench', 'visual-review', 'report', 'demo', 'mode', 'history', 'exit'],
+        ...['build', 'simulation', 'report', 'demo', 'mode', 'history', 'exit'],
         'jobs',
         'artifacts',
         'gates',

@@ -126,18 +126,9 @@ describe('overview panel presentation', () => {
 
     const panel = createOverviewPanel({ status, events: [], commands })
 
-    expect(panel.alerts[0]).toMatchObject({
-      title: '需要可视化复核',
-    })
-    expect(panel.actions[0]).toMatchObject({
-      label: '打开工作台',
-      command: '/workbench 100',
-      tone: 'primary',
-    })
-    expect(panel.actions[1]).toMatchObject({
-      label: '记录通过',
-      command: '/visual-approve',
-    })
+    expect(panel.alerts).toEqual([])
+    expect(panel.actions.map((action) => action.command)).not.toContain('/workbench 100')
+    expect(panel.actions.map((action) => action.command)).not.toContain('/visual-approve')
     expect(panel.actions.map((action) => action.command)).not.toContain('/confirm')
   })
 
@@ -154,5 +145,70 @@ describe('overview panel presentation', () => {
       tone: 'primary',
       mode: 'compose',
     })
+  })
+
+  it('does not expose generic continue while repair continuation approval is pending', () => {
+    const status: JobStatus = {
+      job_id: 'job-repair',
+      user_query: 'Build Bragg benchmark',
+      status: 'paused',
+      current_phase: 'g4_codegen',
+      current_phase_idx: 5,
+      completed_phases: ['prepare_workspace', 'context', 'task_planning', 'g4_modeling', 'human_confirmation'],
+      execution_mode: 'strict',
+      run_mode: 'strict',
+      workspace_root: '/workspace',
+      job_workspace: '/workspace/job-repair',
+      needs_confirmation: true,
+      key_statuses: {
+        g4_codegen_status: 'needs_user_input',
+        repair_continuation_status: 'pending',
+      },
+      state: {
+        repair_continuation_status: 'pending',
+        repair_continuation_request: {
+          status: 'pending',
+          increment_turns: 12,
+          requested_total_turns: 60,
+        },
+      },
+    }
+
+    const panel = createOverviewPanel({ status, events: [], commands })
+
+    expect(panel.alerts[0]).toMatchObject({
+      title: '需要批准继续修复',
+    })
+    expect(panel.actions[0]).toMatchObject({
+      label: '批准追加 12 轮',
+      labelEn: 'Approve repair',
+      command: '/confirm approve',
+      tone: 'primary',
+    })
+    expect(panel.actions.map((action) => action.command)).not.toContain('/step')
+    expect(panel.actions.map((action) => action.label)).not.toContain('继续下一步')
+  })
+
+  it('does not use continue step as the default action for ordinary active jobs', () => {
+    const status: JobStatus = {
+      job_id: 'job-running',
+      user_query: 'Build detector',
+      status: 'running',
+      current_phase: 'g4_codegen',
+      current_phase_idx: 5,
+      completed_phases: ['prepare_workspace', 'context'],
+      execution_mode: 'strict',
+      run_mode: 'strict',
+      workspace_root: '/workspace',
+      job_workspace: '/workspace/job-running',
+      needs_confirmation: false,
+      key_statuses: {},
+      state: {},
+    }
+
+    const panel = createOverviewPanel({ status, events: [], commands })
+
+    expect(panel.actions.map((action) => action.command)).toEqual(['/build', '/simulate', '/artifacts'])
+    expect(panel.actions.map((action) => action.label)).not.toContain('继续下一步')
   })
 })

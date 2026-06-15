@@ -111,6 +111,122 @@ class TestAssembleProposedPatchPatchValidatorContract:
         for field in required_fields:
             assert field in patch, f"Missing required field: {field}"
 
+    def test_patch_includes_failed_module_files_for_global_repair(
+        self,
+        workspace: Path,
+    ) -> None:
+        """Failed modules with files must not be discarded before repair."""
+        module_results = {
+            "simulation_core": _make_module_result(
+                "simulation_core",
+                [
+                    {
+                        "path": "src/DetectorConstruction.cc",
+                        "new_content": '#include "DetectorConstruction.hh"\n#include "Bad.hh"\n',
+                    },
+                ],
+                status="failed",
+            )
+        }
+
+        patch = assemble_proposed_patch(module_results, "test_job")
+        paths = {entry["path"] for entry in patch["changed_files"]}
+
+        assert "src/DetectorConstruction.cc" in paths
+        assert patch["metadata"]["failed_module_count"] == 1
+        assert patch["metadata"]["repair_input_module_count"] == 1
+
+    def test_patch_metadata_reports_obvious_cross_module_method_mismatch(
+        self,
+        workspace: Path,
+    ) -> None:
+        """Assembler should surface API mismatches before global repair spends turns."""
+        module_results = {
+            "simulation_core": _make_module_result(
+                "simulation_core",
+                [
+                    {
+                        "path": "include/PlacementManager.hh",
+                        "new_content": (
+                            "#pragma once\n"
+                            "class G4VPhysicalVolume;\n"
+                            "class PlacementManager {\n"
+                            "public:\n"
+                            "  G4VPhysicalVolume* GetPhysicalVolume(const char* id) const;\n"
+                            "};\n"
+                        ),
+                    },
+                    {
+                        "path": "src/DetectorConstruction.cc",
+                        "new_content": (
+                            '#include "PlacementManager.hh"\n'
+                            "void Build(PlacementManager* fPlacementManager) {\n"
+                            '  fPlacementManager->RegisterPhysicalVolume("world", nullptr);\n'
+                            "}\n"
+                        ),
+                    },
+                ],
+            )
+        }
+
+        patch = assemble_proposed_patch(module_results, "test_job")
+        audit = patch["metadata"]["interface_audit"]
+
+        assert audit["status"] == "fail"
+        assert any(
+            issue["kind"] == "unknown_method"
+            and issue["class_name"] == "PlacementManager"
+            and issue["method"] == "RegisterPhysicalVolume"
+            and issue["path"] == "src/DetectorConstruction.cc"
+            for issue in audit["issues"]
+        )
+        assert any("RegisterPhysicalVolume" in item for item in audit["repair_hints"])
+
+    def test_patch_metadata_reports_constructor_arity_mismatch(
+        self,
+        workspace: Path,
+    ) -> None:
+        module_results = {
+            "runtime_app": _make_module_result(
+                "runtime_app",
+                [
+                    {
+                        "path": "include/ActionInitialization.hh",
+                        "new_content": (
+                            "#pragma once\n"
+                            "class OutputManager;\n"
+                            "class ActionInitialization {\n"
+                            "public:\n"
+                            "  explicit ActionInitialization(OutputManager* outputManager);\n"
+                            "};\n"
+                        ),
+                    },
+                    {
+                        "path": "main.cc",
+                        "new_content": (
+                            '#include "ActionInitialization.hh"\n'
+                            "int main() {\n"
+                            "  auto* action = new ActionInitialization();\n"
+                            "  return action == nullptr;\n"
+                            "}\n"
+                        ),
+                    },
+                ],
+            )
+        }
+
+        patch = assemble_proposed_patch(module_results, "test_job")
+        audit = patch["metadata"]["interface_audit"]
+
+        assert audit["status"] == "fail"
+        assert any(
+            issue["kind"] == "constructor_arity_mismatch"
+            and issue["class_name"] == "ActionInitialization"
+            and issue["actual_arg_count"] == 0
+            and 1 in issue["allowed_arg_counts"]
+            for issue in audit["issues"]
+        )
+
     def test_patch_id_includes_job_id(self, workspace: Path) -> None:
         """patch_id should contain the job_id."""
         module_results = {

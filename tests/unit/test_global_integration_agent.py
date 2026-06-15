@@ -40,6 +40,46 @@ def _patch() -> dict[str, Any]:
     }
 
 
+def test_persist_report_appends_attempt_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    job_id = "global_report_history"
+
+    first = {
+        "job_id": job_id,
+        "status": "failed",
+        "errors": ["first failed"],
+        "runtime_gate_attempts": [{"attempt": 1, "status": "fail"}],
+        "agentic": {"stop_reason": "max_turns", "n_turns": 48},
+        "continuation_request": {"status": "pending"},
+    }
+    second = {
+        "job_id": job_id,
+        "status": "failed",
+        "errors": ["second failed"],
+        "runtime_gate_attempts": [{"attempt": 2, "status": "fail"}],
+        "agentic": {"stop_reason": "stalled_repeated_tool_result", "n_turns": 11},
+    }
+
+    gia._persist_report(first, job_id)
+    gia._persist_report(second, job_id)
+
+    codegen_dir = tmp_path / "jobs" / job_id / STAGE_CODEGEN
+    latest = json.loads((codegen_dir / "global_integration_agent_report.json").read_text())
+    history_path = codegen_dir / "integration" / "global_integration_attempts.jsonl"
+    history = [json.loads(line) for line in history_path.read_text().splitlines()]
+
+    assert latest["errors"] == ["second failed"]
+    assert len(history) == 2
+    assert history[0]["errors"] == ["first failed"]
+    assert history[0]["agentic"]["stop_reason"] == "max_turns"
+    assert history[0]["continuation_request"]["status"] == "pending"
+    assert history[1]["runtime_gate_attempts"][0]["attempt"] == 2
+    assert history[1]["agentic"]["n_turns"] == 11
+
+
 def _write_visual_artifacts(output_dir: Path) -> None:
     (output_dir / "geometry_view.json").write_text(
         json.dumps(
@@ -1452,6 +1492,133 @@ def test_global_integration_runtime_gate_rejects_event_count_mismatch(tmp_path) 
     assert any("expected 5" in error for error in gate["errors"])
 
 
+def test_model_context_includes_interface_audit() -> None:
+    context_json = gia._model_context_json(
+        {
+            "job_id": "job_interface_audit",
+            "available_modules": ["simulation_core"],
+            "runtime_failure_context": {},
+            "project_files": [],
+            "database_search": {},
+            "web_search": {},
+            "interface_contracts": {},
+            "interface_audit": {
+                "status": "fail",
+                "issues": [
+                    {
+                        "kind": "unknown_method",
+                        "class_name": "PlacementManager",
+                        "method": "RegisterPhysicalVolume",
+                    }
+                ],
+            },
+            "module_contracts": {},
+            "module_result_diagnostics": {},
+            "module_context_summaries": {},
+            "integration_memory": {},
+            "write_contract": {},
+        },
+        max_chars=20_000,
+    )
+
+    assert "interface_audit" in context_json
+    assert "RegisterPhysicalVolume" in context_json
+    assert "PlacementManager" in context_json
+
+
+@pytest.mark.asyncio
+async def test_global_integration_passes_interface_audit_to_agentic_repair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
+        lambda: object(),
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_database",
+        _empty_evidence,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_web",
+        _empty_evidence,
+    )
+
+    async def fake_runtime_gate(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "status": "fail",
+            "attempt": kwargs["attempt"],
+            "errors": ["compile failed"],
+            "warnings": [],
+            "missing_outputs": [],
+        }
+
+    seen: dict[str, Any] = {}
+
+    async def fake_repair(
+        proposed_patch: dict[str, Any],
+        *,
+        runtime_failure_context: dict[str, Any],
+        **_kwargs: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        seen["runtime_failure_context"] = runtime_failure_context
+        return proposed_patch, {"status": "failed", "errors": ["still failed"], "runtime_gate": {}}
+
+    monkeypatch.setattr(gia, "_run_integration_runtime_gate", fake_runtime_gate)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.agentic_repair.run_agentic_repair",
+        fake_repair,
+    )
+
+    await run_global_integration_agent(
+        {
+            "metadata": {
+                "interface_audit": {
+                    "status": "fail",
+                    "issues": [
+                        {
+                            "kind": "constructor_arity_mismatch",
+                            "class_name": "SensitiveDetector",
+                            "path": "src/DetectorConstruction.cc",
+                            "line": 1,
+                        }
+                    ],
+                    "repair_hints": [
+                        "Align src/DetectorConstruction.cc with include/SensitiveDetector.hh: "
+                        "new SensitiveDetector(...) passes 1 argument but the generated header "
+                        "declares arity 2."
+                    ],
+                }
+            },
+            "changed_files": [
+                {
+                    "path": "include/SensitiveDetector.hh",
+                    "new_content": (
+                        "class ScoringManager;\n"
+                        "class SensitiveDetector {\n"
+                        " public:\n"
+                        "  SensitiveDetector(const G4String& name, ScoringManager* scoring);\n"
+                        "};\n"
+                    ),
+                    "module_name": "simulation_core",
+                },
+                {
+                    "path": "src/DetectorConstruction.cc",
+                    "new_content": 'void DetectorConstruction::ConstructSDandField(){ new SensitiveDetector("water"); }\n',
+                    "module_name": "simulation_core",
+                },
+            ]
+        },
+        job_id="job_interface_audit_repair_context",
+    )
+
+    audit = seen["runtime_failure_context"]["interface_audit"]
+    assert audit["status"] == "fail"
+    assert audit["issues"][0]["kind"] == "constructor_arity_mismatch"
+    assert "SensitiveDetector" in audit["repair_hints"][0]
+
+
 def test_global_integration_runtime_gate_rejects_empty_zero_smoke_outputs(tmp_path) -> None:
     project_dir = tmp_path / "geant4_project"
     output_dir = tmp_path / "g4_output_package"
@@ -1499,6 +1666,49 @@ def test_global_integration_runtime_gate_rejects_empty_zero_smoke_outputs(tmp_pa
     assert any("edep_3d.csv has no non-zero edep_MeV bins" in error for error in gate["errors"])
     assert any("dose_3d.csv has no non-zero dose_Gy bins" in error for error in gate["errors"])
     assert any("Smoke simulation stderr" in error for error in gate["errors"])
+
+
+def test_global_integration_runtime_gate_prioritizes_runtime_fatal_error(tmp_path) -> None:
+    project_dir = tmp_path / "geant4_project"
+    output_dir = tmp_path / "g4_output_package"
+    project_dir.mkdir()
+    output_dir.mkdir()
+    fatal = (
+        "*** G4Exception : GeomMgt0002\n"
+        "Logical volume <WorldLV>\n"
+        "does not have a valid material pointer.\n"
+        "Aborted (core dumped)\n"
+    )
+    (output_dir / "smoke_simulation_result.json").write_text(
+        json.dumps(
+            {
+                "success": False,
+                "process_success": False,
+                "runtime_error_patterns": ["FatalException", "core dumped"],
+                "errors": fatal,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    gate = gia._summarize_runtime_gate_result(
+        result={
+            "success": False,
+            "warnings": [fatal],
+            "run_errors": fatal,
+            "runtime_error_patterns": ["FatalException", "core dumped"],
+            "unit_test_result": {"success": False, "errors": "No tests were found!!!\n"},
+        },
+        attempt=1,
+        project_dir=project_dir,
+        output_dir=output_dir,
+        expected_events=5,
+    )
+
+    assert gate["status"] == "fail"
+    assert "GeomMgt0002" in gate["errors"][0]
+    assert "WorldLV" in gate["errors"][0]
+    assert any("Missing output contract files" in error for error in gate["errors"])
 
 
 def test_runtime_failure_context_includes_smoke_log_and_runtime_sources(tmp_path) -> None:

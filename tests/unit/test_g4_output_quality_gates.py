@@ -216,7 +216,7 @@ async def test_base_gates_run_ir_event_count_self_check(
 
 
 @pytest.mark.asyncio
-async def test_base_gates_block_until_g4_visual_review_is_approved(
+async def test_visual_review_gate_is_retired_and_does_not_block(
     tmp_path: Path,
 ) -> None:
     code_dir = tmp_path / "generated_code"
@@ -235,9 +235,8 @@ async def test_base_gates_block_until_g4_visual_review_is_approved(
         }
     )
 
-    gates = {gate["gate_id"]: gate for gate in result["gate_results"]}
-    assert gates[21]["status"] == "blocked"
-    assert result["failed_gates"][0]["name"] == "G4 Visual Review"
+    assert result["gate_results"] == []
+    assert result["failed_gates"] == []
 
     approved = await run_visual_review_gate(
         {
@@ -249,11 +248,11 @@ async def test_base_gates_block_until_g4_visual_review_is_approved(
             "failed_gates": [],
         }
     )
-    approved_gates = {gate["gate_id"]: gate for gate in approved["gate_results"]}
-    assert approved_gates[21]["status"] == "pass"
+    assert approved["gate_results"] == []
+    assert approved["failed_gates"] == []
 
 
-async def test_visual_review_gate_auto_approves_in_test_mode(
+async def test_visual_review_gate_is_retired_in_test_mode(
     tmp_path: Path,
 ) -> None:
     code_dir = tmp_path / "generated_code"
@@ -273,6 +272,5 @@ async def test_visual_review_gate_auto_approves_in_test_mode(
         }
     )
 
-    gates = {gate["gate_id"]: gate for gate in result["gate_results"]}
-    assert gates[21]["status"] == "pass"
+    assert result["gate_results"] == []
     assert result["failed_gates"] == []

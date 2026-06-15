@@ -49,6 +49,10 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     simulation_scope = state.get("simulation_scope", [])
     failed_gates = state.get("failed_gates", [])
     errors = state.get("errors", [])
+    explicit_termination = str(state.get("termination_reason") or "")
+    clarification_request = state.get("clarification_request", {})
+    if not isinstance(clarification_request, dict):
+        clarification_request = {}
 
     job_dir = get_job_dir(job_id)
     report_dir = job_dir / STAGE_REPORT
@@ -80,6 +84,14 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
     # Determine termination reason
     if verified:
         termination = "completed_passed"
+    elif explicit_termination:
+        termination = explicit_termination
+    elif clarification_request:
+        termination = str(
+            clarification_request.get("message")
+            or clarification_request.get("reason")
+            or "needs_user_input"
+        )
     elif context_decision == "block_no_context":
         termination = "blocked_no_context"
     elif "reserved" in str(simulation_scope):
@@ -138,6 +150,27 @@ async def generate_final_report(state: ReportSubgraphState) -> dict[str, Any]:
 
     if reserved_note:
         report_lines.append(reserved_note)
+
+    if clarification_request:
+        missing = clarification_request.get("missing_information", [])
+        questions = clarification_request.get("questions", [])
+        report_lines.extend(["", "### Clarification Needed", ""])
+        message = str(clarification_request.get("message") or "").strip()
+        if message:
+            report_lines.append(message)
+            report_lines.append("")
+        if isinstance(missing, list) and missing:
+            report_lines.append("Missing information:")
+            for item in missing:
+                report_lines.append(f"- {_format_report_value(item)}")
+            report_lines.append("")
+        if isinstance(questions, list) and questions:
+            report_lines.append("Questions:")
+            for item in questions:
+                if isinstance(item, dict):
+                    report_lines.append(f"- {_format_report_value(item.get('question', item))}")
+                else:
+                    report_lines.append(f"- {_format_report_value(item)}")
 
     # User query
     report_lines.extend(

@@ -155,7 +155,7 @@ async def test_repair_toolkit_postprocesses_generated_edits_immediately(
 async def test_agentic_repair_uses_pro_tier_tool_loop(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Compiler-guided repair should not default to the MAX tier."""
+    """Compiler-guided global repair should use PRO with provider thinking."""
     from agent_core.g4_codegen import agentic_repair
 
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -196,14 +196,14 @@ async def test_agentic_repair_uses_pro_tier_tool_loop(
     )
 
     assert seen["tier"] == ModelTier.PRO
-    assert seen["metadata"]["enable_thinking"] is False
+    assert seen["metadata"]["enable_thinking"] is True
 
 
 @pytest.mark.asyncio
 async def test_agentic_repair_defaults_to_bounded_turn_budget(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Repair should fail boundedly instead of spending 70+ calls by default."""
+    """Repair should ask for continuation after the default 48-turn budget."""
     from agent_core.g4_codegen import agentic_repair
 
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -242,9 +242,13 @@ async def test_agentic_repair_defaults_to_bounded_turn_budget(
         attempt_index=0,
     )
 
-    assert seen["max_turns"] == agentic_repair.DEFAULT_AGENTIC_REPAIR_MAX_TURNS
+    assert seen["max_turns"] == 48
+    assert agentic_repair.DEFAULT_AGENTIC_REPAIR_MAX_TURNS == 48
     assert report["stop_reason"] == "max_turns"
     assert any("agent loop exhausted max turns" in err for err in report["errors"])
+    assert report["continuation_request"]["status"] == "pending"
+    assert report["continuation_request"]["increment_turns"] == 12
+    assert "是否增加 12 轮" in report["continuation_request"]["message"]
 
 
 @pytest.mark.asyncio
@@ -465,3 +469,32 @@ def test_failure_lessons_label_geant4_missing_type_and_signature_mismatch() -> N
     assert "signature_mismatch" in lesson_ids
     assert any("G4Material.hh" in lesson["prompt_instruction"] for lesson in lessons)
     assert any("header" in lesson["prompt_instruction"].lower() for lesson in lessons)
+
+
+def test_agentic_repair_prompt_tells_model_to_rewrite_after_failed_exact_edit() -> None:
+    from agent_core.g4_codegen import agentic_repair
+
+    prompt = agentic_repair.AGENTIC_SYSTEM_PROMPT
+
+    assert "old_string not found" in prompt
+    assert "write_file" in prompt
+    assert "rewrite the full file" in prompt
+
+
+def test_agentic_repair_failure_lessons_capture_repeated_exact_edit_failures() -> None:
+    from agent_core.g4_codegen import agentic_repair
+
+    lessons = agentic_repair._build_failure_lessons(
+        gate={"status": "fail", "errors": ["Missing output contract files"]},
+        loop_stop_reason="stalled_repeated_tool_result",
+        loop_turns=17,
+        loop_error=(
+            "Repeated failing tool result 3x: edit_file: old_string not found. "
+            "The actual current text near your match is below — copy it exactly."
+        ),
+    )
+
+    by_id = {lesson["id"]: lesson for lesson in lessons}
+    assert "exact_edit_failed" in by_id
+    assert "write_file" in by_id["exact_edit_failed"]["prompt_instruction"]
+    assert "same file" in by_id["exact_edit_failed"]["prompt_instruction"]

@@ -5,6 +5,9 @@ import SimulationViewport, {
   focusComponentsForViewport,
   highlightedParticleTracks,
   orderedParticleTracks,
+  particleColorForName,
+  particleColorLegendFor,
+  shouldShowSourcePreview,
   trackPointsForViewport,
   visualizationSceneSignature,
 } from './SimulationViewport'
@@ -162,5 +165,35 @@ describe('SimulationViewport', () => {
     const equivalentPayload = structuredClone(viewportPayload)
 
     expect(visualizationSceneSignature(viewportPayload)).toBe(visualizationSceneSignature(equivalentPayload))
+  })
+
+  it('assigns stable colors to common and unknown particle species', () => {
+    const legend = particleColorLegendFor({
+      ...viewportPayload,
+      sourceRays: [
+        ...viewportPayload.sourceRays,
+        { sourceId: 'face_source', particle: 'neutron', energy: { value: 1, unit: 'MeV' }, start: [0, -2, 0], end: [0, 2, 0] },
+      ],
+      tracks: [
+        ...viewportPayload.tracks,
+        { eventId: 1, trackId: 4, particle: 'proton', energyMeV: 150, points: [[0, 0, -1], [0, 0, 1]] },
+        { eventId: 1, trackId: 5, particle: 'mu-', energyMeV: 2, points: [[0, 0, -1], [1, 0, 1]] },
+        { eventId: 1, trackId: 6, particle: 'alpha', energyMeV: 5, points: [[0, 0, -1], [0, 1, 1]] },
+      ],
+    })
+
+    expect(particleColorForName('electron')).toBe('#2aa7ff')
+    expect(particleColorForName('gamma')).toBe('#f2cf3a')
+    expect(particleColorForName('photon')).toBe('#f2cf3a')
+    expect(particleColorForName('proton')).toBe('#ff8d3a')
+    expect(particleColorForName('neutron')).toBe('#7c5cff')
+    expect(legend.map((row) => row.particle)).toEqual(['gamma', 'neutron', 'e-', 'proton', 'mu-', 'alpha'])
+    expect(legend.find((row) => row.particle === 'mu-')?.label).toBe('其他粒子1')
+    expect(legend.find((row) => row.particle === 'alpha')?.label).toBe('其他粒子2')
+  })
+
+  it('shows source direction preview only before real particle tracks exist', () => {
+    expect(shouldShowSourcePreview({ ...viewportPayload, tracks: [] })).toBe(true)
+    expect(shouldShowSourcePreview(viewportPayload)).toBe(false)
   })
 })

@@ -52,6 +52,7 @@ import type { HomeLaunchTarget } from '../lib/homeNavigation'
 import AgentStatusRail from './AgentStatusRail'
 import ArtifactWorkspace from './ArtifactWorkspace'
 import InspectorPanel from './InspectorPanel'
+import LlmDebugPanel from './LlmDebugPanel'
 import SimulationViewportFallback from './SimulationViewportFallback'
 
 const SimulationViewport = lazy(() => import('./SimulationViewport'))
@@ -626,11 +627,10 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
             <p>{workbenchHero.subtitle}</p>
           </div>
           <div className="header-cluster">
-            <div className="status-pill">
+            <div className={`status-pill workflow-status ${workbenchHero.statusTone}`}>
               <Activity size={16} />
               {workbenchHero.statusText}
             </div>
-            <div className="status-pill">{workbenchHero.modeText}</div>
             <div className="status-pill">{loadState}</div>
             <button
               className="inspector-toggle"
@@ -703,9 +703,17 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
 
         <section className="agent-activity-panel" aria-label="Agent 活动状态">
           <div className="agent-activity-summary">
-            <span>{cockpit.agent.stateLabel}</span>
-            <strong>{cockpit.agent.currentAction}</strong>
-            <p>{cockpit.agent.phaseLabel}</p>
+            <span className={workbenchHero.statusTone}>{cockpit.agent.stateLabel}</span>
+            <strong>{cockpit.agent.phaseLabel}</strong>
+            <p>{cockpit.agent.currentAction}</p>
+            <div className="agent-status-chip-grid" aria-label="Agent 运行细节">
+              {cockpit.agent.statusChips.map((chip) => (
+                <small className={`agent-status-chip ${chip.tone}`} key={`${chip.label}-${chip.value}`}>
+                  <span>{chip.label}</span>
+                  <strong>{chip.value}</strong>
+                </small>
+              ))}
+            </div>
           </div>
           <div className="agent-activity-feed">
             {cockpit.recentActivity.length > 0 ? (
@@ -717,6 +725,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
                     <span>
                       {item.statusLabel} · {item.phaseLabel}
                     </span>
+                    {item.detail ? <p>{item.detail}</p> : null}
                   </div>
                 </article>
               ))
@@ -725,6 +734,8 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
             )}
           </div>
         </section>
+
+        <LlmDebugPanel cockpit={cockpit} />
 
         {reviewCallout ? (
           <section className="confirmation-callout" aria-live="polite">

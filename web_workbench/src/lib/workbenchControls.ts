@@ -17,12 +17,12 @@ const sectionDefinitions = [
   {
     title: '执行推进',
     subtitle: 'Workflow',
-    actions: ['workbench', 'build', 'simulate', 'step'],
+    actions: ['retry', 'build', 'simulate'],
   },
   {
     title: '审查门禁',
     subtitle: 'Review',
-    actions: ['confirm', 'gates', 'credibility'],
+    actions: ['diagnose', 'confirm', 'gates', 'credibility'],
   },
   {
     title: '结果与环境',
@@ -56,7 +56,7 @@ export function createWorkbenchControlSections(commands: CommandCatalogEntryLike
         {
           ...commandPresentation({ ...command, name }),
           name,
-          intent: name === 'workbench' || name === 'build' || name === 'simulate' ? 'primary' : 'neutral',
+          intent: name === 'retry' || name === 'build' || name === 'simulate' ? 'primary' : 'neutral',
         },
       ]
     }),

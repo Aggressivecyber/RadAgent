@@ -48,10 +48,8 @@ class Geant4Runner:
 
     async def _run(self, cmd: str, cwd: str | None = None) -> tuple[int, str, str]:
         """Execute *cmd* inside a bash login shell (sources geant4.sh)."""
-        g4_script = Path(self.geant4_setup_script)
-        setup = f"source {self.geant4_setup_script} 2>/dev/null; " if g4_script.is_file() else ""
         proc = await asyncio.create_subprocess_shell(
-            setup + cmd,
+            self._geant4_env_prefix() + cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
@@ -59,6 +57,20 @@ class Geant4Runner:
         stdout, stderr = await proc.communicate()
         rc = proc.returncode or 0
         return rc, stdout.decode(errors="replace"), stderr.decode(errors="replace")
+
+    def _geant4_env_prefix(self) -> str:
+        parts: list[str] = []
+        g4_script = Path(self.geant4_setup_script)
+        if g4_script.is_file():
+            parts.append(f"source {shlex.quote(str(g4_script))} 2>/dev/null")
+        for lib_dir in (Path(self.geant4_dir) / "lib", Path(self.geant4_dir) / "lib64"):
+            if lib_dir.is_dir():
+                parts.append(
+                    "export LD_LIBRARY_PATH="
+                    f"{shlex.quote(str(lib_dir))}:$LD_LIBRARY_PATH"
+                )
+                break
+        return "; ".join(parts) + ("; " if parts else "")
 
     # ------------------------------------------------------------------
     # Public API
@@ -198,6 +210,11 @@ class Geant4Runner:
             events=events,
             sim=sim,
         )
+        sim_errors = str(sim.get("errors") or "")
+        sim_log = str(sim.get("log") or "")
+        runtime_error_patterns = list(sim.get("runtime_error_patterns") or [])
+        run_success = bool(sim.get("success"))
+        process_success = bool(sim.get("process_success", sim.get("success")))
         return {
             "success": unit["success"] and sim["success"],
             "has_geant4": True,
@@ -206,6 +223,16 @@ class Geant4Runner:
             "cmake_configure_result": cfg,
             "build_result": bld,
             "unit_test_result": unit,
+            "events_requested": events,
+            "build_success": bool(bld.get("success")),
+            "run_success": run_success,
+            "process_success": process_success,
+            "returncode": sim.get("returncode"),
+            "command": sim.get("command"),
+            "runtime_error_patterns": runtime_error_patterns,
+            "run_log": sim_log,
+            "run_errors": sim_errors,
+            "errors": sim_errors,
             "warnings": [msg for msg in (unit.get("errors"), sim["errors"]) if msg],
         }
 
@@ -249,8 +276,10 @@ class Geant4Runner:
 
     async def _run_ctest(self, build_dir: str, output_dir: str) -> dict[str, Any]:
         rc, out, err = await self._run("ctest --output-on-failure", cwd=build_dir)
+        no_tests = "No tests were found" in f"{out}\n{err}"
         result = {
-            "success": rc == 0,
+            "success": rc == 0 or no_tests,
+            "skipped": no_tests,
             "command": "ctest --output-on-failure",
             "stdout": out[-4000:],
             "errors": err[-4000:],

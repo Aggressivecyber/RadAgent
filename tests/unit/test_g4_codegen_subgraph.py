@@ -67,8 +67,8 @@ class TestG4CodegenSubgraphCompilation:
         for field in required:
             assert field in annotations, f"Missing field: {field}"
 
-    def test_failed_layer_gate_routes_to_persist(self) -> None:
-        """A failed layer gate must not release the next module layer."""
+    def test_failed_layer_gate_with_no_generated_files_routes_to_persist(self) -> None:
+        """A failed layer gate with no repairable code should fail closed."""
         from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_layer_gate
 
         route = _route_after_layer_gate("detector_modules_gate", "run_application_modules")
@@ -92,6 +92,30 @@ class TestG4CodegenSubgraphCompilation:
             )
             == "run_application_modules"
         )
+
+    def test_failed_layer_gate_with_generated_files_routes_to_integration_repair(self) -> None:
+        """A failed module that produced files should be assembled for global repair."""
+        from agent_core.graph.subgraphs.g4_codegen_graph import _route_after_layer_gate
+
+        route = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
+
+        result = route(
+            {
+                "layer_gate_results": {
+                    "core_modules_gate": {"status": "fail"},
+                },
+                "module_results": {
+                    "simulation_core": {
+                        "status": "failed",
+                        "generated_files": [
+                            {"path": "src/DetectorConstruction.cc", "new_content": "broken"}
+                        ],
+                    }
+                },
+            }
+        )
+
+        assert result == "integration_assembler"
 
     def test_runtime_execution_audit_routes_before_physics_review(self) -> None:
         """Physics review should run only after runtime execution audit passes."""
@@ -161,6 +185,95 @@ class TestNewIntegrationAssembler:
 
         old_path = Path("agent_core/g4_codegen/nodes/integration_assembler.py")
         assert not old_path.exists(), "Old integration_assembler.py must be deleted"
+
+    @pytest.mark.asyncio
+    async def test_integration_assembler_node_surfaces_interface_audit_warnings(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Deterministic API audit findings should be visible in graph state."""
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        from agent_core.g4_codegen.graph_nodes import integration_assembler_node
+
+        result = await integration_assembler_node(
+            {
+                "job_id": "job_interface_warning",
+                "module_results": {
+                    "simulation_core": {
+                        "status": "generated",
+                        "generated_files": [
+                            {
+                                "path": "include/PlacementManager.hh",
+                                "new_content": (
+                                    "#pragma once\n"
+                                    "class PlacementManager {\n"
+                                    "public:\n"
+                                    "  void GetPhysicalVolume(const char* id) const;\n"
+                                    "};\n"
+                                ),
+                            },
+                            {
+                                "path": "src/DetectorConstruction.cc",
+                                "new_content": (
+                                    '#include "PlacementManager.hh"\n'
+                                    "void Build(PlacementManager* mgr) {\n"
+                                    '  mgr->RegisterPhysicalVolume("world", nullptr);\n'
+                                    "}\n"
+                                ),
+                            },
+                        ],
+                    }
+                },
+            }
+        )
+
+        warnings = result.get("codegen_warnings", [])
+        assert any("RegisterPhysicalVolume" in warning for warning in warnings)
+
+    @pytest.mark.asyncio
+    async def test_persist_codegen_output_bootstraps_minimal_template_project(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Every codegen job should start from the canonical Geant4 scaffold."""
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        from agent_core.g4_codegen.graph_nodes import persist_codegen_output_node
+
+        result = await persist_codegen_output_node(
+            {
+                "job_id": "job_template_bootstrap",
+                "proposed_patch": {
+                    "changed_files": [
+                        {
+                            "path": "main.cc",
+                            "new_content": "int main() { return 0; }\n",
+                            "module_name": "runtime_app",
+                        }
+                    ]
+                },
+                "module_results": {
+                    "simulation_core": {"status": "generated"},
+                    "beam_physics": {"status": "generated"},
+                    "runtime_app": {"status": "generated"},
+                },
+                "runtime_execution_audit": {"status": "pass"},
+                "physics_quality_review": {"status": "pass"},
+            }
+        )
+
+        project_dir = Path(result["generated_code_dir"])
+        assert (project_dir / "CMakeLists.txt").is_file()
+        assert (project_dir / "include" / "OutputManager.hh").is_file()
+        manifest = json.loads(
+            (
+                project_dir.parent.parent
+                / "05_codegen"
+                / "template_manifest.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert "macros/radagent_self_check_100.mac" in manifest["files"]
 
 
 class TestCodegenValidators:

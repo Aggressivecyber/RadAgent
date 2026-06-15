@@ -14,9 +14,8 @@ from agent_core.app.schemas import (
     PhaseResult,
     RadAgentEvent,
     SimulationResult,
-    VisualizationWorkbenchResult,
-    VisualReviewResult,
 )
+from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.web.api import build_command_catalog, dispatch_web_command
 from agent_core.workspace.paths import STAGE_HUMAN_CONFIRMATION
 
@@ -117,6 +116,15 @@ class FakeService:
         self.calls.append(("get_credibility_report", job_id))
         return {"gate_id": 20, "score": 0.91}
 
+    async def get_workflow_diagnosis(self, job_id: str | None = None) -> dict[str, object]:
+        self.calls.append(("get_workflow_diagnosis", job_id))
+        return {
+            "ui_state": "modeling_failed",
+            "user_message": "建模失败，需先修复模型。",
+            "allowed_actions": ["view_modeling_report"],
+            "confirmation_actionable": False,
+        }
+
     def get_workflow_context(self, job_id: str | None = None) -> dict[str, object]:
         self.calls.append(("get_workflow_context", job_id))
         return {"job_id": job_id or "job-1", "summary": "workflow memory"}
@@ -176,19 +184,6 @@ class FakeService:
         self.calls.append(("run_until_blocked", None))
         return JobStatus(job_id="job-resumed", status="paused")
 
-    async def prepare_visualization_workbench(
-        self,
-        *,
-        events: int = 100,
-        launch: bool = False,
-    ) -> VisualizationWorkbenchResult:
-        self.calls.append(("prepare_visualization_workbench", (events, launch)))
-        return VisualizationWorkbenchResult(success=True, events=events, launched=launch)
-
-    def record_visual_verdict(self, *, approved: bool, notes: str = "") -> VisualReviewResult:
-        self.calls.append(("record_visual_verdict", (approved, notes)))
-        return VisualReviewResult(status="approved" if approved else "rejected", notes=notes)
-
     async def submit_confirmation(
         self,
         response: dict[str, object],
@@ -200,6 +195,26 @@ class FakeService:
         return JobStatus(
             job_id="job-1",
             status="running" if decision == "approve" else "paused",
+        )
+
+    async def submit_repair_continuation(
+        self,
+        response: dict[str, object],
+        *,
+        auto_continue: bool = True,
+    ) -> JobStatus:
+        self.calls.append(("submit_repair_continuation", (response, auto_continue)))
+        decision = str(response.get("user_decision", ""))
+        return JobStatus(
+            job_id="job-1",
+            status="running" if decision == "approve" else "failed",
+            current_phase="g4_codegen",
+            current_phase_idx=PIPELINE_PHASES.index("g4_codegen"),
+            state={
+                "repair_continuation_status": (
+                    "approved" if decision == "approve" else "rejected"
+                )
+            },
         )
 
 
@@ -247,12 +262,12 @@ def test_command_catalog_covers_tui_commands() -> None:
         "reject",
         "revision",
         "simulate",
-        "visual-approve",
-        "visual-reject",
-        "workbench",
         "step",
         """.replace('"', "").replace(",", "").split()
     ).issubset(names)
+    assert "workbench" not in names
+    assert "visual-approve" not in names
+    assert "visual-reject" not in names
     for row in catalog:
         assert row["tip"].strip(), row
         assert row["module"].strip(), row
@@ -337,6 +352,7 @@ async def test_dispatch_inspector_commands_use_service_data() -> None:
     projects = await dispatch_web_command(service, "/projects")
     gates = await dispatch_web_command(service, "/gates")
     confirm = await dispatch_web_command(service, "/confirm")
+    diagnosis = await dispatch_web_command(service, "/diagnose")
     credibility = await dispatch_web_command(service, "/credibility")
     memory = await dispatch_web_command(service, "/memory")
     revisions = await dispatch_web_command(service, "/revisions")
@@ -349,6 +365,8 @@ async def test_dispatch_inspector_commands_use_service_data() -> None:
     assert projects["data"] == [{"slug": "default", "name": "Default"}]
     assert gates["data"] == [{"gate_id": 20, "status": "pass"}]
     assert confirm["data"]["status"] == "pending"
+    assert diagnosis["view"] == "diagnosis"
+    assert diagnosis["data"]["ui_state"] == "modeling_failed"
     assert credibility["data"]["score"] == 0.91
     assert memory["data"]["summary"] == "workflow memory"
     assert revisions["data"] == [{"revision_id": "rev-1", "status": "draft"}]
@@ -360,6 +378,7 @@ async def test_dispatch_inspector_commands_use_service_data() -> None:
         ("list_projects", None),
         ("get_gate_results", None),
         ("get_confirmation_review", None),
+        ("get_workflow_diagnosis", None),
         ("get_credibility_report", None),
         ("get_workflow_context", None),
         ("list_revisions", None),
@@ -373,9 +392,6 @@ async def test_dispatch_workflow_operation_commands_use_service_methods() -> Non
     build = await dispatch_web_command(service, "/build")
     simulate = await dispatch_web_command(service, "/simulate 25")
     step = await dispatch_web_command(service, "/step")
-    workbench = await dispatch_web_command(service, "/workbench 12")
-    visual_approve = await dispatch_web_command(service, "/visual-approve")
-    visual_reject = await dispatch_web_command(service, "/visual-reject needs a clearer image")
 
     assert build["view"] == "build"
     assert build["data"]["errors"] == "No generated code directory in current state."
@@ -383,20 +399,26 @@ async def test_dispatch_workflow_operation_commands_use_service_methods() -> Non
     assert simulate["data"]["errors"] == "No built executable in current state."
     assert step["view"] == "status"
     assert step["data"]["phase"] == "context"
-    assert workbench["view"] == "workbench"
-    assert workbench["data"]["events"] == 12
-    assert visual_approve["view"] == "visual-review"
-    assert visual_approve["data"]["status"] == "approved"
-    assert visual_reject["data"]["status"] == "rejected"
     assert service.calls == [
         ("build_generated_code", None),
         ("run_simulation", 25),
         ("step", None),
         ("get_status", None),
-        ("prepare_visualization_workbench", (12, True)),
-        ("record_visual_verdict", (True, "")),
-        ("record_visual_verdict", (False, "needs a clearer image")),
     ]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_removed_native_visual_workbench_commands_are_unavailable() -> None:
+    service = FakeService()
+
+    workbench = await dispatch_web_command(service, "/workbench 12")
+    visual_approve = await dispatch_web_command(service, "/visual-approve")
+    visual_reject = await dispatch_web_command(service, "/visual-reject needs a clearer image")
+
+    assert workbench["ok"] is False
+    assert visual_approve["ok"] is False
+    assert visual_reject["ok"] is False
+    assert service.calls == []
 
 
 @pytest.mark.asyncio
@@ -455,6 +477,21 @@ async def test_dispatch_run_resume_retry_commands_use_service_methods() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatch_retry_without_job_id_uses_active_job() -> None:
+    service = FakeService()
+
+    retry = await dispatch_web_command(service, "/retry")
+
+    assert retry["view"] == "status"
+    assert retry["data"]["job_id"] == "job-1"
+    assert service.calls == [
+        ("get_status", None),
+        ("resume_job", ("job-1", True)),
+        ("continue_in_background", "retry"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_confirmation_decision_commands_use_service_methods() -> None:
     service = FakeService()
 
@@ -499,6 +536,60 @@ async def test_dispatch_confirmation_decision_commands_use_service_methods() -> 
 
 
 @pytest.mark.asyncio
+async def test_dispatch_repair_continuation_commands_use_repair_endpoint() -> None:
+    class RepairContinuationService(FakeService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.state = {
+                "repair_continuation_status": "pending",
+                "repair_continuation_request": {
+                    "status": "pending",
+                    "increment_turns": 12,
+                    "requested_total_turns": 60,
+                },
+            }
+
+        async def submit_repair_continuation(
+            self,
+            response: dict[str, object],
+            *,
+            auto_continue: bool = True,
+        ) -> JobStatus:
+            result = await super().submit_repair_continuation(
+                response,
+                auto_continue=auto_continue,
+            )
+            self.state["repair_continuation_status"] = result.state[
+                "repair_continuation_status"
+            ]
+            self.state["repair_continuation_request"]["status"] = result.state[
+                "repair_continuation_status"
+            ]
+            return result
+
+    service = RepairContinuationService()
+
+    approve = await dispatch_web_command(service, "/approve")
+    reject = await dispatch_web_command(service, "/reject stop")
+
+    assert approve["view"] == "status"
+    assert approve["data"]["state"]["repair_continuation_status"] == "approved"
+    assert reject["view"] == "status"
+    assert reject["data"]["status"] == "paused"
+    assert service.calls == [
+        (
+            "submit_repair_continuation",
+            ({"user_decision": "approve", "feedback": "approve"}, False),
+        ),
+        ("continue_in_background", "repair_continuation_approved"),
+        (
+            "submit_confirmation",
+            ({"user_decision": "reject", "feedback": "stop"}, False),
+        ),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_repeated_approve_does_not_continue_background() -> None:
     class AlreadyApprovedService(FakeService):
         async def submit_confirmation(
@@ -531,6 +622,42 @@ async def test_dispatch_repeated_approve_does_not_continue_background() -> None:
 
     assert result["ok"] is True
     assert result["data"]["current_phase"] == "gate"
+    assert service.calls == [
+        (
+            "submit_confirmation",
+            (
+                {"user_decision": "approve", "feedback": "approve"},
+                False,
+            ),
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_approve_does_not_continue_background_after_failed_status() -> None:
+    class FailedApprovalService(FakeService):
+        async def submit_confirmation(
+            self,
+            response: dict[str, object],
+            *,
+            auto_continue: bool = True,
+        ) -> JobStatus:
+            self.calls.append(("submit_confirmation", (response, auto_continue)))
+            return JobStatus(
+                job_id="job-1",
+                status="failed",
+                current_phase="human_confirmation",
+                current_phase_idx=PIPELINE_PHASES.index("human_confirmation"),
+                state={"termination_reason": "g4_modeling status is failed"},
+                key_statuses={"g4_modeling_status": "failed"},
+            )
+
+    service = FailedApprovalService()
+
+    result = await dispatch_web_command(service, "/approve")
+
+    assert result["ok"] is True
+    assert result["data"]["status"] == "failed"
     assert service.calls == [
         (
             "submit_confirmation",
@@ -592,6 +719,11 @@ def test_confirmation_review_includes_structured_request_and_proposal(tmp_path: 
     assert review["proposed_model_completion"]["missing_information"] == [
         "Beam spot size was not specified."
     ]
+    assert review["summary"] == "确认水箱几何尺寸。"
+    assert review["summary_for_user"] == "确认水箱几何尺寸。"
+    assert review["questions"] == [{"field_path": "components.water_tank.geometry"}]
+    assert review["critical_confirmations"] == [{"field_path": "components.water_tank.geometry"}]
+    assert review["missing_information"] == ["Beam spot size was not specified."]
     assert review["preview"] == "confirmation report"
 
 

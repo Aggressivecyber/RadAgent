@@ -194,18 +194,89 @@ def _source_rays_from_model_ir(
         direction = _normalize_direction(_vector(beam.get("direction"), fallback=[0.0, 0.0, 1.0]))
         if not direction:
             continue
-        length = _source_ray_length_mm(start, direction, geometry, extent)
-        end = [start[index] + direction[index] * length for index in range(3)]
-        rays.append(
-            {
-                "source_id": _text(row.get("source_id") or row.get("id"), f"source_{len(rays) + 1}"),
-                "particle": _text(row.get("particle_type") or row.get("particle"), "particle"),
-                "energy": _as_dict(row.get("energy")),
-                "start_mm": [_round_mm(value) for value in start],
-                "end_mm": [_round_mm(value) for value in end],
-            }
-        )
+        source_id = _text(row.get("source_id") or row.get("id"), f"source_{len(rays) + 1}")
+        start_points = _source_preview_start_points_mm(start, direction, beam, coordinate_factor)
+        for sample_index, sample_start in enumerate(start_points):
+            length = _source_ray_length_mm(sample_start, direction, geometry, extent)
+            end = [sample_start[index] + direction[index] * length for index in range(3)]
+            rays.append(
+                {
+                    "source_id": source_id if sample_index == 0 else f"{source_id}:{sample_index}",
+                    "particle": _text(row.get("particle_type") or row.get("particle"), "particle"),
+                    "energy": _as_dict(row.get("energy")),
+                    "start_mm": [_round_mm(value) for value in sample_start],
+                    "end_mm": [_round_mm(value) for value in end],
+                }
+            )
     return rays
+
+
+def _source_preview_start_points_mm(
+    center: list[float],
+    direction: list[float],
+    beam: dict[str, Any],
+    coordinate_factor: float,
+) -> list[list[float]]:
+    shape = _text(beam.get("surface_shape"), "point").lower()
+    surface_size = _as_list(beam.get("surface_size"))
+    axis_u, axis_v = _source_surface_basis(direction)
+
+    if shape == "rectangle" and len(surface_size) >= 2:
+        half_width = abs(_float(surface_size[0], 0.0) * coordinate_factor) / 2.0
+        half_height = abs(_float(surface_size[1], 0.0) * coordinate_factor) / 2.0
+        if half_width > 0.0 and half_height > 0.0:
+            return [
+                center,
+                _offset_point(center, axis_u, axis_v, -half_width, -half_height),
+                _offset_point(center, axis_u, axis_v, -half_width, half_height),
+                _offset_point(center, axis_u, axis_v, half_width, -half_height),
+                _offset_point(center, axis_u, axis_v, half_width, half_height),
+            ]
+
+    if shape == "circle" and surface_size:
+        radius = abs(_float(surface_size[0], 0.0) * coordinate_factor)
+        if radius > 0.0:
+            return [
+                center,
+                _offset_point(center, axis_u, axis_v, radius, 0.0),
+                _offset_point(center, axis_u, axis_v, -radius, 0.0),
+                _offset_point(center, axis_u, axis_v, 0.0, radius),
+                _offset_point(center, axis_u, axis_v, 0.0, -radius),
+            ]
+
+    return [center]
+
+
+def _source_surface_basis(direction: list[float]) -> tuple[list[float], list[float]]:
+    reference = [0.0, 1.0, 0.0] if abs(direction[1]) < 0.9 else [1.0, 0.0, 0.0]
+    axis_u = _normalize_direction(_cross(reference, direction))
+    if not axis_u:
+        axis_u = [1.0, 0.0, 0.0]
+    axis_v = _normalize_direction(_cross(direction, axis_u))
+    if not axis_v:
+        axis_v = [0.0, 1.0, 0.0]
+    return axis_u, axis_v
+
+
+def _offset_point(
+    center: list[float],
+    axis_u: list[float],
+    axis_v: list[float],
+    u_mm: float,
+    v_mm: float,
+) -> list[float]:
+    return [
+        center[index] + axis_u[index] * u_mm + axis_v[index] * v_mm
+        for index in range(3)
+    ]
+
+
+def _cross(left: list[float], right: list[float]) -> list[float]:
+    return [
+        left[1] * right[2] - left[2] * right[1],
+        left[2] * right[0] - left[0] * right[2],
+        left[0] * right[1] - left[1] * right[0],
+    ]
 
 
 def _source_ray_length_mm(

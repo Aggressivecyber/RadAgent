@@ -19,9 +19,6 @@ class GateSubgraphState(TypedDict, total=False):
     task_spec_path: str
     context_decision: str
     retry_count: int
-    visual_review_status: str  # "pending" | "approved" | "rejected"
-    visual_review_notes: str
-    visual_review_blocking: bool
 
     # Loaded data
     g4_model_ir: dict[str, Any]

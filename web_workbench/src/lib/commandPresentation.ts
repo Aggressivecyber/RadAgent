@@ -31,25 +31,25 @@ const actionLabels: Record<string, Pick<CommandPresentation, 'primary' | 'second
     secondary: 'Simulate',
     tip: '按选定事件数运行当前仿真批次。',
   },
-  workbench: {
-    primary: '准备工作台',
-    secondary: 'Prepare workbench',
-    tip: '创建或刷新当前作业的工程工作区。',
-  },
   resume: {
     primary: '恢复作业',
     secondary: 'Resume',
     tip: '继续已暂停或中断的工作流。',
   },
   retry: {
-    primary: '重试步骤',
-    secondary: 'Retry',
-    tip: '重新执行失败的当前步骤。',
+    primary: '重试阶段',
+    secondary: 'Retry stage',
+    tip: '复用当前作业，重新执行失败的当前阶段。',
   },
   confirm: {
     primary: '处理确认',
     secondary: 'Review confirmation',
     tip: '打开需要人工确认的门禁并继续审批。',
+  },
+  diagnose: {
+    primary: '诊断阻塞',
+    secondary: 'Diagnose',
+    tip: '解释当前失败或等待原因，并区分可审批事项与系统阻塞。',
   },
   approve: {
     primary: '批准',

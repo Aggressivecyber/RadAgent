@@ -11,6 +11,7 @@ const cockpit: AgentCockpit = {
     currentAction: 'Files persisted',
     workspace: '/tmp/job',
     changedFiles: '2 个文件',
+    statusChips: [],
   },
   fileGroups: [
     {
@@ -45,6 +46,7 @@ const cockpit: AgentCockpit = {
     },
   ],
   recentActivity: [],
+  llmDebugCalls: [],
 }
 
 const selectedArtifact: ArtifactContent = {

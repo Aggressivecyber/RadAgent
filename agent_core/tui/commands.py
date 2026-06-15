@@ -22,7 +22,6 @@ _ALIASES = {
     "setting": "options",
     "settings": "options",
     "config": "options",
-    "visualize": "workbench",
 }
 
 _COMMAND_DESCRIPTIONS = {
@@ -41,7 +40,7 @@ _COMMAND_DESCRIPTIONS = {
     "status": "Show active job status",
     "mode": "Switch composer mode",
     "resume": "Resume a saved job",
-    "retry": "Retry a saved job",
+    "retry": "Retry current or saved job",
     "revise": "Request a revision for the active job",
     "revisions": "List saved revisions",
     "artifact": "Preview one artifact path",
@@ -49,6 +48,7 @@ _COMMAND_DESCRIPTIONS = {
     "chat": "Ask RadAgent directly",
     "confirm": "Open confirmation review",
     "credibility": "Open credibility report",
+    "diagnose": "Explain why the workflow is blocked",
     "exit": "Exit the TUI",
     "gates": "Open gate results",
     "logs": "Open service event log",
@@ -65,9 +65,6 @@ _COMMAND_DESCRIPTIONS = {
     "reject": "Reject active human confirmation",
     "revision": "Open one revision",
     "simulate": "Run the generated simulator",
-    "visual-approve": "Approve G4 visual review",
-    "visual-reject": "Reject G4 visual review",
-    "workbench": "Open the G4 visual workbench",
     "step": "Run the next pipeline phase",
 }
 _KNOWN_COMMANDS = set(_COMMAND_DESCRIPTIONS)
@@ -87,9 +84,9 @@ _PALETTE_ORDER = (
     "mode",
     "resume",
     "retry",
-    "workbench",
     "revise",
     "revisions",
+    "diagnose",
 )
 _MODES = frozenset({"ask", "run", "cmd", "inspect", "artifact", "config"})
 
@@ -107,9 +104,7 @@ _REQUIRES_ARGS = {
     "revision": "Usage: /revision <revision_id>",
     "revise": "Usage: /revise <change request>",
     "resume": "Usage: /resume <job_id>",
-    "retry": "Usage: /retry <job_id>",
     "run": "Usage: /run <simulation request>",
-    "visual-reject": "Usage: /visual-reject <reason>",
 }
 
 
@@ -151,14 +146,6 @@ def parse_command(text: str) -> Command:
             raise CommandParseError("Usage: /simulate [positive event count]") from exc
         if events <= 0:
             raise CommandParseError("Simulation event count must be positive.")
-    if name == "workbench" and args:
-        try:
-            events = int(args)
-        except ValueError as exc:
-            raise CommandParseError("Usage: /workbench [positive event count]") from exc
-        if events <= 0:
-            raise CommandParseError("Workbench event count must be positive.")
-
     return Command(name=name, args=args, raw=text)
 
 

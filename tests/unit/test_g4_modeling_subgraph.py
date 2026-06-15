@@ -1314,6 +1314,89 @@ class TestG4ModelingNodes:
         )
         assert detector["placement"]["position"][2] >= 50500.0
 
+    async def test_geometry_expands_world_for_bragg_depth_dose_stack(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Layered Bragg benchmark geometry must keep all layers inside the world."""
+        from agent_core.g4_modeling.nodes.geometry_decomposition_node import (
+            geometry_decomposition_node,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+        from agent_core.g4_modeling.validators.overlap_policy_validator import (
+            OverlapPolicyValidator,
+        )
+
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        model_ir = self._minimal_model_ir()
+        model_ir["target_system"] = "150 MeV proton Bragg peak layered depth-dose benchmark"
+        model_ir["components"] = [
+            {
+                "component_id": "world_001",
+                "display_name": "World Volume",
+                "component_type": "world",
+                "geometry_type": "box",
+                "dimensions": {"dx": 100000.0, "dy": 100000.0, "dz": 500000.0},
+                "material_id": "G4_Galactic",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": None,
+                "source_evidence": ["lite draft: world for layered Bragg target"],
+            },
+            {
+                "component_id": "layer_water_001",
+                "display_name": "Water layer",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 300000.0},
+                "material_id": "G4_WATER",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world_001",
+                "source_evidence": ["user requested water layer"],
+            },
+            {
+                "component_id": "layer_aluminum_001",
+                "display_name": "Aluminum layer",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 50000.0},
+                "material_id": "G4_Al",
+                "placement": {"position": [0.0, 0.0, 300000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world_001",
+                "source_evidence": ["user requested aluminum layer"],
+            },
+            {
+                "component_id": "layer_silicon_001",
+                "display_name": "Silicon scoring layer",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 50000.0},
+                "material_id": "G4_Si",
+                "placement": {"position": [0.0, 0.0, 350000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world_001",
+                "sensitive": True,
+                "roles": ["edep_region", "dose_scoring_region"],
+                "source_evidence": ["user requested silicon Bragg scoring layer"],
+            },
+        ]
+
+        result = await geometry_decomposition_node(
+            {
+                "job_id": "test",
+                "g4_model_ir": model_ir,
+                "task_spec": {},
+            }
+        )
+
+        fixed_ir = G4ModelIR.model_validate(result["g4_model_ir"])
+        passed, errors = OverlapPolicyValidator().validate(fixed_ir)
+        assert passed, errors
+        world = next(
+            comp for comp in result["g4_model_ir"]["components"] if comp["component_id"] == "world_001"
+        )
+        assert world["dimensions"]["dz"] >= 751000.0
+        assert "contain daughter placements" in " ".join(world["source_evidence"])
+
     async def test_scoring_design_creates_edep_and_dose_voxel_scores(self) -> None:
         """3D edep and dose roles should both become explicit scoring specs."""
         from agent_core.g4_modeling.nodes.scoring_design_node import scoring_design_node

@@ -72,6 +72,7 @@ export function reduceCommandResponse(
   const status: TimelineStatus = response.ok ? 'success' : 'error'
   const title = commandTitle(response)
   const body = response.ok ? summarizeData(response.data) : response.error || 'Command failed'
+  const normalizedCommand = String(response.command || '').trim().toLowerCase()
   const timeline = [
     ...state.timeline,
     {
@@ -80,7 +81,7 @@ export function reduceCommandResponse(
       title,
       body,
       status,
-      meta: response.view,
+      meta: normalizedCommand === 'chat' ? 'chat' : response.view,
       details: response.data,
     },
   ]

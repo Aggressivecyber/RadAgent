@@ -638,9 +638,99 @@ async def integration_assembler_node(
     job_id = state.get("job_id", "unknown")
 
     patch = assemble_proposed_patch(module_results, job_id)
+    interface_audit = (
+        patch.get("metadata", {}).get("interface_audit", {})
+        if isinstance(patch.get("metadata"), dict)
+        else {}
+    )
+    interface_warnings = _interface_audit_warnings(interface_audit)
+    if interface_warnings:
+        record_event(
+            job_id=job_id,
+            event_type="integration_interface_audit",
+            status="failed",
+            phase="g4_codegen",
+            module_name="integration_assembler",
+            summary="Generated project has cross-module interface mismatches.",
+            metrics={"issue_count": len(interface_audit.get("issues", []) or [])},
+            warnings=interface_warnings,
+            details=interface_audit,
+        )
     return {
         "proposed_patch": patch,
         "current_node": "integration_assembler",
+        "codegen_warnings": list(state.get("codegen_warnings", [])) + interface_warnings,
+    }
+
+
+def _interface_audit_warnings(interface_audit: Any) -> list[str]:
+    if not isinstance(interface_audit, dict) or interface_audit.get("status") != "fail":
+        return []
+    hints = interface_audit.get("repair_hints")
+    if isinstance(hints, list) and hints:
+        return [str(item) for item in hints[:20] if item]
+    issues = interface_audit.get("issues")
+    if not isinstance(issues, list):
+        return []
+    warnings: list[str] = []
+    for issue in issues[:20]:
+        if not isinstance(issue, dict):
+            continue
+        warnings.append(str(issue.get("message") or issue))
+    return warnings
+
+
+async def continue_agentic_repair_node(
+    state: G4CodegenSubgraphState,
+) -> dict[str, Any]:
+    """Continue repair from the persisted proposed patch after user approval."""
+    from agent_core.g4_codegen.global_integration_agent import run_global_integration_agent
+    from agent_core.g4_codegen.runtime_execution_auditor import (
+        RUNTIME_EXECUTION_AUDIT_PATH,
+        runtime_audit_to_runtime_observation,
+    )
+    from agent_core.workspace.io import get_job_dir
+
+    job_id = state.get("job_id", "unknown")
+    job_dir = get_job_dir(job_id)
+    patch_path = job_dir / STAGE_CODEGEN / "proposed_patch.json"
+    if patch_path.is_file():
+        proposed_patch = json.loads(patch_path.read_text(encoding="utf-8"))
+    else:
+        proposed_patch = state.get("proposed_patch", {})
+
+    audit_path = job_dir / RUNTIME_EXECUTION_AUDIT_PATH
+    runtime_failure_context = state.get("runtime_failure_context", {})
+    if not runtime_failure_context and audit_path.is_file():
+        try:
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            runtime_failure_context = runtime_audit_to_runtime_observation(audit)
+        except (OSError, json.JSONDecodeError):
+            runtime_failure_context = {
+                "status": "fail",
+                "phase": "repair_continuation",
+                "errors": ["Previous runtime audit could not be loaded."],
+            }
+
+    repaired_patch, report = await run_global_integration_agent(
+        proposed_patch,
+        job_id=job_id,
+        g4_model_ir=state.get("g4_model_ir", {}),
+        module_results=state.get("module_results", {}),
+        module_contracts=state.get("module_contracts", {}),
+        module_contexts=state.get("module_contexts", {}),
+        interface_contracts=state.get("interface_contracts", {}),
+        runtime_failure_context=runtime_failure_context,
+        runtime_attempt_offset=_next_runtime_attempt_index(job_dir),
+        agentic_max_turns=_agentic_max_turns_override(state),
+    )
+    return {
+        "proposed_patch": repaired_patch,
+        "global_integration_agent_report": report,
+        "repair_continuation_status": "",
+        "repair_continuation_request": {},
+        "current_node": "continue_agentic_repair",
+        "codegen_errors": list(state.get("codegen_errors", [])) + report.get("errors", []),
     }
 
 
@@ -734,6 +824,7 @@ async def global_integration_agent_node(
         interface_contracts=state.get("interface_contracts", {}),
         runtime_failure_context=state.get("runtime_failure_context", {}),
         runtime_repair_rounds=GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS,
+        agentic_max_turns=_agentic_max_turns_override(state),
     )
     record_event(
         job_id=job_id,
@@ -771,6 +862,32 @@ async def runtime_execution_audit_node(
 
     job_id = state.get("job_id", "unknown")
     global_report = state.get("global_integration_agent_report", {})
+    continuation_request = _repair_continuation_request(global_report)
+    if continuation_request:
+        audit = {
+            "status": "blocked",
+            "blocking_errors": [
+                "Agentic repair exhausted its turn budget and requires user approval to continue."
+            ],
+            "warnings": [],
+            "continuation_request": continuation_request,
+        }
+        record_event(
+            job_id=job_id,
+            event_type="runtime_execution_audit",
+            status="paused",
+            phase="g4_codegen",
+            module_name="runtime_execution_auditor",
+            summary="Runtime execution audit paused for repair continuation approval.",
+            details=audit,
+        )
+        return {
+            "runtime_execution_audit": audit,
+            "repair_continuation_request": continuation_request,
+            "repair_continuation_status": "pending",
+            "current_node": "runtime_execution_audit",
+        }
+
     audit = await run_runtime_execution_auditor(
         job_id=job_id,
         global_integration_report=global_report,
@@ -812,6 +929,7 @@ async def runtime_execution_audit_node(
         runtime_failure_context=observation,
         runtime_repair_rounds=RUNTIME_AUDIT_REPAIR_ROUNDS,
         runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
+        agentic_max_turns=_agentic_max_turns_override(state),
     )
     second_audit = await run_runtime_execution_auditor(
         job_id=job_id,
@@ -895,6 +1013,7 @@ async def physics_quality_review_node(
         runtime_failure_context=observation,
         runtime_repair_rounds=PHYSICS_REVIEW_REPAIR_ROUNDS,
         runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
+        agentic_max_turns=_agentic_max_turns_override(state),
     )
     second_review = await run_physics_quality_reviewer(
         proposed_patch=repair_patch,
@@ -928,10 +1047,11 @@ async def persist_codegen_output_node(
     state: G4CodegenSubgraphState,
 ) -> dict[str, Any]:
     """Persist final codegen output."""
+    from agent_core.g4_codegen.template_project import create_minimal_geant4_project
+    from agent_core.workspace.io import get_job_dir
+
     job_id = state.get("job_id", "unknown")
     proposed_patch = state.get("proposed_patch", {})
-
-    from agent_core.workspace.io import get_job_dir
 
     job_dir = get_job_dir(job_id)
     codegen_dir = job_dir / STAGE_CODEGEN
@@ -961,7 +1081,11 @@ async def persist_codegen_output_node(
 
     new_errors: list[str] = []
 
-    if not has_code:
+    continuation_request = _repair_continuation_request(global_integration)
+
+    if continuation_request:
+        status = "needs_user_input"
+    elif not has_code:
         status = "failed"
     elif missing_modules or missing_from_patch or failed_modules:
         status = "failed"
@@ -979,6 +1103,12 @@ async def persist_codegen_output_node(
     # Target directory for generated Geant4 files.
     geant4_dir = job_dir / STAGE_PATCH / GEANT4_PROJECT_DIRNAME
     geant4_dir.mkdir(parents=True, exist_ok=True)
+    template_manifest = create_minimal_geant4_project(geant4_dir, events=100)
+    template_manifest_path = codegen_dir / "template_manifest.json"
+    template_manifest_path.write_text(
+        json.dumps(template_manifest, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     generated_code_dir = str(geant4_dir)
 
     if missing_modules:
@@ -1002,6 +1132,9 @@ async def persist_codegen_output_node(
         "g4_codegen_status": status,
         "current_node": "persist_codegen_output",
     }
+    if continuation_request:
+        updates["repair_continuation_request"] = continuation_request
+        updates["repair_continuation_status"] = "pending"
     if new_errors:
         updates["codegen_errors"] = list(state.get("codegen_errors", [])) + new_errors
     record_event(
@@ -1016,7 +1149,11 @@ async def persist_codegen_output_node(
             "failed_module_count": len(failed_modules),
             "physics_review_score": physics_review.get("overall_score"),
         },
-        artifacts=[{"path": str(patch_path)}, {"path": generated_code_dir}],
+        artifacts=[
+            {"path": str(patch_path)},
+            {"path": str(template_manifest_path)},
+            {"path": generated_code_dir},
+        ],
         errors=list(state.get("codegen_errors", [])) + new_errors,
     )
     if status != "passed":
@@ -1025,7 +1162,11 @@ async def persist_codegen_output_node(
             status=status,
             phase="g4_codegen",
             errors=list(state.get("codegen_errors", [])) + new_errors,
-            artifacts=[{"path": str(patch_path)}, {"path": generated_code_dir}],
+            artifacts=[
+                {"path": str(patch_path)},
+                {"path": str(template_manifest_path)},
+                {"path": generated_code_dir},
+            ],
             details={
                 "missing_modules": sorted(missing_modules),
                 "missing_from_patch": sorted(missing_from_patch),
@@ -1035,3 +1176,41 @@ async def persist_codegen_output_node(
             },
         )
     return updates
+
+
+def _repair_continuation_request(
+    global_integration: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(global_integration, dict):
+        return {}
+    request = global_integration.get("continuation_request")
+    if isinstance(request, dict) and request.get("status") == "pending":
+        return request
+    agentic = global_integration.get("agentic")
+    if isinstance(agentic, dict):
+        nested = agentic.get("continuation_request")
+        if isinstance(nested, dict) and nested.get("status") == "pending":
+            return nested
+    return {}
+
+
+def _agentic_max_turns_override(state: dict[str, Any]) -> int | None:
+    try:
+        value = int(state.get("agentic_repair_max_turns_override") or 0)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _next_runtime_attempt_index(job_dir: Path) -> int:
+    integration_dir = job_dir / STAGE_CODEGEN / "integration"
+    if not integration_dir.is_dir():
+        return 0
+    max_seen = -1
+    for path in integration_dir.glob("runtime_attempt_*"):
+        suffix = path.name.removeprefix("runtime_attempt_")
+        try:
+            max_seen = max(max_seen, int(suffix))
+        except ValueError:
+            continue
+    return max_seen + 1

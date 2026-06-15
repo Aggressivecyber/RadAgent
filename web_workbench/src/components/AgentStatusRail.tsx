@@ -40,9 +40,7 @@ export default function AgentStatusRail({
     setCopilotText('')
   }
 
-  const historyRows = timeline
-    .filter((row) => row.kind === 'command' || row.meta === 'chat')
-    .slice(-18)
+  const historyRows = timeline.filter((row) => row.kind === 'command' && row.meta === 'chat').slice(-18)
 
   return (
     <aside className="agent-status-rail">
@@ -76,7 +74,7 @@ export default function AgentStatusRail({
         {historyRows.length > 0 ? (
           historyRows.map((row) => (
             <article className={`copilot-history-message ${row.status}`} key={row.id}>
-              <span>{row.meta === 'chat' || row.title === '对话' ? 'Copilot' : 'Workflow'}</span>
+              <span>Copilot</span>
               <strong>{row.title}</strong>
               {row.body ? <p>{row.body}</p> : null}
             </article>

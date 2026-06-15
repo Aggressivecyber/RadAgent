@@ -155,3 +155,73 @@ class TestNoSimplificationValidator:
         passed, errors = NoSimplificationValidator().validate(ir)
 
         assert passed, errors
+
+    def test_shielding_material_stack_does_not_require_oxide_layer(self):
+        """A shielding stack may be multi-layer without being a semiconductor oxide stack."""
+        ir = G4ModelIR(
+            model_ir_id="shielding_stack",
+            job_id="job",
+            target_system=(
+                "14 MeV neutron shielding stack with polyethylene borated "
+                "polyethylene lead and downstream silicon detector"
+            ),
+            components=[
+                _world(),
+                ComponentSpec(
+                    component_id="polyethylene_layer",
+                    display_name="Polyethylene layer",
+                    component_type="layer",
+                    geometry_type="box",
+                    dimensions={"dx": 100.0, "dy": 100.0, "dz": 30.0},
+                    material_id="polyethylene",
+                    mother_volume="world",
+                    roles=["shielding"],
+                    source_evidence=["user_spec: polyethylene shielding layer"],
+                ),
+                ComponentSpec(
+                    component_id="borated_polyethylene_layer",
+                    display_name="Borated polyethylene layer",
+                    component_type="layer",
+                    geometry_type="box",
+                    dimensions={"dx": 100.0, "dy": 100.0, "dz": 20.0},
+                    material_id="borated_polyethylene",
+                    mother_volume="world",
+                    roles=["shielding"],
+                    source_evidence=["user_spec: borated polyethylene shielding layer"],
+                ),
+                ComponentSpec(
+                    component_id="lead_layer",
+                    display_name="Lead layer",
+                    component_type="layer",
+                    geometry_type="box",
+                    dimensions={"dx": 100.0, "dy": 100.0, "dz": 10.0},
+                    material_id="lead",
+                    mother_volume="world",
+                    roles=["shielding"],
+                    source_evidence=["user_spec: lead shielding layer"],
+                ),
+                ComponentSpec(
+                    component_id="silicon_detector",
+                    display_name="Silicon detector",
+                    component_type="volume",
+                    geometry_type="box",
+                    dimensions={"dx": 50.0, "dy": 50.0, "dz": 1.0},
+                    material_id="silicon",
+                    mother_volume="world",
+                    sensitive=True,
+                    roles=["dose_scoring_region"],
+                    source_evidence=["user_spec: downstream silicon detector"],
+                ),
+            ],
+            materials=[
+                _mat("air"),
+                _mat("polyethylene"),
+                _mat("borated_polyethylene"),
+                _mat("lead"),
+                _mat("silicon"),
+            ],
+        )
+
+        passed, errors = NoSimplificationValidator().validate(ir)
+
+        assert passed, f"Unexpected simplification errors: {errors}"

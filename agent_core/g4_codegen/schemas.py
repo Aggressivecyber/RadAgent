@@ -31,6 +31,7 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     web_search_available: bool
     context_decision: str
     runtime_failure_context: dict[str, Any]
+    agentic_repair_max_turns_override: int
 
     # Planning outputs
     codegen_plan: dict[str, Any]
@@ -57,6 +58,8 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     code_module_plan_path: str
     generated_code_dir: str
     g4_codegen_status: str
+    repair_continuation_request: dict[str, Any]
+    repair_continuation_status: str
 
     # Control
     current_node: str

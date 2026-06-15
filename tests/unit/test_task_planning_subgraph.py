@@ -132,6 +132,66 @@ class TestParseTask:
         assert particle["energy_MeV"] == 5.5
         assert result["task_spec_errors"] == []
 
+    async def test_mosfet_tid_requires_clarification_instead_of_default_geant4(
+        self,
+        temp_workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[dict[str, object]] = []
+
+        class FakeGateway:
+            async def call(self, **kwargs):
+                calls.append(kwargs)
+                return ModelCallResult(
+                    task=kwargs["task"],
+                    tier=kwargs["tier"],
+                    provider=ModelProvider.MOCK,
+                    model_name="fake",
+                    content="{}",
+                    parsed_json={
+                        "particle": {
+                            "type": "gamma",
+                            "pdg_code": 22,
+                            "energy_MeV": 1.25,
+                            "energy_unit": "MeV",
+                        },
+                        "target": {
+                            "geometry": "mosfet",
+                            "materials": ["Si", "SiO2", "Al"],
+                        },
+                        "outputs": ["energy_deposition", "dose_distribution"],
+                    },
+                )
+
+        monkeypatch.setattr(
+            "agent_core.models.gateway.get_model_gateway",
+            lambda: FakeGateway(),
+        )
+
+        result = await parse_task(
+            {
+                "job_id": "test_job",
+                "user_query": "仿真一个mosfet的tid效应",
+            }
+        )
+
+        task_spec = result["task_spec"]
+        assert result["task_planning_status"] == "needs_user_input"
+        assert result["simulation_scope"] == ["tcad"]
+        assert "particle" not in task_spec
+        assert task_spec["clarification_request"]["reason"] == "ambiguous_device_tid"
+        assert task_spec["clarification_request"]["missing_information"] == [
+            "MOSFET geometry and dimensions",
+            "gate oxide thickness and material stack",
+            "radiation source particle, energy or spectrum, and fluence or dose",
+            "TID observable: oxide dose only or electrical response such as threshold shift",
+            "whether to run Geant4 dose scoring, TCAD device simulation, or a coupled workflow",
+        ]
+        assert result["task_spec_errors"] == [
+            "MOSFET/TID request needs user clarification before code generation."
+        ]
+        assert calls == []
+
     async def test_simple_slab_query_normalizes_source_and_target(
         self,
         temp_workspace: Path,

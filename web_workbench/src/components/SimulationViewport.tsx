@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Grid, RefreshCw } from 'lucide-react'
+import { Eye, EyeOff, Grid, Info, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -23,6 +23,12 @@ type ViewportBounds = {
   max: Vector3
 }
 
+export type ParticleColorLegendItem = {
+  particle: string
+  label: string
+  color: string
+}
+
 const materialColors: Record<string, number> = {
   air: 0x8fb7d9,
   silicon: 0x61b596,
@@ -45,6 +51,69 @@ const emptyPayload: VisualizationPayload = {
   tracks: [],
   deposits: [],
   warnings: [],
+}
+
+const commonParticleColors: Array<{ label: string; color: string; match: (particle: string) => boolean }> = [
+  { label: '电子', color: '#2aa7ff', match: (particle) => particle === 'electron' || particle === 'e-' || particle === 'e+' || particle.includes('electron') },
+  { label: '质子', color: '#ff8d3a', match: (particle) => particle.includes('proton') || particle === 'p' },
+  { label: '中子', color: '#7c5cff', match: (particle) => particle.includes('neutron') },
+  { label: '光子 / Gamma', color: '#f2cf3a', match: (particle) => particle.includes('gamma') || particle.includes('photon') },
+]
+
+const fallbackParticleColors = ['#00a88f', '#d45c9f', '#8f7a2d', '#4f8bd8', '#b65f2a', '#6f7a89', '#c24bd6']
+
+function normalizeParticleName(particle: string): string {
+  return particle.trim().toLowerCase() || 'unknown'
+}
+
+function commonParticleColor(particle: string): { label: string; color: string } | null {
+  const normalized = normalizeParticleName(particle)
+  const match = commonParticleColors.find((entry) => entry.match(normalized))
+  return match ? { label: match.label, color: match.color } : null
+}
+
+export function particleColorForName(particle: string, fallbackIndex = 0): string {
+  return commonParticleColor(particle)?.color ?? fallbackParticleColors[fallbackIndex % fallbackParticleColors.length]
+}
+
+export function particleColorLegendFor(payload: VisualizationPayload): ParticleColorLegendItem[] {
+  const particles: string[] = []
+  for (const sourceRay of payload.sourceRays) {
+    if (sourceRay.particle && !particles.includes(sourceRay.particle)) {
+      particles.push(sourceRay.particle)
+    }
+  }
+  for (const track of payload.tracks) {
+    if (track.particle && !particles.includes(track.particle)) {
+      particles.push(track.particle)
+    }
+  }
+
+  let otherIndex = 0
+  return particles.map((particle) => {
+    const common = commonParticleColor(particle)
+    if (common) {
+      return { particle, label: common.label, color: common.color }
+    }
+    otherIndex += 1
+    return {
+      particle,
+      label: `其他粒子${otherIndex}`,
+      color: fallbackParticleColors[(otherIndex - 1) % fallbackParticleColors.length],
+    }
+  })
+}
+
+export function shouldShowSourcePreview(payload: VisualizationPayload): boolean {
+  return payload.sourceRays.length > 0 && payload.tracks.length === 0
+}
+
+function particleColorLookup(payload: VisualizationPayload): Map<string, string> {
+  return new Map(particleColorLegendFor(payload).map((item) => [item.particle, item.color]))
+}
+
+function colorHexToNumber(color: string): number {
+  return Number.parseInt(color.replace('#', ''), 16)
 }
 
 function colorFor(component: VisualizationComponent): number {
@@ -377,35 +446,15 @@ function compactTrackPoints(track: VisualizationTrack, viewportBounds: ViewportB
   return points
 }
 
-function colorForTrack(track: VisualizationTrack): number {
-  const particle = track.particle.toLowerCase()
-  if (particle.includes('gamma') || particle.includes('photon')) {
-    return 0xf2cf3a
-  }
-  if (particle.includes('proton') || particle.includes('ion')) {
-    return 0xff8d3a
-  }
-  if (particle.includes('neutron')) {
-    return 0x7c5cff
-  }
-  return 0x20a4ff
+function colorForTrack(track: VisualizationTrack, colors: Map<string, string>): number {
+  return colorHexToNumber(colors.get(track.particle) ?? particleColorForName(track.particle))
 }
 
-function sourceRayColor(ray: VisualizationSourceRay): number {
-  const particle = ray.particle.toLowerCase()
-  if (particle.includes('gamma') || particle.includes('photon')) {
-    return 0xf0c929
-  }
-  if (particle.includes('proton') || particle.includes('ion')) {
-    return 0xff8d3a
-  }
-  if (particle.includes('neutron')) {
-    return 0x7c5cff
-  }
-  return 0x1b7fce
+function sourceRayColor(ray: VisualizationSourceRay, colors: Map<string, string>): number {
+  return colorHexToNumber(colors.get(ray.particle) ?? particleColorForName(ray.particle))
 }
 
-function addSourceRay(root: THREE.Group, ray: VisualizationSourceRay, extent: number): void {
+function addSourceRay(root: THREE.Group, ray: VisualizationSourceRay, extent: number, colors: Map<string, string>): void {
   const start = toVector3(ray.start)
   const end = toVector3(ray.end)
   const delta = end.clone().sub(start)
@@ -413,7 +462,7 @@ function addSourceRay(root: THREE.Group, ray: VisualizationSourceRay, extent: nu
   if (length <= 1e-8) {
     return
   }
-  const color = sourceRayColor(ray)
+  const color = sourceRayColor(ray, colors)
   const radius = Math.max(0.45, Math.min(1.8, extent * 0.008))
   const curve = new THREE.LineCurve3(start, end)
   root.add(
@@ -445,12 +494,13 @@ function addParticleTrack(
   index: number,
   extent: number,
   viewportBounds: ViewportBounds,
+  colors: Map<string, string>,
 ): void {
   const points = compactTrackPoints(track, viewportBounds)
   if (points.length < 2) {
     return
   }
-  const color = colorForTrack(track)
+  const color = colorForTrack(track, colors)
   const geometry = new THREE.BufferGeometry().setFromPoints(points)
   const isHighlighted = isPrimaryLikeParticle(track.particle)
   const opacity = isHighlighted ? 0.74 : 0.3
@@ -515,6 +565,7 @@ export default function SimulationViewport({
   const data = payload ?? emptyPayload
   const stats = useMemo(() => layerStats(data, showParticles), [data, showParticles])
   const sceneSignature = useMemo(() => visualizationSceneSignature(data), [data])
+  const particleLegend = useMemo(() => particleColorLegendFor(data), [sceneSignature])
 
   useEffect(() => {
     const container = containerRef.current
@@ -567,12 +618,15 @@ export default function SimulationViewport({
     }
 
     const visibleTracks = orderedParticleTracks(data, showParticles)
+    const colors = particleColorLookup(data)
     if (showParticles) {
-      for (const sourceRay of data.sourceRays) {
-        addSourceRay(root, sourceRay, extent)
+      if (shouldShowSourcePreview(data)) {
+        for (const sourceRay of data.sourceRays) {
+          addSourceRay(root, sourceRay, extent, colors)
+        }
       }
       for (const [index, track] of visibleTracks.entries()) {
-        addParticleTrack(root, track, index, extent, viewportBounds)
+        addParticleTrack(root, track, index, extent, viewportBounds, colors)
       }
     }
 
@@ -690,6 +744,28 @@ export default function SimulationViewport({
         <div>
           <strong>3D 模型视图</strong>
           <span>{data.status === 'ready' ? '100 粒子可视化数据已就绪' : '等待可视化产物 · 参考网格'}</span>
+        </div>
+        <div className="particle-legend-tooltip">
+          <button type="button" aria-label="查看粒子颜色图例" title="粒子颜色图例">
+            <Info size={15} />
+          </button>
+          <div className="particle-legend-popover" role="tooltip">
+            {particleLegend.length > 0 ? (
+              particleLegend.map((item) => (
+                <span key={`${item.label}-${item.particle}`}>
+                  <i style={{ backgroundColor: item.color }} />
+                  <strong>{item.label}</strong>
+                  <em>{item.particle}</em>
+                </span>
+              ))
+            ) : (
+              <span>
+                <i style={{ backgroundColor: particleColorForName('gamma') }} />
+                <strong>暂无轨迹</strong>
+                <em>等待真实粒子数据</em>
+              </span>
+            )}
+          </div>
         </div>
         <button
           type="button"

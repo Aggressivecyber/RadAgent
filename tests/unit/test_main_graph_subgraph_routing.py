@@ -185,13 +185,13 @@ class TestRouteAfterGates:
         }
         assert route_after_gates(state) == "human_confirmation_subgraph"
 
-    def test_blocked_visual_review_gate_routes_to_report(self) -> None:
+    def test_retired_visual_review_gate_is_ignored(self) -> None:
         state: RadAgentMainState = {
             "validation_status": "blocked",
             "retry_count": 0,
             "failed_gates": [{"gate_id": 21, "name": "G4 Visual Review"}],
         }
-        assert route_after_gates(state) == "report_subgraph"
+        assert route_after_gates(state) == "artifact_subgraph"
 
     def test_failed_max_retries_reports(self) -> None:
         state: RadAgentMainState = {

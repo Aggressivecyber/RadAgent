@@ -63,7 +63,7 @@ describe('operation panel presentation', () => {
     ])
   })
 
-  it('models visual workbench and review actions as operation panels', () => {
+  it('does not model retired native visual workbench actions as operation panels', () => {
     const workbench = createOperationPanel('workbench', {
       success: true,
       events: 100,
@@ -77,15 +77,10 @@ describe('operation panel presentation', () => {
       notes: 'Geometry needs a clearer shield boundary.',
     })
 
-    expect(isOperationPanelView('workbench')).toBe(true)
+    expect(isOperationPanelView('workbench')).toBe(false)
+    expect(isOperationPanelView('visual-review')).toBe(false)
     expect(isOperationPanelView('status')).toBe(false)
-    expect(workbench?.metrics).toEqual([
-      { label: '结果', value: '通过' },
-      { label: '事件数', value: '100' },
-      { label: '已启动', value: '是' },
-    ])
-    expect(workbench?.preview).toContain('/tmp/example')
-    expect(review?.title).toBe('可视化审查')
-    expect(review?.preview).toBe('Geometry needs a clearer shield boundary.')
+    expect(workbench).toBeNull()
+    expect(review).toBeNull()
   })
 })

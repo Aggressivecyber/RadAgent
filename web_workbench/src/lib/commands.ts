@@ -22,6 +22,7 @@ export const coreCommandNames = [
   'chat',
   'confirm',
   'credibility',
+  'diagnose',
   'exit',
   'gates',
   'logs',
@@ -36,9 +37,6 @@ export const coreCommandNames = [
   'reject',
   'revision',
   'simulate',
-  'visual-approve',
-  'visual-reject',
-  'workbench',
   'step',
 ] as const
 
@@ -66,12 +64,13 @@ const commandGroups: Array<{
 }> = [
   {
     label: 'Workflow',
-    commands: ['run', 'step', 'build', 'simulate', 'workbench', 'demo', 'resume', 'retry'],
+    commands: ['run', 'step', 'build', 'simulate', 'demo', 'resume', 'retry'],
   },
   {
     label: 'Review',
     commands: [
       'confirm',
+      'diagnose',
       'approve',
       'reject',
       'ask-more',
@@ -82,8 +81,6 @@ const commandGroups: Array<{
       'revision',
       'accept-revision',
       'reject-revision',
-      'visual-approve',
-      'visual-reject',
     ],
   },
   {

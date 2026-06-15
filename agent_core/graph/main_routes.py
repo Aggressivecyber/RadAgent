@@ -94,8 +94,11 @@ def route_after_human_confirmation(state: RadAgentMainState) -> str:
     - unconfirmed_assumptions_count == 0
     """
     status = state.get("confirmation_status", "failed")
+    modeling_status = state.get("g4_modeling_status")
 
     if status in {"approved", "edited"}:
+        if modeling_status and modeling_status != "passed":
+            return "report_subgraph"
         if state.get("unconfirmed_assumptions_count", 0) > 0:
             return "report_subgraph"
         if not state.get("confirmation_record_path"):
@@ -136,7 +139,10 @@ def route_after_gates(state: RadAgentMainState) -> str:
     On failure with retries remaining, route back to the appropriate
     subgraph based on the failed gate type.
     """
+    failed_gates = _active_failed_gates(state.get("failed_gates", []))
     validation_status = state.get("validation_status", "failed")
+    if validation_status in {"failed", "blocked"} and not failed_gates:
+        return "artifact_subgraph"
     if validation_status == "passed":
         return "artifact_subgraph"
 
@@ -146,10 +152,24 @@ def route_after_gates(state: RadAgentMainState) -> str:
         return "report_subgraph"
 
     # Route back based on which gates failed
-    failed_gates = state.get("failed_gates", [])
     return classify_failed_gates(failed_gates)
 
 
 def route_after_artifact(state: RadAgentMainState) -> str:
     """Route after Artifact Subgraph — always goes to report."""
     return "report_subgraph"
+
+
+def _active_failed_gates(failed_gates: object) -> list[object]:
+    if not isinstance(failed_gates, list):
+        return []
+    return [gate for gate in failed_gates if not _is_retired_visual_review_gate(gate)]
+
+
+def _is_retired_visual_review_gate(gate: object) -> bool:
+    if isinstance(gate, dict):
+        try:
+            return int(gate.get("gate_id", -1)) == 21
+        except (TypeError, ValueError):
+            return False
+    return str(gate).strip() == "G4 Visual Review"

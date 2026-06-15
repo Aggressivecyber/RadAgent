@@ -7,7 +7,7 @@ from agent_core.graph import main_graph
 
 
 @pytest.mark.asyncio
-async def test_gate_subgraph_receives_visual_review_state(
+async def test_gate_subgraph_does_not_forward_retired_visual_review_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -44,7 +44,7 @@ async def test_gate_subgraph_receives_visual_review_state(
     )
 
     assert captured["run_mode"] == "test"
-    assert captured["visual_review_status"] == "approved"
-    assert captured["visual_review_notes"] == "geometry inspected"
-    assert captured["visual_review_blocking"] is True
+    assert "visual_review_status" not in captured
+    assert "visual_review_notes" not in captured
+    assert "visual_review_blocking" not in captured
     assert result["validation_status"] == "passed"

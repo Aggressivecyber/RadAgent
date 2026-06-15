@@ -40,8 +40,12 @@ function HomeView({
     normalizeHomeSummary(emptyHomeSummary),
   )
   const [intro, setIntro] = useState<HomeIntroState>(() => ({ stage: 'collapsed' }))
+  const [visibleAdvantageCards, setVisibleAdvantageCards] = useState<Set<string>>(
+    () => new Set(),
+  )
   const introAnchorRef = useRef<HTMLDivElement | null>(null)
   const ambientSphereRef = useRef<HTMLDivElement | null>(null)
+  const advantageCardIds = home.advantageItems.map((item) => item.index).join('|')
 
   useEffect(() => {
     let active = true
@@ -68,7 +72,50 @@ function HomeView({
     setIntro(createHomeIntroState({ reducedMotion }))
   }, [])
 
-  function collapseIntro(type: 'click' | 'wheel' | 'touch') {
+  useEffect(() => {
+    const panels = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-advantage-index]'),
+    )
+    if (panels.length === 0) {
+      return
+    }
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reducedMotion || !('IntersectionObserver' in window)) {
+      setVisibleAdvantageCards(
+        new Set(panels.map((panel) => panel.dataset.advantageIndex).filter(Boolean) as string[]),
+      )
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const index = (entry.target as HTMLElement).dataset.advantageIndex
+          if (index) {
+            setVisibleAdvantageCards((current) => {
+              const next = new Set(current)
+              if (entry.isIntersecting) {
+                next.add(index)
+              } else {
+                next.delete(index)
+              }
+              if (next.size === current.size && next.has(index) === current.has(index)) {
+                return current
+              }
+              return next
+            })
+          }
+        })
+      },
+      { rootMargin: '0px 0px -10% 0px', threshold: 0.2 },
+    )
+
+    panels.forEach((panel) => observer.observe(panel))
+    return () => observer.disconnect()
+  }, [advantageCardIds])
+
+  function collapseIntro() {
     const targetBox = ambientSphereRef.current?.getBoundingClientRect()
     const sourceWidth = introAnchorRef.current?.offsetWidth || 0
     if (sourceWidth && targetBox) {
@@ -82,7 +129,7 @@ function HomeView({
         })
       }
     }
-    setIntro((current) => reduceHomeIntro(current, { type }))
+    setIntro((current) => reduceHomeIntro(current, { type: 'click' }))
   }
 
   function finishIntroTransition() {
@@ -103,9 +150,7 @@ function HomeView({
           className="intro-sphere-stage"
           type="button"
           aria-label="进入 RadAgent 首页"
-          onClick={() => collapseIntro('click')}
-          onWheel={() => collapseIntro('wheel')}
-          onTouchStart={() => collapseIntro('touch')}
+          onClick={collapseIntro}
           onAnimationEnd={(event) => {
             if (event.animationName === 'intro-shell-leave') {
               finishIntroTransition()
@@ -119,12 +164,19 @@ function HomeView({
               <small>空天辐照防护仿真工作台</small>
             </span>
           </div>
-          <span className="intro-hint">点击或滑动进入</span>
+          <span className="intro-hint">点击进入</span>
         </button>
       ) : null}
       <section className="home-hero">
+        <div className="home-scan-beam" aria-hidden="true" />
+        <div className="home-signal-dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
         <div className="home-ambient-sphere" ref={ambientSphereRef}>
-          <HeroSphere />
+          <HeroSphere variant="field" />
         </div>
         <div className="hero-copy">
           <div className="hero-promise">
@@ -198,7 +250,15 @@ function HomeView({
         </div>
         <div className="advantage-showcase">
           {home.advantageItems.map((item) => (
-            <article className="advantage-panel" key={item.index}>
+            <article
+              className={
+                visibleAdvantageCards.has(item.index)
+                  ? 'advantage-panel is-visible'
+                  : 'advantage-panel'
+              }
+              data-advantage-index={item.index}
+              key={item.index}
+            >
               <div className="advantage-media">
                 <WorkflowMiniDemo index={item.demoIndex} />
               </div>
@@ -284,9 +344,19 @@ export default function App() {
   const [view, setView] = useState<ViewMode>('home')
   const [launchTarget, setLaunchTarget] = useState<HomeLaunchTarget | null>(null)
 
+  function resetViewportScroll() {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }
+
   function openWorkbench(target: HomeLaunchTarget | null = null) {
+    resetViewportScroll()
     setLaunchTarget(target)
     setView('workbench')
+  }
+
+  function openHome() {
+    resetViewportScroll()
+    setView('home')
   }
 
   return view === 'home' ? (
@@ -295,6 +365,6 @@ export default function App() {
       onLaunchExample={(target) => openWorkbench(target)}
     />
   ) : (
-    <WorkbenchShell launchTarget={launchTarget} onHome={() => setView('home')} />
+    <WorkbenchShell launchTarget={launchTarget} onHome={openHome} />
   )
 }

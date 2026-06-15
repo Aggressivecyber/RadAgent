@@ -4,11 +4,12 @@ import type { CommandCatalogEntryLike } from './commands'
 
 const catalog: CommandCatalogEntryLike[] = [
   'run',
-  'workbench',
+  'retry',
   'build',
   'simulate',
   'step',
   'confirm',
+  'diagnose',
   'gates',
   'credibility',
   'artifacts',
@@ -32,8 +33,8 @@ describe('workbench controls', () => {
     const sections = createWorkbenchControlSections(catalog)
 
     expect(sections.map((section) => section.title)).toEqual(['执行推进', '审查门禁', '结果与环境'])
-    expect(sections[0].actions.map((action) => action.name)).toEqual(['workbench', 'build', 'simulate', 'step'])
-    expect(sections[1].actions.map((action) => action.name)).toEqual(['confirm', 'gates', 'credibility'])
+    expect(sections[0].actions.map((action) => action.name)).toEqual(['retry', 'build', 'simulate'])
+    expect(sections[1].actions.map((action) => action.name)).toEqual(['diagnose', 'confirm', 'gates', 'credibility'])
     expect(sections[2].actions.map((action) => action.name)).toEqual(['artifacts', 'jobs', 'logs', 'model'])
   })
 
@@ -41,8 +42,10 @@ describe('workbench controls', () => {
     const sections = createWorkbenchControlSections(catalog)
     const names = sections.flatMap((section) => section.actions.map((action) => action.name))
 
-    expect(names).not.toEqual(expect.arrayContaining(['run', 'history', 'demo', 'exit']))
+    expect(names).not.toEqual(expect.arrayContaining(['run', 'step', 'history', 'demo', 'exit']))
+    expect(names).not.toContain('workbench')
     expect(isWorkbenchControlAction('build')).toBe(true)
+    expect(isWorkbenchControlAction('workbench')).toBe(false)
     expect(isWorkbenchControlAction('history')).toBe(false)
   })
 

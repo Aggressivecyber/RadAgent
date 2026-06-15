@@ -15,10 +15,12 @@ import json
 import logging
 import os
 import re
+import hashlib
 from pathlib import Path
 from typing import Any
 
 from agent_core.g4_codegen.schemas import GeneratedModuleFile, ModuleAgentResult
+from agent_core.g4_codegen.template_project import create_minimal_geant4_project
 from agent_core.models.gateway import get_model_gateway
 from agent_core.models.schemas import ModelTask, ModelTier
 from agent_core.workspace.paths import STAGE_CODEGEN
@@ -46,6 +48,12 @@ MODULE_AGENTIC_SYSTEM_PROMPT = """\
 API 不匹配的硬性要求。当前模块前一个文件组写出的接口若已出现在
 `*_file_group.prior_files`，这是同一 agent 流程中的真实接口摘要，可直接使用，
 不要再 read_file 同一模块刚生成的文件。
+
+项目目录会预置 RadAgent canonical template：一套能 build/smoke run 的
+Geant4 C++ 骨架，而不是关键词表单。你要读取并修改真实 C++ 接口
+（DetectorConstruction、MaterialRegistry、PrimaryGeneratorAction、
+OutputManager、ActionInitialization 等），不要把任务当成 fill keyword、
+占位替换或配置表填空。
 
 工具：
 - read_file(path): 读取项目内文件（带行号）。写代码前先读依赖的头文件。
@@ -137,6 +145,8 @@ async def run_module_agent(
     # is still written by the patch subgraph under STAGE_PATCH).
     project_dir = get_job_dir(job_id) / STAGE_CODEGEN / "module_workspace"
     project_dir.mkdir(parents=True, exist_ok=True)
+    template_manifest = create_minimal_geant4_project(project_dir, events=100)
+    preexisting_owned_hashes = _file_hashes(project_dir, output_files)
 
     tool_policy = module_context.get("agent_tool_policy") or {}
     allow_read_file = bool(tool_policy.get("allow_read_file", True))
@@ -151,16 +161,28 @@ async def run_module_agent(
     )
 
     async def owned_files_written(_toolkit: DevToolkit, _audit: list[dict[str, Any]]) -> bool:
-        return bool(output_files) and all((project_dir / rel).exists() for rel in output_files)
+        return bool(output_files) and all(
+            _owned_file_modified_by_current_agent(project_dir, rel, preexisting_owned_hashes, _audit)
+            for rel in output_files
+        )
 
     def nudge_remaining_files(_audit: list[dict[str, Any]]) -> str | None:
-        missing = [rel for rel in output_files if not (project_dir / rel).exists()]
+        missing = [
+            rel
+            for rel in output_files
+            if not _owned_file_modified_by_current_agent(
+                project_dir,
+                rel,
+                preexisting_owned_hashes,
+                _audit,
+            )
+        ]
         if not missing:
             return None
         return (
-            "Remaining owned files still missing: "
-            f"{', '.join(missing)}. Write these exact files next with complete content. "
-            "Do not re-read files unless needed for a real dependency signature."
+            "Remaining owned files still not written or modified by this module agent: "
+            f"{', '.join(missing)}. Use write_file or edit_file on these exact files next "
+            "with complete task-specific content. Do not rely on the unchanged template file."
         )
 
     effective_system = (
@@ -202,6 +224,14 @@ async def run_module_agent(
     user_message = (
         f"Module: {module_name}\n"
         f"Owned files to write now: {owned}\n\n"
+        "Canonical template workspace:\n"
+        "- The project directory already contains a buildable RadAgent Geant4 "
+        "canonical template with stable interfaces and config/simulation_config.json.\n"
+        "- Use read_file to inspect relevant template headers/sources before changing "
+        "interfaces; use edit_file for focused changes when an owned file already exists.\n"
+        "- This is not a keyword-fill task. Modify real C++ code and macros so the "
+        "template implements the current G4ModelIR and human-confirmed constraints.\n"
+        f"- Template manifest: {json.dumps(template_manifest, ensure_ascii=False)}\n\n"
         f"ModuleContext:\n{context_json}\n\n"
         "Instructions:\n"
         "- Use write_file to create each owned file with COMPLETE content.\n"
@@ -248,7 +278,12 @@ async def run_module_agent(
     errors: list[str] = []
     for rel in output_files:
         target = project_dir / rel
-        if target.exists():
+        if target.exists() and _owned_file_modified_by_current_agent(
+            project_dir,
+            rel,
+            preexisting_owned_hashes,
+            loop_result.tool_audit,
+        ):
             original_content = target.read_text(encoding="utf-8", errors="replace")
             content = _postprocess_generated_module_content(rel, original_content)
             if content != original_content:
@@ -265,7 +300,10 @@ async def run_module_agent(
                 )
             )
         else:
-            errors.append(f"module agent did not write owned file: {rel}")
+            if target.exists():
+                errors.append(f"module agent owned file not modified by current module agent: {rel}")
+            else:
+                errors.append(f"module agent did not write owned file: {rel}")
 
     warnings: list[str] = []
     if loop_result.stop_reason == "max_turns":
@@ -311,6 +349,67 @@ def _module_context_json_for_prompt(
 
     keep_chars = max(0, max_chars - len(MODULE_CONTEXT_TRUNCATED_MARKER) - 1)
     return f"{compact_json[:keep_chars]}\n{MODULE_CONTEXT_TRUNCATED_MARKER}"
+
+
+def _file_hashes(project_dir: Path, relative_paths: list[str]) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    for relative in relative_paths:
+        path = project_dir / relative
+        if path.is_file():
+            hashes[relative] = _file_sha256(path)
+    return hashes
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _owned_file_modified_by_current_agent(
+    project_dir: Path,
+    relative_path: str,
+    preexisting_hashes: dict[str, str],
+    audit: list[dict[str, Any]],
+) -> bool:
+    path = project_dir / relative_path
+    if not path.is_file():
+        return False
+    if relative_path not in preexisting_hashes:
+        return True
+    if _tool_audit_wrote_path(audit, relative_path):
+        return True
+    return _file_sha256(path) != preexisting_hashes[relative_path]
+
+
+def _tool_audit_wrote_path(audit: list[dict[str, Any]], relative_path: str) -> bool:
+    for entry in audit:
+        if not entry.get("ok"):
+            continue
+        name = str(entry.get("name") or entry.get("tool") or "")
+        if name not in {"write_file", "edit_file"}:
+            continue
+        arguments = entry.get("arguments")
+        args = entry.get("args")
+        parsed = args if isinstance(args, dict) else _json_dict(arguments)
+        if str(parsed.get("path") or "") == relative_path:
+            return True
+        result = entry.get("result")
+        if isinstance(result, dict) and str(result.get("path") or "") == relative_path:
+            return True
+    return False
+
+
+def _json_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _compact_module_context_for_prompt(prompt_context: dict[str, Any]) -> dict[str, Any]:

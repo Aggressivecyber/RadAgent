@@ -85,7 +85,10 @@ class RadAgentMainState(TypedDict, total=False):
     code_module_plan_path: str
     proposed_patch_path: str
     generated_code_dir: str
-    g4_codegen_status: str  # "passed" | "failed"
+    g4_codegen_status: str  # "passed" | "failed" | "needs_user_input"
+    repair_continuation_request: dict[str, Any]
+    repair_continuation_status: str  # "pending" | "approved" | "rejected"
+    agentic_repair_max_turns_override: int
 
     # ── Patch Subgraph outputs ──
     patch_review_path: str
@@ -98,9 +101,6 @@ class RadAgentMainState(TypedDict, total=False):
     validation_status: str  # "passed" | "failed" | "blocked"
     failed_gates: list[str]
     skipped_gates: list[str]
-    visual_review_status: str  # "pending" | "approved" | "rejected"
-    visual_review_notes: str
-    visual_review_blocking: bool
 
     # ── Artifact Subgraph outputs ──
     review_artifact_dir: str

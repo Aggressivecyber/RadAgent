@@ -10,12 +10,14 @@ const cockpit: AgentCockpit = {
     currentAction: 'Generating detector construction module',
     workspace: '/tmp/radagent/job-42',
     changedFiles: '3 个文件',
+    statusChips: [],
   },
   fileGroups: [],
   recentActivity: [
-    { title: 'model call start', statusLabel: '运行中', phaseLabel: '工程生成' },
-    { title: 'g4 codegen persist', statusLabel: '通过', phaseLabel: '工程生成' },
+    { title: 'model call start', detail: 'Generating module', statusLabel: '运行中', phaseLabel: '工程生成' },
+    { title: 'g4 codegen persist', detail: 'Persisted files', statusLabel: '通过', phaseLabel: '工程生成' },
   ],
+  llmDebugCalls: [],
 }
 
 describe('AgentStatusRail', () => {
@@ -24,6 +26,14 @@ describe('AgentStatusRail', () => {
       <AgentStatusRail
         cockpit={cockpit}
         timeline={[
+          {
+            id: 'command:status',
+            kind: 'command',
+            title: '查看状态',
+            body: 'Running g4_codegen',
+            status: 'success',
+            meta: 'status',
+          },
           {
             id: 'command:chat',
             kind: 'command',
@@ -46,6 +56,7 @@ describe('AgentStatusRail', () => {
     expect(markup).toContain('Copilot')
     expect(markup).toContain('对话历史')
     expect(markup).toContain('当前工作流下一步是什么？')
+    expect(markup).not.toContain('Running g4_codegen')
     expect(markup).toContain('仿真协作助手')
     expect(markup).toContain('仿真工作流')
     expect(markup).toContain('正在仿真')

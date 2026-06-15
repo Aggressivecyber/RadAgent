@@ -175,6 +175,18 @@ class TestRouteAfterHumanConfirmationBlocking:
         result = route_after_human_confirmation(state)
         assert result == "g4_codegen_subgraph"
 
+    def test_modeling_failure_blocks_codegen_after_approval(self):
+        """Test that approval cannot bypass a failed modeling phase."""
+        state = {
+            "g4_modeling_status": "failed",
+            "confirmation_status": "approved",
+            "confirmation_record_path": "x/confirmation_record.json",
+            "confirmed_model_plan_path": "x/confirmed_model_plan.json",
+            "unconfirmed_assumptions_count": 0,
+        }
+        result = route_after_human_confirmation(state)
+        assert result == "report_subgraph"
+
 
 class TestRouteAfterG4ModelingPhase2:
     """Test routing for G4 Modeling Phase 2 scenarios.

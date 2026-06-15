@@ -935,6 +935,116 @@ async def test_agentic_module_agent_writes_owned_files_to_shared_workspace(
 
 
 @pytest.mark.asyncio
+async def test_agentic_module_agent_seeds_canonical_template_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Module agents should modify a real template scaffold, not fill keywords."""
+    workspace = tmp_path / "simulation_workspace"
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
+    seen: dict[str, Any] = {}
+
+    class FakeGateway:
+        pass
+
+    async def _no_examples(**_: Any) -> dict[str, Any]:
+        return {}
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        seen.update(kwargs)
+        project_dir = kwargs["toolkit"].project_dir
+        assert (project_dir / "config" / "simulation_config.json").is_file()
+        assert (project_dir / "include" / "OutputManager.hh").is_file()
+        assert (project_dir / "src" / "DetectorConstruction.cc").is_file()
+        (project_dir / "include" / "Hit.hh").write_text("#pragma once\nclass Hit {};\n", encoding="utf-8")
+        return AgentLoopResult(
+            content="DONE",
+            stop_reason="stop_hook",
+            n_turns=1,
+            messages=[],
+            tool_audit=[],
+        )
+
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.module_agents.base._collect_example_lookup_context",
+        _no_examples,
+    )
+    monkeypatch.setattr(
+        "agent_core.agent_loop.run_agent_loop",
+        fake_run_agent_loop,
+    )
+
+    result = await run_module_agent(
+        "simulation_core",
+        {
+            "job_id": "job_template_workspace",
+            "module_name": "simulation_core",
+            "module_contract": {"output_files": ["include/Hit.hh"]},
+        },
+    )
+
+    assert result.status == "generated"
+    assert "canonical template" in seen["system_prompt"].lower()
+    assert "read_file" in seen["user_message"]
+    assert "edit_file" in seen["user_message"]
+    assert "fill keyword" not in seen["user_message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_agentic_module_agent_does_not_accept_unchanged_template_file_as_generated(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A preseeded template file is context, not proof that the model did work."""
+    workspace = tmp_path / "simulation_workspace"
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
+
+    class FakeGateway:
+        pass
+
+    async def _no_examples(**_: Any) -> dict[str, Any]:
+        return {}
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        assert (kwargs["toolkit"].project_dir / "main.cc").is_file()
+        return AgentLoopResult(
+            content="DONE",
+            stop_reason="natural",
+            n_turns=1,
+            messages=[],
+            tool_audit=[],
+        )
+
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.module_agents.base.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.module_agents.base._collect_example_lookup_context",
+        _no_examples,
+    )
+    monkeypatch.setattr(
+        "agent_core.agent_loop.run_agent_loop",
+        fake_run_agent_loop,
+    )
+
+    result = await run_module_agent(
+        "runtime_app",
+        {
+            "job_id": "job_template_not_generated",
+            "module_name": "runtime_app",
+            "module_contract": {"output_files": ["main.cc"]},
+        },
+    )
+
+    assert result.status == "failed"
+    assert result.generated_files == []
+    assert any("not modified by current module agent" in error for error in result.errors)
+
+
+@pytest.mark.asyncio
 async def test_agentic_module_agent_stops_after_owned_files_are_written(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
