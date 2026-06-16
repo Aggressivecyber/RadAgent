@@ -112,7 +112,7 @@ class ModelTierConfig(BaseModel):
     max_retries: int = 2
     temperature: float = 0.0
     max_tokens: int = 4096
-    context_window_tokens: int = 128_000
+    context_window_tokens: int = 1_000_000
     thinking_default: bool = False
 
 
@@ -121,7 +121,7 @@ class ModelConfigView(BaseModel):
     default_api_key_env: str = "RADAGENT_API_KEY"
     tiers: dict[str, ModelTierConfig] = Field(default_factory=dict)
     agentic_repair_max_turns: int = 48
-    agentic_repair_history_chars: int = 48_000
+    agentic_repair_history_chars: int = 0
 
 
 class ModelHealthTierResult(BaseModel):

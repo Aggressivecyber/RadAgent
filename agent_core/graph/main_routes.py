@@ -61,9 +61,19 @@ def route_after_task_planning(state: RadAgentMainState) -> str:
 
     # Only pure geant4 scope proceeds
     if scope == ["geant4"]:
-        return "g4_modeling_subgraph"
+        return "requirements_review"
 
     # Unknown/empty scope → report
+    return "report_subgraph"
+
+
+def route_after_requirements_review(state: RadAgentMainState) -> str:
+    """Route after MAX requirements review and user parameter approval."""
+    status = state.get("requirements_review_status", "failed")
+    if status == "approved":
+        if not state.get("confirmed_requirement_plan_path"):
+            return "report_subgraph"
+        return "g4_modeling_subgraph"
     return "report_subgraph"
 
 

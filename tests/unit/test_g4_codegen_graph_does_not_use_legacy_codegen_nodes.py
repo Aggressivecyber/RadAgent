@@ -35,15 +35,18 @@ def test_graph_does_not_import_legacy_nodes():
                 )
 
 
-def test_graph_uses_module_layer_nodes():
-    """g4_codegen_graph must use module layer nodes."""
+def test_graph_uses_full_project_agent_node():
+    """g4_codegen_graph must use the full-project agentic node by default."""
     graph_file = Path("agent_core/graph/subgraphs/g4_codegen_graph.py")
     source = graph_file.read_text()
 
-    # Must import from graph_nodes (module agent system)
+    # Must keep planning/audit nodes from graph_nodes and code through the
+    # full-project writer.
     assert "from agent_core.g4_codegen.graph_nodes import" in source
-    # Must have module layer nodes; individual agents are called inside the layer node.
-    assert "run_module_layer_node" in source
+    assert "geant4_project_agent_node" in source
+    assert "run_module_layer_node" not in source
+    assert "integration_assembler_node" not in source
+    assert "global_integration_agent_node" not in source
     assert "runtime_execution_audit_node" in source
     assert "run_module_hard_gate_node" not in source
     assert "run_module_llm_gate_node" not in source

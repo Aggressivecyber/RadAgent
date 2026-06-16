@@ -7,16 +7,15 @@ Flow:
     → plan_code_architecture
     → build_module_contracts
     → build_module_contexts
-    → [coarse module groups: simulation_core + beam_physics → runtime_app]
     → build_interface_contracts
-    → integration_assembler
-    → global_integration_agent
+    → geant4_project_agent
     → runtime_execution_audit
     → physics_quality_review
     → persist_codegen_output
 
-The global integration agent is the only cross-module writer in the codegen
-graph. It owns compile/runtime repair from real terminal observations.
+The Geant4 project agent is the default cross-project writer. It owns the
+complete Geant4 workspace and uses build/smoke tool feedback before handing the
+project to runtime/physics audit.
 """
 
 from __future__ import annotations
@@ -31,42 +30,21 @@ from agent_core.g4_codegen.graph_nodes import (
     build_module_contexts_node,
     build_module_contracts_node,
     continue_agentic_repair_node,
-    context_coordinator_node,
-    global_integration_agent_node,
-    integration_assembler_node,
-    layer_consistency_gate_node,
     persist_codegen_output_node,
     physics_quality_review_node,
     plan_code_architecture_node,
     plan_geometry_strategy_node,
-    run_module_layer_node,
     runtime_execution_audit_node,
 )
+from agent_core.g4_codegen.project_agent import geant4_project_agent_node
 from agent_core.g4_codegen.io_nodes import load_model_ir
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 
-# Layered module execution plan. Modules inside a layer run in parallel; the
-# layer gate waits for all module chains to complete before releasing the next
-# layer.
-MODULE_LAYERS = [
-    (
-        "core_modules",
-        [
-            "simulation_core",
-            "beam_physics",
-        ],
-    ),
-    (
-        "runtime_modules",
-        [
-            "runtime_app",
-        ],
-    ),
-]
+AUDIT_REPAIR_ROUTE_LIMIT = 2
 
 
 def build_g4_codegen_subgraph() -> StateGraph:
-    """Build the G4 Codegen Subgraph with module agent pipeline."""
+    """Build the G4 Codegen Subgraph with a full-project agentic pipeline."""
     graph = StateGraph(G4CodegenSubgraphState)
 
     # ── I/O nodes ─────────────────────────────────────────────────────
@@ -80,28 +58,9 @@ def build_g4_codegen_subgraph() -> StateGraph:
     graph.add_node("build_module_contracts", build_module_contracts_node)
     graph.add_node("build_module_contexts", build_module_contexts_node)
 
-    # ── Module layers ─────────────────────────────────────────────────
-    for layer_index, (layer_name, module_names) in enumerate(MODULE_LAYERS):
-        graph.add_node(
-            f"run_{layer_name}",
-            _make_module_layer_node(layer_name, module_names),
-        )
-        graph.add_node(
-            f"{layer_name}_gate",
-            _make_layer_gate_node(f"{layer_name}_gate", module_names),
-        )
-        graph.add_node(
-            f"coordinate_{layer_name}_context",
-            _make_context_coordinator_node(
-                f"coordinate_{layer_name}_context",
-                _target_modules_after_layer(layer_index),
-            ),
-        )
-
     # ── Integration nodes ─────────────────────────────────────────────
     graph.add_node("build_interface_contracts", build_interface_contracts_node)
-    graph.add_node("integration_assembler", integration_assembler_node)
-    graph.add_node("global_integration_agent", global_integration_agent_node)
+    graph.add_node("geant4_project_agent", geant4_project_agent_node)
     graph.add_node("runtime_execution_audit", runtime_execution_audit_node)
     graph.add_node("physics_quality_review", physics_quality_review_node)
     graph.add_node("persist_codegen_output", persist_codegen_output_node)
@@ -129,77 +88,32 @@ def build_g4_codegen_subgraph() -> StateGraph:
     graph.add_edge("plan_code_architecture", "build_module_contracts")
     graph.add_edge("build_module_contracts", "build_module_contexts")
 
-    # ── Flow: Module agents (layered parallel DAG) ────────────────────
-    graph.add_edge("build_module_contexts", f"run_{MODULE_LAYERS[0][0]}")
-
-    for layer_index, (layer_name, module_names) in enumerate(MODULE_LAYERS):
-        run_node = f"run_{layer_name}"
-        gate_node = f"{layer_name}_gate"
-
-        graph.add_edge(run_node, gate_node)
-
-        context_node = f"coordinate_{layer_name}_context"
-        if layer_index + 1 < len(MODULE_LAYERS):
-            next_node = f"run_{MODULE_LAYERS[layer_index + 1][0]}"
-        else:
-            next_node = "build_interface_contracts"
-        graph.add_conditional_edges(
-            gate_node,
-            _route_after_layer_gate(gate_node, context_node),
-            {
-                context_node: context_node,
-                "integration_assembler": "integration_assembler",
-                "persist_codegen_output": "persist_codegen_output",
-            },
-        )
-        graph.add_edge(context_node, next_node)
+    # ── Flow: Full-project agentic generation ────────────────────────
+    graph.add_edge("build_module_contexts", "build_interface_contracts")
 
     # ── Flow: Integration ─────────────────────────────────────────────
-    graph.add_edge("build_interface_contracts", "integration_assembler")
-    graph.add_edge("integration_assembler", "global_integration_agent")
-    graph.add_edge("global_integration_agent", "runtime_execution_audit")
+    graph.add_edge("build_interface_contracts", "geant4_project_agent")
+    graph.add_edge("geant4_project_agent", "runtime_execution_audit")
     graph.add_conditional_edges(
         "runtime_execution_audit",
         _route_after_runtime_execution_audit,
         {
             "physics_quality_review": "physics_quality_review",
+            "geant4_project_agent": "geant4_project_agent",
             "persist_codegen_output": "persist_codegen_output",
         },
     )
-    graph.add_edge("physics_quality_review", "persist_codegen_output")
+    graph.add_conditional_edges(
+        "physics_quality_review",
+        _route_after_physics_quality_review,
+        {
+            "geant4_project_agent": "geant4_project_agent",
+            "persist_codegen_output": "persist_codegen_output",
+        },
+    )
     graph.add_edge("persist_codegen_output", END)
 
     return graph
-
-
-# ── Node factories ───────────────────────────────────────────────────
-
-
-def _make_module_layer_node(layer_name: str, module_names: list[str]) -> Any:
-    """Create a node that runs one module layer concurrently."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return await run_module_layer_node(state, layer_name, module_names)
-
-    return _run
-
-
-def _make_layer_gate_node(layer_gate_name: str, module_names: list[str]) -> Any:
-    """Create a layer consistency gate node."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return await layer_consistency_gate_node(state, layer_gate_name, module_names)
-
-    return _run
-
-
-def _make_context_coordinator_node(coordinator_name: str, target_modules: list[str]) -> Any:
-    """Create a context coordination graph node."""
-
-    async def _run(state: G4CodegenSubgraphState) -> dict[str, Any]:
-        return await context_coordinator_node(state, coordinator_name, target_modules)
-
-    return _run
 
 
 # ── Routing functions ────────────────────────────────────────────────
@@ -227,23 +141,22 @@ def _route_after_continue_agentic_repair(state: G4CodegenSubgraphState) -> str:
 def _route_after_layer_gate(layer_gate_name: str, next_node: str) -> Any:
     """Route after a layer gate.
 
-    A failed layer must not release the next layer, but if a failed module
-    produced source files, global integration repair still has concrete code to
-    compile and fix.
+    Legacy module layers are no longer the default codegen path. If this helper
+    is used by older tests or compatibility code, failed layers fail closed
+    instead of promoting partial module output into whole-project repair.
     """
 
     def _route(state: G4CodegenSubgraphState) -> str:
         gate = state.get("layer_gate_results", {}).get(layer_gate_name, {})
         if gate.get("status") == "pass":
             return next_node
-        if _has_repairable_module_files(state):
-            return "integration_assembler"
         return "persist_codegen_output"
 
     return _route
 
 
 def _has_repairable_module_files(state: G4CodegenSubgraphState) -> bool:
+    """Compatibility helper for tests around the retired module-layer path."""
     module_results = state.get("module_results", {})
     if not isinstance(module_results, dict):
         return False
@@ -262,14 +175,40 @@ def _has_repairable_module_files(state: G4CodegenSubgraphState) -> bool:
 
 
 def _route_after_runtime_execution_audit(state: G4CodegenSubgraphState) -> str:
-    """Run physics review only after runtime execution authenticity passes."""
+    """Run physics review only after runtime authenticity passes.
+
+    Failed runtime artifacts are repairable by the full-project agent because
+    the previous patch is still concrete code, not a partial module fragment.
+    """
     audit = state.get("runtime_execution_audit", {})
     if audit.get("status") == "pass":
         return "physics_quality_review"
+    if _repair_attempts_remaining(state.get("runtime_audit_repair_attempts")):
+        return "geant4_project_agent"
     return "persist_codegen_output"
 
 
-def _target_modules_after_layer(layer_index: int) -> list[str]:
-    if layer_index + 1 < len(MODULE_LAYERS):
-        return list(MODULE_LAYERS[layer_index + 1][1])
-    return ["global_integration_agent", "runtime_execution_auditor", "physics_quality_reviewer"]
+def _route_after_physics_quality_review(state: G4CodegenSubgraphState) -> str:
+    """Feed only code-repairable physics review failures back to the project agent."""
+    review = state.get("physics_quality_review", {})
+    status = str(review.get("status") or "")
+    recommendation = str(review.get("routing_recommendation") or "").lower()
+    if status == "pass" or recommendation == "accept":
+        return "persist_codegen_output"
+    if status == "needs_user_input" or recommendation == "request_user_input":
+        return "persist_codegen_output"
+    has_required_fixes = bool(review.get("required_fixes"))
+    if (
+        (recommendation == "repair_code" or has_required_fixes)
+        and _repair_attempts_remaining(state.get("physics_review_repair_attempts"))
+    ):
+        return "geant4_project_agent"
+    return "persist_codegen_output"
+
+
+def _repair_attempts_remaining(value: Any) -> bool:
+    try:
+        attempts = int(value or 0)
+    except (TypeError, ValueError):
+        attempts = 0
+    return attempts < AUDIT_REPAIR_ROUTE_LIMIT

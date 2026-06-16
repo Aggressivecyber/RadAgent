@@ -9,9 +9,9 @@ from agent_core.g4_codegen.module_agents.module_context_examples import (
     get_module_code_example,
     get_module_interface_context,
 )
-from agent_core.graph.subgraphs.g4_codegen_graph import MODULE_LAYERS
+from agent_core.g4_codegen.planners.module_contract_builder import MODULE_DEFINITIONS
 
-MODULE_NAMES = [module_name for _, modules in MODULE_LAYERS for module_name in modules]
+MODULE_NAMES = list(MODULE_DEFINITIONS)
 
 
 def _contract(module_name: str) -> dict:

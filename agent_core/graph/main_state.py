@@ -60,6 +60,12 @@ class RadAgentMainState(TypedDict, total=False):
     simulation_scope: list[str]
     task_planning_status: str  # "passed" | "failed" | "reserved"
 
+    # ── Requirements Review outputs ──
+    requirements_review_status: str  # "pending" | "approved" | "rejected" | "failed"
+    requirements_review_request_path: str
+    requirements_review_response_path: str
+    confirmed_requirement_plan_path: str
+
     # ── G4 Modeling Subgraph outputs ──
     g4_model_ir_path: str
     component_specs_dir: str

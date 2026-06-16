@@ -2,13 +2,12 @@ import {
   Activity,
   CircleDot,
   PanelRightOpen,
-  Pause,
   Play,
   Send,
   TerminalSquare,
   X,
 } from 'lucide-react'
-import { FormEvent, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import {
   fetchCommandCatalog,
   fetchArtifactContent,
@@ -37,8 +36,10 @@ import {
   createPhaseTrack,
   createReviewCallout,
   createWorkbenchHero,
+  type LlmDebugCall,
   presentTimelineRow,
 } from '../lib/workbenchPresentation'
+import { createLlmResponsePreview, type LlmResponsePreview } from '../lib/llmTranscriptPreview'
 import { normalizeVisualizationPayload, type VisualizationPayload } from '../lib/visualizationPayload'
 import {
   createInitialWorkbenchState,
@@ -62,7 +63,7 @@ type WorkbenchShellProps = {
   launchTarget?: HomeLaunchTarget | null
 }
 
-type WorkflowRunState = 'idle' | 'confirming' | 'running' | 'paused'
+type WorkflowRunState = 'idle' | 'confirming' | 'running'
 
 const navItems = [
   { label: '概览', labelEn: 'Overview', command: '', inspector: 'overview', icon: Activity },
@@ -123,6 +124,10 @@ function rememberSelectedJobId(jobId: string) {
   }
 }
 
+function isRuntimeActive(status: JobStatus | null): boolean {
+  return status?.key_statuses?.runtime_active === true || status?.state?.runtime_active === true
+}
+
 function TimelineItem({ row }: { row: TimelineRow }) {
   const presented = presentTimelineRow(row)
   return (
@@ -159,17 +164,24 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactContent | null>(null)
   const [artifactLoading, setArtifactLoading] = useState(false)
   const [artifactError, setArtifactError] = useState('')
+  const [llmResponsePreviews, setLlmResponsePreviews] = useState<Record<string, LlmResponsePreview>>({})
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [submission, setSubmission] = useState<{ status: SubmissionStatus; command?: string; message?: string }>({
     status: 'idle',
   })
   const [workflowRunState, setWorkflowRunState] = useState<WorkflowRunState>('idle')
-  const workflowRunStateRef = useRef<WorkflowRunState>('idle')
   const [busy, setBusy] = useState(false)
+  const runtimeActive = isRuntimeActive(status)
 
   useEffect(() => {
-    workflowRunStateRef.current = workflowRunState
-  }, [workflowRunState])
+    if (runtimeActive && workflowRunState !== 'confirming') {
+      setWorkflowRunState('running')
+      return
+    }
+    if (status?.status && !runtimeActive && workflowRunState === 'running') {
+      setWorkflowRunState('idle')
+    }
+  }, [runtimeActive, status?.status, workflowRunState])
 
   function setSelectedJobId(jobId: string) {
     setSelectedJobIdState(jobId)
@@ -222,6 +234,48 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     }
   }
 
+  function llmCallsFromData(
+    nextStatus: JobStatus | null,
+    nextEvents: RadAgentEvent[],
+    nextArtifacts: ArtifactSummary[],
+    selectedPath = '',
+  ): LlmDebugCall[] {
+    return createAgentCockpit({
+      status: nextStatus,
+      events: nextEvents,
+      artifacts: nextArtifacts,
+      selectedPath,
+    }).llmDebugCalls
+  }
+
+  async function refreshLlmResponsePreviews(calls: LlmDebugCall[]) {
+    const candidates = calls
+      .filter((call) => call.artifactPath && call.artifactPath !== '未记录 artifact 路径')
+      .slice(0, 5)
+    if (candidates.length === 0) {
+      setLlmResponsePreviews({})
+      return
+    }
+    const entries = await Promise.all(
+      candidates.map(async (call) => {
+        try {
+          const artifact = await fetchArtifactContent(call.artifactPath, 260_000)
+          if (!artifact.exists) {
+            return null
+          }
+          return [call.id, createLlmResponsePreview(artifact)] as const
+        } catch {
+          return null
+        }
+      }),
+    )
+    setLlmResponsePreviews(
+      Object.fromEntries(
+        entries.filter((entry): entry is readonly [string, LlmResponsePreview] => Boolean(entry)),
+      ),
+    )
+  }
+
   useEffect(() => {
     let cancelled = false
 
@@ -255,7 +309,8 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
         if (currentVisualization) {
           setVisualization(normalizeVisualizationPayload(currentVisualization))
         }
-        await refreshArtifacts(initialJobId)
+        const initialArtifacts = await refreshArtifacts(initialJobId)
+        await refreshLlmResponsePreviews(llmCallsFromData(currentStatus, currentEvents, initialArtifacts))
         setState((current) => reduceEvents(current, currentEvents))
         setLoadState(`${catalog.length} 个功能可用`)
       } catch (error) {
@@ -313,7 +368,10 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           if (!selectedJobId && nextStatus.job_id) {
             setSelectedJobId(nextStatus.job_id)
           }
-          await refreshArtifacts(refreshJobId)
+          const nextArtifacts = await refreshArtifacts(refreshJobId)
+          await refreshLlmResponsePreviews(
+            llmCallsFromData(nextStatus, nextEvents, nextArtifacts, selectedArtifact?.path || ''),
+          )
           try {
             const nextVisualization = await fetchVisualization(refreshJobId)
             setVisualization(normalizeVisualizationPayload(nextVisualization))
@@ -345,6 +403,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
   const submissionFeedback = useMemo(() => createSubmissionFeedback(submission), [submission])
   const workflowInstruction = runRequest.trim()
   const reviewCallout = createReviewCallout(status)
+  const isWorkflowRunning = workflowRunState === 'running' || runtimeActive
 
   const controlSections = useMemo(() => createWorkbenchControlSections(commands), [commands])
   const quickActions = useMemo(
@@ -354,7 +413,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
         labelEn: item.labelEn,
         active:
           item.labelEn === 'Run'
-            ? workflowRunState === 'confirming' || workflowRunState === 'running'
+            ? workflowRunState === 'confirming' || isWorkflowRunning
             : state.activeInspector === item.inspector,
         onSelect: () => {
           if (item.labelEn === 'Run') {
@@ -369,7 +428,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           }
         },
       })),
-    [state.activeInspector, workflowRunState],
+    [state.activeInspector, workflowRunState, isWorkflowRunning],
   )
   const topQuickActions = quickActions.slice(0, 3)
   const bottomQuickActions = quickActions.slice(3)
@@ -400,19 +459,20 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
         setSelectedJobId(refreshJobId)
       }
       await refreshVisualization(refreshJobId)
-      await refreshArtifacts(refreshJobId)
+      const nextArtifacts = await refreshArtifacts(refreshJobId)
+      await refreshLlmResponsePreviews(
+        llmCallsFromData(nextStatus, nextEvents, nextArtifacts, selectedArtifact?.path || ''),
+      )
       setState((current) => reduceEvents(current, nextEvents))
       setLoadState(result.ok ? `${result.command || '功能'} 已完成` : result.error || '执行失败')
       if (options.workflow) {
         if (result.ok) {
-          if (workflowRunStateRef.current !== 'paused') {
-            setWorkflowRunState('running')
-            setSubmission({
-              status: 'running',
-              command: result.command || commandName,
-              message: '仿真工作流正在运行，状态已同步到侧边栏。',
-            })
-          }
+          setWorkflowRunState('running')
+          setSubmission({
+            status: 'running',
+            command: result.command || commandName,
+            message: '仿真工作流正在运行，状态已同步到侧边栏。',
+          })
         } else {
           setWorkflowRunState('idle')
           setSubmission({
@@ -479,12 +539,23 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     }
   }
 
-  function requestWorkflowStart() {
-    if (!workflowInstruction || (busy && workflowRunState !== 'running')) {
+  function focusRuntimeProgress() {
+    setState((current) => ({ ...current, activeInspector: 'status' }))
+    setInspectorOpen(true)
+    const debugPanel = document.getElementById('llm-debug-panel')
+    if (debugPanel) {
+      debugPanel.scrollIntoView({ behavior: 'smooth', block: 'start' })
       return
     }
-    if (workflowRunState === 'running') {
-      pauseWorkflow()
+    focusWorkflowConsole()
+  }
+
+  function requestWorkflowStart() {
+    if (isWorkflowRunning) {
+      focusRuntimeProgress()
+      return
+    }
+    if (!workflowInstruction || busy) {
       return
     }
     setWorkflowRunState('confirming')
@@ -501,32 +572,10 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       setSubmission({ status: 'idle' })
       return
     }
-    workflowRunStateRef.current = 'running'
     setWorkflowRunState('running')
     setSubmission({ status: 'running', command: 'run' })
     setLoadState('仿真工作流正在运行')
     void executeCommand(command, { workflow: true })
-  }
-
-  function pauseWorkflow() {
-    workflowRunStateRef.current = 'paused'
-    setWorkflowRunState('paused')
-    setSubmission({ status: 'paused', command: 'run' })
-    setLoadState('工作流已暂停')
-    setState((current) => ({
-      ...current,
-      timeline: [
-        ...current.timeline,
-        {
-          id: `workflow:paused:${Date.now()}:${current.timeline.length}`,
-          kind: 'system',
-          title: '工作流已暂停',
-          body: '用户从工作台暂停了当前仿真工作流。',
-          status: 'warning',
-          meta: 'workflow',
-        },
-      ],
-    }))
   }
 
   function askCopilot(message: string) {
@@ -534,7 +583,13 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
   }
 
   function executeReviewCommand(command: string) {
-    if (command === '/confirm') {
+    const normalized = command.trim().toLowerCase()
+    const opensConfirmationReview =
+      normalized.startsWith('/confirm') &&
+      !['/confirm approve', '/confirm approved', '/confirm yes', '/confirm y', '/confirm 确认', '/confirm 同意'].includes(
+        normalized,
+      )
+    if (opensConfirmationReview) {
       setState((current) => ({ ...current, activeInspector: 'confirmation' }))
       setInspectorOpen(true)
     }
@@ -547,7 +602,10 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
         const detail = await fetchJobDetail(record.job_id)
         setSelectedJobId(record.job_id)
         setState((current) => reduceDetailSelection(current, 'job', detail))
-        await refreshArtifacts(record.job_id)
+        const nextArtifacts = await refreshArtifacts(record.job_id)
+        await refreshLlmResponsePreviews(
+          llmCallsFromData(status, events, nextArtifacts, selectedArtifact?.path || ''),
+        )
         await refreshVisualization(record.job_id)
         setLoadState(`已切换到作业 ${record.job_id}`)
         return
@@ -735,7 +793,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           </div>
         </section>
 
-        <LlmDebugPanel cockpit={cockpit} />
+        <LlmDebugPanel cockpit={cockpit} responsePreviews={llmResponsePreviews} />
 
         {reviewCallout ? (
           <section className="confirmation-callout" aria-live="polite">
@@ -759,6 +817,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           <SimulationViewport
             payload={visualization}
             loading={visualizationLoading}
+            reviewFocus={reviewCallout?.kind === 'human-confirmation'}
             onRefresh={() => refreshVisualization(selectedJobId || status?.job_id || '')}
           />
         </Suspense>
@@ -790,21 +849,20 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
             </label>
             <div className="workflow-action-column">
               <button
-                className={`workflow-start-button ${workflowRunState}`}
+                className={`workflow-start-button ${isWorkflowRunning ? 'running' : workflowRunState}`}
                 type="button"
                 title={
-                  workflowRunState === 'running'
-                    ? '暂停当前仿真工作流'
+                  isWorkflowRunning
+                    ? '查看当前仿真工作流进度'
                     : '确认后开始执行 RadAgent 仿真工作流'
                 }
                 onClick={requestWorkflowStart}
-                disabled={workflowRunState !== 'running' && (busy || !workflowInstruction)}
+                disabled={!isWorkflowRunning && (busy || !workflowInstruction)}
               >
-                {workflowRunState === 'running' ? <Pause size={15} /> : <Play size={15} />}
-                <span>{workflowRunState === 'running' ? '暂停工作流' : workflowRunState === 'paused' ? '继续工作流' : '开始工作流'}</span>
-                <small>{workflowRunState === 'running' ? 'Running' : 'Start'}</small>
+                {isWorkflowRunning ? <Activity size={15} /> : <Play size={15} />}
+                <span>{isWorkflowRunning ? '查看进度' : '开始工作流'}</span>
+                <small>{isWorkflowRunning ? 'Progress' : 'Start'}</small>
               </button>
-              {workflowRunState === 'paused' ? <small>暂停中，可继续提交当前指令。</small> : null}
             </div>
           </div>
           {workflowRunState === 'confirming' ? (

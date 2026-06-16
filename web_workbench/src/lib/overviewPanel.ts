@@ -47,6 +47,7 @@ const phaseLabels: Record<string, string> = {
   prepare_workspace: '准备工作区',
   context: '上下文收集',
   task_planning: '任务规划',
+  requirements_review: '参数核对',
   g4_modeling: 'Geant4 建模',
   human_confirmation: '人工确认',
   g4_codegen: '工程生成',

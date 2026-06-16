@@ -1118,10 +1118,10 @@ async def test_agentic_module_agent_disables_provider_thinking(
 
 
 @pytest.mark.asyncio
-async def test_agentic_module_agent_enables_history_compaction_and_context_limit(
+async def test_agentic_module_agent_defaults_to_model_window_compaction_without_prompt_truncation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Module agents should not resend unbounded tool history or huge context JSON."""
+    """Module agents should let the shared loop manage window-aware compression."""
     workspace = tmp_path / "simulation_workspace"
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
     monkeypatch.delenv("RADAGENT_MODULE_AGENT_HISTORY_CHARS", raising=False)
@@ -1170,17 +1170,17 @@ async def test_agentic_module_agent_enables_history_compaction_and_context_limit
     )
 
     assert result.status == "generated"
-    assert seen["max_history_chars"] == module_base.DEFAULT_MODULE_AGENT_HISTORY_CHARS
+    assert seen["max_history_chars"] is None
     assert seen["preserve_recent_tool_messages"] == 1
-    assert "...[module_context truncated]" in seen["user_message"]
-    assert len(seen["user_message"]) < 55_000
+    assert "...[module_context truncated]" not in seen["user_message"]
+    assert "x" * 1_000 in seen["user_message"]
 
 
 @pytest.mark.asyncio
 async def test_agentic_module_agent_context_compaction_preserves_human_confirmations(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Prompt compression must not drop user-confirmed hard constraints."""
+    """Default module prompts should not truncate user-confirmed hard constraints."""
     workspace = tmp_path / "simulation_workspace"
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
     monkeypatch.delenv("RADAGENT_MODULE_CONTEXT_PROMPT_CHARS", raising=False)
@@ -1240,18 +1240,18 @@ async def test_agentic_module_agent_context_compaction_preserves_human_confirmat
     )
 
     assert result.status == "generated"
-    assert "...[module_context truncated]" in seen["user_message"]
+    assert "...[module_context truncated]" not in seen["user_message"]
     assert "human_confirmation_context" in seen["user_message"]
     assert "detector_radius_mm" in seen["user_message"]
     assert "25 mm" in seen["user_message"]
-    assert len(seen["user_message"]) < 43_000
+    assert "x" * 1_000 in seen["user_message"]
 
 
 @pytest.mark.asyncio
 async def test_agentic_module_agent_context_compaction_preserves_repair_lessons(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Prompt compression must keep repair lessons learned from prior failures."""
+    """Default module prompts should keep repair lessons learned from prior failures."""
     workspace = tmp_path / "simulation_workspace"
     monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
     monkeypatch.delenv("RADAGENT_MODULE_CONTEXT_PROMPT_CHARS", raising=False)
@@ -1313,11 +1313,11 @@ async def test_agentic_module_agent_context_compaction_preserves_repair_lessons(
     )
 
     assert result.status == "generated"
-    assert "...[module_context truncated]" in seen["user_message"]
+    assert "...[module_context truncated]" not in seen["user_message"]
     assert "agentic_repair_lessons" in seen["user_message"]
     assert "visual_workbench_artifact" in seen["user_message"]
     assert "energy_deposits.json" in seen["user_message"]
-    assert len(seen["user_message"]) < 43_000
+    assert "x" * 1_000 in seen["user_message"]
 
 
 @pytest.mark.asyncio
@@ -2776,7 +2776,7 @@ async def test_agentic_module_agent_flags_missing_owned_files(
     }
     result = await run_module_agent("beam_physics", module_context)
     assert result.status == "failed"
-    assert any("did not write owned file" in e for e in result.errors)
+    assert any("owned file" in e for e in result.errors)
 
 
 @pytest.mark.asyncio
@@ -2810,7 +2810,9 @@ async def test_agentic_module_agent_fails_when_only_some_owned_files_are_written
 
     assert result.status == "failed"
     assert {file.path for file in result.generated_files} == {"main.cc"}
-    assert result.errors == ["module agent did not write owned file: macros/run.mac"]
+    assert result.errors == [
+        "module agent owned file not modified by current module agent: macros/run.mac"
+    ]
 
 
 @pytest.mark.asyncio

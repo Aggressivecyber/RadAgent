@@ -1,9 +1,9 @@
 {
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
-  "job_id": "job_919509e8__20260612_201928",
-  "validation_status": "failed",
-  "generated_at": "2026-06-12T12:29:00.370743+00:00",
+  "job_id": "job_5574e228__20260616_070817",
+  "validation_status": "passed",
+  "generated_at": "2026-06-15T23:23:55.080157+00:00",
   "is_stub": false,
   "run_type": "strict",
   "artifacts_collected": 14,

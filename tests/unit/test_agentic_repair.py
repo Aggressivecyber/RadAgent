@@ -168,6 +168,7 @@ async def test_agentic_repair_uses_pro_tier_tool_loop(
     async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
         seen["tier"] = kwargs["tier"]
         seen["metadata"] = kwargs["metadata"]
+        seen["tool_names"] = [schema["function"]["name"] for schema in kwargs["toolkit"].schemas]
         return AgentLoopResult(
             content="BUILD AND SMOKE PASSED",
             stop_reason="stop_hook",
@@ -197,6 +198,57 @@ async def test_agentic_repair_uses_pro_tier_tool_loop(
 
     assert seen["tier"] == ModelTier.PRO
     assert seen["metadata"]["enable_thinking"] is True
+    assert "search_geant4_docs" in seen["tool_names"]
+    assert "search_web" in seen["tool_names"]
+
+
+@pytest.mark.asyncio
+async def test_agentic_repair_uses_roomier_diagnostic_stall_nudge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from agent_core.g4_codegen import agentic_repair
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    seen: dict[str, Any] = {}
+
+    class FakeGateway:
+        pass
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        seen["max_stalls"] = kwargs["max_stalls"]
+        seen["stall_nudge"] = kwargs["stall_nudge"]
+        return AgentLoopResult(
+            content="BUILD AND SMOKE PASSED",
+            stop_reason="stop_hook",
+            n_turns=1,
+            messages=[],
+            tool_audit=[],
+        )
+
+    async def fake_runtime_gate(**_: Any) -> dict[str, Any]:
+        return {"status": "pass", "errors": []}
+
+    monkeypatch.setattr(
+        "agent_core.models.gateway.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(agentic_repair, "run_agent_loop", fake_run_agent_loop)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
+        fake_runtime_gate,
+    )
+
+    await agentic_repair.run_agentic_repair(
+        {"changed_files": [{"path": "main.cc", "new_content": "int main(){return 0;}\n"}]},
+        job_id="job_repair_stall_nudge",
+        attempt_index=0,
+    )
+
+    assert seen["max_stalls"] == 8
+    assert "diagnose" in seen["stall_nudge"].lower()
+    assert "search_geant4_docs" in seen["stall_nudge"]
+    assert "search_web" in seen["stall_nudge"]
+    assert "Do not answer with text only" not in seen["stall_nudge"]
 
 
 @pytest.mark.asyncio
@@ -295,7 +347,7 @@ async def test_agentic_repair_enables_context_history_compaction(
         attempt_index=0,
     )
 
-    assert seen["max_history_chars"] == agentic_repair.DEFAULT_AGENTIC_REPAIR_HISTORY_CHARS
+    assert seen["max_history_chars"] is None
     assert seen["preserve_recent_tool_messages"] == 2
 
 
@@ -479,6 +531,16 @@ def test_agentic_repair_prompt_tells_model_to_rewrite_after_failed_exact_edit() 
     assert "old_string not found" in prompt
     assert "write_file" in prompt
     assert "rewrite the full file" in prompt
+
+
+def test_agentic_repair_prompt_exposes_geant4_rag_tool() -> None:
+    from agent_core.g4_codegen import agentic_repair
+
+    prompt = agentic_repair.AGENTIC_SYSTEM_PROMPT
+
+    assert "search_geant4_docs(query)" in prompt
+    assert "search_web(query)" in prompt
+    assert "unfamiliar Geant4" in prompt
 
 
 def test_agentic_repair_failure_lessons_capture_repeated_exact_edit_failures() -> None:

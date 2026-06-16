@@ -22,6 +22,11 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     confirmation_record_path: str
     confirmed_model_plan_path: str
     human_confirmation_status: str
+    human_confirmation_required: bool
+    confirmation_status: str
+    confirmation_request_path: str
+    confirmation_report_path: str
+    confirmation_summary: str
 
     # Loaded data
     g4_model_ir: dict[str, Any]
@@ -60,6 +65,8 @@ class G4CodegenSubgraphState(TypedDict, total=False):
     g4_codegen_status: str
     repair_continuation_request: dict[str, Any]
     repair_continuation_status: str
+    runtime_audit_repair_attempts: int
+    physics_review_repair_attempts: int
 
     # Control
     current_node: str

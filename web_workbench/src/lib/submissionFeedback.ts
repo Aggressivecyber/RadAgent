@@ -24,8 +24,8 @@ export function createSubmissionFeedback(input: SubmissionFeedbackInput): Submis
   if (input.status === 'paused') {
     return {
       tone: 'paused',
-      title: '工作流已暂停',
-      detail: '再次点击开始按钮可继续提交仿真工作流。',
+      title: '等待审查',
+      detail: '工作流停在人工确认点，请在审查面板处理后继续。',
     }
   }
 

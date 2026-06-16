@@ -20,6 +20,118 @@ const status: JobStatus = {
 }
 
 describe('InspectorPanel', () => {
+  it('renders a color-coded parameter checklist in the confirmation panel', () => {
+    const markup = renderToStaticMarkup(
+      <InspectorPanel
+        active="confirmation"
+        data={{
+          status: 'pending',
+          confirmation_request: {
+            summary_for_user: '模型已用默认值补全，请人工确认后继续。',
+            ambiguous_fields: [
+              {
+                field_path: 'components.detector.material',
+                proposed_value: 'G4_Si',
+                reason: '用户只说了半导体探测器，材料由 AI 补全。',
+              },
+            ],
+          },
+          proposed_model_completion: {
+            proposed_parameters: [
+              {
+                field_path: 'sources.primary.energy',
+                proposed_value: '14 MeV',
+                source_type: 'user',
+                confidence: 0.98,
+              },
+              {
+                field_path: 'components.detector.material',
+                proposed_value: 'G4_Si',
+                source_type: 'ai_inferred',
+                confidence: 0.52,
+                requires_confirmation: true,
+              },
+            ],
+          },
+        }}
+        commands={[]}
+        status={status}
+        events={[]}
+        onSelectCommand={() => {}}
+        onSelectRecord={() => {}}
+        onSaveModelConfig={async () => {}}
+        onTestModelHealth={async () => ({ tested_at: '', tiers: {} })}
+        onExecuteCommand={async () => {}}
+      />,
+    )
+
+    expect(markup).toContain('参数核对')
+    expect(markup).toContain('confirmation-parameter-row confirmed')
+    expect(markup).toContain('confirmation-parameter-row needs-review')
+    expect(markup).toContain('sources.primary.energy')
+    expect(markup).toContain('明确')
+    expect(markup).toContain('components.detector.material')
+    expect(markup).toContain('AI 补全 / 需确认')
+    expect(markup).toContain('修改意见或补充参数')
+  })
+
+  it('renders selected job confirmation request details instead of the empty preview state', () => {
+    const markup = renderToStaticMarkup(
+      <InspectorPanel
+        active="confirmation"
+        data={{
+          status: 'pending',
+          summary_for_user: '请确认水层厚度。',
+          confirmation_request: {
+            questions: [
+              {
+                field_path: 'components.water.dimensions',
+                proposed_value: { dz: 300000.0 },
+                impact: '影响 Bragg peak 位置。',
+              },
+            ],
+          },
+          proposed_model_completion: {
+            missing_information: ['Step limiter settings need definition.'],
+            proposed_components: [
+              {
+                component_id: 'water',
+                component_type: 'layer',
+                material_id: 'G4_WATER',
+                parameters: [
+                  {
+                    field_path: 'components.water.dimensions',
+                    proposed_value: { dz: 300000.0 },
+                    source_type: 'assumption',
+                    confidence: 0.4,
+                    requires_confirmation: true,
+                  },
+                ],
+              },
+            ],
+          },
+          preview: 'human confirmation report',
+        }}
+        commands={[]}
+        status={status}
+        events={[]}
+        onSelectCommand={() => {}}
+        onSelectRecord={() => {}}
+        onSaveModelConfig={async () => {}}
+        onTestModelHealth={async () => ({ tested_at: '', tiers: {} })}
+        onExecuteCommand={async () => {}}
+      />,
+    )
+
+    expect(markup).toContain('请确认水层厚度。')
+    expect(markup).toContain('参数核对')
+    expect(markup).toContain('components.water.dimensions')
+    expect(markup).toContain('AI 补全 / 需确认')
+    expect(markup).toContain('Step limiter settings need definition.')
+    expect(markup).toContain('human confirmation report')
+    expect(markup).not.toContain('暂无确认预览。')
+  })
+
   it('renders workflow diagnosis as a readable non-approval panel', () => {
     const markup = renderToStaticMarkup(
       <InspectorPanel

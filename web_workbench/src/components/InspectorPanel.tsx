@@ -768,6 +768,28 @@ function ConfirmationPanel({
         <strong>确认 Geant4 模型参数与继续执行条件</strong>
         <p>{view.summary}</p>
       </section>
+      {view.parameterChecklist.length > 0 ? (
+        <section className="confirmation-parameter-review" aria-label="参数核对">
+          <div className="confirmation-parameter-heading">
+            <h3>参数核对</h3>
+            <span>
+              {view.parameterChecklist.filter((item) => item.tone === 'confirmed').length} 明确 ·{' '}
+              {view.parameterChecklist.filter((item) => item.tone === 'needs-review').length} 需确认
+            </span>
+          </div>
+          {view.parameterChecklist.map((item) => (
+            <article className={`confirmation-parameter-row ${item.tone}`} key={`${item.title}-${item.value}`}>
+              <div>
+                <span className="confirmation-parameter-status">{item.statusLabel}</span>
+                {item.meta ? <em>{item.meta}</em> : null}
+              </div>
+              <strong>{item.title}</strong>
+              {item.value ? <code>{item.value}</code> : null}
+              {item.detail ? <p>{item.detail}</p> : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
       {view.proposedItems.length > 0 ? (
         <section className="confirmation-review-section">
           <h3>模型草案</h3>
@@ -843,7 +865,7 @@ function ConfirmationPanel({
             {pendingAction === 'reject' ? '提交中' : '拒绝'}
           </button>
           <label>
-            <span>补充说明或要求 Agent 继续追问</span>
+            <span>修改意见或补充参数</span>
             <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
           </label>
           <button

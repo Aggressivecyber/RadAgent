@@ -92,6 +92,9 @@ describe('model settings helpers', () => {
     expect(savedDraft).toBeDefined()
     expect(savedDraft?.api_key).toBe('')
     expect(savedDraft?.pro_model).toBe('pro-1')
+    expect(draft.pro_context_window_tokens).toBe('1000000')
+    expect(draft.max_context_window_tokens).toBe('1000000')
+    expect(draft.agentic_repair_history_chars).toBe('0')
   })
 
   it('keeps the current draft visible when model save fails', () => {

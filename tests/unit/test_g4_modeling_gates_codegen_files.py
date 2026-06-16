@@ -50,4 +50,5 @@ async def test_g4_codegen_file_gates_fail_when_code_missing() -> None:
 
     gates = {gate["gate_id"]: gate for gate in result["gate_results"]}
     assert gates[17]["status"] == "fail"
-    assert gates[18]["status"] == "fail"
+    assert gates[18]["status"] == "warning"
+    assert gates[18]["critical"] is False

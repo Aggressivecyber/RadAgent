@@ -18,6 +18,7 @@ const cockpit: AgentCockpit = {
     { title: 'g4 codegen persist', detail: 'Persisted files', statusLabel: '通过', phaseLabel: '工程生成' },
   ],
   llmDebugCalls: [],
+  runtimeActive: true,
 }
 
 describe('AgentStatusRail', () => {

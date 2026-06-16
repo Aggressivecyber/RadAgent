@@ -1,10 +1,12 @@
 {
-  "total_components": 2,
+  "total_components": 4,
   "component_ids": [
-    "world",
-    "silicon_detector"
+    "world_001",
+    "layer_water_001",
+    "layer_aluminum_001",
+    "layer_silicon_001"
   ],
-  "materials_count": 2,
+  "materials_count": 4,
   "sources_count": 1,
-  "scoring_count": 4
+  "scoring_count": 10
 }

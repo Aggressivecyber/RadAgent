@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import LlmDebugPanel from './LlmDebugPanel'
 import type { AgentCockpit } from '../lib/workbenchPresentation'
+import type { LlmResponsePreview } from '../lib/llmTranscriptPreview'
 
 const cockpit: AgentCockpit = {
   agent: {
@@ -50,11 +51,12 @@ const cockpit: AgentCockpit = {
       createdAt: '2026-06-14T08:01:00Z',
     },
   ],
+  runtimeActive: true,
 }
 
 describe('LlmDebugPanel', () => {
   it('renders current and recent LLM call fields for live debugging', () => {
-    const markup = renderToStaticMarkup(<LlmDebugPanel cockpit={cockpit} />)
+    const markup = renderToStaticMarkup(<LlmDebugPanel cockpit={cockpit} responsePreviews={{}} />)
 
     expect(markup).toContain('LLM 实时 debug')
     expect(markup).toContain('context summary')
@@ -70,12 +72,70 @@ describe('LlmDebugPanel', () => {
     expect(markup).toContain('logs/model_calls/call-failed_detector_codegen.json')
   })
 
-  it('renders a clear empty state when no model_call events are available', () => {
+  it('renders recent response lines and folds older response text', () => {
+    const responsePreviews: Record<string, LlmResponsePreview> = {
+      'call-running': {
+        visibleLines: ['third visible line', 'fourth visible line', 'fifth visible line'],
+        foldedText: 'first hidden line\nsecond hidden line',
+        emptyLabel: '',
+        isLive: true,
+      },
+    }
+
     const markup = renderToStaticMarkup(
-      <LlmDebugPanel cockpit={{ ...cockpit, llmDebugCalls: [] }} />,
+      <LlmDebugPanel cockpit={cockpit} responsePreviews={responsePreviews} />,
     )
 
-    expect(markup).toContain('暂无 LLM 调用事件')
-    expect(markup).toContain('等待工作流上报 model_call_start 或 model_call。')
+    expect(markup).toContain('third visible line')
+    expect(markup).toContain('fourth visible line')
+    expect(markup).toContain('fifth visible line')
+    expect(markup).toContain('展开较早响应')
+    expect(markup).toContain('first hidden line')
+    expect(markup).toContain('second hidden line')
+    expect(markup).toContain('实时片段')
+  })
+
+  it('renders only the two most recent LLM call cards', () => {
+    const olderCall = {
+      ...cockpit.llmDebugCalls[1],
+      id: 'call-older',
+      moduleLabel: 'Older Hidden Module',
+      artifactPath: 'logs/model_calls/call-older_hidden.json',
+      createdAt: '2026-06-14T08:00:00Z',
+    }
+
+    const markup = renderToStaticMarkup(
+      <LlmDebugPanel
+        cockpit={{ ...cockpit, llmDebugCalls: [...cockpit.llmDebugCalls, olderCall] }}
+        responsePreviews={{}}
+      />,
+    )
+
+    expect(markup).toContain('Coordinate Core Modules Context')
+    expect(markup).toContain('Detector Construction')
+    expect(markup).not.toContain('Older Hidden Module')
+    expect(markup).not.toContain('logs/model_calls/call-older_hidden.json')
+  })
+
+  it('renders a waiting-for-stream state when no model_call events are available', () => {
+    const markup = renderToStaticMarkup(
+      <LlmDebugPanel cockpit={{ ...cockpit, llmDebugCalls: [] }} responsePreviews={{}} />,
+    )
+
+    expect(markup).toContain('等待模型响应片段')
+    expect(markup).toContain('工作流运行时会在这里显示最近三行响应。')
+  })
+
+  it('renders a resumable state when the job is not actively running', () => {
+    const markup = renderToStaticMarkup(
+      <LlmDebugPanel
+        cockpit={{ ...cockpit, llmDebugCalls: [], runtimeActive: false }}
+        responsePreviews={{}}
+      />,
+    )
+
+    expect(markup).toContain('后台未运行')
+    expect(markup).toContain('当前作业可继续；恢复后会在这里显示最近三行模型响应。')
+    expect(markup).not.toContain('工作流运行时会在这里显示最近三行响应。')
   })
 })

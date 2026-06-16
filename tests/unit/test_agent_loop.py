@@ -7,13 +7,17 @@ mimo call (gated by env) proves the native tool-calling round-trip end-to-end.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import tempfile
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from agent_core.agent_loop import AgentLoopResult, run_agent_loop
+from agent_core.agent_loop.loop import _stringify_tool_result
 from agent_core.dev_tools import DevToolkit
 from agent_core.models.schemas import (
     ModelCallResult,
@@ -39,6 +43,25 @@ class _FakeGateway:
         return self._script.pop(0)
 
 
+class _FakeGatewayWithProfiles(_FakeGateway):
+    """Fake gateway that exposes model context windows like ModelGateway."""
+
+    def __init__(
+        self,
+        script: list[ModelCallResult],
+        *,
+        context_window_tokens: int,
+        profile_max_tokens: int = 128,
+    ) -> None:
+        super().__init__(script)
+        self.profiles = {
+            ModelTier.PRO: SimpleNamespace(
+                context_window_tokens=context_window_tokens,
+                max_tokens=profile_max_tokens,
+            )
+        }
+
+
 def _result(*, content: str = "", tool_calls=None, error: str = "") -> ModelCallResult:
     return ModelCallResult(
         task=ModelTask.CODEGEN,
@@ -50,6 +73,18 @@ def _result(*, content: str = "", tool_calls=None, error: str = "") -> ModelCall
         finish_reason="tool_calls" if tool_calls else "stop",
         error=error,
     )
+
+
+def test_tool_results_are_not_hidden_truncated_before_history_compaction() -> None:
+    """Tools should return ground truth; context compression owns later shrinking."""
+    large_payload = "full tool output\n" + ("line with compiler or file context\n" * 3_000)
+    text = _stringify_tool_result(
+        {"ok": True, "output": large_payload},
+        tool_name="read_file",
+    )
+
+    assert json.loads(text)["output"] == large_payload
+    assert "[truncated]" not in text
 
 
 @pytest.mark.asyncio
@@ -128,6 +163,94 @@ async def test_loop_dispatches_multiple_tool_calls_from_one_response() -> None:
     assert [entry["name"] for entry in result.tool_audit] == ["write_file", "write_file"]
     assert (workdir / "a.txt").read_text(encoding="utf-8") == "A\n"
     assert (workdir / "b.txt").read_text(encoding="utf-8") == "B\n"
+
+
+@pytest.mark.asyncio
+async def test_loop_dispatches_parallel_safe_read_tools_concurrently() -> None:
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir)
+    calls: list[str] = []
+
+    async def slow_dispatch(name: str, _arguments: str):  # noqa: ANN001
+        calls.append(name)
+        await asyncio.sleep(0.05)
+        return {"ok": True, "name": name}
+
+    toolkit.dispatch = slow_dispatch  # type: ignore[method-assign]
+    script = [
+        _result(
+            tool_calls=[
+                {"id": "c1", "name": "read_file", "arguments": '{"path": "a.txt"}'},
+                {"id": "c2", "name": "list_files", "arguments": "{}"},
+                {"id": "c3", "name": "search_text", "arguments": '{"pattern": "x"}'},
+            ]
+        ),
+        _result(content="DONE"),
+    ]
+    gw = _FakeGateway(script)
+
+    start = time.perf_counter()
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="read in parallel",
+        toolkit=toolkit,
+        max_turns=3,
+    )
+    elapsed = time.perf_counter() - start
+
+    assert result.stop_reason == "natural"
+    assert calls == ["read_file", "list_files", "search_text"]
+    assert elapsed < 0.13
+    assert [entry["name"] for entry in result.tool_audit] == [
+        "read_file",
+        "list_files",
+        "search_text",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_loop_keeps_write_tools_sequential_even_when_batched() -> None:
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir)
+    active = 0
+    max_active = 0
+
+    async def guarded_dispatch(name: str, _arguments: str):  # noqa: ANN001
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return {"ok": True, "name": name}
+
+    toolkit.dispatch = guarded_dispatch  # type: ignore[method-assign]
+    script = [
+        _result(
+            tool_calls=[
+                {"id": "c1", "name": "write_file", "arguments": "{}"},
+                {"id": "c2", "name": "edit_file", "arguments": "{}"},
+            ]
+        ),
+        _result(content="DONE"),
+    ]
+    gw = _FakeGateway(script)
+
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="write sequentially",
+        toolkit=toolkit,
+        max_turns=3,
+    )
+
+    assert result.stop_reason == "natural"
+    assert max_active == 1
+    assert [entry["name"] for entry in result.tool_audit] == ["write_file", "edit_file"]
 
 
 @pytest.mark.asyncio
@@ -278,24 +401,24 @@ async def test_loop_stops_on_repeated_tool_result_fingerprint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_loop_compacts_old_tool_results_before_next_model_call() -> None:
+async def test_loop_compacts_old_non_build_tool_results_before_next_model_call() -> None:
     workdir = Path(tempfile.mkdtemp())
-    toolkit = DevToolkit(workdir, tool_names=["build_project"])
-    large_error = {
-        "ok": False,
+    toolkit = DevToolkit(workdir, tool_names=["search_text"])
+    large_search_result = {
+        "ok": True,
         "output": (
-            "src/OutputManager.cc:264:7: error: 'fGeometryComponents' was not declared\n"
-            + ("detail line with generated source context\n" * 400)
+            "src/OutputManager.cc:264: fGeometryComponents candidate\n"
+            + ("generated source context without diagnostics\n" * 400)
         ),
     }
 
     async def large_dispatch(_name: str, _arguments: str):  # noqa: ANN001
-        return dict(large_error)
+        return dict(large_search_result)
 
     toolkit.dispatch = large_dispatch  # type: ignore[method-assign]
     script = [
-        _result(tool_calls=[{"id": "c1", "name": "build_project", "arguments": "{}"}]),
-        _result(tool_calls=[{"id": "c2", "name": "build_project", "arguments": "{}"}]),
+        _result(tool_calls=[{"id": "c1", "name": "search_text", "arguments": "{}"}]),
+        _result(tool_calls=[{"id": "c2", "name": "search_text", "arguments": "{}"}]),
         _result(content="done"),
     ]
     gw = _FakeGateway(script)
@@ -318,7 +441,52 @@ async def test_loop_compacts_old_tool_results_before_next_model_call() -> None:
     assert tool_messages
     assert "compacted previous tool result" in tool_messages[0]["content"]
     assert "fGeometryComponents" in tool_messages[0]["content"]
+    compacted_payload = json.loads(tool_messages[0]["content"])
+    assert len(str(compacted_payload["diagnostics"][0])) < len(large_search_result["output"])
     assert sum(len(str(m.get("content", ""))) for m in second_call_messages) < 2_500
+
+
+@pytest.mark.asyncio
+async def test_loop_compacts_old_build_project_tool_messages_during_history_compression() -> None:
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir, tool_names=["build_project"])
+    compiler_output = (
+        "src/Detector.cc:12:7: error: no matching function for call\n"
+        "   12 |   BuildDetector(foo)\n"
+        "      |   ^~~~~~~~~~~~~\n"
+        + ("note: template context and compiler details\n" * 500)
+    )
+
+    async def large_dispatch(_name: str, _arguments: str):  # noqa: ANN001
+        return {"ok": False, "stage": "build", "output": compiler_output}
+
+    toolkit.dispatch = large_dispatch  # type: ignore[method-assign]
+    script = [
+        _result(tool_calls=[{"id": "c1", "name": "build_project", "arguments": "{}"}]),
+        _result(content="done"),
+    ]
+    gw = _FakeGateway(script)
+
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="fix build",
+        toolkit=toolkit,
+        max_turns=3,
+        max_history_chars=1_000,
+        preserve_recent_tool_messages=0,
+    )
+
+    assert result.stop_reason == "natural"
+    second_call_messages = gw.call_kwargs[1]["messages"]
+    tool_messages = [m for m in second_call_messages if m.get("role") == "tool"]
+    assert tool_messages
+    payload = json.loads(tool_messages[0]["content"])
+    assert payload["status"] == "compacted previous tool result"
+    assert "Detector.cc" in tool_messages[0]["content"]
+    assert compiler_output not in tool_messages[0]["content"]
 
 
 @pytest.mark.asyncio
@@ -367,6 +535,85 @@ async def test_loop_compacts_large_write_file_tool_call_arguments() -> None:
     assert "src/OutputManager.cc" in compacted_arguments
     assert "generated implementation detail" not in compacted_arguments
     assert "content_chars" in compacted_arguments
+
+
+@pytest.mark.asyncio
+async def test_loop_uses_model_context_window_threshold_for_compaction() -> None:
+    """When no fixed char cap is set, compaction should follow model window usage."""
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir, tool_names=["search_text"])
+    large_search_result = {
+        "ok": True,
+        "output": "src/Hit.cc:12: error: invalid Hit allocator\n" + ("detail\n" * 1_000),
+    }
+
+    async def large_dispatch(_name: str, _arguments: str):  # noqa: ANN001
+        return dict(large_search_result)
+
+    toolkit.dispatch = large_dispatch  # type: ignore[method-assign]
+    script = [
+        _result(tool_calls=[{"id": "c1", "name": "search_text", "arguments": "{}"}]),
+        _result(content="done"),
+    ]
+    gw = _FakeGatewayWithProfiles(script, context_window_tokens=1_000, profile_max_tokens=100)
+
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="sys",
+        user_message="fix it",
+        toolkit=toolkit,
+        max_turns=3,
+        max_tokens=100,
+        max_history_chars=None,
+        preserve_recent_tool_messages=0,
+        compression_threshold_ratio=0.75,
+    )
+
+    assert result.stop_reason == "natural"
+    second_call_messages = gw.call_kwargs[1]["messages"]
+    tool_messages = [m for m in second_call_messages if m.get("role") == "tool"]
+    assert tool_messages
+    assert "compacted previous tool result" in tool_messages[0]["content"]
+    assert gw.call_kwargs[1]["metadata"]["agent_compression_triggered"] is True
+    assert gw.call_kwargs[1]["metadata"]["agent_context_window_tokens"] == 1_000
+    assert gw.call_kwargs[1]["metadata"]["agent_context_usage_ratio"] > 0.75
+
+
+@pytest.mark.asyncio
+async def test_loop_compacts_oversized_initial_user_context_when_window_threshold_crossed() -> None:
+    """A giant initial project brief should not bypass the window-aware compactor."""
+    workdir = Path(tempfile.mkdtemp())
+    toolkit = DevToolkit(workdir, tool_names=["list_files"])
+    user_message = (
+        "Current task: fix Geant4 Hit construction.\n"
+        + ("large model IR and source context\n" * 500)
+        + "\nCritical requirement: produce real Geant4 output files."
+    )
+    gw = _FakeGatewayWithProfiles([_result(content="done")], context_window_tokens=1_000)
+
+    result = await run_agent_loop(
+        gateway=gw,  # type: ignore[arg-type]
+        task=ModelTask.CODEGEN,
+        tier=ModelTier.PRO,
+        system_prompt="system prompt must stay intact",
+        user_message=user_message,
+        toolkit=toolkit,
+        max_turns=1,
+        max_tokens=100,
+        max_history_chars=None,
+        compression_threshold_ratio=0.75,
+    )
+
+    assert result.stop_reason == "natural"
+    sent_messages = gw.call_kwargs[0]["messages"]
+    assert sent_messages[0]["content"] == "system prompt must stay intact"
+    sent_user = sent_messages[1]["content"]
+    assert "compacted previous user context" in sent_user
+    assert "Current task: fix Geant4 Hit construction." in sent_user
+    assert "Critical requirement: produce real Geant4 output files." in sent_user
+    assert len(sent_user) < len(user_message)
 
 
 @pytest.mark.asyncio

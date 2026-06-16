@@ -25,7 +25,6 @@ from agent_core.workspace.paths import STAGE_CODEGEN
 GEANT4_PROJECT_DIRNAME = "geant4_project"
 DEFAULT_AGENTIC_REPAIR_MAX_TURNS = 48
 AGENTIC_REPAIR_CONTINUATION_INCREMENT_TURNS = 12
-DEFAULT_AGENTIC_REPAIR_HISTORY_CHARS = 48_000
 AGENTIC_REPAIR_LESSONS_PATH = (
     Path(STAGE_CODEGEN) / "integration" / "agentic_repair_lessons.json"
 )
@@ -62,6 +61,14 @@ Tools (this is your whole loop — no shell):
 - search_text(pattern, glob?): search source/config files for a literal symbol,
   constructor, method, or placeholder comment. Use this instead of repeated
   read_file calls when locating API definitions/call sites.
+- search_geant4_docs(query): search local Geant4 official docs/examples for API
+  signatures, include files, and usage patterns. If an unfamiliar Geant4 class,
+  method, macro command, allocator, physics-list API, or visualization API is
+  involved and the compiler output does not make the fix obvious, call this
+  before guessing.
+- search_web(query): search the public web for Geant4/API/compiler context when
+  local project files and search_geant4_docs are insufficient. Verify web facts
+  against the generated project or official docs before editing.
 - edit_file(path, old_string, new_string): replace ONE unique match. Copy
   old_string verbatim from what read_file/build output showed. If the match
   fails, the tool returns the nearby actual lines — correct old_string from that
@@ -189,6 +196,8 @@ async def run_agentic_repair(
         tool_names=[
             "list_files",
             "search_text",
+            "search_geant4_docs",
+            "search_web",
             "read_file",
             "edit_file",
             "write_file",
@@ -232,11 +241,8 @@ async def run_agentic_repair(
             str(DEFAULT_AGENTIC_REPAIR_MAX_TURNS),
         )
     )
-    history_chars = int(
-        __import__("os").getenv(
-            "RADAGENT_AGENTIC_HISTORY_CHARS",
-            str(DEFAULT_AGENTIC_REPAIR_HISTORY_CHARS),
-        )
+    history_chars = _optional_positive_int(
+        __import__("os").getenv("RADAGENT_AGENTIC_HISTORY_CHARS")
     )
 
     loop_result = await run_agent_loop(
@@ -256,17 +262,18 @@ async def run_agentic_repair(
             "agentic_attempt": attempt_index,
             "enable_thinking": True,
         },
-        max_stalls=3,
+        max_stalls=8,
         repeated_tool_result_limit=3,
         max_history_chars=history_chars,
         preserve_recent_tool_messages=2,
         stall_nudge=(
             "You stopped without calling a tool. The simulation still does not "
-            "pass — the task is NOT done. Pick the file responsible for the "
-            "current error, call edit_file (or write_file) to apply the minimal "
-            "fix, then call build_project (and run_smoke) to verify. If you are "
-            "unsure of the exact change, make your best single attempt and let "
-            "the build output guide the next step. Do not answer with text only."
+            "pass. Diagnose the current error from the latest build_project or "
+            "run_smoke output, use search_geant4_docs if an unfamiliar Geant4 "
+            "API or signature is involved, use search_web when local docs are "
+            "insufficient, then apply the smallest edit_file or "
+            "write_file change and verify with build_project. If the build "
+            "passes, call run_smoke once."
         ),
     )
 
@@ -468,10 +475,9 @@ def _extract_initial_errors(runtime_failure_context: dict[str, Any] | None) -> s
         parts.append(str(stderr))
     raw = "\n".join(parts)
     brief = _structured_repair_brief(raw)
-    bounded_raw = raw[:8000]
     if brief:
-        return f"{brief}\n\nRaw failure context:\n{bounded_raw}"
-    return bounded_raw
+        return f"{brief}\n\nRaw failure context:\n{raw}"
+    return raw
 
 
 def _structured_repair_brief(raw_errors: str) -> str:
@@ -848,6 +854,14 @@ def _slim_audit(audit: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return slimmed
+
+
+def _optional_positive_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _collect_errors(gate: dict[str, Any], loop_result: Any) -> list[str]:

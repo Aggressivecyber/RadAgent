@@ -63,11 +63,11 @@ export function createModelSettingsDraft(view: unknown): ModelSettingsDraft {
     pro_model: tiers.pro?.model_name || '',
     max_model: tiers.max?.model_name || '',
     pro_max_tokens: String(tiers.pro?.max_tokens ?? 8192),
-    pro_context_window_tokens: String(tiers.pro?.context_window_tokens ?? 128000),
+    pro_context_window_tokens: String(tiers.pro?.context_window_tokens ?? 1000000),
     max_max_tokens: String(tiers.max?.max_tokens ?? 12000),
-    max_context_window_tokens: String(tiers.max?.context_window_tokens ?? 128000),
+    max_context_window_tokens: String(tiers.max?.context_window_tokens ?? 1000000),
     agentic_repair_max_turns: String(config.agentic_repair_max_turns ?? 24),
-    agentic_repair_history_chars: String(config.agentic_repair_history_chars ?? 48000),
+    agentic_repair_history_chars: String(config.agentic_repair_history_chars ?? 0),
   }
 }
 

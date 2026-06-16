@@ -7,10 +7,6 @@ from typing import Any
 import pytest
 from agent_core.g4_codegen import global_integration_agent as gia
 from agent_core.g4_codegen.global_integration_agent import run_global_integration_agent
-from agent_core.g4_codegen.graph_nodes import (
-    GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS,
-    global_integration_agent_node,
-)
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 from agent_core.workspace.paths import STAGE_CODEGEN
 

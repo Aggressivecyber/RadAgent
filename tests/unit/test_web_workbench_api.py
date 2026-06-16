@@ -386,6 +386,18 @@ async def test_dispatch_inspector_commands_use_service_data() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatch_confirm_can_open_selected_job_review() -> None:
+    service = FakeService()
+
+    result = await dispatch_web_command(service, "/confirm job-7")
+
+    assert result["ok"] is True
+    assert result["view"] == "confirmation"
+    assert result["data"]["status"] == "pending"
+    assert service.calls == [("get_confirmation_review", "job-7")]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_workflow_operation_commands_use_service_methods() -> None:
     service = FakeService()
 

@@ -15,6 +15,7 @@ import {
 type SimulationViewportProps = {
   payload: VisualizationPayload | null
   loading?: boolean
+  reviewFocus?: boolean
   onRefresh: () => void
 }
 
@@ -552,6 +553,7 @@ function disposeObjectTree(object: THREE.Object3D): void {
 export default function SimulationViewport({
   payload,
   loading = false,
+  reviewFocus = false,
   onRefresh,
 }: SimulationViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -738,8 +740,14 @@ export default function SimulationViewport({
   }, [sceneSignature, showParticles, showReferenceGrid])
 
   return (
-    <section className="simulation-viewport" aria-label="Geant4 3D visualization">
+    <section className={`simulation-viewport${reviewFocus ? ' review-focus' : ''}`} aria-label="Geant4 3D visualization">
       <div className="simulation-viewport-stage" ref={containerRef} />
+      {reviewFocus ? (
+        <div className="simulation-review-focus-badge" aria-live="polite">
+          <strong>模型核对</strong>
+          <span>请对照参数清单检查几何、材料和粒子源是否符合预期</span>
+        </div>
+      ) : null}
       <div className="simulation-viewport-toolbar">
         <div>
           <strong>3D 模型视图</strong>

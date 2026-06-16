@@ -147,6 +147,26 @@ async def test_configure_resolves_relative_source_before_running_from_build_dir(
     assert result["build_dir"] == str(build_dir.resolve())
 
 
+def test_prepare_build_dir_removes_stale_cmake_cache(tmp_path: Path) -> None:
+    project_dir = tmp_path / "geant4_project"
+    old_project_dir = tmp_path / "old_project"
+    build_dir = project_dir / "build"
+    build_dir.mkdir(parents=True)
+    (build_dir / "CMakeCache.txt").write_text(
+        f"CMAKE_HOME_DIRECTORY:INTERNAL={old_project_dir}\n",
+        encoding="utf-8",
+    )
+    runner = _runner()
+
+    runner.prepare_build_dir(str(project_dir), str(build_dir))
+
+    assert build_dir.is_dir()
+    assert not (build_dir / "CMakeCache.txt").exists()
+    assert (build_dir / ".radagent_source").read_text(encoding="utf-8") == str(
+        project_dir.resolve()
+    )
+
+
 @pytest.mark.asyncio
 async def test_build_returns_absolute_executable_path_for_relative_build_dir(
     tmp_path: Path,

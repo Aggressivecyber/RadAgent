@@ -34,8 +34,7 @@ FORBIDDEN_GENERATED_CONTENT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bdummy\b", re.IGNORECASE), "dummy marker"),
     (re.compile(r"\bplaceholder\b", re.IGNORECASE), "placeholder marker"),
 ]
-DEFAULT_MODULE_AGENT_HISTORY_CHARS = 48_000
-DEFAULT_MODULE_CONTEXT_PROMPT_CHARS = 24_000
+DEFAULT_MODULE_CONTEXT_PROMPT_CHARS = 0
 MODULE_CONTEXT_TRUNCATED_MARKER = "...[module_context truncated]"
 
 MODULE_AGENTIC_SYSTEM_PROMPT = """\
@@ -197,12 +196,8 @@ async def run_module_agent(
             "prior_files 和已给出的接口摘要直接写 owned files；不要请求读取文件。"
         )
 
-    context_prompt_chars = max(
-        8_000,
-        _positive_int(
-            os.getenv("RADAGENT_MODULE_CONTEXT_PROMPT_CHARS"),
-            default=DEFAULT_MODULE_CONTEXT_PROMPT_CHARS,
-        ),
+    context_prompt_chars = _optional_positive_int(
+        os.getenv("RADAGENT_MODULE_CONTEXT_PROMPT_CHARS")
     )
     context_json = _module_context_json_for_prompt(
         prompt_context,
@@ -246,13 +241,7 @@ async def run_module_agent(
         4,
         _positive_int(os.getenv("RADAGENT_MODULE_AGENT_MAX_TURNS"), default=8),
     )
-    history_chars = max(
-        8_000,
-        _positive_int(
-            os.getenv("RADAGENT_MODULE_AGENT_HISTORY_CHARS"),
-            default=DEFAULT_MODULE_AGENT_HISTORY_CHARS,
-        ),
-    )
+    history_chars = _optional_positive_int(os.getenv("RADAGENT_MODULE_AGENT_HISTORY_CHARS"))
     loop_result = await run_agent_loop(
         gateway=gateway,
         task=ModelTask.CODEGEN,
@@ -335,10 +324,12 @@ async def run_module_agent(
 def _module_context_json_for_prompt(
     prompt_context: dict[str, Any],
     *,
-    max_chars: int,
+    max_chars: int | None,
 ) -> str:
     """Serialize module context with priority-preserving compaction."""
     full_json = json.dumps(prompt_context, ensure_ascii=False, indent=2, default=str)
+    if max_chars is None or max_chars <= 0:
+        return full_json
     if len(full_json) <= max_chars:
         return full_json
 
@@ -1912,6 +1903,14 @@ def _positive_int(value: Any, *, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return result if result > 0 else default
+
+
+def _optional_positive_int(value: Any) -> int | None:
+    try:
+        result = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return result if result > 0 else None
 
 
 def save_module_result(

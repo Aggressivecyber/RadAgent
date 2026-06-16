@@ -18,6 +18,16 @@ from agent_core.gates.output_quality import detect_smoke_runtime_errors
 logger = logging.getLogger(__name__)
 
 
+def _cmake_cache_source_dir(cache: Path) -> str | None:
+    try:
+        for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("CMAKE_HOME_DIRECTORY:"):
+                return str(Path(line.split("=", 1)[1]).resolve())
+    except (OSError, IndexError):
+        return None
+    return None
+
+
 class Geant4Runner:
     """Runs Geant4 simulations with proper environment setup.
 
@@ -80,7 +90,7 @@ class Geant4Runner:
         """Run cmake configure. Returns {success, cmake_output, errors}."""
         source_path = Path(source_dir).resolve()
         build_path = Path(build_dir).resolve()
-        build_path.mkdir(parents=True, exist_ok=True)
+        self.prepare_build_dir(str(source_path), str(build_path))
         command = f"cmake {shlex.quote(str(source_path))}"
         rc, out, err = await self._run(command, cwd=str(build_path))
         return {
@@ -91,6 +101,24 @@ class Geant4Runner:
             "cmake_output": out,
             "errors": err,
         }
+
+    def prepare_build_dir(self, source_dir: str, build_dir: str) -> None:
+        """Create build_dir and drop stale CMake cache copied from another source."""
+        source_path = Path(source_dir).resolve()
+        build_path = Path(build_dir).resolve()
+        marker = build_path / ".radagent_source"
+        cache = build_path / "CMakeCache.txt"
+        expected = str(source_path)
+        stale = False
+        if cache.exists():
+            if marker.exists():
+                stale = marker.read_text(encoding="utf-8", errors="replace").strip() != expected
+            else:
+                stale = _cmake_cache_source_dir(cache) not in {None, expected}
+        if stale:
+            shutil.rmtree(build_path, ignore_errors=True)
+        build_path.mkdir(parents=True, exist_ok=True)
+        marker.write_text(expected, encoding="utf-8")
 
     async def build(self, build_dir: str, threads: int = 4) -> dict[str, Any]:
         """Run make. Returns {success, build_output, executable_path, errors}."""

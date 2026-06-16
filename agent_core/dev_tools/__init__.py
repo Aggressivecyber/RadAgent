@@ -15,8 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from agent_core.dev_tools.files import edit_file, list_files, read_file, search_text, write_file
+from agent_core.dev_tools.geant4_docs import search_geant4_docs
 from agent_core.dev_tools.schemas import ALL_TOOL_SCHEMAS
 from agent_core.dev_tools.shell import build_project, run_bash, run_smoke
+from agent_core.dev_tools.web_search import search_web
 
 __all__ = ["DevToolkit", "ALL_TOOL_SCHEMAS"]
 
@@ -97,6 +99,16 @@ class DevToolkit:
                 str(args.get("pattern", "")),
                 str(args.get("glob") or "**/*"),
                 max_results=int(args.get("max_results") or 50),
+            )
+        if name == "search_geant4_docs":
+            return await search_geant4_docs(
+                str(args.get("query", "")),
+                top_k=int(args.get("top_k") or 5),
+            )
+        if name == "search_web":
+            return await search_web(
+                str(args.get("query", "")),
+                top_k=int(args.get("top_k") or 5),
             )
         if name == "run_bash":
             return await run_bash(

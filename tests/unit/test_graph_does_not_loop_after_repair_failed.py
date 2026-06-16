@@ -25,7 +25,7 @@ def test_failed_layer_without_generated_files_routes_to_persist():
     assert route_fn(state) == "persist_codegen_output"
 
 
-def test_failed_layer_with_generated_files_routes_to_integration_repair():
+def test_failed_layer_with_generated_files_routes_to_persist():
     route_fn = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
     state = {
         "layer_gate_results": {
@@ -40,7 +40,7 @@ def test_failed_layer_with_generated_files_routes_to_integration_repair():
             }
         },
     }
-    assert route_fn(state) == "integration_assembler"
+    assert route_fn(state) == "persist_codegen_output"
 
 
 def test_failed_layer_does_not_route_to_next_layer():
@@ -53,7 +53,7 @@ def test_failed_layer_does_not_route_to_next_layer():
     }
     result = route_fn(state)
     assert result != "run_runtime_modules"
-    assert result in {"persist_codegen_output", "integration_assembler"}
+    assert result == "persist_codegen_output"
 
 
 def test_missing_layer_result_routes_to_persist():

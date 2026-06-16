@@ -94,6 +94,7 @@ export type AgentCockpit = {
   fileGroups: AgentCockpitFileGroup[]
   recentActivity: AgentCockpitActivity[]
   llmDebugCalls: LlmDebugCall[]
+  runtimeActive: boolean
 }
 
 export type ReviewCallout = {
@@ -111,6 +112,7 @@ const pipelinePhases = [
   'prepare_workspace',
   'context',
   'task_planning',
+  'requirements_review',
   'g4_modeling',
   'human_confirmation',
   'g4_codegen',
@@ -124,6 +126,7 @@ const phaseLabels: Record<string, { label: string; labelEn: string }> = {
   prepare_workspace: { label: '准备工作区', labelEn: 'Workspace' },
   context: { label: '上下文收集', labelEn: 'Context' },
   task_planning: { label: '任务规划', labelEn: 'Planning' },
+  requirements_review: { label: '参数核对', labelEn: 'Requirements' },
   g4_modeling: { label: 'Geant4 建模', labelEn: 'Model IR' },
   human_confirmation: { label: '人工确认', labelEn: 'Review' },
   g4_codegen: { label: '工程生成', labelEn: 'Codegen' },
@@ -194,6 +197,17 @@ function runtimeStatusLabel(status?: string): string {
     return '待命'
   }
   return runtimeStatusLabels[status] || status.replaceAll('_', ' ')
+}
+
+function runtimeActive(status: JobStatus | null): boolean {
+  return status?.key_statuses?.runtime_active === true || status?.state?.runtime_active === true
+}
+
+function presentedRuntimeStatus(status: JobStatus | null): string {
+  if (status?.status === 'running' && !runtimeActive(status)) {
+    return '待继续'
+  }
+  return runtimeStatusLabel(status?.status)
 }
 
 function runtimeStatusTone(status?: string): WorkbenchHero['statusTone'] {
@@ -291,6 +305,7 @@ export function createReviewCallout(status: JobStatus | null): ReviewCallout | n
   if (!status || !status.job_id) {
     return null
   }
+  const reviewCommand = `/confirm ${status.job_id}`
 
   const repairStatus = statusValue(status, 'repair_continuation_status')
   const repairRequest = repairContinuationRequest(status)
@@ -304,7 +319,7 @@ export function createReviewCallout(status: JobStatus | null): ReviewCallout | n
       primaryLabel: `批准追加 ${increment} 轮`,
       primaryCommand: '/confirm approve',
       secondaryLabel: '查看确认项',
-      secondaryCommand: '/confirm',
+      secondaryCommand: reviewCommand,
     }
   }
 
@@ -324,7 +339,7 @@ export function createReviewCallout(status: JobStatus | null): ReviewCallout | n
       title: '当前工作流正在等待你确认模型假设、关键参数或继续执行条件。',
       detail: '打开确认面板后，可以查看到底要确认什么；如果参数含糊，填写补充说明让 Agent 继续追问。',
       primaryLabel: '查看确认项',
-      primaryCommand: '/confirm',
+      primaryCommand: reviewCommand,
     }
   }
 
@@ -441,7 +456,18 @@ function statusRawValue(status: JobStatus | null, key: string): string {
 }
 
 function compactNodeLabel(status: JobStatus | null, fallbackPhase: string): string {
-  return humanizeIdentifier(statusRawValue(status, 'current_node') || fallbackPhase)
+  const rawNode = statusRawValue(status, 'current_node')
+  const confirmationApproved =
+    statusRawValue(status, 'confirmation_status') === 'approved' &&
+    status?.state?.human_confirmation_required !== true
+  if (
+    confirmationApproved &&
+    fallbackPhase !== 'human_confirmation' &&
+    rawNode === 'human_confirmation_subgraph'
+  ) {
+    return humanizeIdentifier(fallbackPhase)
+  }
+  return humanizeIdentifier(rawNode || fallbackPhase)
 }
 
 function codegenStatusChip(status: JobStatus | null): AgentCockpitStatusChip | null {
@@ -449,6 +475,9 @@ function codegenStatusChip(status: JobStatus | null): AgentCockpitStatusChip | n
     return null
   }
   const raw = statusRawValue(status, 'g4_codegen_status') || status?.status || 'running'
+  if (raw === 'running' && status?.status === 'running' && !runtimeActive(status)) {
+    return { label: 'Codegen', value: '待继续', tone: 'warning' }
+  }
   const mapped = codegenStatusLabels[raw] || {
     value: humanizeIdentifier(raw) || '运行中',
     tone: raw === 'failed' ? 'error' : raw === 'paused' ? 'warning' : 'running',
@@ -548,6 +577,17 @@ function normalizeLlmStatus(status: unknown): LlmDebugCall['status'] {
   return 'info'
 }
 
+function normalizeLlmStatusForRuntime(
+  status: unknown,
+  runtimeIsActive: boolean,
+): LlmDebugCall['status'] {
+  const normalized = normalizeLlmStatus(status)
+  if (normalized === 'running' && !runtimeIsActive) {
+    return 'info'
+  }
+  return normalized
+}
+
 function numberValue(value: unknown): number {
   const number = Number(value)
   return Number.isFinite(number) && number > 0 ? number : 0
@@ -612,7 +652,12 @@ type LlmCallDraft = {
   order: number
 }
 
-function mergeModelCallEvent(draft: LlmCallDraft, event: RadAgentEvent, index: number): LlmCallDraft {
+function mergeModelCallEvent(
+  draft: LlmCallDraft,
+  event: RadAgentEvent,
+  index: number,
+  runtimeIsActive: boolean,
+): LlmCallDraft {
   const metrics = eventMetrics(event)
   const artifactPath = eventArtifacts(event)
     .map((artifact) => String(artifact.path || '').trim())
@@ -621,7 +666,7 @@ function mergeModelCallEvent(draft: LlmCallDraft, event: RadAgentEvent, index: n
   const modelName = modelCallModelName(event)
   const createdAt = eventTimestamp(event)
   const isStart = event.event_type === 'model_call_start'
-  const status = normalizeLlmStatus(event.status)
+  const status = normalizeLlmStatusForRuntime(event.status, runtimeIsActive)
   const systemPromptChars = numberValue(metrics.system_prompt_chars)
   const userPromptChars = numberValue(metrics.user_prompt_chars)
   const contentLength = numberValue(metrics.content_length)
@@ -667,7 +712,7 @@ function createEmptyModelCallDraft(id: string): LlmCallDraft {
   }
 }
 
-function createLlmDebugCalls(events: RadAgentEvent[]): LlmDebugCall[] {
+function createLlmDebugCalls(events: RadAgentEvent[], runtimeIsActive: boolean): LlmDebugCall[] {
   const calls = new Map<string, LlmCallDraft>()
 
   events.forEach((event, index) => {
@@ -676,7 +721,7 @@ function createLlmDebugCalls(events: RadAgentEvent[]): LlmDebugCall[] {
     }
     const id = modelCallId(event)
     const draft = calls.get(id) || createEmptyModelCallDraft(id)
-    calls.set(id, mergeModelCallEvent(draft, event, index))
+    calls.set(id, mergeModelCallEvent(draft, event, index, runtimeIsActive))
   })
 
   return [...calls.values()]
@@ -700,7 +745,12 @@ function createLlmDebugCalls(events: RadAgentEvent[]): LlmDebugCall[] {
         promptSummary: call.promptSummary || '未收到 prompt 摘要',
         promptCharsLabel: characterLabel(call.promptChars) || '未知字符数',
         outputSummary:
-          call.outputSummary || (status === 'running' ? '等待模型输出' : '未收到输出摘要'),
+          call.outputSummary ||
+          (status === 'running'
+            ? '等待模型输出'
+            : !runtimeIsActive && call.durationMs === 0
+              ? '等待继续后刷新'
+              : '未收到输出摘要'),
         outputCharsLabel: characterLabel(call.outputChars),
         artifactPath: call.artifactPath || '未记录 artifact 路径',
         createdAt: call.createdAt,
@@ -752,8 +802,11 @@ export function createWorkbenchHero(status: JobStatus | null): WorkbenchHero {
     eyebrow: project,
     title: workbenchTitle(status),
     subtitle: `当前推进到 ${currentPhase}，已完成 ${done}/${total} 个阶段。`,
-    statusText: `${runtimeStatusLabel(status.status)} · ${currentPhase}`,
-    statusTone: runtimeStatusTone(status.status),
+    statusText: `${presentedRuntimeStatus(status)} · ${currentPhase}`,
+    statusTone:
+      status.status === 'running' && !runtimeActive(status)
+        ? 'paused'
+        : runtimeStatusTone(status.status),
   }
 }
 
@@ -817,7 +870,7 @@ export function createStatusPanelSummary(status: JobStatus | null): StatusPanelS
   return {
     metrics: [
       { label: '活动作业', value: status.job_id || '暂无活动作业' },
-      { label: '状态', value: runtimeStatusLabel(status.status) },
+      { label: '状态', value: presentedRuntimeStatus(status) },
     ],
     phases: createPhaseTrack(status).map((phase, index) => ({
       id: phase.id,
@@ -895,7 +948,7 @@ export function createAgentCockpit({
 
   return {
     agent: {
-      stateLabel: runtimeStatusLabel(status?.status),
+      stateLabel: presentedRuntimeStatus(status),
       phaseLabel: heroPhaseLabel(activePhase),
       currentAction: currentEvent?.summary || phaseLabel(activePhase),
       workspace: status?.job_workspace || status?.workspace_root || '尚未创建工作区',
@@ -904,6 +957,7 @@ export function createAgentCockpit({
     },
     fileGroups,
     recentActivity,
-    llmDebugCalls: createLlmDebugCalls(events),
+    llmDebugCalls: createLlmDebugCalls(events, runtimeActive(status)),
+    runtimeActive: runtimeActive(status),
   }
 }

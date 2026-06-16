@@ -80,7 +80,7 @@ describe('overview panel presentation', () => {
     expect(panel.actions[0]).toMatchObject({
       label: '查看确认项',
       labelEn: 'Review',
-      command: '/confirm',
+      command: '/confirm job-1',
       tone: 'primary',
       mode: 'execute',
     })

@@ -25,9 +25,9 @@ DEFAULT_MODEL_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL_LITE = "mimo-v2.5"
 DEFAULT_MODEL_PRO = "mimo-v2.5-pro"
 DEFAULT_MODEL_MAX = DEFAULT_MODEL_PRO
-DEFAULT_CONTEXT_WINDOW_LITE = 32_000
-DEFAULT_CONTEXT_WINDOW_PRO = 128_000
-DEFAULT_CONTEXT_WINDOW_MAX = 128_000
+DEFAULT_CONTEXT_WINDOW_LITE = 1_000_000
+DEFAULT_CONTEXT_WINDOW_PRO = 1_000_000
+DEFAULT_CONTEXT_WINDOW_MAX = 1_000_000
 _ENV_ASSIGNMENT_RE = re.compile(r"^(\s*(?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)(\s*=).*$")
 
 
@@ -319,7 +319,7 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
             "RADAGENT_MODEL_PRO",
             DEFAULT_MODEL_PRO,
             "RADAGENT_PRO_TIMEOUT_S",
-            240.0,
+            360.0,
             "RADAGENT_PRO_MAX_TOKENS",
             8192,
             "RADAGENT_PRO_CONTEXT_WINDOW_TOKENS",
@@ -335,7 +335,7 @@ def load_environment(env_path: Path | None = None) -> RadAgentEnvironment:
             "RADAGENT_MODEL_MAX",
             DEFAULT_MODEL_MAX,
             "RADAGENT_MAX_TIMEOUT_S",
-            300.0,
+            420.0,
             "RADAGENT_MAX_MAX_TOKENS",
             12000,
             "RADAGENT_MAX_CONTEXT_WINDOW_TOKENS",

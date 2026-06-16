@@ -2816,6 +2816,55 @@ p {
   box-shadow: 0 18px 42px rgba(40, 34, 24, 0.08);
 }
 
+.simulation-viewport.review-focus {
+  border-color: rgba(185, 65, 56, 0.34);
+  box-shadow:
+    0 18px 42px rgba(40, 34, 24, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.84) inset;
+}
+
+.simulation-viewport.review-focus::before,
+.simulation-viewport.review-focus::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.simulation-viewport.review-focus::before {
+  inset: -1px;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 32deg,
+    rgba(185, 65, 56, 0.18),
+    rgba(242, 207, 58, 0.48),
+    rgba(35, 120, 90, 0.32),
+    rgba(42, 167, 255, 0.42),
+    rgba(124, 92, 255, 0.34),
+    rgba(185, 65, 56, 0.18)
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.88;
+  animation: review-focus-orbit 2800ms linear infinite;
+}
+
+.simulation-viewport.review-focus::after {
+  inset: 10px;
+  z-index: 1;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 44%, rgba(255, 255, 255, 0.22) 56%, transparent 68%),
+    linear-gradient(118deg, transparent 0 36%, rgba(255, 255, 255, 0.36) 44%, rgba(242, 207, 58, 0.18) 49%, transparent 58%);
+  mix-blend-mode: screen;
+  opacity: 0.72;
+  transform: translate3d(-8%, -4%, 0);
+  animation: review-focus-sweep 3200ms var(--motion-ease) infinite;
+}
+
 .simulation-viewport-stage {
   position: absolute;
   inset: 0;
@@ -2829,9 +2878,39 @@ p {
 
 .simulation-viewport-toolbar,
 .simulation-viewport-stats,
-.simulation-viewport-empty {
+.simulation-viewport-empty,
+.simulation-review-focus-badge {
   position: absolute;
   z-index: 2;
+}
+
+.simulation-review-focus-badge {
+  left: 12px;
+  bottom: 12px;
+  display: grid;
+  gap: 2px;
+  max-width: min(320px, calc(100% - 24px));
+  border: 1px solid rgba(185, 65, 56, 0.28);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 32px rgba(40, 34, 24, 0.12);
+  pointer-events: none;
+  animation: review-focus-badge-in 420ms var(--motion-ease) both;
+}
+
+.simulation-review-focus-badge strong {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 840;
+}
+
+.simulation-review-focus-badge span {
+  color: rgba(47, 43, 39, 0.76);
+  font-size: 11px;
+  line-height: 1.34;
 }
 
 .simulation-viewport-toolbar {
@@ -3457,6 +3536,76 @@ p {
   line-height: 1.36;
 }
 
+.llm-response-preview {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(65, 77, 72, 0.14);
+  border-radius: 6px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.llm-response-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.llm-response-preview-heading strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.llm-response-preview-heading span,
+.llm-response-rest summary {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 780;
+}
+
+.llm-response-lines,
+.llm-response-rest pre {
+  overflow: auto;
+  max-width: 100%;
+  margin: 0;
+  border-radius: 5px;
+  padding: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #183129;
+  background: rgba(18, 37, 31, 0.055);
+  font-family: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.llm-response-lines {
+  min-height: 52px;
+  max-height: 70px;
+}
+
+.llm-response-waiting {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.llm-response-rest {
+  display: grid;
+  gap: 6px;
+}
+
+.llm-response-rest summary {
+  cursor: pointer;
+}
+
+.llm-response-rest pre {
+  max-height: 180px;
+}
+
 .llm-debug-artifact {
   margin: 0;
   border-top: 1px solid rgba(222, 217, 207, 0.72);
@@ -3811,11 +3960,6 @@ p {
   border-color: rgba(35, 120, 90, 0.72);
   background: linear-gradient(135deg, #23785a, #155f45);
   box-shadow: 0 14px 28px rgba(35, 120, 90, 0.18);
-}
-
-.workflow-start-button.paused {
-  border-color: rgba(154, 106, 23, 0.58);
-  background: linear-gradient(135deg, #b94138, #9a6a17);
 }
 
 .workflow-confirm-backdrop {
@@ -5621,6 +5765,38 @@ p {
   }
 }
 
+@keyframes review-focus-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes review-focus-sweep {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: translate3d(-14%, -6%, 0);
+  }
+  46% {
+    opacity: 0.76;
+    transform: translate3d(12%, 7%, 0);
+  }
+}
+
+@keyframes review-focus-badge-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes dialog-pop {
   from {
     opacity: 0;
@@ -5646,6 +5822,118 @@ p {
   border-radius: 8px;
   padding: 12px;
   background: #fff;
+}
+
+.confirmation-parameter-review {
+  display: grid;
+  gap: 9px;
+  border: 1px solid rgba(222, 217, 207, 0.92);
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(251, 250, 247, 0.9)),
+    #fff;
+}
+
+.confirmation-parameter-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.confirmation-parameter-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 840;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.confirmation-parameter-heading > span {
+  color: rgba(104, 98, 90, 0.72);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.confirmation-parameter-row {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+  animation: detail-unfold 260ms var(--motion-ease) both;
+}
+
+.confirmation-parameter-row.confirmed {
+  border-color: rgba(35, 120, 90, 0.3);
+  background: rgba(35, 120, 90, 0.055);
+}
+
+.confirmation-parameter-row.needs-review {
+  border-color: rgba(185, 65, 56, 0.34);
+  background: rgba(185, 65, 56, 0.065);
+  box-shadow: inset 3px 0 0 rgba(185, 65, 56, 0.62);
+}
+
+.confirmation-parameter-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.confirmation-parameter-status {
+  justify-self: start;
+  border: 1px solid rgba(35, 120, 90, 0.24);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--green);
+  background: rgba(35, 120, 90, 0.08);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.confirmation-parameter-row.needs-review .confirmation-parameter-status {
+  border-color: rgba(185, 65, 56, 0.3);
+  color: var(--accent);
+  background: rgba(185, 65, 56, 0.09);
+}
+
+.confirmation-parameter-row em {
+  color: rgba(104, 98, 90, 0.68);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 720;
+}
+
+.confirmation-parameter-row strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.confirmation-parameter-row code {
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(222, 217, 207, 0.82);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #2f2b27;
+  background: rgba(255, 255, 255, 0.78);
+  font-family: var(--radagent-code-font);
+  font-size: 11px;
+  line-height: 1.36;
+  white-space: pre-wrap;
+}
+
+.confirmation-parameter-row p {
+  margin: 0;
+  color: rgba(104, 98, 90, 0.82);
+  font-size: 12px;
+  line-height: 1.42;
 }
 
 .confirmation-summary-card span {
@@ -6257,6 +6545,10 @@ body:has(.workbench-shell) {
   .agent-activity-panel,
   .llm-debug-panel,
   .simulation-viewport,
+  .simulation-viewport.review-focus::before,
+  .simulation-viewport.review-focus::after,
+  .simulation-review-focus-badge,
+  .confirmation-parameter-row,
   .timeline-panel,
   .workflow-console,
   .status-pill,

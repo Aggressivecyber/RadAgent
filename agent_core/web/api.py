@@ -684,7 +684,7 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                         service.continue_in_background(reason=_approval_continue_reason(data))
                     view = "status"
                 else:
-                    data = service.get_confirmation_review(None)
+                    data = service.get_confirmation_review(_text(command.args) or None)
                     view = "confirmation"
             case "reject":
                 response = {"user_decision": "reject", "feedback": command.args}

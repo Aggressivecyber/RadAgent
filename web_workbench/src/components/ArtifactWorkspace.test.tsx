@@ -47,6 +47,7 @@ const cockpit: AgentCockpit = {
   ],
   recentActivity: [],
   llmDebugCalls: [],
+  runtimeActive: true,
 }
 
 const selectedArtifact: ArtifactContent = {

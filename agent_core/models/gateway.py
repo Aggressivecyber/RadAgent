@@ -74,6 +74,7 @@ class ModelGateway:
             started_at=start,
         )
         self._record_model_call_start(req, profile, transcript_path=transcript_path)
+        progress_writer: _ModelCallProgressWriter | None = None
 
         try:
             if profile.provider == ModelProvider.MOCK:
@@ -89,13 +90,29 @@ class ModelGateway:
             elif profile.provider == ModelProvider.OPENAI_COMPATIBLE and req.tools:
                 from agent_core.models.client import call_openai_compatible_tools
 
+                progress_writer = _ModelCallProgressWriter(
+                    gateway=self,
+                    req=req,
+                    profile=profile,
+                    call_id=call_id,
+                    started_at=start,
+                )
+                progress_writer.mark_waiting("请求已发送，等待模型返回响应或工具调用...")
                 if _model_timeouts_enabled():
                     tools_result = await asyncio.wait_for(
-                        call_openai_compatible_tools(profile, req),
+                        call_openai_compatible_tools(
+                            profile,
+                            req,
+                            on_chunk=progress_writer.on_chunk,
+                        ),
                         timeout=_provider_call_deadline_s(profile),
                     )
                 else:
-                    tools_result = await call_openai_compatible_tools(profile, req)
+                    tools_result = await call_openai_compatible_tools(
+                        profile,
+                        req,
+                        on_chunk=progress_writer.on_chunk,
+                    )
                 content = tools_result["content"]
                 usage = tools_result["usage"]
                 reasoning_content = tools_result["reasoning_content"]
@@ -103,13 +120,25 @@ class ModelGateway:
                 finish_reason = tools_result["finish_reason"]
                 parsed_json = None
             elif profile.provider == ModelProvider.OPENAI_COMPATIBLE:
+                progress_writer = _ModelCallProgressWriter(
+                    gateway=self,
+                    req=req,
+                    profile=profile,
+                    call_id=call_id,
+                    started_at=start,
+                )
+                progress_writer.mark_waiting("请求已发送，等待模型首个响应...")
                 if _model_timeouts_enabled():
                     provider_result = await asyncio.wait_for(
-                        call_openai_compatible_model(profile, req),
+                        call_openai_compatible_model(profile, req, on_chunk=progress_writer.on_chunk),
                         timeout=_provider_call_deadline_s(profile),
                     )
                 else:
-                    provider_result = await call_openai_compatible_model(profile, req)
+                    provider_result = await call_openai_compatible_model(
+                        profile,
+                        req,
+                        on_chunk=progress_writer.on_chunk,
+                    )
                 content, usage, reasoning_content = _normalize_provider_result(
                     provider_result
                 )
@@ -170,6 +199,7 @@ class ModelGateway:
             status="failed" if result.error else "passed",
             started_at=start,
             result=result,
+            progress=progress_writer.snapshot(result.content) if progress_writer else None,
         )
 
         self._log_tool_call(req, result, start, transcript_path=transcript_path)
@@ -283,6 +313,7 @@ class ModelGateway:
         status: str,
         started_at: float,
         result: ModelCallResult | None = None,
+        progress: dict[str, Any] | None = None,
     ) -> str:
         """Persist full prompt/response context for job-scoped debugging."""
         job_id = str(req.metadata.get("job_id") or "")
@@ -318,6 +349,8 @@ class ModelGateway:
                     "tool_choice": req.tool_choice,
                 },
             }
+            if progress is not None:
+                payload["progress"] = progress
             if result is not None:
                 payload["result"] = {
                     "error": result.error,
@@ -374,6 +407,75 @@ def _with_default_thinking(task: ModelTask, metadata: dict[str, Any]) -> dict[st
     merged = dict(metadata)
     merged.setdefault("enable_thinking", thinking_for_task(task))
     return merged
+
+
+class _ModelCallProgressWriter:
+    def __init__(
+        self,
+        *,
+        gateway: ModelGateway,
+        req: ModelCallRequest,
+        profile: Any,
+        call_id: str,
+        started_at: float,
+    ) -> None:
+        self.gateway = gateway
+        self.req = req
+        self.profile = profile
+        self.call_id = call_id
+        self.started_at = started_at
+        self.content = ""
+        self.chunk_count = 0
+        self.last_write = 0.0
+
+    def mark_waiting(self, message: str) -> None:
+        now = time.time()
+        self.last_write = now
+        self.gateway._write_model_call_transcript(
+            req=self.req,
+            profile=self.profile,
+            call_id=self.call_id,
+            status="running",
+            started_at=self.started_at,
+            progress={
+                "content": message,
+                "content_length": len(message),
+                "chunk_count": 0,
+                "updated_at_unix": now,
+            },
+        )
+
+    async def on_chunk(self, chunk: str) -> None:
+        self.content += chunk
+        self.chunk_count += 1
+        now = time.time()
+        if now - self.last_write < 0.25 and self.chunk_count > 1:
+            return
+        self.last_write = now
+        self.gateway._write_model_call_transcript(
+            req=self.req,
+            profile=self.profile,
+            call_id=self.call_id,
+            status="running",
+            started_at=self.started_at,
+            progress={
+                "content": self.content,
+                "content_length": len(self.content),
+                "chunk_count": self.chunk_count,
+                "updated_at_unix": now,
+            },
+        )
+
+    def snapshot(self, content_override: str = "") -> dict[str, Any] | None:
+        content = content_override or self.content
+        if not content:
+            return None
+        return {
+            "content": content,
+            "content_length": len(content),
+            "chunk_count": self.chunk_count,
+            "updated_at_unix": time.time(),
+        }
 
 
 def _model_timeouts_enabled() -> bool:

@@ -71,7 +71,8 @@ PHYSICS_REVIEW_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 物理质量审核 
 
 返回格式：
 {
-  "status": "pass" | "revise" | "fail",
+  "status": "pass" | "revise" | "needs_user_input" | "fail",
+  "routing_recommendation": "accept" | "repair_code" | "request_user_input" | "fail",
   "overall_score": 0,
   "physics_model_score": 0,
   "source_fidelity_score": 0,
@@ -80,8 +81,25 @@ PHYSICS_REVIEW_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 物理质量审核 
   "output_validity_score": 0,
   "findings": [{"severity": "low|medium|high", "target": "...", "message": "..."}],
   "required_fixes": [{"target": "...", "message": "..."}],
+  "needs_user_input": [{"target": "...", "message": "..."}],
+  "advisory_findings": [{"severity": "low|medium|high", "target": "...", "message": "..."}],
   "reviewer_notes": "..."
 }
+
+硬性分类规则：
+- required_fixes 只能包含 Geant4 工程 Agent 能通过编辑项目文件直接修复的问题。
+- 不要把“获取用户确认”“确认材料/几何选择”“confirmed_by_user=false”
+  “requires_confirmation=true”“修改/澄清 G4ModelIR metadata”放进 required_fixes。
+  这些属于上游建模确认缺口，只能放入 needs_user_input 或 advisory_findings。
+- 如果 G4ModelIR 自身矛盾，且需要在人类选择后才能知道正确材料、几何或 scoring，
+  返回 status="needs_user_input"、routing_recommendation="request_user_input"。
+- 这是 codegen 之后的审核阶段，禁止向用户发起新的人工确认流程；确认材料、几何、
+  physics cuts、scoring 语义等问题必须在 codegen 前的 human_confirmation 阶段完成。
+  因此这里的 needs_user_input 只表示“上游确认缺口/流程失败”，不会被路由到用户确认。
+- 如果最新 runtime gate 已通过，且 deterministic output_quality 已通过，
+  event_table 额外列、大小写列名、附加 CSV 是否写入 IR 这类格式偏好默认放入
+  advisory_findings；除非缺少真实用户要求的物理量或 artifact 是空/假/固定值。
+- 如果所有阻塞项都需要用户或上游 IR 澄清，required_fixes 必须为空。
 """
 
 
@@ -117,8 +135,13 @@ async def run_physics_quality_reviewer(
             "treat the latest passing runtime gate as authoritative for build/run/"
             "artifact status and do not request fixes solely from earlier failed "
             "runtime attempts. "
-            "When status is revise or fail, required_fixes must be concrete enough "
-            "for global_integration_agent to patch the project."
+            "When status is revise or fail, required_fixes must contain ONLY "
+            "code-repairable issues that the Geant4 project agent can fix by "
+            "editing project files. This is a post-codegen review, so never ask "
+            "the user to confirm parameters here. Put upstream G4ModelIR "
+            "clarification/metadata gaps into needs_user_input as a workflow "
+            "contract failure, and put nonblocking output-format preferences into "
+            "advisory_findings."
         ),
     }
     prompt = _review_prompt_json(context, max_chars=MAX_REVIEW_CONTEXT_CHARS)
@@ -199,10 +222,31 @@ def _normalize_review(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         data = {}
     status = str(data.get("status", "fail")).strip().lower()
-    if status not in {"pass", "revise", "fail"}:
+    if status not in {"pass", "revise", "needs_user_input", "fail"}:
         status = "fail"
+    required_fixes = _list_of_dicts(data.get("required_fixes", []))
+    explicit_needs_user_input = _list_of_dicts(data.get("needs_user_input", []))
+    explicit_advisory = _list_of_dicts(data.get("advisory_findings", []))
+    classified = _classify_required_fixes(
+        required_fixes,
+        needs_user_input=explicit_needs_user_input,
+        advisory_findings=explicit_advisory,
+    )
+    routing = _normalize_routing_recommendation(
+        data.get("routing_recommendation"),
+        status=status,
+        required_fixes=classified["required_fixes"],
+        needs_user_input=classified["needs_user_input"],
+    )
+    if routing == "request_user_input" and not classified["required_fixes"]:
+        status = "needs_user_input"
+    elif routing == "repair_code" and status == "needs_user_input":
+        status = "revise"
+    elif routing == "accept":
+        status = "pass"
     review: dict[str, Any] = {
         "status": status,
+        "routing_recommendation": routing,
         "overall_score": _score(data.get("overall_score")),
         "physics_model_score": _score(data.get("physics_model_score")),
         "source_fidelity_score": _score(data.get("source_fidelity_score")),
@@ -210,20 +254,158 @@ def _normalize_review(data: Any) -> dict[str, Any]:
         "transport_precision_score": _score(data.get("transport_precision_score")),
         "output_validity_score": _score(data.get("output_validity_score")),
         "findings": _list_of_dicts(data.get("findings", [])),
-        "required_fixes": _list_of_dicts(data.get("required_fixes", [])),
+        "required_fixes": classified["required_fixes"],
+        "needs_user_input": classified["needs_user_input"],
+        "advisory_findings": classified["advisory_findings"],
         "reviewer_notes": str(data.get("reviewer_notes", "")),
     }
     if status in {"revise", "fail"} and not review["required_fixes"]:
-        review["required_fixes"] = [
-            {
-                "target": "physics_quality_review",
-                "message": (
-                    "Reviewer did not provide concrete fixes; rerun review or "
-                    "inspect findings."
-                ),
-            }
-        ]
+        if review["needs_user_input"]:
+            review["status"] = "needs_user_input"
+            review["routing_recommendation"] = "request_user_input"
+        else:
+            review["required_fixes"] = [
+                {
+                    "target": "physics_quality_review",
+                    "message": (
+                        "Reviewer did not provide concrete fixes; rerun review or "
+                        "inspect findings."
+                    ),
+                }
+            ]
+            review["routing_recommendation"] = "repair_code"
     return review
+
+
+def _classify_required_fixes(
+    required_fixes: list[dict[str, Any]],
+    *,
+    needs_user_input: list[dict[str, Any]],
+    advisory_findings: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Split old-style required_fixes into repairable, user-input, and advisory sets."""
+    repairable: list[dict[str, Any]] = []
+    user_input = list(needs_user_input)
+    advisory = list(advisory_findings)
+    for fix in required_fixes:
+        if _is_user_input_fix(fix):
+            user_input.append(fix)
+        elif _is_advisory_output_format_fix(fix):
+            advisory.append(_fix_to_advisory(fix))
+        else:
+            repairable.append(fix)
+    return {
+        "required_fixes": repairable,
+        "needs_user_input": user_input,
+        "advisory_findings": advisory,
+    }
+
+
+def _normalize_routing_recommendation(
+    value: Any,
+    *,
+    status: str,
+    required_fixes: list[dict[str, Any]],
+    needs_user_input: list[dict[str, Any]],
+) -> str:
+    recommendation = str(value or "").strip().lower()
+    if recommendation in {"accept", "repair_code", "request_user_input", "fail"}:
+        return recommendation
+    if status == "pass":
+        return "accept"
+    if status == "needs_user_input":
+        return "request_user_input"
+    if required_fixes:
+        return "repair_code"
+    if needs_user_input:
+        return "request_user_input"
+    return "fail"
+
+
+def _is_user_input_fix(fix: dict[str, Any]) -> bool:
+    text = _fix_text(fix)
+    if any(
+        phrase in text
+        for phrase in (
+            "user confirmation",
+            "obtain user",
+            "get user",
+            "ask user",
+            "human confirmation",
+            "confirmed_by_user",
+            "requires_confirmation",
+            "unconfirmed",
+            "user approval",
+        )
+    ):
+        return True
+    if "g4modelir" in text and any(
+        phrase in text
+        for phrase in (
+            "update",
+            "clarify",
+            "change",
+            "modify",
+            "metadata",
+            "add",
+            "remove",
+        )
+    ):
+        return True
+    if "contradiction" in text and any(
+        phrase in text for phrase in ("either", "which material", "material is intended")
+    ):
+        return True
+    return False
+
+
+def _is_advisory_output_format_fix(fix: dict[str, Any]) -> bool:
+    text = _fix_text(fix)
+    if "event_table.csv" not in text and "output" not in text:
+        return False
+    if not any(
+        phrase in text
+        for phrase in (
+            "dose_gy",
+            "eventid",
+            "event_id",
+            "field name",
+            "column name",
+            "extra column",
+            "not specified",
+            "additional column",
+        )
+    ):
+        return False
+    return not any(
+        phrase in text
+        for phrase in (
+            "missing",
+            "empty",
+            "fake",
+            "fallback",
+            "placeholder",
+            "fixed zero",
+            "identical value",
+            "row count",
+            "expected events",
+            "does not match",
+        )
+    )
+
+
+def _fix_to_advisory(fix: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "severity": str(fix.get("severity") or "low"),
+        "target": str(fix.get("target") or "physics_review"),
+        "message": str(fix.get("message") or ""),
+    }
+
+
+def _fix_text(fix: dict[str, Any]) -> str:
+    return (
+        f"{fix.get('target', '')}\n{fix.get('message', '')}"
+    ).strip().lower()
 
 
 def _model_info(result: Any) -> dict[str, Any]:

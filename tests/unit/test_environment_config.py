@@ -113,6 +113,9 @@ def test_default_model_config_is_token_plan_mimo(monkeypatch) -> None:
     assert env.models[ModelTier.LITE].model_name == DEFAULT_MODEL_LITE
     assert env.models[ModelTier.PRO].model_name == DEFAULT_MODEL_PRO
     assert env.models[ModelTier.MAX].model_name == DEFAULT_MODEL_MAX
+    assert env.models[ModelTier.LITE].context_window_tokens == 1_000_000
+    assert env.models[ModelTier.PRO].context_window_tokens == 1_000_000
+    assert env.models[ModelTier.MAX].context_window_tokens == 1_000_000
 
 
 def test_regular_model_endpoint_requires_local_api_key() -> None:
@@ -182,6 +185,27 @@ def test_max_tier_reads_context_window_env(
     env = load_environment(env_file)
 
     assert env.models[ModelTier.MAX].context_window_tokens == 200000
+
+
+def test_default_model_timeouts_only_guard_dead_connections(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    for key in (
+        "RADAGENT_LITE_TIMEOUT_S",
+        "RADAGENT_PRO_TIMEOUT_S",
+        "RADAGENT_MAX_TIMEOUT_S",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("", encoding="utf-8")
+
+    env = load_environment(env_file)
+
+    assert env.models[ModelTier.LITE].timeout_s == 30.0
+    assert env.models[ModelTier.PRO].timeout_s == 360.0
+    assert env.models[ModelTier.MAX].timeout_s == 420.0
 
 
 def test_write_project_env_values_upserts_without_exposing_other_lines(

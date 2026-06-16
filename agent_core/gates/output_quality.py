@@ -268,17 +268,25 @@ def _inspect_particle_tracks(path: Path, report: OutputQualityReport) -> None:
     tracks = _as_list(data.get("tracks"))
     usable = 0
     point_count = 0
+    flat_tracks: dict[tuple[Any, Any], int] = {}
     for track in tracks:
         if not isinstance(track, dict):
+            continue
+        direct_position = _position_from_record(track)
+        if _has_position(direct_position):
+            point_count += 1
+            key = (track.get("event_id"), track.get("track_id"))
+            flat_tracks[key] = flat_tracks.get(key, 0) + 1
             continue
         points = [
             point
             for point in _as_list(track.get("points_mm") or track.get("points"))
-            if _has_three_numeric_values(point)
+            if _has_position(point)
         ]
         point_count += len(points)
         if len(points) >= 2:
             usable += 1
+    usable += sum(1 for count in flat_tracks.values() if count >= 2)
     report.metrics["particle_tracks"] = len(tracks)
     report.metrics["particle_track_points"] = point_count
     report.metrics["particle_tracks_usable"] = usable
@@ -298,11 +306,9 @@ def _inspect_energy_deposits(path: Path, report: OutputQualityReport) -> None:
     for deposit in deposits:
         if not isinstance(deposit, dict):
             continue
-        position = deposit.get("position_mm") or deposit.get("position")
-        if position is None:
-            position = [deposit.get("x_mm"), deposit.get("y_mm"), deposit.get("z_mm")]
+        position = _position_from_record(deposit)
         edep = _finite_float(deposit.get("edep_MeV"))
-        if edep is not None and edep > 0.0 and _has_three_numeric_values(position):
+        if edep is not None and edep > 0.0 and _has_position(position):
             positive += 1
     report.metrics["energy_deposits"] = len(deposits)
     report.metrics["energy_deposits_positive"] = positive
@@ -344,3 +350,28 @@ def _has_three_numeric_values(value: Any) -> bool:
     if len(values) != 3:
         return False
     return all(_finite_float(item) is not None for item in values)
+
+
+def _has_position(value: Any) -> bool:
+    if _has_three_numeric_values(value):
+        return True
+    if not isinstance(value, dict):
+        return False
+    keys = (
+        ("x_mm", "y_mm", "z_mm"),
+        ("x", "y", "z"),
+    )
+    return any(
+        all(_finite_float(value.get(key)) is not None for key in group)
+        for group in keys
+    )
+
+
+def _position_from_record(record: dict[str, Any]) -> Any:
+    for key in ("position_mm", "position"):
+        if key in record and record.get(key) is not None:
+            return record.get(key)
+    for group in (("x_mm", "y_mm", "z_mm"), ("x", "y", "z")):
+        if any(key in record for key in group):
+            return {key: record.get(key) for key in group}
+    return None

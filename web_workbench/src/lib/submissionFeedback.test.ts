@@ -21,8 +21,8 @@ describe('submission feedback', () => {
   it('presents paused, success and error states without leaking slash commands', () => {
     expect(createSubmissionFeedback({ status: 'paused' })).toEqual({
       tone: 'paused',
-      title: '工作流已暂停',
-      detail: '再次点击开始按钮可继续提交仿真工作流。',
+      title: '等待审查',
+      detail: '工作流停在人工确认点，请在审查面板处理后继续。',
     })
     expect(createSubmissionFeedback({ status: 'success', command: 'run' })).toMatchObject({
       tone: 'success',

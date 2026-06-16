@@ -9,6 +9,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from agent_core.workspace.paths import STAGE_CODEGEN
+
 
 def _resolve_job_dir(value: str) -> Path:
     candidate = Path(value)
@@ -122,7 +124,7 @@ def build_summary(job_dir: Path) -> dict[str, Any]:
         "model_call_summary": _summarize_model_call_transcripts(transcripts),
         "failure_taxonomy": _classify_failures(events),
         "agentic_repair_lessons": _read_json(
-            job_dir / "05_codegen" / "integration" / "agentic_repair_lessons.json"
+            job_dir / STAGE_CODEGEN / "integration" / "agentic_repair_lessons.json"
         ),
         "failure_bundle_path": str(job_dir / "logs" / "failure_bundle.json"),
         "has_failure_bundle": (job_dir / "logs" / "failure_bundle.json").exists(),

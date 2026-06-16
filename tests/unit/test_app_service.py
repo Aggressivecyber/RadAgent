@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -8,7 +9,12 @@ from unittest.mock import AsyncMock
 import pytest
 from agent_core.app import PIPELINE_PHASES, RadAgentAppService
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
-from agent_core.workspace.paths import STAGE_GATE_VALIDATION, STAGE_INPUT
+from agent_core.workspace.paths import (
+    STAGE_GATE_VALIDATION,
+    STAGE_HUMAN_CONFIRMATION,
+    STAGE_INPUT,
+    STAGE_TASK_PLAN,
+)
 from pydantic import ValidationError
 
 
@@ -16,6 +22,7 @@ def test_service_exposes_pipeline_contract(tmp_path) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
 
     assert PIPELINE_PHASES[0] == "prepare_workspace"
+    assert PIPELINE_PHASES[3] == "requirements_review"
     status = service.get_status()
     assert status.status == "idle"
     assert status.workspace_root == str(tmp_path)
@@ -69,6 +76,299 @@ def test_read_artifact_supports_text_json_binary_and_missing(tmp_path) -> None:
     assert data.json_data == {"ok": True}
     assert binary.kind == "binary"
     assert missing.exists is False
+
+
+def test_read_artifact_resolves_job_relative_model_call_paths(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {"job_id": "job_model_debug"}
+    transcript = tmp_path / "jobs" / "job_model_debug" / "logs" / "model_calls" / "call.json"
+    transcript.parent.mkdir(parents=True)
+    transcript.write_text('{"status": "running"}', encoding="utf-8")
+
+    content = service.read_artifact("logs/model_calls/call.json")
+
+    assert content.exists is True
+    assert content.kind == "json"
+    assert content.json_data == {"status": "running"}
+
+
+def test_recent_events_includes_model_gateway_job_log_events(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {"job_id": "job_model_events"}
+    events_path = tmp_path / "jobs" / "job_model_events" / "logs" / "events.jsonl"
+    events_path.parent.mkdir(parents=True)
+    events_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-06-14T08:00:00+00:00",
+                "job_id": "job_model_events",
+                "event_type": "model_call_start",
+                "status": "running",
+                "phase": "codegen",
+                "summary": "codegen via openai_compatible",
+                "artifacts": [{"path": "logs/model_calls/call.json"}],
+                "metrics": {"system_prompt_chars": 5},
+                "details": {"model_name": "mimo-v2.5-pro"},
+            },
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    events = service.recent_events()
+
+    assert any(event.event_type == "model_call_start" for event in events)
+    model_event = next(event for event in events if event.event_type == "model_call_start")
+    assert model_event.payload["artifacts"] == [{"path": "logs/model_calls/call.json"}]
+    assert model_event.payload["details"]["model_name"] == "mimo-v2.5-pro"
+
+
+def test_recent_events_includes_active_model_call_while_background_worker_is_running(
+    tmp_path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {"job_id": "job_active_model_call"}
+    active_path = tmp_path / "jobs" / "job_active_model_call" / "logs" / "active_model_call.json"
+    active_path.parent.mkdir(parents=True)
+    active_path.write_text(
+        json.dumps(
+            {
+                "model_call_id": "call-active",
+                "status": "running",
+                "task": "codegen",
+                "module_name": "simulation_core",
+                "transcript_path": "logs/model_calls/call-active_codegen.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    release = threading.Event()
+    worker = threading.Thread(target=lambda: release.wait(timeout=5))
+    worker.start()
+    service._background_continue_thread = worker
+    try:
+        events = service.recent_events(limit=1)
+    finally:
+        release.set()
+        worker.join(timeout=5)
+
+    assert len(events) == 1
+    event = events[0]
+    assert event.event_type == "model_call_start"
+    assert event.status == "running"
+    assert event.phase == "codegen"
+    assert event.payload["artifacts"] == [
+        {"path": "logs/model_calls/call-active_codegen.json"}
+    ]
+    assert event.payload["details"]["metadata"] == {
+        "model_call_id": "call-active",
+        "module_name": "simulation_core",
+    }
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_uses_max_model_and_blocks_for_confirmation(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review"
+    task_dir = tmp_path / "jobs" / job_id / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "particle": {"type": "proton", "energy_MeV": 150},
+                "target": {"material": "Water"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build a 150 MeV proton depth-dose benchmark.",
+        "task_spec_path": str(task_spec_path),
+        "simulation_scope": ["geant4"],
+        "task_planning_status": "passed",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.MAX,
+                provider=ModelProvider.MOCK,
+                model_name="max-review",
+                content="{}",
+                parsed_json={
+                    "summary_for_user": "请确认质子束、水箱尺寸和 scoring。",
+                    "missing_information": ["Water phantom dimensions are not specified."],
+                    "ambiguous_parameters": [
+                        {
+                            "field_path": "target.size",
+                            "proposed_value": "30 cm x 30 cm x 30 cm",
+                            "reason": "User asked for depth-dose but did not give phantom size.",
+                        }
+                    ],
+                    "physics_risks": ["Physics cuts are unspecified."],
+                    "questions": [
+                        {
+                            "field_path": "scoring.depth_dose",
+                            "question": "Confirm depth-dose bin width.",
+                            "proposed_value": "1 mm",
+                        }
+                    ],
+                    "proposed_parameters": [
+                        {
+                            "field_path": "source.particle",
+                            "proposed_value": "proton",
+                            "source_type": "user",
+                            "confidence": 0.99,
+                        }
+                    ],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    result = await service.run_phase("requirements_review")
+
+    assert result.success is True
+    assert result.status.status == "paused"
+    assert result.status.needs_confirmation is True
+    assert service.state["requirements_review_status"] == "pending"
+    assert service.state["confirmation_status"] == "pending"
+    assert service.state["human_confirmation_required"] is True
+    assert calls[0]["tier"] == ModelTier.MAX
+    request_path = Path(service.state["requirements_review_request_path"])
+    assert request_path.is_file()
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    assert request["schema_version"] == "requirements_review_v1"
+    assert request["missing_information"] == ["Water phantom dimensions are not specified."]
+    assert request["ambiguous_fields"][0]["field_path"] == "target.size"
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_approval_resumes_at_g4_modeling(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_approve"
+    job_dir = tmp_path / "jobs" / job_id
+    review_dir = job_dir / STAGE_TASK_PLAN
+    review_dir.mkdir(parents=True)
+    request_path = review_dir / "requirements_review_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "requirements_review_v1",
+                "summary_for_user": "请确认参数。",
+                "proposed_parameters": [
+                    {
+                        "field_path": "source.energy",
+                        "proposed_value": "150 MeV",
+                        "source_type": "user",
+                        "confidence": 0.99,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build proton benchmark",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "requirements_review_status": "pending",
+        "requirements_review_request_path": str(request_path),
+        "confirmation_status": "pending",
+        "human_confirmation_required": True,
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+
+    status = await service.submit_confirmation(
+        {"user_decision": "approve", "feedback": "Use 1 mm scoring bins."},
+        auto_continue=False,
+    )
+
+    assert status.status == "running"
+    assert status.current_phase == "g4_modeling"
+    assert service.state["requirements_review_status"] == "approved"
+    assert service.state["human_confirmation_required"] is False
+    confirmed_path = Path(service.state["confirmed_requirement_plan_path"])
+    assert confirmed_path.is_file()
+    confirmed = json.loads(confirmed_path.read_text(encoding="utf-8"))
+    assert confirmed["schema_version"] == "confirmed_requirement_plan_v1"
+    assert confirmed["user_response"]["feedback"] == "Use 1 mm scoring bins."
+
+
+def test_recent_events_ignores_stale_active_model_call_without_runtime_worker(
+    tmp_path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {"job_id": "job_stale_model_call"}
+    active_path = tmp_path / "jobs" / "job_stale_model_call" / "logs" / "active_model_call.json"
+    active_path.parent.mkdir(parents=True)
+    active_path.write_text(
+        json.dumps(
+            {
+                "model_call_id": "call-stale",
+                "status": "running",
+                "task": "codegen",
+                "module_name": "simulation_core",
+                "transcript_path": "logs/model_calls/call-stale_codegen.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    events = service.recent_events(limit=1)
+
+    assert not any(event.event_type == "model_call_start" for event in events)
+
+
+def test_status_exposes_runtime_active_for_background_continue(tmp_path, monkeypatch) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state["job_id"] = "job-active-status"
+    service.store.upsert_job(job_id="job-active-status", user_query="simulate")
+    started = threading.Event()
+    release = threading.Event()
+
+    async def fake_run_until_blocked() -> None:
+        started.set()
+        release.wait(timeout=5)
+
+    monkeypatch.setattr(service, "run_until_blocked", fake_run_until_blocked)
+
+    assert service.continue_in_background(reason="retry") is True
+    try:
+        assert started.wait(timeout=5) is True
+        status = service.get_status()
+        assert status.key_statuses["runtime_active"] is True
+        assert status.state["runtime_active"] is True
+    finally:
+        release.set()
+        thread = service._background_continue_thread
+        if thread is not None:
+            thread.join(timeout=5)
+
+    status = service.get_status()
+    assert status.key_statuses["runtime_active"] is False
+    assert status.state["runtime_active"] is False
 
 
 def test_read_artifact_reports_invalid_json_without_blocking_text_view(tmp_path) -> None:
@@ -160,7 +460,7 @@ def test_service_exposes_frontend_safe_model_config(tmp_path, monkeypatch) -> No
     assert config.tiers[ModelTier.PRO.value].base_url == "https://token-plan-cn.xiaomimimo.com/v1"
     assert config.tiers[ModelTier.PRO.value].api_key_configured is True
     assert config.agentic_repair_max_turns == 48
-    assert config.agentic_repair_history_chars == 48_000
+    assert config.agentic_repair_history_chars == 0
     assert "secret-key" not in config.model_dump_json()
 
 
@@ -270,6 +570,74 @@ async def test_submit_confirmation_does_not_advance_when_modeling_failed(
     )
 
 
+@pytest.mark.asyncio
+async def test_submit_confirmation_rejects_legacy_codegen_physics_confirmation(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy post-codegen confirmation requests must not be accepted."""
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_dir = tmp_path / "jobs" / "job_codegen_physics_confirm"
+    confirmation_dir = job_dir / STAGE_HUMAN_CONFIRMATION
+    confirmation_dir.mkdir(parents=True)
+    request_path = confirmation_dir / "confirmation_request_round_1.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "codegen_physics_confirmation_v1",
+                "source": "physics_quality_review",
+                "summary_for_user": "确认 tracker material。",
+                "critical_confirmations": [
+                    {
+                        "field_path": "g4_codegen.physics_quality_review.0",
+                        "target": "materials[1]",
+                        "proposed_value": "plastic scintillator or silicon",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": "job_codegen_physics_confirm",
+        "user_query": "build muon tomography",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "strict",
+        "run_mode": "strict",
+        "g4_modeling_status": "passed",
+        "g4_codegen_status": "needs_user_input",
+        "human_confirmation_required": True,
+        "confirmation_status": "pending",
+        "confirmation_request_path": str(request_path),
+        "confirmation_summary": "确认 tracker material。",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+
+    async def fail_if_called(_: str) -> None:
+        raise AssertionError("legacy codegen confirmation must not run HC subgraph")
+
+    monkeypatch.setattr(service, "run_phase", fail_if_called)
+
+    status = await service.submit_confirmation(
+        {"user_decision": "approve", "feedback": "Use plastic scintillator."},
+        auto_continue=False,
+    )
+
+    assert status.status == "failed"
+    assert status.current_phase == "human_confirmation"
+    assert service.state["confirmation_status"] == "rejected"
+    assert service.state["human_confirmation_required"] is False
+    assert service.state["g4_codegen_status"] == "failed"
+    assert "confirmation_record_path" not in service.state
+    assert "confirmed_model_plan_path" not in service.state
+    assert any(
+        event.event_type == "legacy_codegen_physics_confirmation_rejected"
+        for event in service.recent_events()
+    )
+
+
 def test_modeling_failure_does_not_surface_empty_actionable_confirmation(tmp_path) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
     job_dir = tmp_path / "jobs" / "job_failed_modeling"
@@ -313,6 +681,106 @@ def test_modeling_failure_does_not_surface_empty_actionable_confirmation(tmp_pat
     assert review["actionable"] is False
     assert "Complex model requested but no oxide component found" in review["summary"]
     assert "validation_report.json" in review["preview"]
+
+
+def test_legacy_codegen_physics_confirmation_is_not_actionable(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_dir = tmp_path / "jobs" / "job_codegen_physics_confirm"
+    confirmation_dir = job_dir / STAGE_HUMAN_CONFIRMATION
+    confirmation_dir.mkdir(parents=True)
+    request_path = confirmation_dir / "confirmation_request_round_1.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "codegen_physics_confirmation_v1",
+                "summary_for_user": "确认 tracker material。",
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": "job_codegen_physics_confirm",
+        "job_workspace": str(job_dir),
+        "g4_modeling_status": "passed",
+        "g4_codegen_status": "needs_user_input",
+        "human_confirmation_required": True,
+        "confirmation_status": "pending",
+        "confirmation_request_path": str(request_path),
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+
+    status = service.get_status()
+    review = service.get_confirmation_review()
+
+    assert status.status == "failed"
+    assert status.needs_confirmation is False
+    assert review["type"] == "legacy_codegen_physics_confirmation_disabled"
+    assert review["required"] is False
+    assert review["actionable"] is False
+    assert "codegen" in review["summary"].lower()
+
+
+def test_confirmation_review_loads_selected_job_without_state_snapshot(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_dir = tmp_path / "jobs" / "job_confirmation_only"
+    confirmation_dir = job_dir / STAGE_HUMAN_CONFIRMATION
+    confirmation_dir.mkdir(parents=True)
+    request_path = confirmation_dir / "confirmation_request_round_1.json"
+    proposal_path = confirmation_dir / "proposed_model_completion.json"
+    report_path = confirmation_dir / "human_confirmation_report.md"
+    request_path.write_text(
+        json.dumps(
+            {
+                "summary_for_user": "请确认水层厚度。",
+                "questions": [
+                    {
+                        "field_path": "components.water.dimensions",
+                        "proposed_value": {"dz": 300000.0},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    proposal_path.write_text(
+        json.dumps(
+            {
+                "missing_information": ["Step limiter settings need definition."],
+                "proposed_components": [
+                    {
+                        "component_id": "water",
+                        "component_type": "layer",
+                        "material_id": "G4_WATER",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    report_path.write_text("human confirmation report", encoding="utf-8")
+    service.store.upsert_job(
+        job_id="job_confirmation_only",
+        user_query="build water phantom",
+        status="paused",
+        current_phase="human_confirmation",
+        current_phase_idx=PIPELINE_PHASES.index("human_confirmation"),
+        job_workspace=str(job_dir),
+    )
+    service.state = {"job_id": "different_active_job"}
+
+    review = service.get_confirmation_review("job_confirmation_only")
+
+    assert review["request_path"] == str(request_path)
+    assert review["summary"] == "请确认水层厚度。"
+    assert review["questions"] == [
+        {
+            "field_path": "components.water.dimensions",
+            "proposed_value": {"dz": 300000.0},
+        }
+    ]
+    assert review["missing_information"] == ["Step limiter settings need definition."]
+    assert review["preview"] == "human confirmation report"
 
 
 @pytest.mark.asyncio
@@ -706,7 +1174,7 @@ def test_resume_job_normalizes_progress_and_can_clear_previous_failure(tmp_path)
     status = service.resume_job(job_id, clear_failure=True)
 
     assert status.current_phase == "gate"
-    assert status.current_phase_idx == 7
+    assert status.current_phase_idx == PIPELINE_PHASES.index("gate")
     assert status.status == "running"
     assert status.state["current_node"] == "gate_subgraph"
     assert "termination_reason" not in status.key_statuses
@@ -749,6 +1217,30 @@ async def test_submit_confirmation_approve_is_idempotent_after_gate(tmp_path, mo
     assert status.current_phase_idx == PIPELINE_PHASES.index("gate")
     assert service.state["confirmation_status"] == "approved"
     assert service.recent_events()[-1].event_type == "human_confirmation_already_approved"
+
+
+def test_status_advances_stale_human_confirmation_current_node_after_approval(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {
+        "job_id": "approved-node-job",
+        "user_query": "simulate",
+        "confirmation_status": "approved",
+        "human_confirmation_required": False,
+        "current_node": "human_confirmation_subgraph",
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
+    service.completed_phases = [
+        "prepare_workspace",
+        "context",
+        "task_planning",
+        "g4_modeling",
+        "human_confirmation",
+    ]
+
+    status = service.get_status()
+
+    assert status.current_phase == "g4_codegen"
+    assert status.state["current_node"] == "g4_codegen_subgraph"
 
 
 def test_service_rejects_provider_in_frontend_model_config(tmp_path) -> None:
@@ -1226,6 +1718,13 @@ async def test_run_until_blocked_routes_failed_gate_to_retry_phase(
     async def fixed_planning(state: dict) -> dict:
         return {"task_planning_status": "passed", "simulation_scope": ["geant4"]}
 
+    async def requirements_review(state: dict) -> dict:
+        return {
+            "requirements_review_status": "approved",
+            "confirmed_requirement_plan_path": "confirmed_requirement_plan.json",
+            "human_confirmation_required": False,
+        }
+
     async def g4_modeling(state: dict) -> dict:
         return {"g4_modeling_status": "passed", "human_confirmation_required": False}
 
@@ -1251,6 +1750,7 @@ async def test_run_until_blocked_routes_failed_gate_to_retry_phase(
     service._subgraph_nodes = {
         "gate": gate,
         "task_planning": fixed_planning,
+        "requirements_review": requirements_review,
         "g4_modeling": g4_modeling,
         "human_confirmation": human_confirmation,
         "g4_codegen": g4_codegen,

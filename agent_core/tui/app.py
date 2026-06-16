@@ -491,8 +491,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._options_model_candidates = list(_COMMON_COPILOT_MODELS)
             self._options_original_copilot_model = _COMMON_COPILOT_MODELS[0]
             self._options_draft_copilot_model = _COMMON_COPILOT_MODELS[0]
-            self._options_original_copilot_window = 128_000
-            self._options_draft_copilot_window = 128_000
+            self._options_original_copilot_window = 1_000_000
+            self._options_draft_copilot_window = 1_000_000
             self._command_history: list[str] = []
             self._history_index: int | None = None
             self._composer_mode = "ASK"
@@ -1534,8 +1534,8 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
                 self._options_model_candidates = list(_COMMON_COPILOT_MODELS)
                 self._options_original_copilot_model = self._options_model_candidates[0]
                 self._options_draft_copilot_model = self._options_model_candidates[0]
-                self._options_original_copilot_window = 128_000
-                self._options_draft_copilot_window = 128_000
+                self._options_original_copilot_window = 1_000_000
+                self._options_draft_copilot_window = 1_000_000
                 return
 
             models = {
@@ -1550,7 +1550,7 @@ def create_app_class(*, theme: str = "slate-workstation") -> type[Any]:
             self._options_original_copilot_model = pro_model
             self._options_draft_copilot_model = pro_model
             self._options_original_copilot_window = int(
-                getattr(pro, "context_window_tokens", 128_000) or 128_000
+                getattr(pro, "context_window_tokens", 1_000_000) or 1_000_000
             )
             self._options_draft_copilot_window = self._options_original_copilot_window
 
@@ -1888,6 +1888,44 @@ def _parse_model_config_args(args: str) -> dict[str, Any]:
         else:
             parsed[normalized] = value
     return parsed
+
+
+def _parse_confirmation_edit_args(args: str) -> dict[str, Any]:
+    field_path = ""
+    new_value = ""
+    unit = ""
+    reason = ""
+    for token in shlex.split(args):
+        key, sep, value = token.partition("=")
+        if not sep:
+            raise ValueError(
+                "Use field.path=value, optionally with unit=... and reason=..."
+            )
+        normalized = key.strip()
+        if normalized == "unit":
+            unit = value
+        elif normalized == "reason":
+            reason = value
+        elif not field_path:
+            field_path = normalized
+            new_value = value
+        else:
+            raise ValueError(f"Unknown confirmation edit field: {normalized}")
+    if not field_path:
+        raise ValueError("Use field.path=value")
+    edit = {
+        "field_path": field_path,
+        "new_value": new_value,
+    }
+    if unit:
+        edit["unit"] = unit
+    if reason:
+        edit["reason"] = reason
+    return {
+        "user_decision": "edit",
+        "edits": [edit],
+        "user_notes": f"Edited {field_path}.",
+    }
 
 
 def _copilot_model_candidates(current_models: dict[str, str]) -> list[str]:

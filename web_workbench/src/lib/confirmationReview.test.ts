@@ -149,4 +149,110 @@ describe('confirmation review presentation', () => {
       'Assumed Co-60 gamma irradiation because the user only said TID.',
     ])
   })
+
+  it('builds a source-aware parameter checklist for human review', () => {
+    const view = createConfirmationReviewView({
+      status: 'pending',
+      confirmation_request: {
+        ambiguous_fields: [
+          {
+            field_path: 'components.detector.material',
+            proposed_value: 'G4_Si',
+            reason: '用户只说了半导体探测器，材料由 AI 补全。',
+          },
+        ],
+      },
+      proposed_model_completion: {
+        proposed_parameters: [
+          {
+            field_path: 'sources.primary.energy',
+            proposed_value: '14 MeV',
+            source_type: 'user',
+            confidence: 0.98,
+          },
+          {
+            field_path: 'components.detector.material',
+            proposed_value: 'G4_Si',
+            source_type: 'ai_inferred',
+            confidence: 0.52,
+            requires_confirmation: true,
+          },
+        ],
+      },
+    })
+
+    expect(view.parameterChecklist).toEqual([
+      {
+        title: 'sources.primary.energy',
+        value: '14 MeV',
+        detail: '',
+        meta: 'user · 98%',
+        tone: 'confirmed',
+        statusLabel: '明确',
+      },
+      {
+        title: 'components.detector.material',
+        value: 'G4_Si',
+        detail: '用户只说了半导体探测器，材料由 AI 补全。',
+        meta: 'ai_inferred · 52%',
+        tone: 'needs-review',
+        statusLabel: 'AI 补全 / 需确认',
+      },
+    ])
+  })
+
+  it('presents max-model requirements review as a parameter confirmation card', () => {
+    const view = createConfirmationReviewView({
+      type: 'requirements_review',
+      status: 'pending',
+      summary_for_user: '请确认质子束、水箱尺寸和 scoring。',
+      requirements_review: {
+        missing_information: ['Water phantom dimensions are not specified.'],
+        physics_risks: ['Physics cuts are unspecified.'],
+        proposed_parameters: [
+          {
+            field_path: 'source.particle',
+            proposed_value: 'proton',
+            source_type: 'user',
+            confidence: 0.99,
+          },
+          {
+            field_path: 'target.size',
+            proposed_value: '30 cm x 30 cm x 30 cm',
+            source_type: 'max_model_proposed_default',
+            confidence: 0.62,
+            requires_confirmation: true,
+          },
+        ],
+        ambiguous_parameters: [
+          {
+            field_path: 'target.size',
+            reason: 'User asked for depth-dose but did not give phantom size.',
+          },
+        ],
+      },
+    })
+
+    expect(view.summary).toBe('请确认质子束、水箱尺寸和 scoring。')
+    expect(view.missingInformation).toEqual(['Water phantom dimensions are not specified.'])
+    expect(view.assumptions).toEqual(['Physics cuts are unspecified.'])
+    expect(view.parameterChecklist).toEqual([
+      {
+        title: 'source.particle',
+        value: 'proton',
+        detail: '',
+        meta: 'user · 99%',
+        tone: 'confirmed',
+        statusLabel: '明确',
+      },
+      {
+        title: 'target.size',
+        value: '30 cm x 30 cm x 30 cm',
+        detail: 'User asked for depth-dose but did not give phantom size.',
+        meta: 'max_model_proposed_default · 62%',
+        tone: 'needs-review',
+        statusLabel: 'AI 补全 / 需确认',
+      },
+    ])
+  })
 })

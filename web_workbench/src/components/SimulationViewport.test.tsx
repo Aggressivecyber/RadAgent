@@ -196,4 +196,14 @@ describe('SimulationViewport', () => {
     expect(shouldShowSourcePreview({ ...viewportPayload, tracks: [] })).toBe(true)
     expect(shouldShowSourcePreview(viewportPayload)).toBe(false)
   })
+
+  it('adds a human-review focus layer when model confirmation is pending', () => {
+    const markup = renderToStaticMarkup(
+      <SimulationViewport payload={viewportPayload} onRefresh={() => {}} reviewFocus />,
+    )
+
+    expect(markup).toContain('simulation-viewport review-focus')
+    expect(markup).toContain('模型核对')
+    expect(markup).toContain('请对照参数清单检查几何、材料和粒子源是否符合预期')
+  })
 })

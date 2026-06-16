@@ -162,7 +162,7 @@ def search_text(
                         {
                             "path": rel,
                             "line": line_no,
-                            "text": line[:240],
+                            "text": line,
                         }
                     )
                     if len(matches) >= limit:

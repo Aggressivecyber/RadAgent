@@ -1,0 +1,10 @@
+{
+  "description": "Example RadAgent golden set manifest. Replace or extend with 20-30 stable Geant4 jobs before running release comparisons.",
+  "cases": [
+    {
+      "case_id": "shielding-neutron-current",
+      "job_id": "job_ed1c2431__20260616_010838",
+      "notes": "14 MeV neutron shielding stack current regression case."
+    }
+  ]
+}
