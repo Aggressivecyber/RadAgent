@@ -11,6 +11,7 @@ Flow:
       → prepare_workspace
         → context_subgraph
         → task_planning_subgraph
+        → requirements_review
         → g4_modeling_subgraph
         → human_confirmation_subgraph
         → g4_codegen_subgraph
@@ -38,6 +39,7 @@ from agent_core.graph.main_routes import (
     route_after_human_confirmation,
     route_after_intent,
     route_after_patch,
+    route_after_requirements_review,
     route_after_task_planning,
 )
 from agent_core.graph.main_state import RadAgentMainState
@@ -174,10 +176,20 @@ def _make_task_planning_subgraph_node() -> Any:
             "task_spec_path": result.get("task_spec_path", ""),
             "simulation_scope": result.get("simulation_scope", ["geant4"]),
             "task_planning_status": result.get("task_planning_status", "failed"),
+            "task_spec_errors": result.get("task_spec_errors", []),
+            "clarification_request": result.get("clarification_request", {}),
+            "termination_reason": result.get("termination_reason", ""),
+            "errors": list(state.get("errors", [])) + result.get("task_spec_errors", []),
             "current_node": "task_planning_subgraph",
         }
 
     return _run
+
+
+async def _requirements_review_node(state: RadAgentMainState) -> dict[str, Any]:
+    from agent_core.requirements_review import requirements_review_node
+
+    return await requirements_review_node(dict(state))
 
 
 def _make_g4_modeling_subgraph_node() -> Any:
@@ -193,6 +205,9 @@ def _make_g4_modeling_subgraph_node() -> Any:
                 "user_query": state.get("user_query", ""),
                 "task_spec_path": state.get("task_spec_path", ""),
                 "evidence_map_path": state.get("evidence_map_path", ""),
+                "confirmed_requirement_plan_path": state.get(
+                    "confirmed_requirement_plan_path", ""
+                ),
             }
         )
         return {
@@ -268,8 +283,17 @@ def _make_g4_codegen_subgraph_node() -> Any:
                 "execution_mode": state.get("execution_mode", ""),
                 "confirmation_record_path": state.get("confirmation_record_path", ""),
                 "confirmed_model_plan_path": state.get("confirmed_model_plan_path", ""),
-                "human_confirmation_status": state.get("human_confirmation_status", ""),
+                "human_confirmation_status": state.get("confirmation_status", ""),
                 "runtime_failure_context": runtime_failure_context,
+                "repair_continuation_status": state.get(
+                    "repair_continuation_status", ""
+                ),
+                "repair_continuation_request": state.get(
+                    "repair_continuation_request", {}
+                ),
+                "agentic_repair_max_turns_override": state.get(
+                    "agentic_repair_max_turns_override", 0
+                ),
             }
         )
         return {
@@ -277,7 +301,25 @@ def _make_g4_codegen_subgraph_node() -> Any:
             "proposed_patch_path": result.get("proposed_patch_path", ""),
             "generated_code_dir": result.get("generated_code_dir", ""),
             "g4_codegen_status": result.get("g4_codegen_status", "failed"),
-            "current_node": "g4_codegen_subgraph",
+            "repair_continuation_request": result.get("repair_continuation_request", {}),
+            "repair_continuation_status": result.get("repair_continuation_status", ""),
+            "human_confirmation_required": result.get(
+                "human_confirmation_required",
+                state.get("human_confirmation_required", False),
+            ),
+            "confirmation_status": result.get(
+                "confirmation_status",
+                state.get("confirmation_status", ""),
+            ),
+            "confirmation_request_path": result.get(
+                "confirmation_request_path",
+                state.get("confirmation_request_path", ""),
+            ),
+            "confirmation_summary": result.get(
+                "confirmation_summary",
+                state.get("confirmation_summary", ""),
+            ),
+            "current_node": result.get("current_node", "g4_codegen_subgraph"),
         }
 
     return _run
@@ -487,9 +529,6 @@ def _make_gate_subgraph_node() -> Any:
                 "task_spec_path": state.get("task_spec_path", ""),
                 "context_decision": state.get("context_decision", ""),
                 "retry_count": state.get("retry_count", 0),
-                "visual_review_status": state.get("visual_review_status", ""),
-                "visual_review_notes": state.get("visual_review_notes", ""),
-                "visual_review_blocking": state.get("visual_review_blocking", True),
             }
         )
         new_retry = state.get("retry_count", 0) + (
@@ -557,6 +596,8 @@ def _make_report_subgraph_node() -> Any:
                 "simulation_scope": state.get("simulation_scope", []),
                 "failed_gates": state.get("failed_gates", []),
                 "errors": state.get("errors", []),
+                "termination_reason": state.get("termination_reason", ""),
+                "clarification_request": state.get("clarification_request", {}),
             }
         )
         return {
@@ -608,6 +649,7 @@ def build_main_graph() -> StateGraph:
     # Add subgraph wrapper nodes
     graph.add_node("context_subgraph", _make_context_subgraph_node())
     graph.add_node("task_planning_subgraph", _make_task_planning_subgraph_node())
+    graph.add_node("requirements_review", _requirements_review_node)
     graph.add_node("g4_modeling_subgraph", _make_g4_modeling_subgraph_node())
     graph.add_node("human_confirmation_subgraph", _make_human_confirmation_subgraph_node())
     graph.add_node("g4_codegen_subgraph", _make_g4_codegen_subgraph_node())
@@ -654,6 +696,15 @@ def build_main_graph() -> StateGraph:
         "task_planning_subgraph",
         route_after_task_planning,
         {
+            "requirements_review": "requirements_review",
+            "report_subgraph": "report_subgraph",
+        },
+    )
+
+    graph.add_conditional_edges(
+        "requirements_review",
+        route_after_requirements_review,
+        {
             "g4_modeling_subgraph": "g4_modeling_subgraph",
             "report_subgraph": "report_subgraph",
         },
@@ -687,6 +738,7 @@ def build_main_graph() -> StateGraph:
         route_after_g4_codegen,
         {
             "patch_subgraph": "patch_subgraph",
+            "human_confirmation_subgraph": "human_confirmation_subgraph",
             "report_subgraph": "report_subgraph",
         },
     )
@@ -749,6 +801,7 @@ def build_subgraph_nodes() -> dict[str, Any]:
     return {
         "context": _make_context_subgraph_node(),
         "task_planning": _make_task_planning_subgraph_node(),
+        "requirements_review": _requirements_review_node,
         "g4_modeling": _make_g4_modeling_subgraph_node(),
         "human_confirmation": _make_human_confirmation_subgraph_node(),
         "g4_codegen": _make_g4_codegen_subgraph_node(),

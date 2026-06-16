@@ -1,13 +1,14 @@
 """Context Subgraph nodes — RAG retrieval, web search, evidence management.
 
 Rules:
-1. RAG first — real Ollama bge-m3 embedding + cosine similarity search
-2. RAG insufficient → Web supplement
-3. Both insufficient → block_no_context
-4. Never use model built-in knowledge as sole source
-5. All web results must have URLs
-6. All evidence goes to evidence_map
-7. Graceful degradation when Ollama unavailable
+1. Use the lite model to extract what the user request explicitly specifies.
+2. Use RAG/Web for Geant4 implementation evidence, not to decide whether the
+   user mentioned a source or geometry.
+3. Missing hard user requirements → block_no_context.
+4. Never use model built-in knowledge as sole implementation source.
+5. All web results must have URLs.
+6. All evidence goes to evidence_map.
+7. Graceful degradation when model or retrieval services are unavailable.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +91,42 @@ REQUIRED_RAG_CATEGORIES: dict[str, list[str]] = {
 }
 
 HARD_REQUIRED_CATEGORIES = {"geometry", "materials", "source", "scoring"}
+
+USER_CONTEXT_EXTRACTION_PROMPT = """You are RadAgent's lightweight simulation requirement extractor.
+Extract whether the user's request explicitly specifies each modelling dimension.
+Only mark a dimension true when the user gave enough concrete information for that dimension.
+Do not use Geant4 documentation knowledge here. This is about the user's request, not RAG.
+
+Dimensions:
+- geometry: target/layer/device/detector/world structure or dimensions.
+- materials: named materials or material classes.
+- source: particle type, source/beam, energy, incidence direction, spectrum, or source shape.
+- physics: requested physics list, process family, or enough particle/energy context to choose physics later.
+- scoring: observables such as dose, range, Bragg peak, tracks, energy deposition, flux.
+- output: requested CSV, report, files, histograms, plots, validation gates, or artifacts.
+
+Return JSON only:
+{
+  "coverage": {
+    "geometry": false,
+    "materials": false,
+    "source": false,
+    "physics": false,
+    "scoring": false,
+    "output": false
+  },
+  "evidence": {
+    "geometry": [],
+    "materials": [],
+    "source": [],
+    "physics": [],
+    "scoring": [],
+    "output": []
+  },
+  "missing_information": [],
+  "confidence": 0.0
+}
+"""
 
 # Concurrency lock for index building
 _index_lock = asyncio.Lock()
@@ -189,6 +227,52 @@ async def route_sources(state: ContextSubgraphState) -> dict[str, Any]:
     required = state.get("required_sources", ["geant4"])
     return {
         "required_sources": required,
+    }
+
+
+async def extract_user_context_requirements(state: ContextSubgraphState) -> dict[str, Any]:
+    """Use the lite model to determine what the user request already specifies."""
+    user_query = state.get("user_query", "")
+    context_dir = _get_context_dir(state.get("job_id", "unknown"))
+    context_dir.mkdir(parents=True, exist_ok=True)
+
+    extraction = _heuristic_user_context_requirements(user_query)
+    extraction["extraction_source"] = "heuristic"
+    extraction["model_error"] = ""
+
+    try:
+        from agent_core.models.gateway import get_model_gateway
+        from agent_core.models.schemas import ModelTask, ModelTier
+
+        gateway = get_model_gateway()
+        result = await gateway.call(
+            task=ModelTask.SIMPLE_EXTRACTION,
+            tier=ModelTier.LITE,
+            system_prompt=USER_CONTEXT_EXTRACTION_PROMPT,
+            user_prompt=f"User request:\n{user_query}\n\nReturn JSON only.",
+            response_format="json",
+            temperature=0.0,
+            max_tokens=1536,
+            metadata={
+                "job_id": state.get("job_id", ""),
+                "module_name": "context_user_requirement_extraction",
+                "enable_thinking": False,
+            },
+        )
+        if result.error:
+            extraction["model_error"] = result.error
+        elif isinstance(result.parsed_json, dict):
+            model_extraction = _normalize_user_context_requirements(result.parsed_json)
+            heuristic = _heuristic_user_context_requirements(user_query)
+            extraction = _merge_user_context_requirements(model_extraction, heuristic)
+            extraction["extraction_source"] = "lite_model"
+            extraction["model_error"] = ""
+    except Exception as exc:
+        extraction["model_error"] = str(exc)
+
+    _save_user_context_requirements(context_dir, extraction)
+    return {
+        "user_context_requirements": extraction,
     }
 
 
@@ -314,6 +398,238 @@ def _generate_search_queries(user_query: str) -> list[str]:
         queries.append(keywords)
 
     return queries[:3]
+
+
+def _normalize_user_context_requirements(payload: dict[str, Any]) -> dict[str, Any]:
+    coverage_raw = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
+    evidence_raw = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+    coverage = {
+        category: bool(coverage_raw.get(category, False))
+        for category in REQUIRED_RAG_CATEGORIES
+    }
+    evidence = {
+        category: _string_list(evidence_raw.get(category))
+        for category in REQUIRED_RAG_CATEGORIES
+    }
+    missing_categories = sorted(category for category, covered in coverage.items() if not covered)
+    missing_hard_required = sorted(
+        category for category in HARD_REQUIRED_CATEGORIES if not coverage.get(category, False)
+    )
+    return {
+        "coverage": coverage,
+        "evidence": evidence,
+        "missing_categories": missing_categories,
+        "missing_hard_required": missing_hard_required,
+        "missing_information": _string_list(payload.get("missing_information")),
+        "confidence": _float(payload.get("confidence"), 0.0),
+    }
+
+
+def _merge_user_context_requirements(
+    primary: dict[str, Any],
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    primary = _normalize_user_context_requirements(primary)
+    fallback = _normalize_user_context_requirements(fallback)
+    coverage = {
+        category: bool(primary["coverage"].get(category) or fallback["coverage"].get(category))
+        for category in REQUIRED_RAG_CATEGORIES
+    }
+    evidence: dict[str, list[str]] = {}
+    for category in REQUIRED_RAG_CATEGORIES:
+        evidence[category] = list(
+            dict.fromkeys(
+                [
+                    *primary["evidence"].get(category, []),
+                    *fallback["evidence"].get(category, []),
+                ]
+            )
+        )
+    missing_categories = sorted(category for category, covered in coverage.items() if not covered)
+    missing_hard_required = sorted(
+        category for category in HARD_REQUIRED_CATEGORIES if not coverage.get(category, False)
+    )
+    return {
+        "coverage": coverage,
+        "evidence": evidence,
+        "missing_categories": missing_categories,
+        "missing_hard_required": missing_hard_required,
+        "missing_information": list(
+            dict.fromkeys(
+                [
+                    *primary.get("missing_information", []),
+                    *fallback.get("missing_information", []),
+                ]
+            )
+        ),
+        "confidence": max(
+            _float(primary.get("confidence"), 0.0),
+            _float(fallback.get("confidence"), 0.0),
+        ),
+    }
+
+
+def _heuristic_user_context_requirements(user_query: str) -> dict[str, Any]:
+    text = user_query.lower()
+    coverage = {
+        "geometry": _has_any(
+            text,
+            [
+                "layer",
+                "layers",
+                "slab",
+                "detector",
+                "phantom",
+                "target",
+                "shield",
+                "crystal",
+                "water",
+                "silicon",
+                "aluminum",
+                "through",
+                "穿过",
+                "层",
+                "探测器",
+                "屏蔽",
+                "器件",
+            ],
+        ),
+        "materials": _has_any(
+            text,
+            [
+                "water",
+                "aluminum",
+                "silicon",
+                "lead",
+                "copper",
+                "germanium",
+                "bgo",
+                "material",
+                "材料",
+                "水",
+                "铝",
+                "硅",
+                "铅",
+                "铜",
+            ],
+        ),
+        "source": _has_source_requirement(text),
+        "physics": _has_any(
+            text,
+            [
+                "physics",
+                "physics list",
+                "em",
+                "electromagnetic",
+                "hadronic",
+                "proton",
+                "gamma",
+                "electron",
+                "neutron",
+                "质子",
+                "电子",
+                "中子",
+                "物理",
+            ],
+        ),
+        "scoring": _has_any(
+            text,
+            [
+                "dose",
+                "range",
+                "bragg",
+                "energy deposition",
+                "edep",
+                "scoring",
+                "score",
+                "track",
+                "trajectory",
+                "flux",
+                "剂量",
+                "能量沉积",
+                "计分",
+                "轨迹",
+            ],
+        ),
+        "output": _has_any(
+            text,
+            [
+                "csv",
+                "output",
+                "report",
+                "histogram",
+                "plot",
+                "validation",
+                "gate",
+                "artifact",
+                "输出",
+                "报告",
+                "文件",
+                "门禁",
+                "验证",
+            ],
+        ),
+    }
+    evidence = {
+        category: _heuristic_evidence_snippets(user_query, category, covered)
+        for category, covered in coverage.items()
+    }
+    missing_categories = sorted(category for category, covered in coverage.items() if not covered)
+    missing_hard_required = sorted(
+        category for category in HARD_REQUIRED_CATEGORIES if not coverage.get(category, False)
+    )
+    return {
+        "coverage": coverage,
+        "evidence": evidence,
+        "missing_categories": missing_categories,
+        "missing_hard_required": missing_hard_required,
+        "missing_information": [],
+        "confidence": 0.55 if any(coverage.values()) else 0.0,
+    }
+
+
+def _has_source_requirement(text: str) -> bool:
+    particles = [
+        "proton",
+        "gamma",
+        "photon",
+        "electron",
+        "neutron",
+        "ion",
+        "alpha",
+        "质子",
+        "伽马",
+        "光子",
+        "电子",
+        "中子",
+        "离子",
+    ]
+    source_markers = ["beam", "source", "pencil", "incident", "入射", "束", "源"]
+    energy_pattern = r"\b\d+(?:\.\d+)?\s*(?:kev|mev|gev|ev)\b"
+    return (
+        any(particle in text for particle in particles)
+        and (any(marker in text for marker in source_markers) or re.search(energy_pattern, text) is not None)
+    )
+
+
+def _has_any(text: str, terms: list[str]) -> bool:
+    return any(term in text for term in terms)
+
+
+def _heuristic_evidence_snippets(
+    user_query: str,
+    category: str,
+    covered: bool,
+) -> list[str]:
+    if not covered:
+        return []
+    return [f"user_query indicates {category}: {user_query[:240]}"]
+
+
+def _save_user_context_requirements(context_dir: Path, extraction: dict[str, Any]) -> None:
+    (context_dir / "user_context_requirements.json").write_text(
+        json.dumps(extraction, indent=2, ensure_ascii=False)
+    )
 
 
 def compute_rag_coverage(
@@ -524,18 +840,26 @@ async def score_combined_context(state: ContextSubgraphState) -> dict[str, Any]:
     """Score combined RAG + Web context and make final decision.
 
     Decision logic:
+      - User request has all hard-required modelling dimensions → allow_rag
+        (RAG gaps are implementation-evidence warnings, not user-context blockers)
       - RAG sufficient (score >= 0.7, no hard-required missing) → allow_rag
       - Web quality sufficient → allow_with_web_supplement
       - Otherwise → block_no_context
     """
     rag_score = float(state.get("rag_score", 0.0))
     rag_report = state.get("rag_report", {})
-    missing_hard = rag_report.get("missing_hard_required", [])
+    rag_missing_hard = rag_report.get("missing_hard_required", [])
+    user_requirements = state.get("user_context_requirements", {})
+    if not isinstance(user_requirements, dict):
+        user_requirements = {}
+    user_missing_hard = user_requirements.get("missing_hard_required", [])
 
     web_context = state.get("web_context", [])
     web_quality = score_web_quality(web_context)
 
-    if rag_score >= 0.7 and not missing_hard:
+    if user_requirements and not user_missing_hard:
+        decision = "allow_rag"
+    elif rag_score >= 0.7 and not rag_missing_hard:
         decision = "allow_rag"
     elif web_quality["sufficient"]:
         decision = "allow_with_web_supplement"
@@ -544,7 +868,9 @@ async def score_combined_context(state: ContextSubgraphState) -> dict[str, Any]:
 
     report = {
         "rag_score": rag_score,
-        "rag_missing_hard_required": missing_hard,
+        "rag_missing_hard_required": rag_missing_hard,
+        "user_context_requirements": user_requirements,
+        "user_missing_hard_required": user_missing_hard,
         "web_quality": web_quality,
         "decision": decision,
     }
@@ -567,6 +893,7 @@ async def save_evidence_map(state: ContextSubgraphState) -> dict[str, Any]:
 
     evidence_map = {
         "job_id": state.get("job_id", ""),
+        "user_context_requirements": state.get("user_context_requirements", {}),
         "rag_sources": [
             {"type": "rag", "source": "geant4_rag", "items": state.get("rag_context", [])}
         ],
@@ -586,3 +913,19 @@ async def save_evidence_map(state: ContextSubgraphState) -> dict[str, Any]:
     return {
         "evidence_map_path": str(path),
     }
+
+
+def _string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _float(value: Any, fallback: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback

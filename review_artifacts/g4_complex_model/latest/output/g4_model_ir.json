@@ -1,9 +1,9 @@
 {
   "schema_version": "g4_model_ir_v1",
-  "model_ir_id": "mir_job_919509e8__20260612_201928",
-  "job_id": "job_919509e8__20260612_201928",
+  "model_ir_id": "mir_job_5574e228__20260616_070817",
+  "job_id": "job_5574e228__20260616_070817",
   "modeling_mode": "realistic",
-  "target_system": "10 MeV proton beam on 300 μm silicon slab detector",
+  "target_system": "Proton depth-dose benchmark through layered materials",
   "simplification_policy": {
     "allow_simplification": false,
     "requires_user_approval": true,
@@ -32,7 +32,7 @@
         "source_type": "user_requirement",
         "source": "requirements.json",
         "dimension": "geometry",
-        "text": "[{\"component_id\": \"world\", \"display_name\": \"World Volume\", \"component_type\": \"world\", \"geometry_type\": \"box\", \"material\": \"G4_AIR\", \"role\": \"modeling draft component\", \"source\": \"User request: world volume 50x50x10 mm³ air\"}, {\"component_id\": \"silicon_detector\", \"display_name\": \"Silicon Slab Detector\", \"component_type\": \"volume\", \"geometry_type\": \"box\", \"material\": \"G4_Si\", \"role\": \"edep_region, dose_scoring_region\", \"source\": \"User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral\"}]"
+        "text": "[{\"component_id\": \"world_001\", \"display_name\": \"World Volume\", \"component_type\": \"world\", \"geometry_type\": \"box\", \"material\": \"G4_Galactic\", \"role\": \"world\", \"source\": \"Standard Geant4 world volume\"}, {\"component_id\": \"layer_water_001\", \"display_name\": \"Water Layer\", \"component_type\": \"layer\", \"geometry_type\": \"box\", \"material\": \"G4_WATER\", \"role\": \"edep_region, dose_scoring_region\", \"source\": \"Water phantom for proton therapy benchmark\"}, {\"component_id\": \"layer_aluminum_001\", \"display_name\": \"Aluminum Layer\", \"component_type\": \"layer\", \"geometry_type\": \"box\", \"material\": \"G4_Al\", \"role\": \"edep_region, dose_scoring_region\", \"source\": \"Aluminum layer for material variation study\"}, {\"component_id\": \"layer_silicon_001\", \"display_name\": \"Silicon Layer\", \"component_type\": \"layer\", \"geometry_type\": \"box\", \"material\": \"G4_Si\", \"role\": \"edep_region, dose_scoring_region\", \"source\": \"Silicon layer for detector material study\"}]"
       }
     ],
     "materials": [
@@ -40,7 +40,7 @@
         "source_type": "user_requirement",
         "source": "requirements.json",
         "dimension": "materials",
-        "text": "[{\"name\": \"Silicon\", \"classification\": \"custom\", \"reason\": \"Target material from task specification\"}, {\"name\": \"G4_AIR\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'world'\"}, {\"name\": \"G4_Si\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'silicon_detector'\"}]"
+        "text": "[{\"name\": \"G4_Galactic\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'world_001'\"}, {\"name\": \"G4_WATER\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'layer_water_001'\"}, {\"name\": \"G4_Al\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'layer_aluminum_001'\"}, {\"name\": \"G4_Si\", \"classification\": \"nist\", \"reason\": \"Referenced by draft component 'layer_silicon_001'\"}]"
       }
     ],
     "source": [
@@ -48,7 +48,7 @@
         "source_type": "user_requirement",
         "source": "requirements.json",
         "dimension": "source",
-        "text": "[{\"source_id\": \"primary_source\", \"particle_type\": \"proton\", \"energy\": \"10.0 MeV\", \"distribution\": \"mono\", \"geometry\": \"pencil\", \"direction\": \"[0.0, 0.0, 1.0]\", \"angular_distribution\": \"mono\"}]"
+        "text": "[{\"source_id\": \"primary_source\", \"particle_type\": \"proton\", \"energy\": \"150.0 MeV\", \"distribution\": \"mono\", \"geometry\": \"pencil\", \"direction\": \"[0.0, 0.0, 1.0]\", \"angular_distribution\": \"mono\"}]"
       }
     ],
     "physics": [
@@ -78,16 +78,16 @@
   },
   "components": [
     {
-      "component_id": "world",
+      "component_id": "world_001",
       "display_name": "World Volume",
       "component_type": "world",
       "geometry_type": "box",
       "dimensions": {
-        "dx": 50000.0,
-        "dy": 50000.0,
-        "dz": 10000.0
+        "dx": 100000.0,
+        "dy": 100000.0,
+        "dz": 752000.0
       },
-      "material_id": "G4_AIR",
+      "material_id": "G4_Galactic",
       "placement": {
         "position": [
           0.0,
@@ -102,10 +102,13 @@
       },
       "mother_volume": null,
       "sensitive": false,
-      "roles": [],
+      "roles": [
+        "world"
+      ],
       "color": null,
       "source_evidence": [
-        "User request: world volume 50x50x10 mm³ air"
+        "Standard Geant4 world volume",
+        "geometry_decomposition:expanded mother volume to contain daughter placements on z"
       ],
       "open_issues": [],
       "requires_confirmation": false,
@@ -113,16 +116,16 @@
       "confirmation_source": null
     },
     {
-      "component_id": "silicon_detector",
-      "display_name": "Silicon Slab Detector",
-      "component_type": "volume",
+      "component_id": "layer_water_001",
+      "display_name": "Water Layer",
+      "component_type": "layer",
       "geometry_type": "box",
       "dimensions": {
         "dx": 10000.0,
         "dy": 10000.0,
-        "dz": 300.0
+        "dz": 300000.0
       },
-      "material_id": "G4_Si",
+      "material_id": "G4_WATER",
       "placement": {
         "position": [
           0.0,
@@ -135,7 +138,7 @@
           0.0
         ]
       },
-      "mother_volume": "world",
+      "mother_volume": "world_001",
       "sensitive": true,
       "roles": [
         "edep_region",
@@ -143,19 +146,123 @@
       ],
       "color": null,
       "source_evidence": [
-        "User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral"
+        "Water phantom for proton therapy benchmark"
       ],
-      "open_issues": [],
-      "requires_confirmation": false,
+      "open_issues": [
+        "Material thickness needs confirmation for 150 MeV proton range"
+      ],
+      "requires_confirmation": true,
+      "confirmed_by_user": false,
+      "confirmation_source": null
+    },
+    {
+      "component_id": "layer_aluminum_001",
+      "display_name": "Aluminum Layer",
+      "component_type": "layer",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 10000.0,
+        "dy": 10000.0,
+        "dz": 50000.0
+      },
+      "material_id": "G4_Al",
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          300000.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "mother_volume": "world_001",
+      "sensitive": true,
+      "roles": [
+        "edep_region",
+        "dose_scoring_region"
+      ],
+      "color": null,
+      "source_evidence": [
+        "Aluminum layer for material variation study"
+      ],
+      "open_issues": [
+        "Material thickness needs confirmation"
+      ],
+      "requires_confirmation": true,
+      "confirmed_by_user": false,
+      "confirmation_source": null
+    },
+    {
+      "component_id": "layer_silicon_001",
+      "display_name": "Silicon Layer",
+      "component_type": "layer",
+      "geometry_type": "box",
+      "dimensions": {
+        "dx": 10000.0,
+        "dy": 10000.0,
+        "dz": 50000.0
+      },
+      "material_id": "G4_Si",
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          350000.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "mother_volume": "world_001",
+      "sensitive": true,
+      "roles": [
+        "edep_region",
+        "dose_scoring_region"
+      ],
+      "color": null,
+      "source_evidence": [
+        "Silicon layer for detector material study"
+      ],
+      "open_issues": [
+        "Material thickness needs confirmation"
+      ],
+      "requires_confirmation": true,
       "confirmed_by_user": false,
       "confirmation_source": null
     }
   ],
   "interfaces": [
     {
-      "interface_id": "iface_silicon_detector_world",
-      "component_a": "world",
-      "component_b": "silicon_detector",
+      "interface_id": "iface_layer_water_001_world_001",
+      "component_a": "world_001",
+      "component_b": "layer_water_001",
+      "relationship": "contains",
+      "expected_gap_um": 0.0,
+      "overlap_allowed": false,
+      "overlap_check_enabled": true,
+      "tolerance_um": 0.001,
+      "source_evidence": []
+    },
+    {
+      "interface_id": "iface_layer_aluminum_001_world_001",
+      "component_a": "world_001",
+      "component_b": "layer_aluminum_001",
+      "relationship": "contains",
+      "expected_gap_um": 0.0,
+      "overlap_allowed": false,
+      "overlap_check_enabled": true,
+      "tolerance_um": 0.001,
+      "source_evidence": []
+    },
+    {
+      "interface_id": "iface_layer_silicon_001_world_001",
+      "component_a": "world_001",
+      "component_b": "layer_silicon_001",
       "relationship": "contains",
       "expected_gap_um": 0.0,
       "overlap_allowed": false,
@@ -166,21 +273,45 @@
   ],
   "materials": [
     {
-      "material_id": "G4_AIR",
-      "name": "G4_AIR (NIST)",
+      "material_id": "G4_Al",
+      "name": "G4_Al (NIST)",
       "classification": "nist",
-      "nist_name": "G4_AIR",
+      "nist_name": "G4_Al",
       "composition": null,
-      "density_g_cm3": 0.001225,
+      "density_g_cm3": 2.699,
       "state": "solid",
       "temperature_kelvin": null,
       "source_evidence": [
-        "nist:G4_AIR",
-        "component:world:material_id=G4_AIR",
-        "component:world:User request: world volume 50x50x10 mm³ air",
+        "nist:G4_Al",
+        "component:layer_aluminum_001:material_id=G4_Al",
+        "component:layer_aluminum_001:Aluminum layer for material variation study",
         "user_requirement:requirements.json:materials"
       ],
-      "open_issues": []
+      "open_issues": [],
+      "requires_confirmation": false,
+      "confirmed_by_user": false,
+      "confirmation_source": null
+    },
+    {
+      "material_id": "G4_Galactic",
+      "name": "G4_Galactic (NIST)",
+      "classification": "nist",
+      "nist_name": "G4_Galactic",
+      "composition": null,
+      "density_g_cm3": 1e-25,
+      "state": "solid",
+      "temperature_kelvin": null,
+      "source_evidence": [
+        "nist:G4_Galactic",
+        "component:world_001:material_id=G4_Galactic",
+        "component:world_001:Standard Geant4 world volume",
+        "component:world_001:geometry_decomposition:expanded mother volume to contain daughter placements on z",
+        "user_requirement:requirements.json:materials"
+      ],
+      "open_issues": [],
+      "requires_confirmation": false,
+      "confirmed_by_user": false,
+      "confirmation_source": null
     },
     {
       "material_id": "G4_Si",
@@ -193,11 +324,34 @@
       "temperature_kelvin": null,
       "source_evidence": [
         "nist:G4_Si",
-        "component:silicon_detector:material_id=G4_Si",
-        "component:silicon_detector:User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral",
+        "component:layer_silicon_001:material_id=G4_Si",
+        "component:layer_silicon_001:Silicon layer for detector material study",
         "user_requirement:requirements.json:materials"
       ],
-      "open_issues": []
+      "open_issues": [],
+      "requires_confirmation": false,
+      "confirmed_by_user": false,
+      "confirmation_source": null
+    },
+    {
+      "material_id": "G4_WATER",
+      "name": "G4_WATER (NIST)",
+      "classification": "nist",
+      "nist_name": "G4_WATER",
+      "composition": null,
+      "density_g_cm3": 1.0,
+      "state": "solid",
+      "temperature_kelvin": null,
+      "source_evidence": [
+        "nist:G4_WATER",
+        "component:layer_water_001:material_id=G4_WATER",
+        "component:layer_water_001:Water phantom for proton therapy benchmark",
+        "user_requirement:requirements.json:materials"
+      ],
+      "open_issues": [],
+      "requires_confirmation": false,
+      "confirmed_by_user": false,
+      "confirmation_source": null
     }
   ],
   "sources": [
@@ -205,7 +359,7 @@
       "source_id": "primary_source",
       "particle_type": "proton",
       "energy": {
-        "value": 10.0,
+        "value": 150.0,
         "unit": "MeV",
         "distribution": "mono",
         "sigma": null,
@@ -215,7 +369,7 @@
         "position": [
           0.0,
           0.0,
-          -800.0
+          -400500.0
         ],
         "direction": [
           0.0,
@@ -233,30 +387,31 @@
       "events": 1000,
       "relative_weight": null,
       "source_evidence": [
-        "task_spec.particles[0]: source_id=primary_source, particle=proton, energy=10.0 MeV, distribution=mono, generator=gun, position=[0.0, 0.0, -800.0], direction=[0.0, 0.0, 1.0], angular_distribution=mono"
+        "task_spec.particles[0]: source_id=primary_source, particle=proton, energy=150.0 MeV, distribution=mono, generator=gun, position=[0.0, 0.0, -400500.0], direction=[0.0, 0.0, 1.0], angular_distribution=mono"
       ],
       "open_issues": []
     }
   ],
   "physics": {
-    "physics_list": "QGSP_BIC_HP",
-    "selection_reasoning": "User explicitly requested QGSP_BIC_HP for proton transport with high-precision neutron handling.",
+    "physics_list": "FTFP_BERT",
+    "selection_reasoning": "FTFP_BERT is recommended for proton therapy simulations up to 10 GeV, providing good accuracy for electromagnetic and hadronic interactions in the requested energy range.",
     "em_physics": "standard",
-    "hadronic": "binary_cascade",
+    "hadronic": "bertini",
     "decay": true,
     "cuts": {
       "gamma": 0.1,
       "e-": 0.1
     },
-    "hp_neutron": true,
+    "hp_neutron": false,
     "source_evidence": [
-      "User request: QGSP_BIC_HP physics list"
+      "Geant4 Physics Reference Manual",
+      "Proton therapy simulation best practices"
     ],
     "open_issues": []
   },
   "scoring": [
     {
-      "scoring_id": "silicon_detector_edep",
+      "scoring_id": "layer_water_001_edep",
       "scoring_type": "region",
       "quantities": [
         "edep_MeV"
@@ -264,18 +419,18 @@
       "voxel_grid": null,
       "region_scores": [
         {
-          "region_component_id": "silicon_detector",
+          "region_component_id": "layer_water_001",
           "quantity": "edep_MeV"
         }
       ],
       "output_format": "csv",
       "source_evidence": [
-        "Auto-generated: region edep scoring for silicon_detector"
+        "Auto-generated: region edep scoring for layer_water_001"
       ],
       "open_issues": []
     },
     {
-      "scoring_id": "silicon_detector_dose",
+      "scoring_id": "layer_water_001_dose",
       "scoring_type": "region",
       "quantities": [
         "dose_Gy"
@@ -283,34 +438,152 @@
       "voxel_grid": null,
       "region_scores": [
         {
-          "region_component_id": "silicon_detector",
+          "region_component_id": "layer_water_001",
           "quantity": "dose_Gy"
         }
       ],
       "output_format": "csv",
       "source_evidence": [
-        "Auto-generated: region dose scoring for silicon_detector"
+        "Auto-generated: region dose scoring for layer_water_001"
       ],
       "open_issues": []
     },
     {
-      "scoring_id": "silicon_detector_voxel_dose",
+      "scoring_id": "layer_aluminum_001_edep",
+      "scoring_type": "region",
+      "quantities": [
+        "edep_MeV"
+      ],
+      "voxel_grid": null,
+      "region_scores": [
+        {
+          "region_component_id": "layer_aluminum_001",
+          "quantity": "edep_MeV"
+        }
+      ],
+      "output_format": "csv",
+      "source_evidence": [
+        "Auto-generated: region edep scoring for layer_aluminum_001"
+      ],
+      "open_issues": []
+    },
+    {
+      "scoring_id": "layer_aluminum_001_dose",
+      "scoring_type": "region",
+      "quantities": [
+        "dose_Gy"
+      ],
+      "voxel_grid": null,
+      "region_scores": [
+        {
+          "region_component_id": "layer_aluminum_001",
+          "quantity": "dose_Gy"
+        }
+      ],
+      "output_format": "csv",
+      "source_evidence": [
+        "Auto-generated: region dose scoring for layer_aluminum_001"
+      ],
+      "open_issues": []
+    },
+    {
+      "scoring_id": "layer_silicon_001_edep",
+      "scoring_type": "region",
+      "quantities": [
+        "edep_MeV"
+      ],
+      "voxel_grid": null,
+      "region_scores": [
+        {
+          "region_component_id": "layer_silicon_001",
+          "quantity": "edep_MeV"
+        }
+      ],
+      "output_format": "csv",
+      "source_evidence": [
+        "Auto-generated: region edep scoring for layer_silicon_001"
+      ],
+      "open_issues": []
+    },
+    {
+      "scoring_id": "layer_silicon_001_dose",
+      "scoring_type": "region",
+      "quantities": [
+        "dose_Gy"
+      ],
+      "voxel_grid": null,
+      "region_scores": [
+        {
+          "region_component_id": "layer_silicon_001",
+          "quantity": "dose_Gy"
+        }
+      ],
+      "output_format": "csv",
+      "source_evidence": [
+        "Auto-generated: region dose scoring for layer_silicon_001"
+      ],
+      "open_issues": []
+    },
+    {
+      "scoring_id": "layer_water_001_voxel_dose",
       "scoring_type": "voxel",
       "quantities": [
         "dose_Gy"
       ],
       "voxel_grid": {
-        "target_component_id": "silicon_detector",
+        "target_component_id": "layer_water_001",
         "voxel_size": [
           1000.0,
           1000.0,
-          30.0
+          30000.0
         ]
       },
       "region_scores": [],
       "output_format": "csv",
       "source_evidence": [
-        "Auto-generated: voxel dose map for silicon_detector, voxel_size=[1000.0, 1000.0, 30.0] um"
+        "Auto-generated: voxel dose map for layer_water_001, voxel_size=[1000.0, 1000.0, 30000.0] um"
+      ],
+      "open_issues": []
+    },
+    {
+      "scoring_id": "layer_aluminum_001_voxel_dose",
+      "scoring_type": "voxel",
+      "quantities": [
+        "dose_Gy"
+      ],
+      "voxel_grid": {
+        "target_component_id": "layer_aluminum_001",
+        "voxel_size": [
+          1000.0,
+          1000.0,
+          5000.0
+        ]
+      },
+      "region_scores": [],
+      "output_format": "csv",
+      "source_evidence": [
+        "Auto-generated: voxel dose map for layer_aluminum_001, voxel_size=[1000.0, 1000.0, 5000.0] um"
+      ],
+      "open_issues": []
+    },
+    {
+      "scoring_id": "layer_silicon_001_voxel_dose",
+      "scoring_type": "voxel",
+      "quantities": [
+        "dose_Gy"
+      ],
+      "voxel_grid": {
+        "target_component_id": "layer_silicon_001",
+        "voxel_size": [
+          1000.0,
+          1000.0,
+          5000.0
+        ]
+      },
+      "region_scores": [],
+      "output_format": "csv",
+      "source_evidence": [
+        "Auto-generated: voxel dose map for layer_silicon_001, voxel_size=[1000.0, 1000.0, 5000.0] um"
       ],
       "open_issues": []
     },
@@ -325,7 +598,15 @@
       "voxel_grid": null,
       "region_scores": [
         {
-          "region_component_id": "silicon_detector",
+          "region_component_id": "layer_water_001",
+          "quantity": "edep_MeV"
+        },
+        {
+          "region_component_id": "layer_aluminum_001",
+          "quantity": "edep_MeV"
+        },
+        {
+          "region_component_id": "layer_silicon_001",
           "quantity": "edep_MeV"
         }
       ],
@@ -338,13 +619,117 @@
   ],
   "sensitive_detectors": [
     {
-      "sd_id": "silicon_detector_sd",
-      "name": "SiliconDetectorSdSensitiveDetector",
+      "sd_id": "layer_water_001_sd",
+      "name": "LayerWater001SdSensitiveDetector",
       "linked_component_ids": [
-        "silicon_detector"
+        "layer_water_001"
       ],
       "scoring_ids": [],
-      "collection_name": "silicon_detector_Hits",
+      "collection_name": "layer_water_001_Hits",
+      "hit_fields": [
+        {
+          "name": "event_id",
+          "dtype": "int",
+          "unit": null
+        },
+        {
+          "name": "track_id",
+          "dtype": "int",
+          "unit": null
+        },
+        {
+          "name": "particle",
+          "dtype": "int",
+          "unit": "G4ParticleDefinition PDG encoding"
+        },
+        {
+          "name": "edep_MeV",
+          "dtype": "float",
+          "unit": "MeV"
+        },
+        {
+          "name": "x_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "y_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "z_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "time_s",
+          "dtype": "float",
+          "unit": "s"
+        }
+      ],
+      "open_issues": []
+    },
+    {
+      "sd_id": "layer_aluminum_001_sd",
+      "name": "LayerAluminum001SdSensitiveDetector",
+      "linked_component_ids": [
+        "layer_aluminum_001"
+      ],
+      "scoring_ids": [],
+      "collection_name": "layer_aluminum_001_Hits",
+      "hit_fields": [
+        {
+          "name": "event_id",
+          "dtype": "int",
+          "unit": null
+        },
+        {
+          "name": "track_id",
+          "dtype": "int",
+          "unit": null
+        },
+        {
+          "name": "particle",
+          "dtype": "int",
+          "unit": "G4ParticleDefinition PDG encoding"
+        },
+        {
+          "name": "edep_MeV",
+          "dtype": "float",
+          "unit": "MeV"
+        },
+        {
+          "name": "x_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "y_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "z_um",
+          "dtype": "float",
+          "unit": "um"
+        },
+        {
+          "name": "time_s",
+          "dtype": "float",
+          "unit": "s"
+        }
+      ],
+      "open_issues": []
+    },
+    {
+      "sd_id": "layer_silicon_001_sd",
+      "name": "LayerSilicon001SdSensitiveDetector",
+      "linked_component_ids": [
+        "layer_silicon_001"
+      ],
+      "scoring_ids": [],
+      "collection_name": "layer_silicon_001_Hits",
       "hit_fields": [
         {
           "name": "event_id",
@@ -394,10 +779,10 @@
     "schema_version": "construction_ledger_v1",
     "steps": [
       {
-        "timestamp": "2026-06-12T12:19:36.233328+00:00",
+        "timestamp": "2026-06-15T23:08:55.190971+00:00",
         "node_name": "requirement_capture_node",
         "action": "create",
-        "target_id": "mir_job_919509e8__20260612_201928",
+        "target_id": "mir_job_5574e228__20260616_070817",
         "description": "Initialized G4ModelIR skeleton",
         "evidence_refs": [],
         "modified_fields": [
@@ -408,11 +793,11 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.344030+00:00",
+        "timestamp": "2026-06-15T23:09:36.778303+00:00",
         "node_name": "requirement_capture_node",
         "action": "modify",
-        "target_id": "mir_job_919509e8__20260612_201928",
-        "description": "Captured draft: 2 components, physics=QGSP_BIC_HP",
+        "target_id": "mir_job_5574e228__20260616_070817",
+        "description": "Captured draft: 4 components, physics=FTFP_BERT",
         "evidence_refs": [],
         "modified_fields": [
           "target_system",
@@ -423,10 +808,10 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.344811+00:00",
+        "timestamp": "2026-06-15T23:09:36.779109+00:00",
         "node_name": "evidence_retrieval_node",
         "action": "modify",
-        "target_id": "mir_job_919509e8__20260612_201928",
+        "target_id": "mir_job_5574e228__20260616_070817",
         "description": "Organized evidence: geometry=1, materials=1, source=1, physics=2, scoring=1",
         "evidence_refs": [],
         "modified_fields": [
@@ -435,10 +820,10 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.345281+00:00",
+        "timestamp": "2026-06-15T23:09:36.779604+00:00",
         "node_name": "model_scope_guard_node",
         "action": "validate",
-        "target_id": "mir_job_919509e8__20260612_201928",
+        "target_id": "mir_job_5574e228__20260616_070817",
         "description": "Scope guard result: proceed_with_warnings",
         "evidence_refs": [],
         "modified_fields": [],
@@ -447,11 +832,11 @@
         ]
       },
       {
-        "timestamp": "2026-06-12T12:19:44.346195+00:00",
+        "timestamp": "2026-06-15T23:09:36.780477+00:00",
         "node_name": "geometry_decomposition_node",
         "action": "create",
-        "target_id": "mir_job_919509e8__20260612_201928",
-        "description": "Normalized draft components, 2 components, 1 interfaces",
+        "target_id": "mir_job_5574e228__20260616_070817",
+        "description": "Normalized draft components, 4 components, 3 interfaces",
         "evidence_refs": [],
         "modified_fields": [
           "components",
@@ -460,10 +845,10 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.346756+00:00",
+        "timestamp": "2026-06-15T23:09:36.781203+00:00",
         "node_name": "coordinate_system_node",
         "action": "modify",
-        "target_id": "mir_job_919509e8__20260612_201928",
+        "target_id": "mir_job_5574e228__20260616_070817",
         "description": "Set coordinate system: cartesian, origin=world_center",
         "evidence_refs": [],
         "modified_fields": [
@@ -473,11 +858,11 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.347143+00:00",
+        "timestamp": "2026-06-15T23:09:36.781702+00:00",
         "node_name": "material_definition_node",
         "action": "create",
-        "target_id": "mir_job_919509e8__20260612_201928",
-        "description": "Defined 2 materials: ['G4_AIR', 'G4_Si']",
+        "target_id": "mir_job_5574e228__20260616_070817",
+        "description": "Defined 4 materials: ['G4_Al', 'G4_Galactic', 'G4_Si', 'G4_WATER']",
         "evidence_refs": [],
         "modified_fields": [
           "materials"
@@ -485,11 +870,11 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.347646+00:00",
+        "timestamp": "2026-06-15T23:09:36.782334+00:00",
         "node_name": "source_definition_node",
         "action": "create",
         "target_id": "sources",
-        "description": "Configured 1 source(s): primary_source:proton 10.0 MeV mono/gun",
+        "description": "Configured 1 source(s): primary_source:proton 150.0 MeV mono/gun",
         "evidence_refs": [],
         "modified_fields": [
           "sources"
@@ -497,21 +882,21 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.347963+00:00",
+        "timestamp": "2026-06-15T23:09:36.783799+00:00",
         "node_name": "physics_list_node",
         "action": "validate",
         "target_id": "physics",
-        "description": "Preserved drafted physics list: QGSP_BIC_HP",
+        "description": "Preserved drafted physics list: FTFP_BERT",
         "evidence_refs": [],
         "modified_fields": [],
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.349157+00:00",
+        "timestamp": "2026-06-15T23:09:36.784168+00:00",
         "node_name": "sensitive_detector_node",
         "action": "create",
         "target_id": "sensitive_detectors",
-        "description": "Created 1 sensitive detectors for: ['silicon_detector']",
+        "description": "Created 3 sensitive detectors for: ['layer_water_001', 'layer_aluminum_001', 'layer_silicon_001']",
         "evidence_refs": [],
         "modified_fields": [
           "sensitive_detectors"
@@ -519,11 +904,11 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.349562+00:00",
+        "timestamp": "2026-06-15T23:09:36.784632+00:00",
         "node_name": "scoring_design_node",
         "action": "create",
         "target_id": "scoring",
-        "description": "Created 4 scoring configurations: ['silicon_detector_edep', 'silicon_detector_dose', 'silicon_detector_voxel_dose', 'event_table']",
+        "description": "Created 10 scoring configurations: ['layer_water_001_edep', 'layer_water_001_dose', 'layer_aluminum_001_edep', 'layer_aluminum_001_dose', 'layer_silicon_001_edep', 'layer_silicon_001_dose', 'layer_water_001_voxel_dose', 'layer_aluminum_001_voxel_dose', 'layer_silicon_001_voxel_dose', 'event_table']",
         "evidence_refs": [],
         "modified_fields": [
           "scoring"
@@ -531,21 +916,21 @@
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.350879+00:00",
+        "timestamp": "2026-06-15T23:09:36.785177+00:00",
         "node_name": "model_ir_validation_node",
         "action": "validate",
-        "target_id": "mir_job_919509e8__20260612_201928",
+        "target_id": "mir_job_5574e228__20260616_070817",
         "description": "Ran 7 validators: 7 passed, 0 errors",
         "evidence_refs": [],
         "modified_fields": [],
         "warnings": []
       },
       {
-        "timestamp": "2026-06-12T12:19:44.351838+00:00",
+        "timestamp": "2026-06-15T23:09:36.786382+00:00",
         "node_name": "model_review_report_node",
         "action": "create",
         "target_id": "model_review",
-        "description": "Generated model review report (55 sections, 2648 chars)",
+        "description": "Generated model review report (69 sections, 3733 chars)",
         "evidence_refs": [],
         "modified_fields": [],
         "warnings": []
@@ -553,7 +938,9 @@
     ]
   },
   "open_issues": [
-    "Source position not specified; assumed at z = -5 mm (world boundary) for vertical incidence."
+    "Material thicknesses need confirmation for 150 MeV proton range",
+    "Scoring bin size not specified",
+    "Step limiter settings not specified"
   ],
   "human_confirmation": {},
   "confirmed_fields": [],

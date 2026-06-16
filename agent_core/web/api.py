@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.tui.commands import CommandParseError, command_suggestions, parse_command
 
 
@@ -21,6 +22,7 @@ PANEL_COMMANDS: dict[str, str] = {
     "revisions": "revisions",
     "confirm": "confirmation",
     "credibility": "credibility",
+    "diagnose": "diagnosis",
     "memory": "memory",
     "help": "help",
     "options": "options",
@@ -35,11 +37,13 @@ _REQUIRED_COMMANDS: dict[str, str] = {
     "chat": "Ask RadAgent directly",
     "confirm": "Open confirmation review",
     "credibility": "Open credibility report",
+    "diagnose": "Explain current workflow block",
     "exit": "Exit the workbench",
     "gates": "Open gate results",
     "logs": "Open service event log",
     "memory": "Open workflow memory",
     "model": "View or update model settings",
+    "model-health": "Test model API health and latency",
     "options": "Open workbench options",
     "project": "Switch project",
     "projects": "List projects",
@@ -48,8 +52,6 @@ _REQUIRED_COMMANDS: dict[str, str] = {
     "revision": "Open one revision",
     "simulate": "Run the generated simulator",
     "step": "Run the next pipeline phase",
-    "visual-approve": "Approve G4 visual review",
-    "visual-reject": "Reject G4 visual review",
 }
 
 _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
@@ -63,7 +65,7 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "module": "human_confirmation",
         "connection": "service",
         "visible": True,
-        "tip": "Approve the active human-confirmation gate and continue the job.",
+        "tip": "Approve the active human-confirmation gate without blocking the web request.",
     },
     "check": {
         "module": "runtime/tools",
@@ -147,7 +149,7 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "module": "job_control",
         "connection": "service",
         "visible": True,
-        "tip": "Resume a saved job and continue running until the next block.",
+        "tip": "Retry the active job stage, or retry a saved job when a job id is provided.",
     },
     "revise": {
         "module": "revision",
@@ -191,6 +193,12 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "visible": True,
         "tip": "Inspect credibility gate status, confidence, and warnings.",
     },
+    "diagnose": {
+        "module": "workflow/diagnosis",
+        "connection": "service",
+        "visible": True,
+        "tip": "Use a lite model to explain why the workflow is blocked while hard rules keep permissions deterministic.",
+    },
     "exit": {
         "module": "client/navigation",
         "connection": "client",
@@ -220,6 +228,12 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "connection": "service",
         "visible": True,
         "tip": "View or update model endpoint and tier settings without exposing secrets.",
+    },
+    "model-health": {
+        "module": "model_config/health",
+        "connection": "service",
+        "visible": True,
+        "tip": "Run a small model API request and report status plus latency.",
     },
     "options": {
         "module": "client/options",
@@ -274,24 +288,6 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "connection": "service",
         "visible": True,
         "tip": "Run the built simulator for a chosen event count.",
-    },
-    "visual-approve": {
-        "module": "visual_review",
-        "connection": "service",
-        "visible": True,
-        "tip": "Approve the Geant4 visual review gate.",
-    },
-    "visual-reject": {
-        "module": "visual_review",
-        "connection": "service",
-        "visible": True,
-        "tip": "Reject the Geant4 visual review gate with notes.",
-    },
-    "workbench": {
-        "module": "visual_workbench",
-        "connection": "service",
-        "visible": True,
-        "tip": "Prepare and optionally launch the Geant4 visualization workbench.",
     },
     "step": {
         "module": "pipeline",
@@ -555,6 +551,61 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+def _should_continue_after_approval(value: Any) -> bool:
+    status = _as_dict(value)
+    if str(status.get("status") or "").lower() == "failed":
+        return False
+    state = _as_dict(status.get("state"))
+    if state.get("termination_reason"):
+        return False
+    try:
+        current_idx = int(status.get("current_phase_idx", 0))
+    except (TypeError, ValueError):
+        return True
+    return current_idx <= PIPELINE_PHASES.index("g4_codegen")
+
+
+def _has_pending_repair_continuation(service: Any) -> bool:
+    checker = getattr(service, "_is_repair_continuation_pending", None)
+    if callable(checker):
+        try:
+            return bool(checker())
+        except Exception:
+            pass
+    state = _as_dict(getattr(service, "state", {}))
+    if state:
+        request = _as_dict(state.get("repair_continuation_request"))
+        return (
+            request.get("status") == "pending"
+            and state.get("repair_continuation_status") not in {"approved", "rejected"}
+        )
+    return False
+
+
+def _approval_continue_reason(value: Any) -> str:
+    status = _as_dict(value)
+    state = _as_dict(status.get("state"))
+    if state.get("repair_continuation_status") == "approved":
+        return "repair_continuation_approved"
+    return "human_confirmation_approved"
+
+
+def _active_job_id(service: Any) -> str:
+    state = _as_dict(getattr(service, "state", {}))
+    job_id = _text(state.get("job_id"))
+    if job_id:
+        return job_id
+    try:
+        status = _as_dict(service.get_status())
+    except Exception:
+        return ""
+    return _text(status.get("job_id"))
+
+
+def _command_job_id_or_active(service: Any, args: str) -> str:
+    return _text(args) or _active_job_id(service)
+
+
 async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
     """Dispatch one web composer command through the UI-neutral app service."""
     try:
@@ -606,32 +657,45 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                 data = service.get_gate_results(None)
                 view = "gates"
             case "approve":
-                data = await _maybe_await(
-                    service.submit_confirmation(
-                        {"user_decision": "approve", "feedback": "approve"},
-                        auto_continue=True,
+                response = {"user_decision": "approve", "feedback": "approve"}
+                if _has_pending_repair_continuation(service):
+                    data = await _maybe_await(
+                        service.submit_repair_continuation(response, auto_continue=False)
                     )
-                )
+                else:
+                    data = await _maybe_await(
+                        service.submit_confirmation(response, auto_continue=False)
+                    )
+                if _should_continue_after_approval(data):
+                    service.continue_in_background(reason=_approval_continue_reason(data))
                 view = "status"
             case "confirm":
                 if command.args.strip().lower() in {"approve", "approved", "yes", "y", "确认", "同意"}:
-                    data = await _maybe_await(
-                        service.submit_confirmation(
-                            {"user_decision": "approve", "feedback": command.args},
-                            auto_continue=True,
+                    response = {"user_decision": "approve", "feedback": command.args}
+                    if _has_pending_repair_continuation(service):
+                        data = await _maybe_await(
+                            service.submit_repair_continuation(response, auto_continue=False)
                         )
-                    )
+                    else:
+                        data = await _maybe_await(
+                            service.submit_confirmation(response, auto_continue=False)
+                        )
+                    if _should_continue_after_approval(data):
+                        service.continue_in_background(reason=_approval_continue_reason(data))
                     view = "status"
                 else:
-                    data = service.get_confirmation_review(None)
+                    data = service.get_confirmation_review(_text(command.args) or None)
                     view = "confirmation"
             case "reject":
-                data = await _maybe_await(
-                    service.submit_confirmation(
-                        {"user_decision": "reject", "feedback": command.args},
-                        auto_continue=False,
+                response = {"user_decision": "reject", "feedback": command.args}
+                if _has_pending_repair_continuation(service):
+                    data = await _maybe_await(
+                        service.submit_repair_continuation(response, auto_continue=False)
                     )
-                )
+                else:
+                    data = await _maybe_await(
+                        service.submit_confirmation(response, auto_continue=False)
+                    )
                 view = "status"
             case "ask-more":
                 data = await _maybe_await(
@@ -644,6 +708,9 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
             case "credibility":
                 data = service.get_credibility_report(None)
                 view = "credibility"
+            case "diagnose":
+                data = await _maybe_await(service.get_workflow_diagnosis(None))
+                view = "diagnosis"
             case "logs":
                 data = service.recent_events(80)
                 view = "logs"
@@ -653,6 +720,9 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
             case "model":
                 data = service.get_model_config()
                 view = "model"
+            case "model-health":
+                data = await _maybe_await(service.test_model_health())
+                view = "model-health"
             case "project":
                 data = service.set_current_project(command.args)
                 view = "projects"
@@ -725,11 +795,27 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                 data = {"message": "Use the Home button or close the browser tab to leave the workbench."}
                 view = "exit"
             case "resume":
-                data = service.resume_job(command.args)
+                job_id = _command_job_id_or_active(service, command.args)
+                if not job_id:
+                    return {
+                        "ok": False,
+                        "command": command.name,
+                        "error": "No active job to resume.",
+                        "view": "jobs",
+                    }
+                data = service.resume_job(job_id)
                 view = "status"
             case "retry":
-                service.resume_job(command.args)
-                data = await _maybe_await(service.run_until_blocked())
+                job_id = _command_job_id_or_active(service, command.args)
+                if not job_id:
+                    return {
+                        "ok": False,
+                        "command": command.name,
+                        "error": "No active job to retry.",
+                        "view": "jobs",
+                    }
+                data = service.resume_job(job_id, clear_failure=True)
+                service.continue_in_background(reason="retry")
                 view = "status"
             case "build":
                 try:
@@ -758,28 +844,6 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
             case "step":
                 data = await _maybe_await(service.step())
                 view = "status"
-            case "workbench":
-                events = int(command.args) if command.args else 100
-                try:
-                    data = await _maybe_await(
-                        service.prepare_visualization_workbench(events=events, launch=True)
-                    )
-                except Exception as exc:
-                    data = {
-                        "success": False,
-                        "events": events,
-                        "launched": False,
-                        "executable": "",
-                        "working_dir": "",
-                        "errors": str(exc),
-                    }
-                view = "workbench"
-            case "visual-approve":
-                data = service.record_visual_verdict(approved=True)
-                view = "visual-review"
-            case "visual-reject":
-                data = service.record_visual_verdict(approved=False, notes=command.args)
-                view = "visual-review"
             case _ if command.name in PANEL_COMMANDS:
                 data = {"panel": PANEL_COMMANDS[command.name], "args": command.args}
                 view = PANEL_COMMANDS[command.name]

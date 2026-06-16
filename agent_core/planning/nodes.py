@@ -43,6 +43,13 @@ _TCAD_KEYWORDS = [
     "技术计算机辅助设计",
     "半导体器件仿真",
     "器件仿真",
+    "mosfet",
+    "nmos",
+    "pmos",
+    "finfet",
+    "晶体管",
+    "阈值",
+    "阈值漂移",
 ]
 _SPICE_KEYWORDS = [
     "spice",
@@ -88,13 +95,47 @@ _MATERIAL_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("germanium", "Germanium"),
     ("water", "Water"),
 )
+_PARTICLE_KEYWORDS: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
+    (("neutron", "neutrons", "中子"), {"type": "neutron", "pdg_code": 2112}),
+    (("muon", "muons", "缪子"), {"type": "mu-", "pdg_code": 13}),
+    (("proton", "protons", "质子"), {"type": "proton", "pdg_code": 2212}),
+    (("gamma", "gammas", "γ", "伽马"), {"type": "gamma", "pdg_code": 22}),
+    (("electron", "electrons", "e-", "电子"), {"type": "electron", "pdg_code": 11}),
+)
 _OUTPUT_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("edep_3d", "energy deposition map"), "energy_deposition_map"),
     (("total energy deposition", "energy deposition", "edep"), "energy_deposition"),
-    (("dose_3d", "dose map", "dose distribution"), "dose_distribution"),
+    (("dose_3d", "dose map", "dose distribution", "detector dose", "dose"), "dose_distribution"),
+    (("leakage", "flux", "fluence"), "particle_flux"),
+    (("spectrum", "histogram"), "energy_spectrum"),
     (("event_table", "per event", "event data"), "event_data"),
     (("hit", "hits"), "hit_data"),
 )
+
+_DEVICE_TID_KEYWORDS = (
+    "mosfet",
+    "nmos",
+    "pmos",
+    "finfet",
+    "晶体管",
+)
+_TID_KEYWORDS = ("tid", "total ionizing dose", "总剂量", "阈值漂移")
+_EXPLICIT_GEANT4_DOSIMETRY_MARKERS = (
+    "geant4",
+    "g4",
+    "energy deposition",
+    "edep",
+    "dose",
+    "剂量沉积",
+    "能量沉积",
+)
+_MOSFET_TID_MISSING = [
+    "MOSFET geometry and dimensions",
+    "gate oxide thickness and material stack",
+    "radiation source particle, energy or spectrum, and fluence or dose",
+    "TID observable: oxide dose only or electrical response such as threshold shift",
+    "whether to run Geant4 dose scoring, TCAD device simulation, or a coupled workflow",
+]
 
 
 def detect_scope(query: str) -> list[str]:
@@ -105,6 +146,9 @@ def detect_scope(query: str) -> list[str]:
     """
     q = query.lower()
     scope: list[str] = []
+
+    if _is_ambiguous_device_tid_request(q):
+        return ["tcad"]
 
     if any(k in q for k in _GEANT4_KEYWORDS):
         scope.append("geant4")
@@ -165,29 +209,62 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
     # Determine simulation scope from query using keyword detection
     scope = detect_scope(user_query)
     query_lower = user_query.lower()
-
-    # Parse particle info
-    particle: dict[str, Any] = {}
-    if "proton" in query_lower or "质子" in user_query:
-        particle = {"type": "proton", "pdg_code": 2212}
-    elif "gamma" in query_lower or "gamma" in query_lower:
-        particle = {"type": "gamma", "pdg_code": 22}
-    elif "electron" in query_lower or "电子" in user_query:
-        particle = {"type": "electron", "pdg_code": 11}
+    if _is_ambiguous_device_tid_request(query_lower):
+        clarification = _device_tid_clarification_request()
+        task_spec = {
+            "job_id": job_id,
+            "user_query": user_query,
+            "simulation_scope": scope,
+            "modeling_mode": "realistic",
+            "metadata": {
+                "clarification_required": "true",
+                "clarification_reason": clarification["reason"],
+            },
+            "clarification_request": clarification,
+        }
+        return {
+            "task_spec": task_spec,
+            "task_spec_errors": [
+                "MOSFET/TID request needs user clarification before code generation."
+            ],
+            "simulation_scope": scope,
+            "clarification_request": clarification,
+            "task_planning_status": "needs_user_input",
+            "termination_reason": clarification["message"],
+            "current_node": "parse_task",
+        }
 
     energy_value, energy_unit = _parse_energy(user_query)
     events = _parse_events(user_query)
     target = _parse_target(user_query)
     outputs = _parse_outputs(user_query)
     metadata: dict[str, str] = {}
+    model_plan: dict[str, Any] = {}
+
+    # Parse particle info. Use explicit transport particle mentions before
+    # secondary products so a neutron shielding task is not misclassified as
+    # gamma just because it asks for secondary-gamma scoring.
+    particle = _detect_particle(query_lower)
+    if not particle:
+        model_plan = await _model_assisted_task_plan(user_query, job_id)
+        particle = _normalize_model_particle(
+            model_plan.get("particle"),
+            fallback_energy=energy_value,
+            fallback_unit=energy_unit,
+        )
+        outputs = _merge_outputs(outputs, _normalize_model_outputs(model_plan.get("outputs")))
+        if not target:
+            target = _normalize_model_target(model_plan.get("target"))
+        if model_plan:
+            metadata["model_assisted_task_planning"] = "true"
 
     if particle:
         particle = {
             **particle,
-            "energy_MeV": energy_value,
-            "energy_unit": energy_unit,
-            "energy_distribution": "mono",
-            "direction": [0.0, 0.0, 1.0],
+            "energy_MeV": particle.get("energy_MeV", energy_value),
+            "energy_unit": particle.get("energy_unit", energy_unit),
+            "energy_distribution": particle.get("energy_distribution", "mono"),
+            "direction": particle.get("direction", [0.0, 0.0, 1.0]),
         }
         if events is not None:
             particle["events"] = events
@@ -256,6 +333,194 @@ def _canonical_energy_unit(unit: str) -> str:
     if lowered == "ev":
         return "eV"
     return "MeV"
+
+
+def _detect_particle(query_lower: str) -> dict[str, Any]:
+    for keywords, particle in _PARTICLE_KEYWORDS:
+        if any(keyword in query_lower for keyword in keywords):
+            result = dict(particle)
+            if result["type"] == "mu-" and "cosmic" in query_lower:
+                result["angular_distribution"] = "cosine"
+                result["generator_type"] = "gps"
+                result["direction"] = [0.0, 0.0, -1.0]
+            return result
+    return {}
+
+
+async def _model_assisted_task_plan(user_query: str, job_id: str) -> dict[str, Any]:
+    """Ask the model for structured planning only when rules are insufficient."""
+    try:
+        from agent_core.models.gateway import get_model_gateway
+        from agent_core.models.schemas import ModelTask, ModelTier
+
+        gateway = get_model_gateway()
+        result = await gateway.call(
+            task=ModelTask.TASK_PLANNING,
+            tier=ModelTier.PRO,
+            system_prompt=(
+                "Extract simulation planning facts as JSON. Never invent a particle, "
+                "energy, geometry, material, or source when the user did not provide "
+                "one. Return JSON with optional keys particle, target, outputs, "
+                "missing, ask_user, assumptions. Use particle only when the request "
+                "explicitly states a transport particle or enough source context. "
+                "outputs must be stable snake_case names such as energy_deposition, "
+                "dose_distribution, particle_flux, hit_data, energy_spectrum, "
+                "event_data."
+            ),
+            user_prompt=user_query,
+            response_format="json",
+            temperature=0.0,
+            max_tokens=900,
+            metadata={
+                "job_id": job_id,
+                "module_name": "task_planning_model_assist",
+            },
+        )
+        data = result.parsed_json
+        return dict(data) if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _is_ambiguous_device_tid_request(query_lower: str) -> bool:
+    has_device = any(keyword in query_lower for keyword in _DEVICE_TID_KEYWORDS)
+    has_tid = any(keyword in query_lower for keyword in _TID_KEYWORDS)
+    has_geant4_dose_only = (
+        ("geant4" in query_lower or "g4" in query_lower)
+        and any(marker in query_lower for marker in _EXPLICIT_GEANT4_DOSIMETRY_MARKERS)
+        and not any(marker in query_lower for marker in ("阈值", "threshold", "电学"))
+    )
+    return has_device and has_tid and not has_geant4_dose_only
+
+
+def _device_tid_clarification_request() -> dict[str, Any]:
+    return {
+        "reason": "ambiguous_device_tid",
+        "message": (
+            "MOSFET TID can mean Geant4 oxide-dose scoring, TCAD electrical "
+            "response, or a coupled workflow. The workflow needs clarification "
+            "before generating code."
+        ),
+        "missing_information": list(_MOSFET_TID_MISSING),
+        "questions": [
+            {
+                "id": "workflow_scope",
+                "question": (
+                    "Should this run Geant4 dose scoring only, TCAD electrical "
+                    "response, or a coupled Geant4-to-TCAD workflow?"
+                ),
+            },
+            {
+                "id": "source_definition",
+                "question": (
+                    "What radiation source should be used: particle type, energy "
+                    "or spectrum, fluence or dose, and incidence geometry?"
+                ),
+            },
+            {
+                "id": "device_geometry",
+                "question": (
+                    "What MOSFET structure should be modeled: oxide thickness, "
+                    "channel dimensions, material stack, doping, contacts, and bias?"
+                ),
+            },
+        ],
+    }
+
+
+def _normalize_model_particle(
+    value: Any,
+    *,
+    fallback_energy: float,
+    fallback_unit: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    particle_type = str(value.get("type") or "").strip()
+    if not particle_type:
+        return {}
+    unit = _canonical_energy_unit(str(value.get("energy_unit") or fallback_unit))
+    energy = _optional_positive_float(value.get("energy_MeV"), fallback_energy)
+    particle: dict[str, Any] = {
+        "type": particle_type,
+        "energy_MeV": energy,
+        "energy_unit": unit,
+        "energy_distribution": str(value.get("energy_distribution") or "mono"),
+        "direction": _normal_direction(value.get("direction")),
+    }
+    pdg = _optional_int(value.get("pdg_code"))
+    if pdg is not None:
+        particle["pdg_code"] = pdg
+    angular = str(value.get("angular_distribution") or "").strip()
+    if angular in {"mono", "gaussian", "isotropic", "cosine", "custom"}:
+        particle["angular_distribution"] = angular
+    generator = str(value.get("generator_type") or "").strip()
+    if generator in {"gun", "gps"}:
+        particle["generator_type"] = generator
+    return particle
+
+
+def _normalize_model_outputs(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    outputs: list[str] = []
+    for item in value:
+        text = str(item or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if text and text not in outputs:
+            outputs.append(text)
+    return outputs
+
+
+def _merge_outputs(base: list[str], extra: list[str]) -> list[str]:
+    result = list(base)
+    for output in extra:
+        if output not in result:
+            result.append(output)
+    return result
+
+
+def _normalize_model_target(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    material = str(value.get("material") or "").strip()
+    if not material:
+        return None
+    target: dict[str, Any] = {
+        "material": material,
+        "geometry_type": str(value.get("geometry_type") or "box"),
+    }
+    size = value.get("size_um")
+    if isinstance(size, list) and len(size) == 3:
+        parsed = [_optional_positive_float(item, 0.0) for item in size]
+        if all(item > 0 for item in parsed):
+            target["size_um"] = parsed
+    return target
+
+
+def _optional_positive_float(value: Any, fallback: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if parsed > 0 else fallback
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normal_direction(value: Any) -> list[float]:
+    if isinstance(value, list) and len(value) == 3:
+        try:
+            parsed = [float(item) for item in value]
+        except (TypeError, ValueError):
+            return [0.0, 0.0, 1.0]
+        if any(item != 0.0 for item in parsed):
+            return parsed
+    return [0.0, 0.0, 1.0]
 
 
 def _parse_events(user_query: str) -> int | None:
@@ -410,6 +675,17 @@ async def validate_task_spec(state: TaskPlanningState) -> dict[str, Any]:
     """
     task_spec = state.get("task_spec", {})
     errors = list(state.get("task_spec_errors", []))
+    if state.get("task_planning_status") == "needs_user_input" or task_spec.get(
+        "clarification_request"
+    ):
+        return {
+            "task_spec_errors": errors,
+            "task_planning_status": "needs_user_input",
+            "clarification_request": task_spec.get(
+                "clarification_request", state.get("clarification_request", {})
+            ),
+            "termination_reason": state.get("termination_reason", ""),
+        }
 
     if not task_spec.get("simulation_scope"):
         errors.append("No simulation scope determined")
@@ -456,4 +732,8 @@ async def save_task_spec(state: TaskPlanningState) -> dict[str, Any]:
 
     return {
         "task_spec_path": str(ts_path),
+        "task_spec_errors": list(state.get("task_spec_errors", [])),
+        "task_planning_status": state.get("task_planning_status", ""),
+        "clarification_request": state.get("clarification_request", {}),
+        "termination_reason": state.get("termination_reason", ""),
     }

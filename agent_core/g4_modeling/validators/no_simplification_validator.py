@@ -258,7 +258,7 @@ def _required_complex_patterns(target_lower: str) -> list[tuple[str, set[str]]]:
     required: list[tuple[str, set[str]]] = []
     if any(kw in target_lower for kw in ("detector", "sensor", "radiation", "rad-hard")):
         required.append(("sensitive", by_category["sensitive"]))
-    if any(kw in target_lower for kw in ("layer", "stack", "oxide", "insulator")):
+    if _requires_oxide_component(target_lower):
         required.append(("oxide", by_category["oxide"]))
     if any(kw in target_lower for kw in ("shield", "housing", "enclosure", "module")):
         required.append(("housing", by_category["housing"]))
@@ -267,6 +267,24 @@ def _required_complex_patterns(target_lower: str) -> list[tuple[str, set[str]]]:
     if any(kw in target_lower for kw in ("electrode", "contact", "pixel", "strip")):
         required.append(("electrode", by_category["electrode"]))
     return required
+
+
+def _requires_oxide_component(target_lower: str) -> bool:
+    """Return whether the request explicitly implies a semiconductor oxide/insulator."""
+    return any(
+        kw in target_lower
+        for kw in (
+            "oxide",
+            "sio2",
+            "insulator",
+            "gate stack",
+            "gate_oxide",
+            "gate oxide",
+            "mos",
+            "cmos",
+            "semiconductor stack",
+        )
+    )
 
 
 def _requires_multi_component_model(target_lower: str) -> bool:

@@ -261,49 +261,107 @@ def _load_persisted_module_results(job_id: str) -> dict[str, Any]:
 
 
 def _summarize_file(module_name: str, path: str, content: str) -> dict[str, Any]:
-    classes = re.findall(r"\bclass\s+([A-Za-z_]\w*)", content)
-    public_methods = _extract_public_methods(content)
-    constructors = _extract_constructor_signatures(content, classes)
+    comment_free = _strip_cpp_comments(content)
+    classes = re.findall(r"\bclass\s+([A-Za-z_]\w*)", comment_free)
+    public_method_signatures = _extract_public_method_signatures(comment_free, classes)
+    public_methods = _method_names_from_signatures(public_method_signatures)
+    constructors = _extract_constructor_signatures(comment_free, classes)
     includes = re.findall(r'#include\s+[<"]([^>"]+)[>"]', content)
     return {
         "module_name": module_name,
         "path": path,
         "classes": sorted(set(classes)),
         "public_methods": public_methods,
+        "public_method_signatures": public_method_signatures,
         "constructor_signatures": constructors,
         "includes": sorted(set(includes)),
         "provided_symbols": sorted(set(classes + public_methods)),
     }
 
 
-def _extract_public_methods(content: str) -> list[str]:
-    methods: list[str] = []
-    public_blocks = re.findall(
+def _strip_cpp_comments(content: str) -> str:
+    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+    return re.sub(r"//.*", "", content)
+
+
+def _public_blocks(content: str) -> list[str]:
+    return re.findall(
         r"\bpublic:\s*(.*?)(?=\bprivate:|\bprotected:|\n};|$)",
         content,
         re.DOTALL,
     )
-    for block in public_blocks:
-        for match in re.finditer(r"(?:~?[A-Za-z_]\w*|operator\s+\w+)\s*\(", block):
-            name = match.group(0).split("(", 1)[0].strip()
-            if name not in {"if", "for", "while", "switch", "return"}:
-                methods.append(name)
-    return sorted(set(methods))
+
+
+def _extract_public_methods(content: str) -> list[str]:
+    classes = re.findall(r"\bclass\s+([A-Za-z_]\w*)", content)
+    return _method_names_from_signatures(
+        _extract_public_method_signatures(_strip_cpp_comments(content), classes)
+    )
+
+
+def _extract_public_method_signatures(content: str, classes: list[str]) -> list[str]:
+    signatures: list[str] = []
+    class_names = set(classes)
+    for block in _public_blocks(content):
+        for declaration in _public_declarations(block):
+            signature = re.sub(r"\s+", " ", declaration).strip().rstrip(";")
+            if "(" not in signature or ")" not in signature:
+                continue
+            if (
+                "operator" in signature
+                or signature.endswith("= delete")
+                or signature.endswith("= default")
+            ):
+                continue
+            name = _method_name_from_signature(signature)
+            if not name or name in {"if", "for", "while", "switch", "return"}:
+                continue
+            if name.lstrip("~") in class_names:
+                continue
+            signatures.append(signature)
+    return sorted(set(signatures))
+
+
+def _public_declarations(block: str) -> list[str]:
+    declarations: list[str] = []
+    current: list[str] = []
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        current.append(line)
+        joined = " ".join(current)
+        if ";" in line:
+            declarations.append(joined.split(";", 1)[0] + ";")
+            current = []
+    return declarations
+
+
+def _method_names_from_signatures(signatures: list[str]) -> list[str]:
+    return sorted(
+        {
+            name
+            for signature in signatures
+            if (name := _method_name_from_signature(signature))
+        }
+    )
+
+
+def _method_name_from_signature(signature: str) -> str:
+    before_args = signature.split("(", 1)[0].strip()
+    if not before_args:
+        return ""
+    return before_args.split()[-1].strip("*&")
 
 
 def _extract_constructor_signatures(content: str, classes: list[str]) -> list[str]:
     signatures: list[str] = []
-    public_blocks = re.findall(
-        r"\bpublic:\s*(.*?)(?=\bprivate:|\bprotected:|\n};|$)",
-        content,
-        re.DOTALL,
-    )
     for class_name in classes:
         pattern = (
             rf"(?:explicit\s+)?{re.escape(class_name)}\s*"
             r"\([^;{}]*\)\s*(?:=\s*default)?\s*;"
         )
-        for block in public_blocks:
+        for block in _public_blocks(content):
             for match in re.finditer(pattern, block, re.DOTALL):
                 signatures.append(re.sub(r"\s+", " ", match.group(0)).strip().rstrip(";"))
     return sorted(set(signatures))

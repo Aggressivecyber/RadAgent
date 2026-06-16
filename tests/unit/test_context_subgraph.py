@@ -8,13 +8,17 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from agent_core.context.nodes import (
+    extract_user_context_requirements,
     retrieve_rag_context,
     retrieve_web_context,
     route_sources,
     save_evidence_map,
+    score_combined_context,
     score_rag_context,
 )
+from agent_core.context.graph import _route_after_rag
 from agent_core.workspace.paths import STAGE_CONTEXT
+from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 
 
 @pytest.fixture
@@ -31,6 +35,73 @@ class TestRouteSources:
         state = {"required_sources": ["geant4"]}
         result = await route_sources(state)
         assert result["required_sources"] == ["geant4"]
+
+
+class TestContextGraphRouting:
+    def test_rag_sufficient_still_scores_combined_context(self) -> None:
+        assert _route_after_rag({"needs_web_supplement": False}) == "score_combined_context"
+
+    def test_rag_gap_retrieves_web_context(self) -> None:
+        assert _route_after_rag({"needs_web_supplement": True}) == "retrieve_web_context"
+
+
+def _model_result(parsed_json: dict) -> ModelCallResult:
+    return ModelCallResult(
+        task=ModelTask.SIMPLE_EXTRACTION,
+        tier=ModelTier.LITE,
+        provider=ModelProvider.MOCK,
+        model_name="mock-lite",
+        content="{}",
+        parsed_json=parsed_json,
+    )
+
+
+class TestExtractUserContextRequirements:
+    async def test_uses_lite_model_to_extract_source_from_user_query(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        job_dir = temp_workspace / "jobs" / "test_job" / STAGE_CONTEXT
+        job_dir.mkdir(parents=True)
+        model_call = AsyncMock(
+            return_value=_model_result(
+                {
+                    "coverage": {
+                        "geometry": True,
+                        "materials": True,
+                        "source": True,
+                        "physics": True,
+                        "scoring": True,
+                        "output": True,
+                    },
+                    "evidence": {
+                        "source": ["150 MeV proton pencil beam"],
+                    },
+                    "missing_information": [],
+                    "confidence": 0.92,
+                }
+            )
+        )
+
+        with patch("agent_core.models.gateway.get_model_gateway") as get_gateway:
+            get_gateway.return_value.call = model_call
+            result = await extract_user_context_requirements(
+                {
+                    "job_id": "test_job",
+                    "user_query": (
+                        "Build a Geant4 proton depth-dose benchmark for a "
+                        "150 MeV pencil beam through water, aluminum, and silicon layers."
+                    ),
+                }
+            )
+
+        requirements = result["user_context_requirements"]
+        assert requirements["coverage"]["source"] is True
+        assert requirements["missing_hard_required"] == []
+        assert requirements["extraction_source"] == "lite_model"
+        assert (job_dir / "user_context_requirements.json").exists()
+        assert model_call.await_args.kwargs["tier"] == ModelTier.LITE
+        assert model_call.await_args.kwargs["task"] == ModelTask.SIMPLE_EXTRACTION
 
 
 class TestRetrieveRagContext:
@@ -69,6 +140,41 @@ class TestScoreRagContext:
         state = {"rag_score": 0.2}
         result = await score_rag_context(state)
         assert result["needs_web_supplement"] is True
+
+
+class TestScoreCombinedContext:
+    async def test_lite_extracted_source_prevents_false_block_on_rag_source_gap(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        job_dir = temp_workspace / "jobs" / "test_job" / STAGE_CONTEXT
+        job_dir.mkdir(parents=True)
+
+        state = {
+            "job_id": "test_job",
+            "user_context_requirements": {
+                "coverage": {
+                    "geometry": True,
+                    "materials": True,
+                    "source": True,
+                    "physics": True,
+                    "scoring": True,
+                    "output": True,
+                },
+                "missing_hard_required": [],
+                "extraction_source": "lite_model",
+            },
+            "rag_score": 0.49,
+            "rag_report": {"missing_hard_required": ["source"]},
+            "web_context": [],
+        }
+
+        result = await score_combined_context(state)
+
+        assert result["context_decision"] == "allow_rag"
+        report = json.loads(Path(result["context_report_path"]).read_text())
+        assert report["user_missing_hard_required"] == []
+        assert report["rag_missing_hard_required"] == ["source"]
 
 
 class TestRetrieveWebContext:

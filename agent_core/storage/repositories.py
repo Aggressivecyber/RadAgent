@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -44,12 +45,23 @@ class RadAgentStore:
     def __init__(self, workspace_root: Path | None = None) -> None:
         self.workspace_root = workspace_root or WorkspaceManager().root
         self.db_path = database_path(self.workspace_root)
-        self.conn = connect(self.db_path)
+        self._local = threading.local()
         initialize(self.conn)
         self.ensure_default_project()
 
+    @property
+    def conn(self) -> Any:
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = connect(self.db_path)
+            self._local.conn = conn
+        return conn
+
     def close(self) -> None:
-        self.conn.close()
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._local.conn = None
 
     # ── Settings ────────────────────────────────────────────────────
 

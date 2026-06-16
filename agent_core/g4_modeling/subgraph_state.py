@@ -22,6 +22,7 @@ class G4ModelingSubgraphState(TypedDict, total=False):
     user_query: str
     task_spec_path: str
     evidence_map_path: str
+    confirmed_requirement_plan_path: str
 
     # Internal state (populated by nodes, consumed by downstream nodes)
     g4_model_ir: dict[str, Any]
@@ -35,6 +36,7 @@ class G4ModelingSubgraphState(TypedDict, total=False):
     # Task spec (loaded from file)
     task_spec: dict[str, Any]
     simulation_plan: dict[str, Any]
+    confirmed_requirement_plan: dict[str, Any]
 
     # Output paths
     g4_model_ir_path: str

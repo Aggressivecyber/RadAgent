@@ -67,6 +67,8 @@ class ConfirmationQuestion(BaseModel):
     options: list[Any] = Field(default_factory=list)
     required: bool = True
     reason: str = ""
+    category: str = "other"
+    impact: str = ""
 
 
 class ConfirmationRequest(BaseModel):
@@ -81,6 +83,8 @@ class ConfirmationRequest(BaseModel):
     approval_options: list[str] = Field(
         default_factory=lambda: ["approve", "edit", "reject", "ask_more"]
     )
+    critical_confirmations: list[dict[str, Any]] = Field(default_factory=list)
+    agent_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class ConfirmationEdit(BaseModel):
@@ -117,3 +121,4 @@ class ConfirmationRecord(BaseModel):
     unconfirmed_assumptions_count: int = Field(default=0, ge=0)
     confirmation_history: list[dict[str, Any]] = Field(default_factory=list)
     confirmed_model_plan_path: str | None = None
+    agent_context: dict[str, Any] = Field(default_factory=dict)

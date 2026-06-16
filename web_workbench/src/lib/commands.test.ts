@@ -10,15 +10,16 @@ describe('workbench command metadata', () => {
         'jobs',
         'artifacts',
         'confirm',
+        'diagnose',
         'build',
         'simulate',
         'model',
         'projects',
         'revisions',
-        'workbench',
-        'visual-approve',
-        'visual-reject',
       ]),
+    )
+    expect(coreCommandNames).not.toEqual(
+      expect.arrayContaining(['workbench', 'visual-approve', 'visual-reject']),
     )
   })
 
@@ -48,10 +49,11 @@ describe('workbench command metadata', () => {
       'System',
     ])
     expect(groupedNames).not.toEqual(expect.arrayContaining(['demo', 'history', 'inspect', 'mode', 'options', 'exit']))
-    expect(groupedNames).toEqual(expect.arrayContaining(['run', 'report', 'build', 'confirm', 'model']))
+    expect(groupedNames).not.toEqual(expect.arrayContaining(['workbench', 'visual-approve', 'visual-reject']))
+    expect(groupedNames).toEqual(expect.arrayContaining(['run', 'report', 'build', 'confirm', 'diagnose', 'model']))
     expect(groupedNames.filter((name) => name === 'run')).toHaveLength(1)
     expect(groups.find((group) => group.label === 'Review')?.commands.map((command) => command.name)).toEqual(
-      expect.arrayContaining(['confirm', 'revise', 'accept-revision', 'visual-reject']),
+      expect.arrayContaining(['confirm', 'diagnose', 'revise', 'accept-revision']),
     )
     expect(groups[0].commands[0]).toMatchObject({
       tip: expect.stringContaining('tip'),

@@ -22,9 +22,11 @@ def resolve_self_check_events(
     sources = _mapping_get(g4_model_ir, "sources")
     if isinstance(sources, list):
         for source in sources:
-            value = _positive_int(_mapping_get(source, "events"))
-            if value is not None:
-                source_events.append(value)
+            for key in ("events", "num_events", "requested_events"):
+                value = _positive_int(_mapping_get(source, key))
+                if value is not None:
+                    source_events.append(value)
+                    break
     if source_events:
         return sum(source_events)
 

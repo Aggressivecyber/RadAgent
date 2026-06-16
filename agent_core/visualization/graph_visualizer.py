@@ -91,6 +91,7 @@ def get_main_graph_spec() -> SubgraphSpec:
             NodeSpec("prepare_workspace", "准备工作区", "workspace"),
             NodeSpec("context_subgraph", "Context 子图", "subgraph"),
             NodeSpec("task_planning_subgraph", "任务规划 子图", "subgraph"),
+            NodeSpec("requirements_review", "参数核对", "guard"),
             NodeSpec("g4_modeling_subgraph", "G4 建模 子图", "subgraph"),
             NodeSpec("human_confirmation_subgraph", "Human Confirmation 子图", "subgraph"),
             NodeSpec("g4_codegen_subgraph", "G4 代码生成 子图", "subgraph"),
@@ -111,8 +112,10 @@ def get_main_graph_spec() -> SubgraphSpec:
             EdgeSpec("intent_router", "prepare_workspace", "simulation_work"),
             EdgeSpec("context_subgraph", "task_planning_subgraph", "充分 → 规划"),
             EdgeSpec("context_subgraph", "report_subgraph", "不足 → 报告", "block"),
-            EdgeSpec("task_planning_subgraph", "g4_modeling_subgraph", "scope=geant4"),
+            EdgeSpec("task_planning_subgraph", "requirements_review", "scope=geant4"),
             EdgeSpec("task_planning_subgraph", "report_subgraph", "TCAD/SPICE/失败", "block"),
+            EdgeSpec("requirements_review", "g4_modeling_subgraph", "确认完成"),
+            EdgeSpec("requirements_review", "report_subgraph", "拒绝/失败", "block"),
             EdgeSpec("g4_modeling_subgraph", "human_confirmation_subgraph", "需确认"),
             EdgeSpec("g4_modeling_subgraph", "g4_codegen_subgraph", "通过且无需确认"),
             EdgeSpec("g4_modeling_subgraph", "report_subgraph", "失败", "block"),
@@ -234,23 +237,16 @@ def get_g4_modeling_subgraph_spec() -> SubgraphSpec:
 
 
 def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
-    """G4 Codegen subgraph — coarse module agents plus final integration."""
+    """G4 Codegen subgraph — full-project agentic generation."""
     nodes = [
         NodeSpec("load_model_ir", "加载 Model IR", "io", is_entry=True),
         NodeSpec("build_codegen_plan", "代码生成规划", "codegen"),
         NodeSpec("plan_geometry_strategy", "几何策略规划", "codegen"),
         NodeSpec("plan_code_architecture", "架构规划", "codegen"),
-        NodeSpec("build_module_contracts", "模块契约", "codegen"),
-        NodeSpec("build_module_contexts", "模块上下文", "codegen"),
-        NodeSpec("run_core_modules", "生成核心模块", "codegen"),
-        NodeSpec("core_modules_gate", "核心层一致性", "guard"),
-        NodeSpec("coordinate_core_modules_context", "协调核心上下文", "codegen"),
-        NodeSpec("run_runtime_modules", "生成运行模块", "codegen"),
-        NodeSpec("runtime_modules_gate", "运行层一致性", "guard"),
-        NodeSpec("coordinate_runtime_modules_context", "协调运行上下文", "codegen"),
+        NodeSpec("build_module_contracts", "工程责任清单", "codegen"),
+        NodeSpec("build_module_contexts", "工程上下文", "codegen"),
         NodeSpec("build_interface_contracts", "接口契约", "codegen"),
-        NodeSpec("integration_assembler", "集成组装", "codegen"),
-        NodeSpec("global_integration_agent", "最终集成 Agent", "codegen"),
+        NodeSpec("geant4_project_agent", "Geant4 全工程 Agent", "codegen"),
         NodeSpec("runtime_execution_audit", "运行真实性审核", "guard"),
         NodeSpec("physics_quality_review", "物理质量审核", "guard"),
         NodeSpec("persist_codegen_output", "持久化输出", "io"),
@@ -262,23 +258,14 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
         EdgeSpec("plan_geometry_strategy", "plan_code_architecture"),
         EdgeSpec("plan_code_architecture", "build_module_contracts"),
         EdgeSpec("build_module_contracts", "build_module_contexts"),
-        EdgeSpec("build_module_contexts", "run_core_modules"),
-        EdgeSpec("run_core_modules", "core_modules_gate"),
-        EdgeSpec("coordinate_core_modules_context", "run_runtime_modules"),
-        EdgeSpec("run_runtime_modules", "runtime_modules_gate"),
-        EdgeSpec("coordinate_runtime_modules_context", "build_interface_contracts"),
-        EdgeSpec("build_interface_contracts", "integration_assembler"),
-        EdgeSpec("integration_assembler", "global_integration_agent"),
-        EdgeSpec("global_integration_agent", "runtime_execution_audit"),
+        EdgeSpec("build_module_contexts", "build_interface_contracts"),
+        EdgeSpec("build_interface_contracts", "geant4_project_agent"),
+        EdgeSpec("geant4_project_agent", "runtime_execution_audit"),
         EdgeSpec("physics_quality_review", "persist_codegen_output"),
         EdgeSpec("persist_codegen_output", "END"),
     ]
 
     conditional_edges = (
-        EdgeSpec("core_modules_gate", "coordinate_core_modules_context", "通过"),
-        EdgeSpec("core_modules_gate", "persist_codegen_output", "失败", "block"),
-        EdgeSpec("runtime_modules_gate", "coordinate_runtime_modules_context", "通过"),
-        EdgeSpec("runtime_modules_gate", "persist_codegen_output", "失败", "block"),
         EdgeSpec("runtime_execution_audit", "physics_quality_review", "通过"),
         EdgeSpec("runtime_execution_audit", "persist_codegen_output", "失败", "block"),
     )
@@ -286,7 +273,7 @@ def get_g4_codegen_subgraph_spec() -> SubgraphSpec:
     return SubgraphSpec(
         name="g4_codegen_subgraph",
         display_name="G4 Codegen 子图",
-        description="粗粒度 Agent 代码生成流水线 (2 层模块 + 最终集成 + 运行/物理审核)",
+        description="全工程 Agentic Geant4 代码生成流水线 (工程级工具循环 + 运行/物理审核)",
         nodes=tuple(nodes),
         edges=tuple(edges),
         conditional_edges=conditional_edges,
@@ -341,21 +328,19 @@ def get_gate_validation_subgraph_spec() -> SubgraphSpec:
     return SubgraphSpec(
         name="gate_validation_subgraph",
         display_name="Gate Validation 子图",
-        description="21 道门禁检查 (6 nodes, 线性)",
+        description="20 道门禁：基础、G4 建模与可信度门禁检查 (5 nodes, 线性)",
         nodes=(
             NodeSpec("load_gate_inputs", "加载门禁输入", "io", is_entry=True),
             NodeSpec("run_base_gates", "基础门禁 0-11", "gate"),
             NodeSpec("run_g4_modeling_gates", "G4 门禁 A-H", "gate"),
             NodeSpec("run_credibility_gate", "可信度门禁 20", "gate"),
-            NodeSpec("run_visual_review_gate", "可视化验收 21", "gate"),
             NodeSpec("finalize_gate_results", "汇总结果", "gate"),
         ),
         edges=(
             EdgeSpec("load_gate_inputs", "run_base_gates"),
             EdgeSpec("run_base_gates", "run_g4_modeling_gates"),
             EdgeSpec("run_g4_modeling_gates", "run_credibility_gate"),
-            EdgeSpec("run_credibility_gate", "run_visual_review_gate"),
-            EdgeSpec("run_visual_review_gate", "finalize_gate_results"),
+            EdgeSpec("run_credibility_gate", "finalize_gate_results"),
             EdgeSpec("finalize_gate_results", "END"),
         ),
     )

@@ -25,9 +25,20 @@ async def load_task_spec(state: G4ModelingSubgraphState) -> dict[str, Any]:
         task_spec = json.loads(Path(task_spec_path).read_text())
     else:
         task_spec = {}
+    confirmed_plan_path = state.get("confirmed_requirement_plan_path", "")
+    confirmed_plan = {}
+    if confirmed_plan_path and Path(confirmed_plan_path).exists():
+        confirmed_plan = json.loads(Path(confirmed_plan_path).read_text())
+    if confirmed_plan:
+        task_spec = dict(task_spec)
+        metadata = dict(task_spec.get("metadata", {}))
+        metadata["confirmed_requirement_plan_path"] = confirmed_plan_path
+        task_spec["metadata"] = metadata
+        task_spec["confirmed_requirement_plan"] = confirmed_plan
 
     return {
         "task_spec": task_spec,
+        "confirmed_requirement_plan": confirmed_plan,
         "modeling_mode": "realistic",
         "retry_count": 0,
         "errors": [],

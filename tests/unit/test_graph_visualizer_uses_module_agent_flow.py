@@ -1,4 +1,4 @@
-"""P0-13: graph_visualizer uses module agent flow, not legacy codegen."""
+"""Graph visualizer uses full-project agentic Geant4 codegen."""
 
 from __future__ import annotations
 
@@ -12,19 +12,20 @@ from agent_core.visualization.graph_visualizer import (
 
 
 class TestGraphVisualizerUsesModuleAgentFlow:
-    """Verify graph visualizer output includes module agent flow keywords."""
+    """Verify graph visualizer output reflects the project-agent flow."""
 
     def test_main_graph_contains_codegen_subgraph(self):
         diagram = draw_main_graph()
         assert "g4_codegen_subgraph" in diagram
 
-    def test_codegen_spec_has_module_layers(self):
+    def test_codegen_spec_has_project_agent(self):
         spec = get_g4_codegen_subgraph_spec()
         node_ids = {n.node_id for n in spec.nodes}
-        assert "run_core_modules" in node_ids
-        assert "run_runtime_modules" in node_ids
-        assert "coordinate_core_modules_context" in node_ids
-        assert "coordinate_runtime_modules_context" in node_ids
+        assert "geant4_project_agent" in node_ids
+        assert "run_core_modules" not in node_ids
+        assert "run_runtime_modules" not in node_ids
+        assert "coordinate_core_modules_context" not in node_ids
+        assert "coordinate_runtime_modules_context" not in node_ids
         assert "run_simulation_core_agent" not in node_ids
         assert "run_beam_physics_agent" not in node_ids
         assert "run_runtime_app_agent" not in node_ids
@@ -38,14 +39,15 @@ class TestGraphVisualizerUsesModuleAgentFlow:
     def test_codegen_spec_has_physics_review(self):
         spec = get_g4_codegen_subgraph_spec()
         node_ids = {n.node_id for n in spec.nodes}
-        assert "global_integration_agent" in node_ids
+        assert "geant4_project_agent" in node_ids
         assert "runtime_execution_audit" in node_ids
         assert "physics_quality_review" in node_ids
 
-    def test_codegen_spec_has_integration_assembler(self):
+    def test_codegen_spec_has_no_default_integration_assembler(self):
         spec = get_g4_codegen_subgraph_spec()
         node_ids = {n.node_id for n in spec.nodes}
-        assert "integration_assembler" in node_ids
+        assert "integration_assembler" not in node_ids
+        assert "global_integration_agent" not in node_ids
         assert "persist_codegen_output" in node_ids
 
     def test_codegen_spec_no_legacy_nodes(self):
@@ -74,6 +76,7 @@ class TestGraphVisualizerUsesModuleAgentFlow:
         diagrams = draw_all()
         assert "g4_codegen" in diagrams
 
-    def test_draw_combined_includes_module_flow(self):
+    def test_draw_combined_includes_project_agent_flow(self):
         diagram = draw_combined()
         assert "g4_codegen_subgraph" in diagram
+        assert "geant4_project_agent" in diagram

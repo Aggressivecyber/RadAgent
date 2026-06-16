@@ -1,54 +1,68 @@
-# G4 Model Review: mir_job_919509e8__20260612_201928
-- **Job ID**: job_919509e8__20260612_201928
+# G4 Model Review: mir_job_5574e228__20260616_070817
+- **Job ID**: job_5574e228__20260616_070817
 - **Mode**: realistic
-- **Target**: 10 MeV proton beam on 300 μm silicon slab detector
+- **Target**: Proton depth-dose benchmark through layered materials
 
 ## ✅ Validation Status: PASSED
 
 ## Geometry Components
 | ID | Type | Material | Parent | Sensitive |
 |----|------|----------|--------|-----------|
-| world | box | G4_AIR | — |  |
-| silicon_detector | box | G4_Si | world | ✓ |
+| world_001 | box | G4_Galactic | — |  |
+| layer_water_001 | box | G4_WATER | world_001 | ✓ |
+| layer_aluminum_001 | box | G4_Al | world_001 | ✓ |
+| layer_silicon_001 | box | G4_Si | world_001 | ✓ |
 
 ## Materials
 | ID | Name | Type | Density (g/cm³) |
 |----|------|------|-----------------|
-| G4_AIR | G4_AIR (NIST) | nist | 0.001225 |
+| G4_Al | G4_Al (NIST) | nist | 2.699 |
+| G4_Galactic | G4_Galactic (NIST) | nist | 1e-25 |
 | G4_Si | G4_Si (NIST) | nist | 2.33 |
+| G4_WATER | G4_WATER (NIST) | nist | 1.0 |
 
 ## Particle Source
 - **Particle**: proton
-- **Energy**: 10.0 MeV (mono)
+- **Energy**: 150.0 MeV (mono)
 - **Events**: 1000
-- **Position**: [0.0, 0.0, -800.0] → direction [0.0, 0.0, 1.0]
+- **Position**: [0.0, 0.0, -400500.0] → direction [0.0, 0.0, 1.0]
 
 ## Physics
-- **List**: QGSP_BIC_HP
-- **Reasoning**: User explicitly requested QGSP_BIC_HP for proton transport with high-precision neutron handling.
+- **List**: FTFP_BERT
+- **Reasoning**: FTFP_BERT is recommended for proton therapy simulations up to 10 GeV, providing good accuracy for electromagnetic and hadronic interactions in the requested energy range.
 
 ## Sensitive Detectors
-- **SiliconDetectorSdSensitiveDetector**: linked to ['silicon_detector'], collection=silicon_detector_Hits
+- **LayerWater001SdSensitiveDetector**: linked to ['layer_water_001'], collection=layer_water_001_Hits
+- **LayerAluminum001SdSensitiveDetector**: linked to ['layer_aluminum_001'], collection=layer_aluminum_001_Hits
+- **LayerSilicon001SdSensitiveDetector**: linked to ['layer_silicon_001'], collection=layer_silicon_001_Hits
 
 ## Scoring
-- **silicon_detector_edep** (region): edep_MeV
-- **silicon_detector_dose** (region): dose_Gy
-- **silicon_detector_voxel_dose** (voxel): dose_Gy
+- **layer_water_001_edep** (region): edep_MeV
+- **layer_water_001_dose** (region): dose_Gy
+- **layer_aluminum_001_edep** (region): edep_MeV
+- **layer_aluminum_001_dose** (region): dose_Gy
+- **layer_silicon_001_edep** (region): edep_MeV
+- **layer_silicon_001_dose** (region): dose_Gy
+- **layer_water_001_voxel_dose** (voxel): dose_Gy
+- **layer_aluminum_001_voxel_dose** (voxel): dose_Gy
+- **layer_silicon_001_voxel_dose** (voxel): dose_Gy
 - **event_table** (region): edep_MeV, event_id, track_id
 
 ## Construction Audit Trail
 Total steps: 12
-- [evidence_retrieval_node] modify → mir_job_919509e8__20260612_201928: Organized evidence: geometry=1, materials=1, source=1, physics=2, scoring=1
-- [model_scope_guard_node] validate → mir_job_919509e8__20260612_201928: Scope guard result: proceed_with_warnings
-- [geometry_decomposition_node] create → mir_job_919509e8__20260612_201928: Normalized draft components, 2 components, 1 interfaces
-- [coordinate_system_node] modify → mir_job_919509e8__20260612_201928: Set coordinate system: cartesian, origin=world_center
-- [material_definition_node] create → mir_job_919509e8__20260612_201928: Defined 2 materials: ['G4_AIR', 'G4_Si']
-- [source_definition_node] create → sources: Configured 1 source(s): primary_source:proton 10.0 MeV mono/gun
-- [physics_list_node] validate → physics: Preserved drafted physics list: QGSP_BIC_HP
-- [sensitive_detector_node] create → sensitive_detectors: Created 1 sensitive detectors for: ['silicon_detector']
-- [scoring_design_node] create → scoring: Created 4 scoring configurations: ['silicon_detector_edep', 'silicon_detector_dose', 'silicon_detector_voxel_dose', 'event_table']
-- [model_ir_validation_node] validate → mir_job_919509e8__20260612_201928: Ran 7 validators: 7 passed, 0 errors
+- [evidence_retrieval_node] modify → mir_job_5574e228__20260616_070817: Organized evidence: geometry=1, materials=1, source=1, physics=2, scoring=1
+- [model_scope_guard_node] validate → mir_job_5574e228__20260616_070817: Scope guard result: proceed_with_warnings
+- [geometry_decomposition_node] create → mir_job_5574e228__20260616_070817: Normalized draft components, 4 components, 3 interfaces
+- [coordinate_system_node] modify → mir_job_5574e228__20260616_070817: Set coordinate system: cartesian, origin=world_center
+- [material_definition_node] create → mir_job_5574e228__20260616_070817: Defined 4 materials: ['G4_Al', 'G4_Galactic', 'G4_Si', 'G4_WATER']
+- [source_definition_node] create → sources: Configured 1 source(s): primary_source:proton 150.0 MeV mono/gun
+- [physics_list_node] validate → physics: Preserved drafted physics list: FTFP_BERT
+- [sensitive_detector_node] create → sensitive_detectors: Created 3 sensitive detectors for: ['layer_water_001', 'layer_aluminum_001', 'layer_silicon_001']
+- [scoring_design_node] create → scoring: Created 10 scoring configurations: ['layer_water_001_edep', 'layer_water_001_dose', 'layer_aluminum_001_edep', 'layer_aluminum_001_dose', 'layer_silicon_001_edep', 'layer_silicon_001_dose', 'layer_water_001_voxel_dose', 'layer_aluminum_001_voxel_dose', 'layer_silicon_001_voxel_dose', 'event_table']
+- [model_ir_validation_node] validate → mir_job_5574e228__20260616_070817: Ran 7 validators: 7 passed, 0 errors
 - ... and 2 more entries
 
 ## Open Issues
-- ⚠️ Source position not specified; assumed at z = -5 mm (world boundary) for vertical incidence.
+- ⚠️ Material thicknesses need confirmation for 150 MeV proton range
+- ⚠️ Scoring bin size not specified
+- ⚠️ Step limiter settings not specified

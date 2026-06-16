@@ -29,6 +29,7 @@ class ContextSubgraphState(TypedDict, total=False):
     required_sources: list[str]
 
     # RAG results
+    user_context_requirements: dict[str, Any]
     rag_context: list[dict[str, Any]]
     rag_score: float
     rag_report: dict[str, Any]

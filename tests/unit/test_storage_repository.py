@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from agent_core.storage import RadAgentStore
@@ -108,3 +109,28 @@ def test_record_artifact_indexes_file_metadata(tmp_path: Path) -> None:
     assert row["path"] == str(artifact)
     assert row["size_bytes"] == len("report")
     assert len(row["sha256"]) == 64
+
+
+def test_store_can_record_events_from_background_thread(tmp_path: Path) -> None:
+    store = RadAgentStore(workspace_root=tmp_path)
+    store.upsert_job(job_id="thread-job", user_query="simulate")
+    errors: list[str] = []
+
+    def worker() -> None:
+        try:
+            store.record_event(
+                job_id="thread-job",
+                run_id="run-1",
+                event_type="workflow_continue_started",
+                status="running",
+            )
+        except Exception as exc:  # pragma: no cover - assertion reports message
+            errors.append(str(exc))
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join(timeout=5)
+
+    assert errors == []
+    events = store.list_events("thread-job")
+    assert events[0]["event_type"] == "workflow_continue_started"

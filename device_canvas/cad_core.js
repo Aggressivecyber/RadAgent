@@ -1,8 +1,20 @@
 /* Core CAD helpers shared by the canvas UI. Keep this file DOM-free. */
 const MAT_COLORS={silicon:"#4a90a4",si:"#4a90a4",sio2:"#6fbfbf","silicon dioxide":"#6fbfbf",oxide:"#6fbfbf",si3n4:"#7aa874","silicon nitride":"#7aa874",nitride:"#7aa874",polysilicon:"#6a6a78",poly:"#6a6a78",aluminum:"#c0c4cc",al:"#c0c4cc",copper:"#b87333",cu:"#b87333",tungsten:"#8a8f99",w:"#8a8f99",titanium:"#b0b6c0",ti:"#b0b6c0",gold:"#e3c163",au:"#e3c163",air:"transparent",vacuum:"transparent",water:"#3a6f8f",epoxy:"#5a4a3a",kapton:"#caa84a",sapphire:"#5a7fb0",germanium:"#6a7a8a",ge:"#6a7a8a",gaas:"#8a6a9a"};
 const MAT_DEFAULTS=["Silicon","SiO2","Si3N4","Polysilicon","Aluminum","Copper","Tungsten","Titanium","Gold","Air","Sapphire","Germanium","GaAs","Epoxy","Kapton","Water"];
-const OUTLINE="#2563eb";
-const ACCENT="#1d4ed8";
+const OUTLINE="#b94138";
+const ACCENT="#8f2924";
+const BRAND_PAPER="#fbfaf7";
+const BRAND_PANEL="#ffffff";
+const BRAND_INK="#171614";
+const BRAND_MUTED="#68625a";
+const BRAND_MUTED_2="#8b8378";
+const BRAND_LINE="#ded9cf";
+const BRAND_LINE_STRONG="#c9c0b2";
+const BRAND_ACCENT_SOFT="#fff0ed";
+const BRAND_ACCENT_LINE="#d98c83";
+const BRAND_AMBER="#9a6a17";
+const BRAND_AMBER_SOFT="#fffbeb";
+const BRAND_GREEN="#23785a";
 const AXIS_IDX={x:0,y:1,z:2};
 const DIM_KEY={x:"dx",y:"dy",z:"dz"};
 

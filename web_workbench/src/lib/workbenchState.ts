@@ -1,4 +1,5 @@
 import type { RadAgentEvent, WebCommandResponse } from './api'
+import { commandPresentation } from './commandPresentation'
 
 export type TimelineStatus = 'info' | 'running' | 'success' | 'warning' | 'error'
 
@@ -28,8 +29,8 @@ export function createInitialWorkbenchState(): WorkbenchState {
       {
         id: 'system:init',
         kind: 'system',
-        title: 'Web client initialized',
-        body: 'Command, event, and inspector state are ready.',
+        title: '工作台已就绪',
+        body: '命令、事件、审查面板状态已连接。',
         status: 'info',
       },
     ],
@@ -38,9 +39,12 @@ export function createInitialWorkbenchState(): WorkbenchState {
 
 function commandTitle(response: WebCommandResponse): string {
   if (!response.command) {
-    return 'Command'
+    return '功能执行'
   }
-  return `/${response.command}`
+  return commandPresentation({
+    name: response.command,
+    description: response.command,
+  }).primary
 }
 
 function summarizeData(value: unknown): string {
@@ -68,6 +72,7 @@ export function reduceCommandResponse(
   const status: TimelineStatus = response.ok ? 'success' : 'error'
   const title = commandTitle(response)
   const body = response.ok ? summarizeData(response.data) : response.error || 'Command failed'
+  const normalizedCommand = String(response.command || '').trim().toLowerCase()
   const timeline = [
     ...state.timeline,
     {
@@ -76,7 +81,7 @@ export function reduceCommandResponse(
       title,
       body,
       status,
-      meta: response.view,
+      meta: normalizedCommand === 'chat' ? 'chat' : response.view,
       details: response.data,
     },
   ]

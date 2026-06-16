@@ -2,7 +2,7 @@
   {
     "gate_id": 0,
     "name": "Context Sufficiency",
-    "status": "warning",
+    "status": "pass",
     "checked_items": [
       {
         "item": "context_decision == allow_rag or allow_with_web",
@@ -13,14 +13,12 @@
       "context_decision == allow_rag or allow_with_web"
     ],
     "failed_items": [],
-    "warnings": [
-      "Web supplement used"
-    ],
+    "warnings": [],
     "evidence": [
-      "context_decision: allow_with_web_supplement"
+      "context_decision: allow_rag"
     ],
     "file_paths": [],
-    "message": "Context supplemented via web search"
+    "message": "Context sufficient via RAG"
   },
   {
     "gate_id": 1,
@@ -71,45 +69,51 @@
   {
     "gate_id": 3,
     "name": "Patch Format",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
         "item": "applied patch file exists",
-        "result": "fail"
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "No applied patch found"
+    "passed_items": [
+      "patch applied"
     ],
+    "failed_items": [],
     "warnings": [],
-    "evidence": [],
-    "file_paths": [],
-    "message": "No applied patch found"
+    "evidence": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/applied_patch.json"
+    ],
+    "file_paths": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/applied_patch.json"
+    ],
+    "message": "Patch applied"
   },
   {
     "gate_id": 4,
     "name": "File Permission",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
-        "item": "patch file zones",
-        "result": "fail"
+        "item": "all files in green zone",
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "No patch data available for permission check"
+    "passed_items": [
+      "all files green zone"
     ],
+    "failed_items": [],
     "warnings": [],
-    "evidence": [],
+    "evidence": [
+      "checked 33 files"
+    ],
     "file_paths": [],
-    "message": "No patch data available for permission check"
+    "message": "OK (green zone): CMakeLists.txt; OK (green zone): config/simulation_config.json; OK (green zone): include/ActionInitialization.hh; OK (green zone): include/DetectorConstruction.hh; OK (green zone): include/EventAction.hh; OK (green zone): include/Hit.hh; OK (green zone): include/MaterialRegistry.hh; OK (green zone): include/OutputManager.hh; OK (green zone): include/PhysicsListFactoryWrapper.hh; OK (green zone): include/PrimaryGeneratorAction.hh; OK (green zone): include/RunAction.hh; OK (green zone): include/ScoringManager.hh; OK (green zone): include/SensitiveDetector.hh; OK (green zone): include/SteppingAction.hh; OK (green zone): macros/gui.mac; OK (green zone): macros/init_vis.mac; OK (green zone): macros/radagent_self_check_100.mac; OK (green zone): macros/radagent_self_check_1000.mac; OK (green zone): macros/run.mac; OK (green zone): macros/vis.mac; OK (green zone): main.cc; OK (green zone): src/ActionInitialization.cc; OK (green zone): src/DetectorConstruction.cc; OK (green zone): src/EventAction.cc; OK (green zone): src/Hit.cc; OK (green zone): src/MaterialRegistry.cc; OK (green zone): src/OutputManager.cc; OK (green zone): src/PhysicsListFactoryWrapper.cc; OK (green zone): src/PrimaryGeneratorAction.cc; OK (green zone): src/RunAction.cc; OK (green zone): src/ScoringManager.cc; OK (green zone): src/SensitiveDetector.cc; OK (green zone): src/SteppingAction.cc"
   },
   {
     "gate_id": 5,
     "name": "Static Check",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
         "item": "code directory exists",
@@ -117,133 +121,165 @@
       },
       {
         "item": "src/*.cc files present",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "include/*.hh files present",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "CMakeLists.txt valid",
-        "result": "fail"
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "Missing CMakeLists.txt",
-      "No .cc files in src/",
-      "No .hh files in include/",
-      "Missing required class: DetectorConstruction",
-      "Missing required class: PhysicsList",
-      "Missing required class: PrimaryGeneratorAction",
-      "Missing required class: SteppingAction"
+    "passed_items": [
+      "structure valid"
     ],
+    "failed_items": [],
     "warnings": [],
     "evidence": [
-      "code_dir: /tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/06_patch/geant4_project"
+      "code_dir: simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project"
     ],
     "file_paths": [
-      "/tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/06_patch/geant4_project"
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project"
     ],
-    "message": "Missing CMakeLists.txt; No .cc files in src/; No .hh files in include/; Missing required class: DetectorConstruction; Missing required class: PhysicsList; Missing required class: PrimaryGeneratorAction; Missing required class: SteppingAction"
+    "message": "Geant4 code structure valid"
   },
   {
     "gate_id": 6,
     "name": "Build/Parse",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
         "item": "build/parse verification",
-        "result": "fail"
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "Build failed"
+    "passed_items": [
+      "build passed"
     ],
+    "failed_items": [],
     "warnings": [],
     "evidence": [
-      "/tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package/cmake_configure_result.json"
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/cmake_configure_result.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/build_result.json"
     ],
     "file_paths": [
-      "/tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package/cmake_configure_result.json"
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/cmake_configure_result.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/build_result.json"
     ],
-    "message": "Build failed"
+    "message": "Build passed"
   },
   {
     "gate_id": 7,
     "name": "Unit Test",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
         "item": "unit test execution",
-        "result": "fail"
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "Unit tests required; no unit test result artifact found"
+    "passed_items": [
+      "ctest passed"
     ],
+    "failed_items": [],
     "warnings": [],
-    "evidence": [],
-    "file_paths": [],
-    "message": "Unit tests required; no unit test result artifact found"
+    "evidence": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/unit_test_result.json"
+    ],
+    "file_paths": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/unit_test_result.json"
+    ],
+    "message": "Unit/ctest artifact passed"
   },
   {
     "gate_id": 8,
     "name": "Data Contract",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
         "item": "g4_summary.json",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "edep_3d.csv",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "dose_3d.csv",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "event_table.csv",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "provenance.json",
-        "result": "fail"
+        "result": "pass"
+      },
+      {
+        "item": "geometry_view.json",
+        "result": "pass"
+      },
+      {
+        "item": "particle_tracks.json",
+        "result": "pass"
+      },
+      {
+        "item": "energy_deposits.json",
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
+    "passed_items": [
+      "g4_summary.json",
+      "edep_3d.csv",
+      "dose_3d.csv",
+      "event_table.csv",
+      "provenance.json",
+      "geometry_view.json",
+      "particle_tracks.json",
+      "energy_deposits.json"
     ],
+    "failed_items": [],
     "warnings": [],
     "evidence": [
-      "output_dir: /tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package"
+      "output_dir: simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package"
     ],
-    "file_paths": [],
-    "message": "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
+    "file_paths": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/g4_summary.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/edep_3d.csv",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/dose_3d.csv",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/event_table.csv",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/provenance.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/geometry_view.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/particle_tracks.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/energy_deposits.json"
+    ],
+    "message": "All output files present and populated"
   },
   {
     "gate_id": 9,
     "name": "Smoke Simulation",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
         "item": "smoke simulation (1000 events)",
-        "result": "fail"
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "Smoke simulation required; no smoke simulation result artifact found"
+    "passed_items": [
+      "smoke simulation passed"
     ],
+    "failed_items": [],
     "warnings": [],
-    "evidence": [],
-    "file_paths": [],
-    "message": "Smoke simulation required; no smoke simulation result artifact found"
+    "evidence": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/smoke_simulation_result.json"
+    ],
+    "file_paths": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/smoke_simulation_result.json"
+    ],
+    "message": "Smoke simulation passed"
   },
   {
     "gate_id": 10,
@@ -266,25 +302,25 @@
   {
     "gate_id": 11,
     "name": "Physics Sanity",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
         "item": "edep values non-negative, finite",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "dose values non-negative, finite",
-        "result": "fail"
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
+    "passed_items": [
+      "physics sanity passed"
     ],
+    "failed_items": [],
     "warnings": [],
     "evidence": [],
     "file_paths": [],
-    "message": "Missing output contract files: g4_summary.json, edep_3d.csv, dose_3d.csv, event_table.csv, provenance.json"
+    "message": "Physics sanity passed"
   },
   {
     "gate_id": 12,
@@ -292,15 +328,15 @@
     "status": "pass",
     "checked_items": [
       {
-        "item": "components count (2)",
+        "item": "components count (4)",
         "result": "pass"
       },
       {
-        "item": "materials count (2)",
+        "item": "materials count (4)",
         "result": "pass"
       },
       {
-        "item": "scoring specs count (4)",
+        "item": "scoring specs count (10)",
         "result": "pass"
       },
       {
@@ -313,16 +349,16 @@
       }
     ],
     "passed_items": [
-      "components count (2)",
-      "materials count (2)",
-      "scoring specs count (4)",
+      "components count (4)",
+      "materials count (4)",
+      "scoring specs count (10)",
       "simplification_policy defined",
       "evidence pack present"
     ],
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "components: world, silicon_detector"
+      "components: world_001, layer_water_001, layer_aluminum_001, layer_silicon_001"
     ],
     "file_paths": [],
     "message": "All checks passed"
@@ -358,7 +394,7 @@
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "component_ids: world, silicon_detector"
+      "component_ids: world_001, layer_water_001, layer_aluminum_001, layer_silicon_001"
     ],
     "file_paths": [],
     "message": "All checks passed",
@@ -406,8 +442,8 @@
     "failed_items": [],
     "warnings": [],
     "evidence": [
-      "components: 2, interfaces: 1",
-      "component_ids: world, silicon_detector"
+      "components: 4, interfaces: 3",
+      "component_ids: world_001, layer_water_001, layer_aluminum_001, layer_silicon_001"
     ],
     "file_paths": [],
     "message": "All checks passed"
@@ -470,21 +506,64 @@
   {
     "gate_id": 17,
     "name": "G4-F Code Module Boundary",
-    "status": "fail",
+    "status": "pass",
     "checked_items": [
       {
-        "item": "generated C++ modules available",
-        "result": "fail"
+        "item": "src/*.cc files present",
+        "result": "pass"
+      },
+      {
+        "item": "include/*.hh files present",
+        "result": "pass"
+      },
+      {
+        "item": "source files include matching owned headers when present",
+        "result": "pass"
+      },
+      {
+        "item": "no non-const static mutable globals",
+        "result": "pass"
       }
     ],
-    "passed_items": [],
-    "failed_items": [
-      "No generated C++ modules available for boundary validation"
+    "passed_items": [
+      "src/*.cc files present",
+      "include/*.hh files present",
+      "source files include matching owned headers when present",
+      "no non-const static mutable globals"
     ],
+    "failed_items": [],
     "warnings": [],
-    "evidence": [],
-    "file_paths": [],
-    "message": "No generated C++ modules available for boundary validation"
+    "evidence": [
+      "12 source files and 12 headers checked"
+    ],
+    "file_paths": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/ActionInitialization.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/DetectorConstruction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/EventAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/Hit.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/MaterialRegistry.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/OutputManager.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/PhysicsListFactoryWrapper.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/PrimaryGeneratorAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/RunAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/ScoringManager.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/SensitiveDetector.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/SteppingAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/main.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/ActionInitialization.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/DetectorConstruction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/EventAction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/Hit.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/MaterialRegistry.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/OutputManager.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/PhysicsListFactoryWrapper.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/PrimaryGeneratorAction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/RunAction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/ScoringManager.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/SensitiveDetector.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/SteppingAction.cc"
+    ],
+    "message": "All checks passed"
   },
   {
     "gate_id": 18,
@@ -493,18 +572,131 @@
     "critical": false,
     "checked_items": [
       {
-        "item": "generated C++ modules available",
+        "item": "C++ code magic number check (25 files)",
         "result": "warning"
       }
     ],
     "passed_items": [],
     "failed_items": [],
     "warnings": [
-      "No generated C++ modules available for magic-number validation"
+      "include/OutputManager.hh:81: magic number '3' in 'std::map<std::string, std::pair<std::string, std::array<double, 3>>> fGeometry;'",
+      "include/ScoringManager.hh:45: magic number '3' in 'std::array<double,3> origin;'",
+      "src/DetectorConstruction.cc:21: magic number '5000.0' in 'fLayers.push_back({\"layer_water_001\", \"G4_WATER\", 5000.0, 5000.0, 150000.0, 0.0}'",
+      "src/DetectorConstruction.cc:21: magic number '5000.0' in 'fLayers.push_back({\"layer_water_001\", \"G4_WATER\", 5000.0, 5000.0, 150000.0, 0.0}'",
+      "src/DetectorConstruction.cc:21: magic number '150000.0' in 'fLayers.push_back({\"layer_water_001\", \"G4_WATER\", 5000.0, 5000.0, 150000.0, 0.0}'",
+      "src/DetectorConstruction.cc:23: magic number '5000.0' in 'fLayers.push_back({\"layer_aluminum_001\", \"G4_Al\", 5000.0, 5000.0, 25000.0, 30000'",
+      "src/DetectorConstruction.cc:23: magic number '5000.0' in 'fLayers.push_back({\"layer_aluminum_001\", \"G4_Al\", 5000.0, 5000.0, 25000.0, 30000'",
+      "src/DetectorConstruction.cc:23: magic number '25000.0' in 'fLayers.push_back({\"layer_aluminum_001\", \"G4_Al\", 5000.0, 5000.0, 25000.0, 30000'",
+      "src/DetectorConstruction.cc:23: magic number '300000.0' in 'fLayers.push_back({\"layer_aluminum_001\", \"G4_Al\", 5000.0, 5000.0, 25000.0, 30000'",
+      "src/DetectorConstruction.cc:25: magic number '5000.0' in 'fLayers.push_back({\"layer_silicon_001\", \"G4_Si\", 5000.0, 5000.0, 25000.0, 350000'",
+      "src/DetectorConstruction.cc:25: magic number '5000.0' in 'fLayers.push_back({\"layer_silicon_001\", \"G4_Si\", 5000.0, 5000.0, 25000.0, 350000'",
+      "src/DetectorConstruction.cc:25: magic number '25000.0' in 'fLayers.push_back({\"layer_silicon_001\", \"G4_Si\", 5000.0, 5000.0, 25000.0, 350000'",
+      "src/DetectorConstruction.cc:25: magic number '350000.0' in 'fLayers.push_back({\"layer_silicon_001\", \"G4_Si\", 5000.0, 5000.0, 25000.0, 350000'",
+      "src/DetectorConstruction.cc:47: magic number '100000.0' in 'fOutputManager->SetGeometryDescription(\"world_001\", \"G4_Galactic\", {100000.0, 10'",
+      "src/DetectorConstruction.cc:47: magic number '100000.0' in 'fOutputManager->SetGeometryDescription(\"world_001\", \"G4_Galactic\", {100000.0, 10'",
+      "src/DetectorConstruction.cc:47: magic number '752000.0' in 'fOutputManager->SetGeometryDescription(\"world_001\", \"G4_Galactic\", {100000.0, 10'",
+      "src/OutputManager.cc:36: magic number '2.699' in 'fRegionDensity[\"layer_aluminum_001\"] = 2.699;'",
+      "src/OutputManager.cc:37: magic number '2.33' in 'fRegionDensity[\"layer_silicon_001\"] = 2.33;'",
+      "src/OutputManager.cc:42: magic number '5.0' in '{-5.0, -5.0, -150.0}, {5.0, 5.0, 150.0}, 1.0, 1.0, 30.0);'",
+      "src/OutputManager.cc:42: magic number '5.0' in '{-5.0, -5.0, -150.0}, {5.0, 5.0, 150.0}, 1.0, 1.0, 30.0);'",
+      "src/OutputManager.cc:42: magic number '150.0' in '{-5.0, -5.0, -150.0}, {5.0, 5.0, 150.0}, 1.0, 1.0, 30.0);'",
+      "src/OutputManager.cc:42: magic number '5.0' in '{-5.0, -5.0, -150.0}, {5.0, 5.0, 150.0}, 1.0, 1.0, 30.0);'",
+      "src/OutputManager.cc:42: magic number '5.0' in '{-5.0, -5.0, -150.0}, {5.0, 5.0, 150.0}, 1.0, 1.0, 30.0);'",
+      "src/OutputManager.cc:42: magic number '150.0' in '{-5.0, -5.0, -150.0}, {5.0, 5.0, 150.0}, 1.0, 1.0, 30.0);'",
+      "src/OutputManager.cc:42: magic number '30.0' in '{-5.0, -5.0, -150.0}, {5.0, 5.0, 150.0}, 1.0, 1.0, 30.0);'",
+      "src/OutputManager.cc:45: magic number '5.0' in '{-5.0, -5.0, 275.0}, {5.0, 5.0, 325.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:45: magic number '5.0' in '{-5.0, -5.0, 275.0}, {5.0, 5.0, 325.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:45: magic number '275.0' in '{-5.0, -5.0, 275.0}, {5.0, 5.0, 325.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:45: magic number '5.0' in '{-5.0, -5.0, 275.0}, {5.0, 5.0, 325.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:45: magic number '5.0' in '{-5.0, -5.0, 275.0}, {5.0, 5.0, 325.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:45: magic number '325.0' in '{-5.0, -5.0, 275.0}, {5.0, 5.0, 325.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:45: magic number '5.0' in '{-5.0, -5.0, 275.0}, {5.0, 5.0, 325.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:48: magic number '5.0' in '{-5.0, -5.0, 325.0}, {5.0, 5.0, 375.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:48: magic number '5.0' in '{-5.0, -5.0, 325.0}, {5.0, 5.0, 375.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:48: magic number '325.0' in '{-5.0, -5.0, 325.0}, {5.0, 5.0, 375.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:48: magic number '5.0' in '{-5.0, -5.0, 325.0}, {5.0, 5.0, 375.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:48: magic number '5.0' in '{-5.0, -5.0, 325.0}, {5.0, 5.0, 375.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:48: magic number '375.0' in '{-5.0, -5.0, 325.0}, {5.0, 5.0, 375.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:48: magic number '5.0' in '{-5.0, -5.0, 325.0}, {5.0, 5.0, 375.0}, 1.0, 1.0, 5.0);'",
+      "src/OutputManager.cc:124: magic number '13' in 'double eventDose = fCurrentEventEdep * 1.602176634e-13 / phantomMass_kg;'",
+      "src/OutputManager.cc:155: magic number '12' in 'out << \"  \\\"total_edep_MeV\\\": \" << std::setprecision(12) << totalEdep << \",\\n\";'",
+      "src/OutputManager.cc:156: magic number '12' in 'out << \"  \\\"total_dose_Gy\\\": \" << std::setprecision(12) << totalDose << \",\\n\";'",
+      "src/OutputManager.cc:170: magic number '12' in '<< std::setprecision(12) << row.edep_MeV << \",\"'",
+      "src/OutputManager.cc:171: magic number '12' in '<< std::setprecision(12) << row.dose_Gy << \"\\n\";'",
+      "src/OutputManager.cc:182: magic number '12' in '<< std::setprecision(12) << row.x_mm * 1000.0 << \",\"'",
+      "src/OutputManager.cc:182: magic number '1000.0' in '<< std::setprecision(12) << row.x_mm * 1000.0 << \",\"'",
+      "src/OutputManager.cc:183: magic number '12' in '<< std::setprecision(12) << row.y_mm * 1000.0 << \",\"'",
+      "src/OutputManager.cc:183: magic number '1000.0' in '<< std::setprecision(12) << row.y_mm * 1000.0 << \",\"'",
+      "src/OutputManager.cc:184: magic number '12' in '<< std::setprecision(12) << row.z_mm * 1000.0 << \",\"'",
+      "src/OutputManager.cc:184: magic number '1000.0' in '<< std::setprecision(12) << row.z_mm * 1000.0 << \",\"'",
+      "src/OutputManager.cc:185: magic number '12' in '<< std::setprecision(12) << row.edep_MeV << \"\\n\";'",
+      "src/OutputManager.cc:201: magic number '12' in '<< std::setprecision(12) << vr.x * 1000.0 << \",\"'",
+      "src/OutputManager.cc:201: magic number '1000.0' in '<< std::setprecision(12) << vr.x * 1000.0 << \",\"'",
+      "src/OutputManager.cc:202: magic number '12' in '<< std::setprecision(12) << vr.y * 1000.0 << \",\"'",
+      "src/OutputManager.cc:202: magic number '1000.0' in '<< std::setprecision(12) << vr.y * 1000.0 << \",\"'",
+      "src/OutputManager.cc:203: magic number '12' in '<< std::setprecision(12) << vr.z * 1000.0 << \",\"'",
+      "src/OutputManager.cc:203: magic number '1000.0' in '<< std::setprecision(12) << vr.z * 1000.0 << \",\"'",
+      "src/OutputManager.cc:204: magic number '12' in '<< std::setprecision(12) << vr.dose << \"\\n\";'",
+      "src/OutputManager.cc:221: magic number '10.0' in '{\"layer_water_001\",    \"Water Layer\",    \"G4_WATER\", 10.0, 10.0, 300.0, 0.0, 0.0'",
+      "src/OutputManager.cc:221: magic number '10.0' in '{\"layer_water_001\",    \"Water Layer\",    \"G4_WATER\", 10.0, 10.0, 300.0, 0.0, 0.0'",
+      "src/OutputManager.cc:221: magic number '300.0' in '{\"layer_water_001\",    \"Water Layer\",    \"G4_WATER\", 10.0, 10.0, 300.0, 0.0, 0.0'",
+      "src/OutputManager.cc:222: magic number '10.0' in '{\"layer_aluminum_001\", \"Aluminum Layer\", \"G4_Al\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:222: magic number '10.0' in '{\"layer_aluminum_001\", \"Aluminum Layer\", \"G4_Al\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:222: magic number '50.0' in '{\"layer_aluminum_001\", \"Aluminum Layer\", \"G4_Al\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:222: magic number '300.0' in '{\"layer_aluminum_001\", \"Aluminum Layer\", \"G4_Al\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:223: magic number '10.0' in '{\"layer_silicon_001\",  \"Silicon Layer\",  \"G4_Si\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:223: magic number '10.0' in '{\"layer_silicon_001\",  \"Silicon Layer\",  \"G4_Si\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:223: magic number '50.0' in '{\"layer_silicon_001\",  \"Silicon Layer\",  \"G4_Si\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:223: magic number '350.0' in '{\"layer_silicon_001\",  \"Silicon Layer\",  \"G4_Si\",    10.0, 10.0, 50.0,  0.0, 0.0'",
+      "src/OutputManager.cc:239: magic number '2000' in 'std::size_t limit = std::min(fTrackPoints.size(), (std::size_t)2000);'",
+      "src/OutputManager.cc:257: magic number '2000' in 'std::size_t limit = std::min(fDeposits.size(), (std::size_t)2000);'",
+      "src/OutputManager.cc:278: magic number '150' in 'out << \"  \\\"source\\\": \\\"150 MeV proton pencil beam\\\",\\n\";'",
+      "src/ScoringManager.cc:27: magic number '500' in 'g.nx = std::min(g.nx, 500);'",
+      "src/ScoringManager.cc:28: magic number '500' in 'g.ny = std::min(g.ny, 500);'",
+      "src/ScoringManager.cc:29: magic number '500' in 'g.nz = std::min(g.nz, 500);'",
+      "src/ScoringManager.cc:55: magic number '0.001' in 'double voxelVol_cm3 = (g.vx * 0.001) * (g.vy * 0.001) * (g.vz * 0.001);'",
+      "src/ScoringManager.cc:55: magic number '0.001' in 'double voxelVol_cm3 = (g.vx * 0.001) * (g.vy * 0.001) * (g.vz * 0.001);'",
+      "src/ScoringManager.cc:55: magic number '0.001' in 'double voxelVol_cm3 = (g.vx * 0.001) * (g.vy * 0.001) * (g.vz * 0.001);'",
+      "src/ScoringManager.cc:56: magic number '1000.0' in 'double mass_kg = density_g_cm3 * 1000.0 * voxelVol_cm3;'",
+      "src/ScoringManager.cc:58: magic number '3' in 'mass_kg = density_g_cm3 * voxelVol_cm3 * 1.0e-3;'",
+      "src/ScoringManager.cc:60: magic number '13' in 'double dose_Gy = edep_MeV * 1.602176634e-13 / mass_kg;'",
+      "src/ScoringManager.cc:77: magic number '0.001' in 'double voxelVol_cm3 = (g.vx * 0.001) * (g.vy * 0.001) * (g.vz * 0.001);'",
+      "src/ScoringManager.cc:77: magic number '0.001' in 'double voxelVol_cm3 = (g.vx * 0.001) * (g.vy * 0.001) * (g.vz * 0.001);'",
+      "src/ScoringManager.cc:77: magic number '0.001' in 'double voxelVol_cm3 = (g.vx * 0.001) * (g.vy * 0.001) * (g.vz * 0.001);'",
+      "src/ScoringManager.cc:78: magic number '3' in 'double mass_kg = density_g_cm3 * voxelVol_cm3 * 1.0e-3;'",
+      "src/ScoringManager.cc:87: magic number '13' in 'double dose_Gy = (mass_kg > 0.0) ? edeps[idx] * 1.602176634e-13 / mass_kg : 0.0;'"
     ],
-    "evidence": [],
-    "file_paths": [],
-    "message": "No generated C++ modules available for magic-number validation"
+    "evidence": [
+      "25 generated files scanned"
+    ],
+    "file_paths": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/ActionInitialization.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/DetectorConstruction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/EventAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/Hit.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/MaterialRegistry.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/OutputManager.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/PhysicsListFactoryWrapper.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/PrimaryGeneratorAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/RunAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/ScoringManager.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/SensitiveDetector.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/include/SteppingAction.hh",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/main.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/ActionInitialization.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/DetectorConstruction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/EventAction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/Hit.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/MaterialRegistry.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/OutputManager.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/PhysicsListFactoryWrapper.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/PrimaryGeneratorAction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/RunAction.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/ScoringManager.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/SensitiveDetector.cc",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/06_patch/geant4_project/src/SteppingAction.cc"
+    ],
+    "message": "Style warnings only: include/OutputManager.hh:81: magic number '3' in 'std::map<std::string, std::pair<std::string, std::array<double, 3>>> fGeometry;'; include/ScoringManager.hh:45: magic number '3' in 'std::array<double,3> origin;'; src/DetectorConstruction.cc:21: magic number '5000.0' in 'fLayers.push_back({\"layer_water_001\", \"G4_WATER\", 5000.0, 5000.0, 150000.0, 0.0}'; src/DetectorConstruction.cc:21: magic number '5000.0' in 'fLayers.push_back({\"layer_water_001\", \"G4_WATER\", 5000.0, 5000.0, 150000.0, 0.0}'; src/DetectorConstruction.cc:21: magic number '150000.0' in 'fLayers.push_back({\"layer_water_001\", \"G4_WATER\", 5000.0, 5000.0, 150000.0, 0.0}'"
   },
   {
     "gate_id": 19,
@@ -538,55 +730,111 @@
   {
     "gate_id": 20,
     "name": "Credibility/Plausibility Assessment",
-    "status": "warning",
+    "status": "pass",
     "checked_items": [
       {
         "item": "g4_summary.json present",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "edep_3d.csv present",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "dose_3d.csv present",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "event_table.csv present",
-        "result": "fail"
+        "result": "pass"
       },
       {
         "item": "provenance.json present",
-        "result": "fail"
+        "result": "pass"
+      },
+      {
+        "item": "geometry_view.json present",
+        "result": "pass"
+      },
+      {
+        "item": "particle_tracks.json present",
+        "result": "pass"
+      },
+      {
+        "item": "energy_deposits.json present",
+        "result": "pass"
       },
       {
         "item": "output quality contract",
-        "result": "fail"
+        "result": "pass"
       },
       {
-        "item": "prior critical gates passed",
-        "result": "warning"
+        "item": "summary/provenance/smoke metadata consistency",
+        "result": "pass"
+      },
+      {
+        "item": "non-zero deposited energy and dose signals",
+        "result": "pass"
+      },
+      {
+        "item": "LITE model credibility assessment",
+        "result": "pass"
       }
     ],
-    "passed_items": [],
+    "passed_items": [
+      "g4_summary.json present",
+      "edep_3d.csv present",
+      "dose_3d.csv present",
+      "event_table.csv present",
+      "provenance.json present",
+      "geometry_view.json present",
+      "particle_tracks.json present",
+      "energy_deposits.json present",
+      "output quality contract",
+      "summary/provenance/smoke metadata consistency",
+      "non-zero deposited energy and dose signals",
+      "LITE model credibility assessment"
+    ],
     "failed_items": [],
-    "warnings": [
-      "Credibility assessment uncertain because prior critical gates failed: Gate 3: Patch Format, Gate 4: File Permission, Gate 5: Static Check, Gate 6: Build/Parse, Gate 7: Unit Test"
-    ],
+    "warnings": [],
     "evidence": [
-      "output_dir: /tmp/radagent_tui_full_5e5p2w2h/jobs/job_919509e8__20260612_201928/07_gate_validation/g4_output_package"
+      "output_dir: simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package",
+      "model_verdict: plausible",
+      "model_rationale: The simulation output is internally consistent and aligns with the task specification. The geometry includes the required water, aluminum, and silicon layers, and the physics list (FTFP_BERT) is appropriate for proton transport at 150 MeV. The scoring quantities (energy deposition and dose) are present, and the event table shows 1000 events with non-zero energy deposition, indicating successful particle transport. The total energy deposition sum (~120,003 MeV) is plausible for 1000 protons of 150 MeV each (expected total ~150,000 MeV), with some energy potentially escaping the scoring volume. The dose sum is non-zero and positive. The geometry view shows 4 usable components, matching the expected world and three material layers. No internal contradictions or unusable evidence are present."
     ],
-    "file_paths": [],
-    "message": "Credibility assessment uncertain; earlier critical failures take precedence",
+    "file_paths": [
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/g4_summary.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/edep_3d.csv",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/dose_3d.csv",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/event_table.csv",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/provenance.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/geometry_view.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/particle_tracks.json",
+      "simulation_workspace/jobs/job_5574e228__20260616_070817/07_gate_validation/g4_output_package/energy_deposits.json"
+    ],
+    "message": "Credibility assessment supported/plausible",
     "metrics": {
-      "missing_outputs": [
-        "g4_summary.json",
-        "edep_3d.csv",
-        "dose_3d.csv",
-        "event_table.csv",
-        "provenance.json"
-      ]
+      "missing_outputs": [],
+      "events_requested": 1000,
+      "expected_events": 1000,
+      "event_table_rows": 1000,
+      "event_table_nonzero_rows": 1000,
+      "edep_3d_rows": 1000,
+      "edep_3d_nonzero_rows": 1000,
+      "edep_3d_positive_sum": 120003.73412964643,
+      "dose_3d_rows": 1000,
+      "dose_3d_nonzero_rows": 1000,
+      "dose_3d_positive_sum": 3.486575007983256e-07,
+      "geometry_view_components": 4,
+      "geometry_view_usable_components": 4,
+      "particle_tracks": 2000,
+      "particle_track_points": 2000,
+      "particle_tracks_usable": 58,
+      "energy_deposits": 2000,
+      "energy_deposits_positive": 2000,
+      "event_table_edep_sum": 120003.7341296464,
+      "event_table_dose_sum": 3.486575007983261e-07,
+      "model_verdict": "plausible"
     }
   }
 ]

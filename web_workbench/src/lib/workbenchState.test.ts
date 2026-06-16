@@ -9,7 +9,13 @@ import {
 
 describe('workbench state reducer', () => {
   it('starts on the overview inspector', () => {
-    expect(createInitialWorkbenchState().activeInspector).toBe('overview')
+    const state = createInitialWorkbenchState()
+
+    expect(state.activeInspector).toBe('overview')
+    expect(state.timeline[0]).toMatchObject({
+      title: '工作台已就绪',
+      body: '命令、事件、审查面板状态已连接。',
+    })
   })
 
   it('adds command responses to the timeline and switches inspector view', () => {
@@ -31,9 +37,29 @@ describe('workbench state reducer', () => {
     })
     expect(next.timeline.at(-1)).toMatchObject({
       kind: 'command',
-      title: '/status',
+      title: '查看状态',
       status: 'success',
+      meta: 'status',
       details: { job_id: 'job-1', status: 'paused', current_phase: 'context' },
+    })
+  })
+
+  it('marks only chat commands as Copilot history rows', () => {
+    const state = createInitialWorkbenchState()
+
+    const next = reduceCommandResponse(state, {
+      ok: true,
+      command: 'chat',
+      args: '当前状态',
+      view: 'timeline',
+      data: { message: '当前正在 g4_codegen 阶段。' },
+    })
+
+    expect(next.timeline.at(-1)).toMatchObject({
+      kind: 'command',
+      title: '对话',
+      meta: 'chat',
+      body: '当前正在 g4_codegen 阶段。',
     })
   })
 
@@ -50,7 +76,7 @@ describe('workbench state reducer', () => {
     expect(next.activeInspector).toBe('jobs')
     expect(next.timeline.at(-1)).toMatchObject({
       kind: 'command',
-      title: '/unknown',
+      title: 'unknown',
       status: 'error',
       body: 'Unknown command',
     })

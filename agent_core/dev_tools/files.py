@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import fnmatch
 from pathlib import Path
 from typing import Any
 
 from agent_core.dev_tools.security import PathEscapeError, resolve_within
 
 DEFAULT_READ_LIMIT = 200
+DEFAULT_SEARCH_LIMIT = 50
+IGNORED_DIRS = {"build", "CMakeFiles", "smoke_output", ".git", "__pycache__"}
 
 
 def read_file(project_dir: Path, path: str, *, offset: int = 1, limit: int = DEFAULT_READ_LIMIT) -> dict[str, Any]:
@@ -101,6 +104,75 @@ def write_file(project_dir: Path, path: str, content: str) -> dict[str, Any]:
     return {"ok": True, "path": path, "bytes_written": len(content)}
 
 
+def list_files(project_dir: Path, glob: str = "**/*", *, max_results: int = DEFAULT_SEARCH_LIMIT) -> dict[str, Any]:
+    """List project-relative files matching a glob, excluding build artifacts."""
+    try:
+        _validate_relative_glob(project_dir, glob)
+    except PathEscapeError as exc:
+        return {"ok": False, "error": str(exc)}
+
+    matches: list[str] = []
+    limit = max(1, int(max_results))
+    try:
+        for path in sorted(project_dir.rglob("*")):
+            if not path.is_file() or _has_ignored_part(path, project_dir):
+                continue
+            rel = path.relative_to(project_dir).as_posix()
+            if fnmatch.fnmatch(rel, glob):
+                matches.append(rel)
+                if len(matches) >= limit:
+                    break
+    except OSError as exc:
+        return {"ok": False, "error": f"List failed: {exc}"}
+
+    return {"ok": True, "matches": matches, "truncated": len(matches) >= limit}
+
+
+def search_text(
+    project_dir: Path,
+    pattern: str,
+    glob: str = "**/*",
+    *,
+    max_results: int = DEFAULT_SEARCH_LIMIT,
+) -> dict[str, Any]:
+    """Search text files for a literal pattern and return compact line matches."""
+    if not str(pattern):
+        return {"ok": False, "error": "pattern must be non-empty."}
+    try:
+        _validate_relative_glob(project_dir, glob)
+    except PathEscapeError as exc:
+        return {"ok": False, "error": str(exc)}
+
+    matches: list[dict[str, Any]] = []
+    limit = max(1, int(max_results))
+    try:
+        for path in sorted(project_dir.rglob("*")):
+            if not path.is_file() or _has_ignored_part(path, project_dir):
+                continue
+            rel = path.relative_to(project_dir).as_posix()
+            if not fnmatch.fnmatch(rel, glob):
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for line_no, line in enumerate(text.splitlines(), start=1):
+                if pattern in line:
+                    matches.append(
+                        {
+                            "path": rel,
+                            "line": line_no,
+                            "text": line,
+                        }
+                    )
+                    if len(matches) >= limit:
+                        return {"ok": True, "matches": matches, "truncated": True}
+    except OSError as exc:
+        return {"ok": False, "error": f"Search failed: {exc}"}
+
+    return {"ok": True, "matches": matches, "truncated": False}
+
+
 def _closest_lines(text: str, old_string: str, *, context: int = 6) -> str:
     """Return the lines around the best partial match for old_string.
 
@@ -121,3 +193,22 @@ def _closest_lines(text: str, old_string: str, *, context: int = 6) -> str:
     start = max(0, best_idx - context // 2)
     end = min(len(lines), start + context)
     return "\n".join(f"{i+1}: {lines[i]}" for i in range(start, end))
+
+
+def _validate_relative_glob(project_dir: Path, glob: str) -> None:
+    raw = str(glob or "**/*").strip()
+    if raw.startswith("/") or ".." in Path(raw).parts:
+        raise PathEscapeError(f"Path escapes project root: {raw!r}")
+    # Resolve the non-wildcard prefix so symlink escapes are rejected too.
+    prefix_parts: list[str] = []
+    for part in Path(raw).parts:
+        if any(ch in part for ch in "*?["):
+            break
+        prefix_parts.append(part)
+    if prefix_parts:
+        resolve_within(project_dir, str(Path(*prefix_parts)))
+
+
+def _has_ignored_part(path: Path, project_dir: Path) -> bool:
+    rel_parts = path.relative_to(project_dir).parts
+    return any(part in IGNORED_DIRS for part in rel_parts)

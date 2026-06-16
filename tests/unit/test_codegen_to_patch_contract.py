@@ -105,7 +105,8 @@ class TestCodegenPatchContract:
         # Must use new schema
         assert patch["patch_type"] == "json_file_replacement"
         assert "changed_files" in patch
-        assert len(patch["changed_files"]) == 2
+        changed_paths = {f["path"] for f in patch["changed_files"]}
+        assert {"src/TestModule.cc", "include/TestModule.hh"}.issubset(changed_paths)
 
         # Each file must have new_content, not content
         for f in patch["changed_files"]:

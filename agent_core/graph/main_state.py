@@ -60,6 +60,12 @@ class RadAgentMainState(TypedDict, total=False):
     simulation_scope: list[str]
     task_planning_status: str  # "passed" | "failed" | "reserved"
 
+    # ── Requirements Review outputs ──
+    requirements_review_status: str  # "pending" | "approved" | "rejected" | "failed"
+    requirements_review_request_path: str
+    requirements_review_response_path: str
+    confirmed_requirement_plan_path: str
+
     # ── G4 Modeling Subgraph outputs ──
     g4_model_ir_path: str
     component_specs_dir: str
@@ -85,7 +91,10 @@ class RadAgentMainState(TypedDict, total=False):
     code_module_plan_path: str
     proposed_patch_path: str
     generated_code_dir: str
-    g4_codegen_status: str  # "passed" | "failed"
+    g4_codegen_status: str  # "passed" | "failed" | "needs_user_input"
+    repair_continuation_request: dict[str, Any]
+    repair_continuation_status: str  # "pending" | "approved" | "rejected"
+    agentic_repair_max_turns_override: int
 
     # ── Patch Subgraph outputs ──
     patch_review_path: str
@@ -98,9 +107,6 @@ class RadAgentMainState(TypedDict, total=False):
     validation_status: str  # "passed" | "failed" | "blocked"
     failed_gates: list[str]
     skipped_gates: list[str]
-    visual_review_status: str  # "pending" | "approved" | "rejected"
-    visual_review_notes: str
-    visual_review_blocking: bool
 
     # ── Artifact Subgraph outputs ──
     review_artifact_dir: str

@@ -57,6 +57,16 @@ def _create_api_handler(get_service: ServiceProvider) -> ApiHandler:
                     service = get_service()
                     limit = int(query.get("limit", ["80"])[0])
                     return HTTPStatus.OK, {"events": to_jsonable(service.recent_events(limit))}
+                case "GET", "/api/visualization":
+                    service = get_service()
+                    job_id = str(query.get("job_id", [""])[0]).strip() or None
+                    return HTTPStatus.OK, {
+                        "visualization": to_jsonable(service.get_visualization_payload(job_id))
+                    }
+                case "GET", "/api/artifacts":
+                    service = get_service()
+                    job_id = str(query.get("job_id", [""])[0]).strip() or None
+                    return HTTPStatus.OK, {"artifacts": to_jsonable(service.list_artifacts(job_id))}
                 case "POST", "/api/command":
                     service = get_service()
                     payload = _read_json(body)
@@ -103,10 +113,16 @@ def _create_api_handler(get_service: ServiceProvider) -> ApiHandler:
                         "lite_context_window_tokens",
                         "pro_context_window_tokens",
                         "max_context_window_tokens",
+                        "agentic_repair_max_turns",
+                        "agentic_repair_history_chars",
                     }
                     update = {key: value for key, value in payload.items() if key in allowed_keys}
                     model = service.update_model_config(update)
                     return HTTPStatus.OK, {"model": to_jsonable(model)}
+                case "POST", "/api/model/health":
+                    service = get_service()
+                    health = asyncio.run(service.test_model_health())
+                    return HTTPStatus.OK, {"health": to_jsonable(health)}
                 case _:
                     return HTTPStatus.NOT_FOUND, {"ok": False, "error": f"Unknown API path: {path}"}
         except (json.JSONDecodeError, ValueError) as exc:

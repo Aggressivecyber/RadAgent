@@ -14,9 +14,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent_core.dev_tools.files import edit_file, read_file, write_file
+from agent_core.dev_tools.files import edit_file, list_files, read_file, search_text, write_file
+from agent_core.dev_tools.geant4_docs import search_geant4_docs
 from agent_core.dev_tools.schemas import ALL_TOOL_SCHEMAS
 from agent_core.dev_tools.shell import build_project, run_bash, run_smoke
+from agent_core.dev_tools.web_search import search_web
 
 __all__ = ["DevToolkit", "ALL_TOOL_SCHEMAS"]
 
@@ -85,6 +87,29 @@ class DevToolkit:
                 str(args.get("path", "")),
                 str(args.get("content", "")),
             )
+        if name == "list_files":
+            return list_files(
+                self.project_dir,
+                str(args.get("glob") or "**/*"),
+                max_results=int(args.get("max_results") or 50),
+            )
+        if name == "search_text":
+            return search_text(
+                self.project_dir,
+                str(args.get("pattern", "")),
+                str(args.get("glob") or "**/*"),
+                max_results=int(args.get("max_results") or 50),
+            )
+        if name == "search_geant4_docs":
+            return await search_geant4_docs(
+                str(args.get("query", "")),
+                top_k=int(args.get("top_k") or 5),
+            )
+        if name == "search_web":
+            return await search_web(
+                str(args.get("query", "")),
+                top_k=int(args.get("top_k") or 5),
+            )
         if name == "run_bash":
             return await run_bash(
                 self.project_dir,
@@ -100,6 +125,43 @@ class DevToolkit:
                 job_id=self.job_id,
             )
         return {"ok": False, "error": f"Unknown tool: {name}"}
+
+    def _invoke_sync_for_test(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
+        """Invoke synchronous file-navigation tools in unit tests."""
+        if name == "read_file":
+            return read_file(
+                self.project_dir,
+                str(args.get("path", "")),
+                offset=int(args.get("offset") or 1),
+                limit=int(args.get("limit") or 200),
+            )
+        if name == "edit_file":
+            return edit_file(
+                self.project_dir,
+                str(args.get("path", "")),
+                str(args.get("old_string", "")),
+                str(args.get("new_string", "")),
+            )
+        if name == "write_file":
+            return write_file(
+                self.project_dir,
+                str(args.get("path", "")),
+                str(args.get("content", "")),
+            )
+        if name == "list_files":
+            return list_files(
+                self.project_dir,
+                str(args.get("glob") or "**/*"),
+                max_results=int(args.get("max_results") or 50),
+            )
+        if name == "search_text":
+            return search_text(
+                self.project_dir,
+                str(args.get("pattern", "")),
+                str(args.get("glob") or "**/*"),
+                max_results=int(args.get("max_results") or 50),
+            )
+        return {"ok": False, "error": f"Tool is async or unknown: {name}"}
 
     @staticmethod
     def _parse_arguments(arguments: Any) -> dict[str, Any]:

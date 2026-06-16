@@ -1,13 +1,13 @@
 {
   "schema_version": "confirmed_model_plan_v1",
-  "job_id": "job_919509e8__20260612_201928",
-  "source_query": "建立 Geant4 仿真项目：10 MeV 单能质子束垂直入射 300 μm 厚硅平板探测器（横向 10 mm x 10 mm），运行 1000 个事件。使用 QGSP_BIC_HP 物理列表。记录每个事件的总能量沉积以及沿入射方向的深度能量沉积分布（Bragg 曲线，300 bins over 0.3 mm）。硅平板位于世界体中心，世界体为 50x50x10 mm³ 空气。质子源为点源，沿 +z 方向入射。输出统计信息和深度分布数据。",
+  "job_id": "job_5574e228__20260616_070817",
+  "source_query": "Build a Geant4 proton depth-dose benchmark for a 150 MeV pencil beam through water, aluminum, and silicon layers. Produce range and Bragg peak scoring, per-layer energy deposition, step limiter settings, physics list rationale, CSV output, and validation gates for material thickness and scoring bin size.",
   "domain_profile": "geant4",
   "components": [
     {
-      "component_id": "world",
+      "component_id": "world_001",
       "component_type": "world",
-      "material_id": "G4_AIR",
+      "material_id": "G4_Galactic",
       "geometry": {},
       "placement": {
         "position": [
@@ -21,94 +21,115 @@
           0.0
         ]
       },
-      "roles": [],
+      "roles": [
+        "world"
+      ],
       "confirmed_by_user": true,
       "parameters": [
         {
-          "field_path": "components.world.display_name",
-          "value": "World Volume",
-          "source_type": "assumption",
-          "confidence": 0.4,
-          "requires_confirmation": false
-        },
-        {
-          "field_path": "components.world.geometry_type",
-          "value": "box",
-          "source_type": "assumption",
-          "confidence": 0.4,
-          "requires_confirmation": false
-        },
-        {
-          "field_path": "components.world.dimensions",
+          "field_path": "components.world_001.placement",
           "value": {
-            "dx": 50000.0,
-            "dy": 50000.0,
-            "dz": 10000.0
+            "position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0
+            ]
           },
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.material_id",
-          "value": "G4_AIR",
+          "field_path": "components.world_001.display_name",
+          "value": "World Volume",
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.mother_volume",
+          "field_path": "components.world_001.geometry_type",
+          "value": "box",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world_001.dimensions",
+          "value": {
+            "dx": 100000.0,
+            "dy": 100000.0,
+            "dz": 752000.0
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world_001.material_id",
+          "value": "G4_Galactic",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.world_001.mother_volume",
           "value": null,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.sensitive",
+          "field_path": "components.world_001.sensitive",
           "value": false,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.color",
+          "field_path": "components.world_001.color",
           "value": null,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.source_evidence",
+          "field_path": "components.world_001.source_evidence",
           "value": [
-            "User request: world volume 50x50x10 mm³ air"
+            "Standard Geant4 world volume",
+            "geometry_decomposition:expanded mother volume to contain daughter placements on z"
           ],
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.open_issues",
+          "field_path": "components.world_001.open_issues",
           "value": [],
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.requires_confirmation",
+          "field_path": "components.world_001.requires_confirmation",
           "value": false,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.confirmed_by_user",
+          "field_path": "components.world_001.confirmed_by_user",
           "value": false,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.world.confirmation_source",
+          "field_path": "components.world_001.confirmation_source",
           "value": null,
           "source_type": "assumption",
           "confidence": 0.4,
@@ -117,9 +138,9 @@
       ]
     },
     {
-      "component_id": "silicon_detector",
-      "component_type": "volume",
-      "material_id": "G4_Si",
+      "component_id": "layer_water_001",
+      "component_type": "layer",
+      "material_id": "G4_WATER",
       "geometry": {},
       "placement": {
         "position": [
@@ -140,90 +161,380 @@
       "confirmed_by_user": true,
       "parameters": [
         {
-          "field_path": "components.silicon_detector.display_name",
-          "value": "Silicon Slab Detector",
-          "source_type": "assumption",
-          "confidence": 0.4,
-          "requires_confirmation": false
-        },
-        {
-          "field_path": "components.silicon_detector.geometry_type",
-          "value": "box",
-          "source_type": "assumption",
-          "confidence": 0.4,
-          "requires_confirmation": false
-        },
-        {
-          "field_path": "components.silicon_detector.dimensions",
+          "field_path": "components.layer_water_001.placement",
           "value": {
-            "dx": 10000.0,
-            "dy": 10000.0,
-            "dz": 300.0
+            "position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0
+            ]
           },
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.material_id",
-          "value": "G4_Si",
+          "field_path": "components.layer_water_001.display_name",
+          "value": "Water Layer",
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.mother_volume",
-          "value": "world",
+          "field_path": "components.layer_water_001.geometry_type",
+          "value": "box",
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.sensitive",
+          "field_path": "components.layer_water_001.dimensions",
+          "value": {
+            "dx": 10000.0,
+            "dy": 10000.0,
+            "dz": 300000.0
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_water_001.material_id",
+          "value": "G4_WATER",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_water_001.mother_volume",
+          "value": "world_001",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_water_001.sensitive",
           "value": true,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.color",
+          "field_path": "components.layer_water_001.color",
           "value": null,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.source_evidence",
+          "field_path": "components.layer_water_001.source_evidence",
           "value": [
-            "User request: 300 μm thick silicon slab, 10 mm x 10 mm lateral"
+            "Water phantom for proton therapy benchmark"
           ],
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.open_issues",
-          "value": [],
+          "field_path": "components.layer_water_001.open_issues",
+          "value": [
+            "Material thickness needs confirmation for 150 MeV proton range"
+          ],
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.requires_confirmation",
+          "field_path": "components.layer_water_001.requires_confirmation",
+          "value": true,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_water_001.confirmed_by_user",
           "value": false,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.confirmed_by_user",
+          "field_path": "components.layer_water_001.confirmation_source",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        }
+      ]
+    },
+    {
+      "component_id": "layer_aluminum_001",
+      "component_type": "layer",
+      "material_id": "G4_Al",
+      "geometry": {},
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          300000.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "roles": [
+        "edep_region",
+        "dose_scoring_region"
+      ],
+      "confirmed_by_user": true,
+      "parameters": [
+        {
+          "field_path": "components.layer_aluminum_001.placement",
+          "value": {
+            "position": [
+              0.0,
+              0.0,
+              300000.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.display_name",
+          "value": "Aluminum Layer",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.geometry_type",
+          "value": "box",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.dimensions",
+          "value": {
+            "dx": 10000.0,
+            "dy": 10000.0,
+            "dz": 50000.0
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.material_id",
+          "value": "G4_Al",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.mother_volume",
+          "value": "world_001",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.sensitive",
+          "value": true,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.color",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.source_evidence",
+          "value": [
+            "Aluminum layer for material variation study"
+          ],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.open_issues",
+          "value": [
+            "Material thickness needs confirmation"
+          ],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.requires_confirmation",
+          "value": true,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_aluminum_001.confirmed_by_user",
           "value": false,
           "source_type": "assumption",
           "confidence": 0.4,
           "requires_confirmation": false
         },
         {
-          "field_path": "components.silicon_detector.confirmation_source",
+          "field_path": "components.layer_aluminum_001.confirmation_source",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        }
+      ]
+    },
+    {
+      "component_id": "layer_silicon_001",
+      "component_type": "layer",
+      "material_id": "G4_Si",
+      "geometry": {},
+      "placement": {
+        "position": [
+          0.0,
+          0.0,
+          350000.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "roles": [
+        "edep_region",
+        "dose_scoring_region"
+      ],
+      "confirmed_by_user": true,
+      "parameters": [
+        {
+          "field_path": "components.layer_silicon_001.placement",
+          "value": {
+            "position": [
+              0.0,
+              0.0,
+              350000.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.display_name",
+          "value": "Silicon Layer",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.geometry_type",
+          "value": "box",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.dimensions",
+          "value": {
+            "dx": 10000.0,
+            "dy": 10000.0,
+            "dz": 50000.0
+          },
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.material_id",
+          "value": "G4_Si",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.mother_volume",
+          "value": "world_001",
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.sensitive",
+          "value": true,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.color",
+          "value": null,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.source_evidence",
+          "value": [
+            "Silicon layer for detector material study"
+          ],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.open_issues",
+          "value": [
+            "Material thickness needs confirmation"
+          ],
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.requires_confirmation",
+          "value": true,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.confirmed_by_user",
+          "value": false,
+          "source_type": "assumption",
+          "confidence": 0.4,
+          "requires_confirmation": false
+        },
+        {
+          "field_path": "components.layer_silicon_001.confirmation_source",
           "value": null,
           "source_type": "assumption",
           "confidence": 0.4,
@@ -248,7 +559,7 @@
       "confidence": 0.4,
       "requires_confirmation": false,
       "proposed_value": {
-        "value": 10.0,
+        "value": 150.0,
         "unit": "MeV",
         "distribution": "mono",
         "sigma": null,
@@ -265,7 +576,7 @@
         "position": [
           0.0,
           0.0,
-          -800.0
+          -400500.0
         ],
         "direction": [
           0.0,
@@ -311,7 +622,7 @@
       "confidence": 0.4,
       "requires_confirmation": false,
       "proposed_value": [
-        "task_spec.particles[0]: source_id=primary_source, particle=proton, energy=10.0 MeV, distribution=mono, generator=gun, position=[0.0, 0.0, -800.0], direction=[0.0, 0.0, 1.0], angular_distribution=mono"
+        "task_spec.particles[0]: source_id=primary_source, particle=proton, energy=150.0 MeV, distribution=mono, generator=gun, position=[0.0, 0.0, -400500.0], direction=[0.0, 0.0, 1.0], angular_distribution=mono"
       ]
     },
     {
@@ -358,7 +669,7 @@
       "requires_confirmation": false,
       "proposed_value": [
         {
-          "region_component_id": "silicon_detector",
+          "region_component_id": "layer_water_001",
           "quantity": "edep_MeV"
         }
       ]
@@ -378,7 +689,7 @@
       "confidence": 0.4,
       "requires_confirmation": false,
       "proposed_value": [
-        "Auto-generated: region edep scoring for silicon_detector"
+        "Auto-generated: region edep scoring for layer_water_001"
       ]
     },
     {
@@ -423,7 +734,7 @@
       "requires_confirmation": false,
       "proposed_value": [
         {
-          "region_component_id": "silicon_detector",
+          "region_component_id": "layer_water_001",
           "quantity": "dose_Gy"
         }
       ]
@@ -443,7 +754,267 @@
       "confidence": 0.4,
       "requires_confirmation": false,
       "proposed_value": [
-        "Auto-generated: region dose scoring for silicon_detector"
+        "Auto-generated: region dose scoring for layer_water_001"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "region"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "edep_MeV"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        {
+          "region_component_id": "layer_aluminum_001",
+          "quantity": "edep_MeV"
+        }
+      ]
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: region edep scoring for layer_aluminum_001"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "region"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "dose_Gy"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        {
+          "region_component_id": "layer_aluminum_001",
+          "quantity": "dose_Gy"
+        }
+      ]
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: region dose scoring for layer_aluminum_001"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "region"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "edep_MeV"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        {
+          "region_component_id": "layer_silicon_001",
+          "quantity": "edep_MeV"
+        }
+      ]
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: region edep scoring for layer_silicon_001"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "region"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "dose_Gy"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": null
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        {
+          "region_component_id": "layer_silicon_001",
+          "quantity": "dose_Gy"
+        }
+      ]
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: region dose scoring for layer_silicon_001"
       ]
     },
     {
@@ -479,11 +1050,11 @@
       "confidence": 0.4,
       "requires_confirmation": false,
       "proposed_value": {
-        "target_component_id": "silicon_detector",
+        "target_component_id": "layer_water_001",
         "voxel_size": [
           1000.0,
           1000.0,
-          30.0
+          30000.0
         ]
       }
     },
@@ -510,7 +1081,141 @@
       "confidence": 0.4,
       "requires_confirmation": false,
       "proposed_value": [
-        "Auto-generated: voxel dose map for silicon_detector, voxel_size=[1000.0, 1000.0, 30.0] um"
+        "Auto-generated: voxel dose map for layer_water_001, voxel_size=[1000.0, 1000.0, 30000.0] um"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "voxel"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "dose_Gy"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": {
+        "target_component_id": "layer_aluminum_001",
+        "voxel_size": [
+          1000.0,
+          1000.0,
+          5000.0
+        ]
+      }
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: voxel dose map for layer_aluminum_001, voxel_size=[1000.0, 1000.0, 5000.0] um"
+      ]
+    },
+    {
+      "scoring_id": "open_issues",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "scoring_type",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "voxel"
+    },
+    {
+      "scoring_id": "quantities",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "dose_Gy"
+      ]
+    },
+    {
+      "scoring_id": "voxel_grid",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": {
+        "target_component_id": "layer_silicon_001",
+        "voxel_size": [
+          1000.0,
+          1000.0,
+          5000.0
+        ]
+      }
+    },
+    {
+      "scoring_id": "region_scores",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": []
+    },
+    {
+      "scoring_id": "output_format",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": "csv"
+    },
+    {
+      "scoring_id": "source_evidence",
+      "confirmed_by_user": true,
+      "source_type": "assumption",
+      "confidence": 0.4,
+      "requires_confirmation": false,
+      "proposed_value": [
+        "Auto-generated: voxel dose map for layer_silicon_001, voxel_size=[1000.0, 1000.0, 5000.0] um"
       ]
     },
     {
@@ -557,7 +1262,15 @@
       "requires_confirmation": false,
       "proposed_value": [
         {
-          "region_component_id": "silicon_detector",
+          "region_component_id": "layer_water_001",
+          "quantity": "edep_MeV"
+        },
+        {
+          "region_component_id": "layer_aluminum_001",
+          "quantity": "edep_MeV"
+        },
+        {
+          "region_component_id": "layer_silicon_001",
           "quantity": "edep_MeV"
         }
       ]
@@ -591,5 +1304,1908 @@
   ],
   "assumptions_confirmed": true,
   "confirmation_status": "approved",
-  "confirmation_history": []
+  "confirmation_history": [],
+  "agent_context": {
+    "purpose": "confirmed_human_constraints_for_codegen",
+    "status": "approved",
+    "confirmed_constraints": [
+      {
+        "field_path": "components.world_001.placement",
+        "value": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "unit": null,
+        "category": "placement",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 体积放置、重叠检查、入射路径和可视化窗口位置。"
+      },
+      {
+        "field_path": "components.world_001.display_name",
+        "value": "World Volume",
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.world_001.geometry_type",
+        "value": "box",
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.world_001.dimensions",
+        "value": {
+          "dx": 100000.0,
+          "dy": 100000.0,
+          "dz": 752000.0
+        },
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.world_001.material_id",
+        "value": "G4_Galactic",
+        "unit": null,
+        "category": "material",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响材料密度、剂量换算和能量沉积可信度。"
+      },
+      {
+        "field_path": "components.world_001.mother_volume",
+        "value": null,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.world_001.sensitive",
+        "value": false,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.world_001.color",
+        "value": null,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.world_001.source_evidence",
+        "value": [
+          "Standard Geant4 world volume",
+          "geometry_decomposition:expanded mother volume to contain daughter placements on z"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "components.world_001.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.world_001.requires_confirmation",
+        "value": false,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.world_001.confirmed_by_user",
+        "value": false,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.world_001.confirmation_source",
+        "value": null,
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "components.layer_water_001.placement",
+        "value": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "unit": null,
+        "category": "placement",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 体积放置、重叠检查、入射路径和可视化窗口位置。"
+      },
+      {
+        "field_path": "components.layer_water_001.display_name",
+        "value": "Water Layer",
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_water_001.geometry_type",
+        "value": "box",
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.layer_water_001.dimensions",
+        "value": {
+          "dx": 10000.0,
+          "dy": 10000.0,
+          "dz": 300000.0
+        },
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.layer_water_001.material_id",
+        "value": "G4_WATER",
+        "unit": null,
+        "category": "material",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响材料密度、剂量换算和能量沉积可信度。"
+      },
+      {
+        "field_path": "components.layer_water_001.mother_volume",
+        "value": "world_001",
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_water_001.sensitive",
+        "value": true,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_water_001.color",
+        "value": null,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_water_001.source_evidence",
+        "value": [
+          "Water phantom for proton therapy benchmark"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "components.layer_water_001.open_issues",
+        "value": [
+          "Material thickness needs confirmation for 150 MeV proton range"
+        ],
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_water_001.requires_confirmation",
+        "value": true,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_water_001.confirmed_by_user",
+        "value": false,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_water_001.confirmation_source",
+        "value": null,
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.placement",
+        "value": {
+          "position": [
+            0.0,
+            0.0,
+            300000.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "unit": null,
+        "category": "placement",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 体积放置、重叠检查、入射路径和可视化窗口位置。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.display_name",
+        "value": "Aluminum Layer",
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.geometry_type",
+        "value": "box",
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.dimensions",
+        "value": {
+          "dx": 10000.0,
+          "dy": 10000.0,
+          "dz": 50000.0
+        },
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.material_id",
+        "value": "G4_Al",
+        "unit": null,
+        "category": "material",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响材料密度、剂量换算和能量沉积可信度。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.mother_volume",
+        "value": "world_001",
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.sensitive",
+        "value": true,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.color",
+        "value": null,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.source_evidence",
+        "value": [
+          "Aluminum layer for material variation study"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.open_issues",
+        "value": [
+          "Material thickness needs confirmation"
+        ],
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.requires_confirmation",
+        "value": true,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.confirmed_by_user",
+        "value": false,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_aluminum_001.confirmation_source",
+        "value": null,
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.placement",
+        "value": {
+          "position": [
+            0.0,
+            0.0,
+            350000.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "unit": null,
+        "category": "placement",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 体积放置、重叠检查、入射路径和可视化窗口位置。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.display_name",
+        "value": "Silicon Layer",
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.geometry_type",
+        "value": "box",
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.dimensions",
+        "value": {
+          "dx": 10000.0,
+          "dy": 10000.0,
+          "dz": 50000.0
+        },
+        "unit": null,
+        "category": "dimension",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 Geant4 几何尺寸、包络关系、粒子轨迹和能量沉积坐标。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.material_id",
+        "value": "G4_Si",
+        "unit": null,
+        "category": "material",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响材料密度、剂量换算和能量沉积可信度。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.mother_volume",
+        "value": "world_001",
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.sensitive",
+        "value": true,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.color",
+        "value": null,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.source_evidence",
+        "value": [
+          "Silicon layer for detector material study"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.open_issues",
+        "value": [
+          "Material thickness needs confirmation"
+        ],
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.requires_confirmation",
+        "value": true,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.confirmed_by_user",
+        "value": false,
+        "unit": null,
+        "category": "other",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响后续 Geant4 代码生成约束。"
+      },
+      {
+        "field_path": "components.layer_silicon_001.confirmation_source",
+        "value": null,
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.particle_type",
+        "value": "proton",
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.energy",
+        "value": {
+          "value": 150.0,
+          "unit": "MeV",
+          "distribution": "mono",
+          "sigma": null,
+          "spectrum_file": null
+        },
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.beam",
+        "value": {
+          "position": [
+            0.0,
+            0.0,
+            -400500.0
+          ],
+          "direction": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "sigma_position_um": null,
+          "sigma_direction_rad": null,
+          "angular_distribution": "mono",
+          "angular_spectrum_file": null,
+          "surface_shape": "point",
+          "surface_size": null
+        },
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.generator_type",
+        "value": "gun",
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.events",
+        "value": 1000,
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.relative_weight",
+        "value": null,
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.source_evidence",
+        "value": [
+          "task_spec.particles[0]: source_id=primary_source, particle=proton, energy=150.0 MeV, distribution=mono, generator=gun, position=[0.0, 0.0, -400500.0], direction=[0.0, 0.0, 1.0], angular_distribution=mono"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "sources.primary_source.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_edep.scoring_type",
+        "value": "region",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_edep.quantities",
+        "value": [
+          "edep_MeV"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_edep.voxel_grid",
+        "value": null,
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_edep.region_scores",
+        "value": [
+          {
+            "region_component_id": "layer_water_001",
+            "quantity": "edep_MeV"
+          }
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_edep.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_edep.source_evidence",
+        "value": [
+          "Auto-generated: region edep scoring for layer_water_001"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_edep.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_dose.scoring_type",
+        "value": "region",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_dose.quantities",
+        "value": [
+          "dose_Gy"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_dose.voxel_grid",
+        "value": null,
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_dose.region_scores",
+        "value": [
+          {
+            "region_component_id": "layer_water_001",
+            "quantity": "dose_Gy"
+          }
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_dose.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_dose.source_evidence",
+        "value": [
+          "Auto-generated: region dose scoring for layer_water_001"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_dose.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_edep.scoring_type",
+        "value": "region",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_edep.quantities",
+        "value": [
+          "edep_MeV"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_edep.voxel_grid",
+        "value": null,
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_edep.region_scores",
+        "value": [
+          {
+            "region_component_id": "layer_aluminum_001",
+            "quantity": "edep_MeV"
+          }
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_edep.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_edep.source_evidence",
+        "value": [
+          "Auto-generated: region edep scoring for layer_aluminum_001"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_edep.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_dose.scoring_type",
+        "value": "region",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_dose.quantities",
+        "value": [
+          "dose_Gy"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_dose.voxel_grid",
+        "value": null,
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_dose.region_scores",
+        "value": [
+          {
+            "region_component_id": "layer_aluminum_001",
+            "quantity": "dose_Gy"
+          }
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_dose.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_dose.source_evidence",
+        "value": [
+          "Auto-generated: region dose scoring for layer_aluminum_001"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_dose.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_edep.scoring_type",
+        "value": "region",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_edep.quantities",
+        "value": [
+          "edep_MeV"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_edep.voxel_grid",
+        "value": null,
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_edep.region_scores",
+        "value": [
+          {
+            "region_component_id": "layer_silicon_001",
+            "quantity": "edep_MeV"
+          }
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_edep.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_edep.source_evidence",
+        "value": [
+          "Auto-generated: region edep scoring for layer_silicon_001"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_edep.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_dose.scoring_type",
+        "value": "region",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_dose.quantities",
+        "value": [
+          "dose_Gy"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_dose.voxel_grid",
+        "value": null,
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_dose.region_scores",
+        "value": [
+          {
+            "region_component_id": "layer_silicon_001",
+            "quantity": "dose_Gy"
+          }
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_dose.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_dose.source_evidence",
+        "value": [
+          "Auto-generated: region dose scoring for layer_silicon_001"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_dose.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_voxel_dose.scoring_type",
+        "value": "voxel",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_voxel_dose.quantities",
+        "value": [
+          "dose_Gy"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_voxel_dose.voxel_grid",
+        "value": {
+          "target_component_id": "layer_water_001",
+          "voxel_size": [
+            1000.0,
+            1000.0,
+            30000.0
+          ]
+        },
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_voxel_dose.region_scores",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_voxel_dose.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_voxel_dose.source_evidence",
+        "value": [
+          "Auto-generated: voxel dose map for layer_water_001, voxel_size=[1000.0, 1000.0, 30000.0] um"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_water_001_voxel_dose.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_voxel_dose.scoring_type",
+        "value": "voxel",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_voxel_dose.quantities",
+        "value": [
+          "dose_Gy"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_voxel_dose.voxel_grid",
+        "value": {
+          "target_component_id": "layer_aluminum_001",
+          "voxel_size": [
+            1000.0,
+            1000.0,
+            5000.0
+          ]
+        },
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_voxel_dose.region_scores",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_voxel_dose.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_voxel_dose.source_evidence",
+        "value": [
+          "Auto-generated: voxel dose map for layer_aluminum_001, voxel_size=[1000.0, 1000.0, 5000.0] um"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_aluminum_001_voxel_dose.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_voxel_dose.scoring_type",
+        "value": "voxel",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_voxel_dose.quantities",
+        "value": [
+          "dose_Gy"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_voxel_dose.voxel_grid",
+        "value": {
+          "target_component_id": "layer_silicon_001",
+          "voxel_size": [
+            1000.0,
+            1000.0,
+            5000.0
+          ]
+        },
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_voxel_dose.region_scores",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_voxel_dose.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_voxel_dose.source_evidence",
+        "value": [
+          "Auto-generated: voxel dose map for layer_silicon_001, voxel_size=[1000.0, 1000.0, 5000.0] um"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.layer_silicon_001_voxel_dose.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.event_table.scoring_type",
+        "value": "region",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.event_table.quantities",
+        "value": [
+          "edep_MeV",
+          "event_id",
+          "track_id"
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.event_table.voxel_grid",
+        "value": null,
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.event_table.region_scores",
+        "value": [
+          {
+            "region_component_id": "layer_water_001",
+            "quantity": "edep_MeV"
+          },
+          {
+            "region_component_id": "layer_aluminum_001",
+            "quantity": "edep_MeV"
+          },
+          {
+            "region_component_id": "layer_silicon_001",
+            "quantity": "edep_MeV"
+          }
+        ],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.event_table.output_format",
+        "value": "csv",
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      },
+      {
+        "field_path": "scoring.event_table.source_evidence",
+        "value": [
+          "Auto-generated: event table for all sensitive components"
+        ],
+        "unit": null,
+        "category": "source",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响粒子类型、能量、方向和 100 粒子轨迹预览。"
+      },
+      {
+        "field_path": "scoring.event_table.open_issues",
+        "value": [],
+        "unit": null,
+        "category": "scoring",
+        "status": "approved",
+        "source_type": "assumption",
+        "source": "human_confirmation",
+        "priority": "human_confirmed_hard",
+        "edited": false,
+        "confidence": 0.4,
+        "impact": "影响 event_table、edep_3d、dose_3d 和红色能量沉积点输出。"
+      }
+    ],
+    "codegen_instruction": "Use these user-confirmed values as hard constraints. Edited constraints override the same field_path in g4_model_ir, defaults, examples, RAG, and model guesses. Do not replace geometry, placement, source, material, or scoring values with generic defaults."
+  }
 }

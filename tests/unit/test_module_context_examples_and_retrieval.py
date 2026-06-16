@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import json
+
 from agent_core.g4_codegen.module_agents.module_context_builder import build_module_context
 from agent_core.g4_codegen.module_agents.module_context_examples import (
     get_module_code_example,
     get_module_interface_context,
 )
-from agent_core.graph.subgraphs.g4_codegen_graph import MODULE_LAYERS
+from agent_core.g4_codegen.planners.module_contract_builder import MODULE_DEFINITIONS
 
-MODULE_NAMES = [module_name for _, modules in MODULE_LAYERS for module_name in modules]
+MODULE_NAMES = list(MODULE_DEFINITIONS)
 
 
 def _contract(module_name: str) -> dict:
@@ -81,6 +83,111 @@ def test_module_context_includes_examples_interfaces_and_retrieval_policy() -> N
     assert ctx["web_context"]
     assert ctx["context_retrieval_policy"]["rag_score"] == 0.91
     assert ctx["context_retrieval_policy"]["web_search_available"] is True
+
+
+def test_module_context_loads_agentic_repair_lessons_for_prompt(
+    tmp_path, monkeypatch
+) -> None:
+    """Lessons learned by repair should feed the next module-agent prompt."""
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    lessons_path = (
+        tmp_path
+        / "jobs"
+        / "job_lesson_context"
+        / "05_codegen"
+        / "integration"
+        / "agentic_repair_lessons.json"
+    )
+    lessons_path.parent.mkdir(parents=True)
+    lessons_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "agentic_repair_lessons_v1",
+                "job_id": "job_lesson_context",
+                "lessons": [
+                    {
+                        "id": "visual_workbench_artifact",
+                        "title": "Keep workbench artifacts non-empty",
+                        "prompt_instruction": (
+                            "Write real geometry_view.json, particle_tracks.json, "
+                            "and energy_deposits.json from runtime data."
+                        ),
+                        "count": 3,
+                    },
+                    {
+                        "id": "broken",
+                        "title": "invalid lesson without prompt instruction",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    ctx = build_module_context(
+        module_name="runtime_app",
+        module_contract=_contract("runtime_app"),
+        g4_model_ir={"model_ir_id": "test_lessons"},
+        codegen_plan={"required_modules": MODULE_NAMES},
+        geometry_strategy_plan={},
+        code_architecture_plan={},
+        job_id="job_lesson_context",
+    )
+
+    lessons = ctx["agentic_repair_lessons"]
+    assert lessons["source_path"] == str(lessons_path)
+    assert lessons["lesson_count"] == 1
+    assert lessons["lessons"][0]["id"] == "visual_workbench_artifact"
+    assert "energy_deposits.json" in lessons["lessons"][0]["prompt_instruction"]
+
+    persisted = json.loads(
+        (
+            tmp_path
+            / "jobs"
+            / "job_lesson_context"
+            / "05_codegen"
+            / "module_contexts"
+            / "runtime_app.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert persisted["agentic_repair_lessons"]["lessons"][0]["id"] == (
+        "visual_workbench_artifact"
+    )
+
+
+def test_simulation_core_context_exposes_stable_runtime_abi_contract() -> None:
+    ctx = build_module_context(
+        module_name="simulation_core",
+        module_contract=_contract("simulation_core"),
+        g4_model_ir={
+            "model_ir_id": "test_abi",
+            "job_id": "job_abi",
+            "components": [{"component_id": "detector"}],
+            "materials": [{"material_id": "silicon", "geant4_name": "G4_Si"}],
+            "scoring": [{"scoring_id": "edep", "target_component_id": "detector"}],
+        },
+        codegen_plan={"required_modules": MODULE_NAMES},
+        geometry_strategy_plan={"global_strategy": "agent_generated_geometry"},
+        code_architecture_plan={"classes": []},
+        job_id="job_abi",
+    )
+
+    abi_contract = ctx["module_code_example"]["runtime_abi_contract"]
+    joined = json.dumps(abi_contract, ensure_ascii=False)
+
+    assert (
+        "SensitiveDetector(const G4String& name, const G4String& hitsCollectionName, "
+        "ScoringManager* scoringManager)"
+    ) in joined
+    assert "using HitsCollection = G4THitsCollection<Hit>" in joined
+    assert "new ::Hit()" in joined
+    assert "GetCurrentEvent()->GetEventID()" in joined
+    assert "step->GetTrack()->GetTrackID()" in joined
+    assert "new SensitiveDetector(sdName, collectionName, fScoringManager)" in joined
+    assert "ScoringManager::Instance()" in joined
+    assert "RegisterRegion(" in joined
+    assert "new ScoringManager" not in joined
+    assert "RegisterRegionScoring" not in joined
 
 
 def test_module_context_filters_rag_snippets_by_module_keywords() -> None:

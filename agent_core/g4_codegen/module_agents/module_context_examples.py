@@ -30,9 +30,112 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "SensitiveDetector",
             "ScoringManager",
         ],
+        "runtime_abi_contract": {
+            "status": "fixed_runtime_abi",
+            "rule": (
+                "Generate Hit, SensitiveDetector, ScoringManager, and "
+                "DetectorConstruction against this ABI exactly. Do not invent an "
+                "alternate constructor, singleton API, or SetScoringManager method."
+            ),
+            "hit_header": {
+                "required_alias": "using HitsCollection = G4THitsCollection<Hit>;",
+                "required_includes": [
+                    "G4VHit.hh",
+                    "G4THitsCollection.hh",
+                    "G4Allocator.hh",
+                    "G4ThreeVector.hh",
+                    "globals.hh",
+                ],
+                "required_fields": [
+                    "G4int eventID",
+                    "G4int trackID",
+                    "G4int particlePDG",
+                    "G4double edepMeV",
+                    "G4ThreeVector position",
+                    "G4double time",
+                ],
+            },
+            "sensitive_detector_header": {
+                "constructor_signature": (
+                    "SensitiveDetector(const G4String& name, "
+                    "const G4String& hitsCollectionName, "
+                    "ScoringManager* scoringManager)"
+                ),
+                "required_members": [
+                    "G4String fHitsCollectionName",
+                    "G4int fHitsCollectionID",
+                    "HitsCollection* fHitsCollection",
+                    "ScoringManager* fScoringManager",
+                    "G4String fComponentId",
+                ],
+                "required_methods": [
+                    "void Initialize(G4HCofThisEvent* hce) override",
+                    "G4bool ProcessHits(G4Step* step, G4TouchableHistory*) override",
+                    "void SetComponentId(const G4String& componentId)",
+                ],
+            },
+            "sensitive_detector_process_hits": {
+                "hit_allocation": (
+                    "auto* hit = new ::Hit();  // leading :: avoids "
+                    "G4VSensitiveDetector::Hit name hiding inside member functions"
+                ),
+                "event_id_source_pattern": (
+                    "G4RunManager::GetRunManager()->GetCurrentEvent()->GetEventID()"
+                ),
+                "event_id_source": (
+                    "auto* event = G4RunManager::GetRunManager()->GetCurrentEvent(); "
+                    "hit->SetEventID(event ? event->GetEventID() : -1);"
+                ),
+                "event_id_must_include": ["G4RunManager.hh", "G4Event.hh"],
+                "track_id_source": "hit->SetTrackID(step->GetTrack()->GetTrackID());",
+                "track_id_must_include": ["G4Step.hh", "G4Track.hh"],
+                "scoring_call": (
+                    "fScoringManager->RecordEnergyDeposit("
+                    "fComponentId, edep / MeV, preStepPoint->GetPosition())"
+                ),
+            },
+                "detector_construction": {
+                    "scoring_manager_lifetime": (
+                    "DetectorConstruction stores fScoringManager from "
+                    "ScoringManager::Instance() in the constructor. The constructor "
+                    "is private in the stable ABI, so direct allocation is invalid."
+                    ),
+                    "creation_call": (
+                        "new SensitiveDetector(sdName, collectionName, fScoringManager)"
+                    ),
+                    "attachment_sequence": [
+                    "auto* sd = new SensitiveDetector(sdName, collectionName, fScoringManager);",
+                        "sd->SetComponentId(componentId);",
+                        "G4SDManager::GetSDMpointer()->AddNewDetector(sd);",
+                        "logicalVolume->SetSensitiveDetector(sd);",
+                    "G4double massKg = logicalVolume->GetMass(true, false) / kg;",
+                    "fScoringManager->RegisterRegion(componentId, massKg);",
+                    ],
+                },
+            "placement_manager_header": {
+                "rotation_matrix_rule": (
+                    "G4RotationMatrix is a Geant4 11 using/typedef alias. "
+                    "Do not write class G4RotationMatrix; forward declarations; "
+                    'include "G4RotationMatrix.hh" whenever G4RotationMatrix '
+                    "appears in a header, field, parameter, or return type."
+                ),
+                "forbidden_forward_declarations": ["class G4RotationMatrix;"],
+                "required_includes_when_used": ["G4RotationMatrix.hh"],
+            },
+            "forbidden": [
+                "class HitsCollection forward declarations that conflict with the alias",
+                "class G4RotationMatrix; forward declarations; include G4RotationMatrix.hh instead",
+                "SetEventID(0), SetTrackID(0), event_id=0, or track_id=0 placeholders",
+                "new Hit() inside SensitiveDetector member functions; use new ::Hit()",
+                "new SensitiveDetector(name, hitsCollectionName) with only two args",
+                "#include directives inside ConstructSDandField or any function body",
+                "SetScoringManager calls unless declared in SensitiveDetector.hh",
+            ],
+        },
         "example": (
             "// CRITICAL lifetime rule: ScoringManager MUST be owned by the\n"
-            "// DetectorConstruction and created in its CONSTRUCTOR, NOT in\n"
+            "// ScoringManager singleton and stored in DetectorConstruction's\n"
+            "// CONSTRUCTOR, NOT in\n"
             "// ConstructSDandField(). Geant4 calls ActionInitialization::Build()\n"
             "// BEFORE ConstructSDandField(), so Build() must be able to fetch an\n"
             "// already-constructed, non-null ScoringManager for EventAction and\n"
@@ -40,21 +143,20 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "// actions get a null pointer and EVERY event records zero edep.\n"
             "class DetectorConstruction : public G4VUserDetectorConstruction {\n"
             "public:\n"
-            "  DetectorConstruction() : fScoringManager(new ScoringManager()) {}\n"
+            "  DetectorConstruction() : fScoringManager(ScoringManager::Instance()) {}\n"
             "  G4VPhysicalVolume* Construct() override;        // build geometry only\n"
             "  void ConstructSDandField() override;            // register regions + attach SDs\n"
             "  ScoringManager* GetScoringManager() const { return fScoringManager; }\n"
             "private:\n"
-            "  ScoringManager* fScoringManager;  // constructed here, deleted in dtor\n"
+            "  ScoringManager* fScoringManager;  // singleton pointer; do not delete\n"
             "};\n"
             "// SensitiveDetector records under its componentId (set via SetComponentId),\n"
-            "// which MUST match the key passed to ScoringManager::RegisterRegionScoring.\n"
+            "// which MUST match the key passed to ScoringManager::RegisterRegion.\n"
             "// Never use this->GetName() as the scoring key.\n"
             "class ScoringManager {\n"
             "public:\n"
-            "  void RegisterRegionScoring(const G4String& componentId, G4LogicalVolume*);\n"
-            "  void RegisterVoxelScoring(const G4String& componentId, G4LogicalVolume*,\n"
-            "                            const std::array<G4double,3>& voxelSize_um);\n"
+            "  static ScoringManager* Instance();\n"
+            "  void RegisterRegion(const G4String& componentId, G4double massKg);\n"
             "  void RecordEnergyDeposit(const G4String& componentId, G4double edep_MeV,\n"
             "                           const G4ThreeVector& position);\n"
             "  void EndOfEvent(const G4String& componentId, G4double& edep, G4double& dose);\n"
@@ -65,13 +167,14 @@ MODULE_CODE_EXAMPLES: dict[str, dict[str, Any]] = {
             "scoring interfaces together.",
             "Attach sensitive detectors to actual logical volumes from DetectorConstruction.",
             "Keep scoring records and dose calculations tied to real geometry/material quantities.",
-            "ScoringManager lifetime: construct it in the DetectorConstruction constructor "
-            "(and delete in the destructor). RegisterRegionScoring/RegisterVoxelScoring and "
+            "ScoringManager lifetime: store ScoringManager::Instance() in the "
+            "DetectorConstruction constructor and do not delete it in the destructor. "
+            "RegisterRegion(componentId, massKg) and "
             "SD attachment happen in ConstructSDandField() where logical volumes exist. "
             "ActionInitialization::Build() runs BEFORE ConstructSDandField, so the instance "
             "must already exist for EventAction/SteppingAction to receive a non-null pointer.",
             "Scoring key contract: every RecordEnergyDeposit call (from both SensitiveDetector "
-            "and SteppingAction) MUST use the componentId that RegisterRegionScoring used. "
+            "and SteppingAction) MUST use the componentId that RegisterRegion used. "
             "Give SensitiveDetector a SetComponentId() and use it — never this->GetName().",
             "Dose units: dose_Gy = edep_MeV * 1.602176634e-13 (J/MeV) / mass_kg. "
             "G4LogicalVolume::GetMass() returns kg. Do NOT treat `edep_MeV * MeV` as joules — "

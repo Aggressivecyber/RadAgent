@@ -44,8 +44,41 @@ describe('normalizeHomeSummary', () => {
     })
 
     expect(summary.metrics.completed_jobs).toBe(3)
-    expect(summary.metricTiles[0]).toEqual({ label: '项目 Projects', value: '2' })
+    expect(summary.metricTiles[0]).toEqual({ label: '项目', labelEn: 'Projects', value: '2' })
     expect(summary.workflowCapabilities[0].name).toBe('Intent capture')
+    expect(summary.toolUseItems.map((item) => item.title)).toEqual([
+      '任务转仿真链路',
+      'Geant4 可信模型',
+      '材料屏蔽检查',
+      '本地工程生成',
+      '运行得到结果',
+      '审查与修订',
+    ])
+    expect(summary.capabilityShowcases).toHaveLength(2)
+    expect(summary.capabilityShowcases[0]).toMatchObject({
+      title: '防护建模',
+      label: 'Shielding model',
+      items: [
+        { title: '任务拆解', demoIndex: '01' },
+        { title: '模型证据', demoIndex: '02' },
+        { title: '参数确认', demoIndex: '06' },
+      ],
+    })
+    expect(summary.capabilityShowcases[1].items.map((item) => item.demoIndex)).toEqual([
+      '03',
+      '04',
+      '05',
+    ])
+    expect(summary.advantageItems.map((item) => item.title)).toEqual([
+      '空天辐照防护',
+      'Geant4 可信建模',
+      '空间辐射源接入',
+      '本地构建运行',
+      '多层验证门禁',
+      '产物可复查',
+    ])
+    expect(summary.advantageItems.map((item) => item.body).join(' ')).toContain('AP8/AE8')
+    expect(summary.advantageItems.map((item) => item.body).join(' ')).toContain('本地')
     expect(summary.showcaseCards[0]).toMatchObject({
       id: 'example-hpge-coincidence',
       title: 'HPGe 反符合谱仪',
@@ -53,6 +86,8 @@ describe('normalizeHomeSummary', () => {
       prompt: expect.stringContaining('Geant4'),
       difficulty: 'advanced',
       tags: ['HPGe', 'anti-coincidence', 'spectrum'],
+      validationFocus: ['几何闭合检查', '反符合计分逻辑', '报告可追溯'],
+      deliverables: ['Geant4 工程', '能谱直方图', '门禁报告'],
     })
   })
 
@@ -71,9 +106,15 @@ describe('normalizeHomeSummary', () => {
     })
 
     expect(summary.workflowCapabilities).toHaveLength(6)
+    expect(summary.toolUseItems).toHaveLength(6)
+    expect(summary.capabilityShowcases.flatMap((group) => group.items)).toHaveLength(6)
+    expect(summary.advantageItems).toHaveLength(6)
+    expect(summary.toolUseItems[2].body).toContain('屏蔽材料')
     expect(summary.showcaseCards).toHaveLength(4)
     expect(summary.showcaseCards[0].title).toBe('HPGe 反符合谱仪')
     expect(summary.showcaseCards[0].prompt).toContain('coincidence')
+    expect(summary.showcaseCards.every((card) => card.validationFocus.length >= 2)).toBe(true)
+    expect(summary.showcaseCards.every((card) => card.deliverables.length >= 3)).toBe(true)
     expect(summary.metricTiles.map((tile) => tile.value)).toEqual(['0', '0', '0', '0'])
   })
 })

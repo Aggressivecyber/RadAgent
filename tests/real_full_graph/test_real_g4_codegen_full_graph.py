@@ -9,7 +9,7 @@ import pytest
 from agent_core.gates import build_gate_validation_subgraph
 from agent_core.graph.subgraphs.g4_codegen_graph import build_g4_codegen_subgraph
 from agent_core.patching.nodes import apply_patch
-from agent_core.workspace.paths import STAGE_INPUT
+from agent_core.workspace.paths import STAGE_GATE_VALIDATION, STAGE_INPUT
 
 from tests.fixtures.real_g4_case import build_real_g4_model_ir, require_real_model_api
 
@@ -150,10 +150,23 @@ async def test_real_g4_codegen_full_graph(tmp_path: Path, monkeypatch: pytest.Mo
             "confirmation_record_path": str(confirmation_record_path),
             "confirmed_model_plan_path": str(confirmed_model_plan_path),
             "unconfirmed_assumptions_count": 0,
+            "visual_review_status": "approved",
+            "visual_review_notes": (
+                "100-event visual workbench artifacts reviewed: geometry, "
+                "particle tracks, and energy deposits are present."
+            ),
             "retry_count": 0,
         }
     )
     assert gate_result["validation_status"] == "passed"
+
+    output_dir = job_dir / STAGE_GATE_VALIDATION / "g4_output_package"
+    geometry = json.loads((output_dir / "geometry_view.json").read_text(encoding="utf-8"))
+    tracks = json.loads((output_dir / "particle_tracks.json").read_text(encoding="utf-8"))
+    deposits = json.loads((output_dir / "energy_deposits.json").read_text(encoding="utf-8"))
+    assert geometry["components"]
+    assert tracks["tracks"]
+    assert deposits["deposits"]
 
     artifact_check = subprocess.run(
         [

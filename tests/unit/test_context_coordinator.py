@@ -34,6 +34,40 @@ def _module_results() -> dict[str, Any]:
     }
 
 
+def test_context_summary_includes_public_method_signatures() -> None:
+    """Runtime agents need full signatures when read_file is disabled."""
+    from agent_core.g4_codegen.context_coordinator import _summarize_file
+
+    summary = _summarize_file(
+        "simulation_core",
+        "include/ScoringManager.hh",
+        (
+            "class ScoringManager {\n"
+            "public:\n"
+            "  ScoringManager();\n"
+            "  ~ScoringManager();\n"
+            "  ScoringManager& operator=(const ScoringManager&) = delete;\n"
+            "  void EndOfEvent(const G4String& componentId,\n"
+            "                  G4double& edep_MeV,\n"
+            "                  G4double& dose_Gy);\n"
+            "  G4double GetCumulativeDose(const G4String& componentId) const;\n"
+            "private:\n"
+            "  void Helper();\n"
+            "};\n"
+        ),
+    )
+
+    assert "EndOfEvent" in summary["public_methods"]
+    assert "void EndOfEvent(const G4String& componentId, G4double& edep_MeV, G4double& dose_Gy)" in summary[
+        "public_method_signatures"
+    ]
+    assert "G4double GetCumulativeDose(const G4String& componentId) const" in summary[
+        "public_method_signatures"
+    ]
+    assert all("Helper" not in signature for signature in summary["public_method_signatures"])
+    assert all("operator=" not in signature for signature in summary["public_method_signatures"])
+
+
 @pytest.mark.asyncio
 async def test_context_coordinator_uses_deterministic_summary_without_llm(
     tmp_path,

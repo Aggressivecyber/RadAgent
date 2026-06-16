@@ -96,12 +96,12 @@ class TestRouteAfterHumanConfirmation:
         assert result == "report_subgraph"
 
     def test_route_after_human_confirmation_pending(self):
-        """Test routing back to confirmation for next round."""
+        """Test routing to report when one-shot graph is pending user input."""
         state = {
             "confirmation_status": "pending",
         }
         result = route_after_human_confirmation(state)
-        assert result == "human_confirmation_subgraph"
+        assert result == "report_subgraph"
 
     def test_route_after_human_confirmation_expired(self):
         """Test routing to report after confirmation expired."""
@@ -174,6 +174,18 @@ class TestRouteAfterHumanConfirmationBlocking:
         }
         result = route_after_human_confirmation(state)
         assert result == "g4_codegen_subgraph"
+
+    def test_modeling_failure_blocks_codegen_after_approval(self):
+        """Test that approval cannot bypass a failed modeling phase."""
+        state = {
+            "g4_modeling_status": "failed",
+            "confirmation_status": "approved",
+            "confirmation_record_path": "x/confirmation_record.json",
+            "confirmed_model_plan_path": "x/confirmed_model_plan.json",
+            "unconfirmed_assumptions_count": 0,
+        }
+        result = route_after_human_confirmation(state)
+        assert result == "report_subgraph"
 
 
 class TestRouteAfterG4ModelingPhase2:

@@ -15,7 +15,8 @@ READ_FILE: dict[str, Any] = {
         "name": "read_file",
         "description": (
             "Read a file under the project directory. Returns the content with "
-            "line numbers. Use this to inspect generated source before editing."
+            "line numbers. Choose offset/limit yourself to inspect as much or as "
+            "little source as needed before editing."
         ),
         "parameters": {
             "type": "object",
@@ -30,7 +31,7 @@ READ_FILE: dict[str, Any] = {
                 },
                 "limit": {
                     "type": "integer",
-                    "description": "Max lines to return (optional, default 200).",
+                    "description": "Max lines to return (optional, default 200; increase when you need a larger view).",
                 },
             },
             "required": ["path"],
@@ -76,6 +77,60 @@ WRITE_FILE: dict[str, Any] = {
     },
 }
 
+LIST_FILES: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "list_files",
+        "description": (
+            "List project-relative source/config files matching a glob. Ignores "
+            "build artifacts. Use this to find headers or sources before reading."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "glob": {
+                    "type": "string",
+                    "description": "Relative glob such as 'include/*.hh' or 'src/*Detector*'.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum file paths to return (optional, default 50).",
+                },
+            },
+            "required": [],
+        },
+    },
+}
+
+SEARCH_TEXT: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "search_text",
+        "description": (
+            "Search project source/config files for a literal string. Returns "
+            "compact path/line/text matches and ignores build artifacts."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Literal text to search for, e.g. 'SensitiveDetector'.",
+                },
+                "glob": {
+                    "type": "string",
+                    "description": "Relative glob to limit search scope, e.g. 'src/*.cc'.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum matches to return (optional, default 50).",
+                },
+            },
+            "required": ["pattern"],
+        },
+    },
+}
+
 RUN_BASH: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -83,7 +138,7 @@ RUN_BASH: dict[str, Any] = {
         "description": (
             "Run a shell command inside the project directory. Returns stdout, "
             "stderr, and exit_code. Use for grep/diff/inspect. Prefer "
-            "build_project for compile cycles. Output is truncated."
+            "build_project for compile cycles. Output is returned without hidden truncation."
         ),
         "parameters": {
             "type": "object",
@@ -134,10 +189,66 @@ RUN_SMOKE: dict[str, Any] = {
     },
 }
 
+SEARCH_GEANT4_DOCS: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "search_geant4_docs",
+        "description": (
+            "Search the local Geant4 documentation/example RAG index for API "
+            "signatures, include files, and usage patterns. Use this before "
+            "guessing unfamiliar Geant4 classes, methods, or macro commands."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language or exact API query, e.g. 'G4Allocator MallocSingle'.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Maximum documents to return (optional, default 5).",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+SEARCH_WEB: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "search_web",
+        "description": (
+            "Search the public web for current or external Geant4/API/compiler "
+            "context when the local project and Geant4 RAG results are not enough. "
+            "Use sparingly, and verify results against project files or docs before editing."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query, e.g. 'Geant4 G4THitsCollection Hit allocator error'.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Maximum results to return (optional, default 5).",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
 ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     READ_FILE,
     EDIT_FILE,
     WRITE_FILE,
+    LIST_FILES,
+    SEARCH_TEXT,
+    SEARCH_GEANT4_DOCS,
+    SEARCH_WEB,
     RUN_BASH,
     BUILD_PROJECT,
     RUN_SMOKE,

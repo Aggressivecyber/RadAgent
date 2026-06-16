@@ -162,6 +162,33 @@ class TestBuildProposedModelCompletion:
         assert "proposed_components" in proposal
         assert proposal["schema_version"] == "proposed_model_completion_v1"
 
+    @pytest.mark.asyncio
+    async def test_build_proposed_model_completion_preserves_context_missing_information(
+        self, base_state, temp_job_dir
+    ):
+        """Nested context missing info must still be shown on the human review page."""
+        evidence_path = Path(base_state["evidence_map_path"])
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence.pop("missing_information", None)
+        evidence["user_context_requirements"] = {
+            "missing_information": [
+                "MOSFET gate oxide thickness was not specified.",
+                "Irradiation dose rate was not specified.",
+            ]
+        }
+        evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+
+        result = await build_proposed_model_completion(base_state)
+
+        proposal = json.loads(
+            Path(result["proposed_model_completion_path"]).read_text(encoding="utf-8")
+        )
+        assert proposal["requires_human_confirmation"] is True
+        assert proposal["missing_information"] == [
+            "MOSFET gate oxide thickness was not specified.",
+            "Irradiation dose rate was not specified.",
+        ]
+
 
 class TestGenerateConfirmationRequest:
     """Test generate_confirmation_request node."""
@@ -187,6 +214,63 @@ class TestGenerateConfirmationRequest:
         assert request["job_id"] == "test-job-123"
         assert request["round_id"] == 1
         assert "questions" in request
+
+    @pytest.mark.asyncio
+    async def test_generate_confirmation_request_prioritizes_geometry_and_codegen_impact(
+        self, base_state, temp_job_dir
+    ):
+        """Geometry/placement assumptions must be explicit before Geant4 codegen."""
+        await build_proposed_model_completion(base_state)
+
+        result = await generate_confirmation_request(base_state)
+        request = json.loads(Path(result["confirmation_request_path"]).read_text(encoding="utf-8"))
+        question_paths = [q["field_path"] for q in request["questions"]]
+        first_question = request["questions"][0]
+
+        assert "components.water_tank.geometry" in question_paths
+        assert first_question["field_path"] == "components.water_tank.geometry"
+        assert first_question["category"] == "dimension"
+        assert "Geant4" in first_question["impact"]
+        assert "关键确认项" in request["summary_for_user"]
+        assert request["critical_confirmations"][0]["field_path"] == (
+            "components.water_tank.geometry"
+        )
+        assert request["agent_context"]["confirmation_focus"][0]["field_path"] == (
+            "components.water_tank.geometry"
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_confirmation_request_asks_about_missing_information_when_no_field_question_exists(
+        self, base_state, temp_job_dir
+    ):
+        """A confirmation request must not be empty when the model filled defaults."""
+        conf_dir = _get_confirmation_dir(base_state["job_id"])
+        proposal_path = conf_dir / "proposed_model_completion.json"
+        _save_json(
+            {
+                "schema_version": "proposed_model_completion_v1",
+                "job_id": base_state["job_id"],
+                "source_query": "Test query",
+                "domain_profile": "geant4",
+                "proposed_components": [],
+                "proposed_sources": [],
+                "proposed_scoring": [],
+                "missing_information": ["Beam spot size was auto-filled from default."],
+                "assumptions": ["Assumed a pencil beam because the user did not specify source shape."],
+                "requires_human_confirmation": True,
+                "readiness_status": "draft",
+                "readiness_score": 0.4,
+            },
+            proposal_path,
+        )
+
+        result = await generate_confirmation_request(base_state)
+
+        request = json.loads(Path(result["confirmation_request_path"]).read_text(encoding="utf-8"))
+        assert request["questions"]
+        assert request["questions"][0]["field_path"] == "missing_information.0"
+        assert "Beam spot size" in request["questions"][0]["question"]
+        assert request["critical_confirmations"]
 
 
 class TestHumanInterruptNode:
@@ -313,6 +397,16 @@ class TestMergeUserConfirmation:
         ConfirmationRecord.model_validate_json(
             Path(result["confirmation_record_path"]).read_text(encoding="utf-8")
         )
+        confirmed_plan = json.loads(
+            Path(result["confirmed_model_plan_path"]).read_text(encoding="utf-8")
+        )
+        record = json.loads(Path(result["confirmation_record_path"]).read_text(encoding="utf-8"))
+        assert confirmed_plan["agent_context"]["confirmed_constraints"]
+        assert any(
+            item["field_path"] == "components.water_tank.geometry"
+            for item in confirmed_plan["agent_context"]["confirmed_constraints"]
+        )
+        assert record["agent_context"]["confirmed_constraint_count"] >= 1
 
     @pytest.mark.asyncio
     async def test_merge_user_confirmation_edit(self, base_state, temp_job_dir):
@@ -336,6 +430,21 @@ class TestMergeUserConfirmation:
 
         assert result["confirmation_status"] == "edited"
         assert result["edited_fields_count"] == 1
+        confirmed_plan = json.loads(
+            Path(result["confirmed_model_plan_path"]).read_text(encoding="utf-8")
+        )
+        constraints = confirmed_plan["agent_context"]["confirmed_constraints"]
+        edited_constraint = next(
+            item for item in constraints if item["field_path"] == "sources.primary.energy"
+        )
+        assert edited_constraint["value"] == "200 MeV"
+        assert edited_constraint["status"] == "edited"
+        assert edited_constraint["priority"] == "human_confirmed_hard"
+        assert edited_constraint["source"] == "human_confirmation"
+        assert edited_constraint["edited"] is True
+        assert "edited constraints override" in confirmed_plan["agent_context"][
+            "codegen_instruction"
+        ].lower()
 
     @pytest.mark.asyncio
     async def test_merge_user_confirmation_reject(self, base_state, temp_job_dir):

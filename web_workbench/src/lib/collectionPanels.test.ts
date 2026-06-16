@@ -13,12 +13,12 @@ describe('collection inspector presentation', () => {
       },
     ])
 
-    expect(panel?.title).toBe('Jobs')
-    expect(panel?.summary).toBe('1 job')
+    expect(panel?.title).toBe('作业列表')
+    expect(panel?.summary).toBe('1 个作业')
     expect(panel?.rows[0]).toMatchObject({
       title: 'Build a silicon slab detector',
-      status: 'completed',
-      detail: 'report · Detector Workflows',
+      status: '已完成',
+      detail: '报告 · Detector Workflows',
       meta: 'job-1',
     })
   })
@@ -35,8 +35,8 @@ describe('collection inspector presentation', () => {
 
     expect(panel?.rows[0]).toMatchObject({
       title: 'final_report.md',
-      status: 'report',
-      detail: 'report · 4 KB',
+      status: '报告',
+      detail: '报告 · 4 KB',
       meta: '/tmp/final_report.md',
     })
   })
@@ -60,16 +60,16 @@ describe('collection inspector presentation', () => {
     ])
 
     expect(gates?.rows[0]).toMatchObject({
-      title: 'Gate 20',
-      status: 'pass',
+      title: '门禁 20',
+      status: '通过',
       detail: 'Credibility evidence is consistent.',
-      meta: 'high',
+      meta: '高',
     })
     expect(revisions?.rows[0]).toMatchObject({
       title: 'rev-1',
-      status: 'completed',
+      status: '已完成',
       detail: 'Tighten detector spacing.',
-      meta: 'applied',
+      meta: '已应用',
     })
   })
 
@@ -85,7 +85,7 @@ describe('collection inspector presentation', () => {
 
     expect(panel?.rows[0]).toMatchObject({
       title: 'Default Project',
-      status: 'default',
+      status: '默认',
       detail: 'Default RadAgent workspace project',
       meta: '/workspace',
     })

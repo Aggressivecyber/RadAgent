@@ -49,6 +49,63 @@ async def test_run_smoke_requires_output_contract_files(
     assert result["details"]["output_quality"]["status"] == "fail"
 
 
+@pytest.mark.asyncio
+async def test_run_smoke_returns_full_runtime_exception_before_output_contract(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Repair agents need the actual Geant4 fatal error, not just core dumped."""
+    from agent_core.dev_tools import shell
+
+    g4_exception = (
+        "\n-------- EEEE ------- G4Exception-START -------- EEEE -------\n"
+        "*** G4Exception : GeomMgt0002\n"
+        "      issued by : G4Region::ScanVolumeTree()\n"
+        "Logical volume <WorldLV>\n"
+        "does not have a valid material pointer.\n"
+        "*** Fatal Exception *** core dump ***\n"
+        "Aborted (core dumped)\n"
+    )
+
+    class FakeRunner:
+        async def smoke_test(
+            self,
+            project_dir: str,
+            *,
+            job_id: str = "unknown",
+            output_dir: str | None = None,
+            events: int = 10,
+        ) -> dict[str, Any]:
+            assert output_dir is not None
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            return {
+                "success": False,
+                "output_dir": output_dir,
+                "warnings": [g4_exception],
+                "events_requested": events,
+                "build_success": True,
+                "run_success": False,
+                "run_errors": g4_exception,
+                "run_log": "stdout before abort\n",
+                "runtime_error_patterns": ["FatalException", "core dumped"],
+            }
+
+    monkeypatch.setattr(
+        "agent_core.tools.geant4_runner.Geant4Runner",
+        lambda: FakeRunner(),
+    )
+
+    result = await shell.run_smoke(tmp_path, events=5, job_id="job_runtime")
+
+    assert result["ok"] is False
+    assert "GeomMgt0002" in result["output"]
+    assert "WorldLV" in result["output"]
+    assert "does not have a valid material pointer" in result["output"]
+    assert result["details"]["runtime_error_patterns"] == ["FatalException", "core dumped"]
+    assert result["output"].index("GeomMgt0002") < result["output"].index(
+        "Missing output contract files"
+    )
+
+
 def test_known_fix_hints_append_for_classic_geant4_errors() -> None:
     """The repair agent should see the deterministic fix, not just the raw error."""
     from agent_core.dev_tools.shell import _known_fix_hints
@@ -80,3 +137,37 @@ def test_known_fix_hint_for_null_material() -> None:
     )
     assert "MATERIAL FIX" in out
     assert "G4_POLYSTYRENE" in out
+
+    world = _known_fix_hints(
+        "*** G4Exception : GeomMgt0002\n"
+        "Logical volume <WorldLV>\n"
+        "does not have a valid material pointer."
+    )
+    assert "MATERIAL FIX" in world
+    assert "G4_Galactic" in world
+    assert "G4LogicalVolume" in world
+
+
+def test_known_fix_hints_for_common_compile_diagnostics() -> None:
+    from agent_core.dev_tools.shell import _known_fix_hints
+
+    output_manager = _known_fix_hints(
+        "error: no declaration matches 'void OutputManager::WriteSummaryJson()'"
+    )
+    assert "OUTPUTMANAGER SIGNATURE FIX" in output_manager
+    assert "WriteSummaryJson(G4int)" in output_manager
+
+    particle_table = _known_fix_hints(
+        "error: incomplete type 'G4ParticleTable' used in nested name specifier\n"
+        "G4ParticleTable::GetParticleTable()->FindParticle(name);"
+    )
+    assert "PARTICLE-TABLE INCLUDE FIX" in particle_table
+    assert 'G4ParticleTable.hh' in particle_table
+
+    material = _known_fix_hints("error: 'G4Material' has not been declared")
+    assert "GEANT4 INCLUDE FIX" in material
+    assert "G4Material.hh" in material
+
+    solid = _known_fix_hints("error: invalid use of incomplete type 'class G4VSolid'")
+    assert "GEANT4 INCLUDE FIX" in solid
+    assert "G4VSolid.hh" in solid

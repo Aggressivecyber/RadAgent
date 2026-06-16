@@ -33,18 +33,15 @@ def test_simulate_validates_positive_count() -> None:
         parse_command("/simulate 0")
 
 
-def test_visual_workbench_commands_are_parsed_and_validated() -> None:
-    assert parse_command("/workbench").name == "workbench"
-    assert parse_command("/workbench 100").args == "100"
-    assert parse_command("/visual-approve").name == "visual-approve"
-    reject = parse_command("/visual-reject target offset wrong")
-    assert reject.name == "visual-reject"
-    assert reject.args == "target offset wrong"
+def test_native_visual_workbench_commands_are_retired() -> None:
+    for text in ("/workbench", "/workbench 100", "/visual-approve", "/visual-reject target offset wrong"):
+        with pytest.raises(CommandParseError, match="Unknown command"):
+            parse_command(text)
 
-    with pytest.raises(CommandParseError, match="positive"):
-        parse_command("/workbench 0")
-    with pytest.raises(CommandParseError, match="Usage: /visual-reject"):
-        parse_command("/visual-reject")
+
+def test_diagnose_command_is_parsed() -> None:
+    command = parse_command("/diagnose")
+    assert command.name == "diagnose"
 
 
 def test_human_confirmation_decision_commands_are_parsed_and_validated() -> None:
@@ -101,15 +98,15 @@ def test_workstation_commands_are_parsed() -> None:
     assert parse_command("/mode run").name == "mode"
     assert parse_command("/job job-001").name == "job"
     assert parse_command("/retry job-002").name == "retry"
+    retry_current = parse_command("/retry")
+    assert retry_current.name == "retry"
+    assert retry_current.args == ""
 
     with pytest.raises(CommandParseError, match="Usage: /demo"):
         parse_command("/demo")
 
     with pytest.raises(CommandParseError, match="Usage: /job"):
         parse_command("/job")
-
-    with pytest.raises(CommandParseError, match="Usage: /retry"):
-        parse_command("/retry")
 
     with pytest.raises(CommandParseError, match="ask, run, cmd, inspect, artifact, config"):
         parse_command("/mode unknown")
@@ -128,7 +125,7 @@ def test_command_suggestions_return_stable_palette_entries() -> None:
     assert command_suggestions("/re") == [
         "/report    Generate or preview the active report",
         "/resume    Resume a saved job",
-        "/retry     Retry a saved job",
+        "/retry     Retry current or saved job",
         "/revise    Request a revision for the active job",
         "/revisions List saved revisions",
     ]

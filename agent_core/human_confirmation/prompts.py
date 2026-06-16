@@ -78,10 +78,10 @@ MAX_QUESTIONS_PER_ROUND = 8
 
 # Priority ordering for question generation
 QUESTION_PRIORITY = [
-    "source",  # particle / energy / direction
-    "material",  # key materials
     "dimension",  # key dimensions
     "placement",  # layer relationships
+    "source",  # particle / energy / direction
+    "material",  # key materials
     "scoring",  # sensitive region
     "output",  # scoring/output
     "voxel",  # voxel size

@@ -11,12 +11,12 @@ describe('operation panel presentation', () => {
       errors: 'No generated code directory in current state.',
     })
 
-    expect(panel?.title).toBe('Build result')
+    expect(panel?.title).toBe('构建结果')
     expect(panel?.metrics).toEqual([
-      { label: 'Result', value: 'failed' },
-      { label: 'Configure', value: 'ok' },
-      { label: 'Build', value: 'failed' },
-      { label: 'Executable', value: 'not available' },
+      { label: '结果', value: '失败' },
+      { label: '配置', value: '通过' },
+      { label: '构建', value: '失败' },
+      { label: '可执行文件', value: '不可用' },
     ])
     expect(panel?.preview).toBe('No generated code directory in current state.')
   })
@@ -24,15 +24,21 @@ describe('operation panel presentation', () => {
   it('summarizes simulation output without raw JSON fallback', () => {
     const panel = createOperationPanel('simulation', {
       success: true,
+      events: 250,
+      visual_events: 100,
+      visual_success: true,
+      production_success: true,
       output_dir: '/tmp/job/output',
       log: 'BeamOn completed 250 events',
       errors: '',
     })
 
-    expect(panel?.title).toBe('Simulation result')
+    expect(panel?.title).toBe('模拟结果')
     expect(panel?.metrics).toEqual([
-      { label: 'Result', value: 'passed' },
-      { label: 'Output', value: '/tmp/job/output' },
+      { label: '结果', value: '通过' },
+      { label: '可视化 100', value: '通过' },
+      { label: '生产批次', value: '250 个事件' },
+      { label: '输出目录', value: '/tmp/job/output' },
     ])
     expect(panel?.preview).toBe('BeamOn completed 250 events')
   })
@@ -46,10 +52,10 @@ describe('operation panel presentation', () => {
       ],
     })
 
-    expect(panel?.title).toBe('Report artifacts')
+    expect(panel?.title).toBe('报告产物')
     expect(panel?.metrics).toEqual([
-      { label: 'Target', value: 'report' },
-      { label: 'Artifacts', value: '2' },
+      { label: '目标', value: '报告交付' },
+      { label: '产物', value: '2' },
     ])
     expect(panel?.artifacts.map((artifact) => artifact.path)).toEqual([
       '/tmp/final_report.md',
@@ -57,7 +63,7 @@ describe('operation panel presentation', () => {
     ])
   })
 
-  it('models visual workbench and review actions as operation panels', () => {
+  it('does not model retired native visual workbench actions as operation panels', () => {
     const workbench = createOperationPanel('workbench', {
       success: true,
       events: 100,
@@ -71,15 +77,10 @@ describe('operation panel presentation', () => {
       notes: 'Geometry needs a clearer shield boundary.',
     })
 
-    expect(isOperationPanelView('workbench')).toBe(true)
+    expect(isOperationPanelView('workbench')).toBe(false)
+    expect(isOperationPanelView('visual-review')).toBe(false)
     expect(isOperationPanelView('status')).toBe(false)
-    expect(workbench?.metrics).toEqual([
-      { label: 'Result', value: 'passed' },
-      { label: 'Events', value: '100' },
-      { label: 'Launched', value: 'yes' },
-    ])
-    expect(workbench?.preview).toContain('/tmp/example')
-    expect(review?.title).toBe('Visual review')
-    expect(review?.preview).toBe('Geometry needs a clearer shield boundary.')
+    expect(workbench).toBeNull()
+    expect(review).toBeNull()
   })
 })

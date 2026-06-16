@@ -7,10 +7,6 @@ from typing import Any
 import pytest
 from agent_core.g4_codegen import global_integration_agent as gia
 from agent_core.g4_codegen.global_integration_agent import run_global_integration_agent
-from agent_core.g4_codegen.graph_nodes import (
-    GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS,
-    global_integration_agent_node,
-)
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 from agent_core.workspace.paths import STAGE_CODEGEN
 
@@ -38,6 +34,100 @@ def _patch() -> dict[str, Any]:
             },
         ],
     }
+
+
+def test_persist_report_appends_attempt_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    job_id = "global_report_history"
+
+    first = {
+        "job_id": job_id,
+        "status": "failed",
+        "errors": ["first failed"],
+        "runtime_gate_attempts": [{"attempt": 1, "status": "fail"}],
+        "agentic": {"stop_reason": "max_turns", "n_turns": 48},
+        "continuation_request": {"status": "pending"},
+    }
+    second = {
+        "job_id": job_id,
+        "status": "failed",
+        "errors": ["second failed"],
+        "runtime_gate_attempts": [{"attempt": 2, "status": "fail"}],
+        "agentic": {"stop_reason": "stalled_repeated_tool_result", "n_turns": 11},
+    }
+
+    gia._persist_report(first, job_id)
+    gia._persist_report(second, job_id)
+
+    codegen_dir = tmp_path / "jobs" / job_id / STAGE_CODEGEN
+    latest = json.loads((codegen_dir / "global_integration_agent_report.json").read_text())
+    history_path = codegen_dir / "integration" / "global_integration_attempts.jsonl"
+    history = [json.loads(line) for line in history_path.read_text().splitlines()]
+
+    assert latest["errors"] == ["second failed"]
+    assert len(history) == 2
+    assert history[0]["errors"] == ["first failed"]
+    assert history[0]["agentic"]["stop_reason"] == "max_turns"
+    assert history[0]["continuation_request"]["status"] == "pending"
+    assert history[1]["runtime_gate_attempts"][0]["attempt"] == 2
+    assert history[1]["agentic"]["n_turns"] == 11
+
+
+def _write_visual_artifacts(output_dir: Path) -> None:
+    (output_dir / "geometry_view.json").write_text(
+        json.dumps(
+            {
+                "components": [
+                    {
+                        "id": "detector",
+                        "name": "Detector",
+                        "shape": "box",
+                        "material": "G4_Si",
+                        "size_mm": [1.0, 1.0, 1.0],
+                        "position_mm": [0.0, 0.0, 0.0],
+                        "rotation_deg": [0.0, 0.0, 0.0],
+                        "opacity": 0.7,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "particle_tracks.json").write_text(
+        json.dumps(
+            {
+                "tracks": [
+                    {
+                        "event_id": 0,
+                        "track_id": 1,
+                        "particle": "proton",
+                        "energy_MeV": 10.0,
+                        "points_mm": [[0.0, 0.0, -1.0], [0.0, 0.0, 0.0]],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "energy_deposits.json").write_text(
+        json.dumps(
+            {
+                "deposits": [
+                    {
+                        "event_id": 0,
+                        "track_id": 1,
+                        "volume": "detector",
+                        "position_mm": [0.0, 0.0, 0.0],
+                        "edep_MeV": 1.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_global_integration_normalizes_new_file_metadata() -> None:
@@ -246,6 +336,66 @@ def test_integration_query_includes_runtime_compile_error_text() -> None:
 
     assert "MissingWidgetType" in query
     assert "src/Consumer.cc" in query
+
+
+def test_model_context_includes_geant4_repair_memory_under_budget() -> None:
+    text = gia._model_context_json(
+        {
+            "job_id": "job_memory",
+            "available_modules": ["runtime_app"],
+            "project_files": [
+                {
+                    "path": "src/OutputManager.cc",
+                    "new_content": "x" * 80_000,
+                    "module_name": "runtime_app",
+                }
+            ],
+            "runtime_failure_context": {},
+            "integration_memory": {},
+            "write_contract": {},
+        },
+        max_chars=20_000,
+        max_project_file_chars=15_000,
+    )
+    context = json.loads(text)
+    memory_text = json.dumps(context.get("geant4_repair_memory", {}), ensure_ascii=False)
+
+    assert "fGeometryComponents" in memory_text
+    assert "geometry_view.json" in memory_text
+    assert "particle_tracks.json" in memory_text
+    assert "energy_deposits.json" in memory_text
+    assert "event_table.csv" in memory_text
+    assert "g4_summary.json" in memory_text
+
+
+def test_model_context_includes_agentic_repair_lessons() -> None:
+    text = gia._model_context_json(
+        {
+            "job_id": "job_memory",
+            "available_modules": ["runtime_app"],
+            "project_files": [],
+            "runtime_failure_context": {},
+            "integration_memory": {
+                "agentic_repair_lessons": {
+                    "lessons": [
+                        {
+                            "id": "geometry_view_phantom_member",
+                            "prompt_instruction": "Check OutputManager.hh before using fGeometryComponents.",
+                            "count": 2,
+                        }
+                    ]
+                }
+            },
+            "write_contract": {},
+        },
+        max_chars=20_000,
+        max_project_file_chars=15_000,
+    )
+    context = json.loads(text)
+    lessons = context["integration_memory"]["agentic_repair_lessons"]["lessons"]
+
+    assert lessons[0]["id"] == "geometry_view_phantom_member"
+    assert "fGeometryComponents" in lessons[0]["prompt_instruction"]
 
 
 def test_global_integration_qualifies_hit_type_in_sensitive_detector_patch() -> None:
@@ -849,6 +999,92 @@ def test_global_integration_writes_summary_events_requested_from_total_events() 
     assert "totalEvents << \",\"" in content
 
 
+def test_global_integration_postprocesses_runtime_output_manager_fallbacks() -> None:
+    output_manager = (
+        '#include "OutputManager.hh"\n'
+        "#include <fstream>\n"
+        "#include <iomanip>\n"
+        "#include <map>\n"
+        "void OutputManager::AddEnergyDeposit(G4int eventID, G4int trackID,\n"
+        "                                      const G4String& volume,\n"
+        "                                      G4double x, G4double y, G4double z,\n"
+        "                                      G4double edepMeV)\n"
+        "{\n"
+        "  if (edepMeV <= 0.0) return;\n"
+        "  std::lock_guard<std::mutex> lock(fMutex);\n"
+        "  fDeposits.push_back({eventID, trackID, volume, x, y, z, edepMeV});\n"
+        "}\n"
+        "void OutputManager::WriteSummaryJson()\n"
+        "{\n"
+        "  G4double totalEdep = 0.0;\n"
+        "  for (const auto& r : fEventRows) totalEdep += r.edepMeV;\n"
+        "}\n"
+        "void OutputManager::WriteEventTableCsv()\n"
+        "{\n"
+        "  for (const auto& r : fEventRows) { ofs << r.eventID << r.edepMeV << r.doseGy; }\n"
+        "}\n"
+        "void OutputManager::WriteEdep3dCsv()\n"
+        "{\n"
+        "  for (const auto& b : fVoxelBins) { ofs << b.x << b.y << b.z << b.edepMeV; }\n"
+        "}\n"
+        "void OutputManager::WriteDose3dCsv()\n"
+        "{\n"
+        "  for (const auto& b : fVoxelBins) { ofs << b.x << b.y << b.z << b.doseGy; }\n"
+        "}\n"
+    )
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/OutputManager.cc",
+                "operation": "create_or_replace",
+                "new_content": output_manager,
+                "zone": "green",
+                "generated_by": "runtime_app_module_agent",
+                "module_name": "runtime_app",
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, original_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert "_BuildEventRowsFromDeposits" in content
+    assert "_BuildVoxelBinsFromDeposits" in content
+    assert "for (const auto& r : eventRowsForOutput)" in content
+    assert "for (const auto& b : voxelBinsForOutput)" in content
+
+
+def test_global_integration_adds_vis_attributes_include_for_static_access() -> None:
+    original_patch = {
+        "changed_files": [
+            {
+                "path": "src/DetectorConstruction.cc",
+                "operation": "create_or_replace",
+                "new_content": (
+                    '#include "DetectorConstruction.hh"\n'
+                    "G4VPhysicalVolume* DetectorConstruction::Construct() {\n"
+                    "  worldLV->SetVisAttributes(G4VisAttributes::GetInvisible());\n"
+                    "  return worldPV;\n"
+                    "}\n"
+                ),
+                "zone": "green",
+                "generated_by": "simulation_core_module_agent",
+                "module_name": "simulation_core",
+            }
+        ]
+    }
+
+    repaired, errors = gia._merge_patch_by_path(original_patch, original_patch)
+
+    assert errors == []
+    content = repaired["changed_files"][0]["new_content"]
+    assert '#include "G4VisAttributes.hh"' in content
+    assert content.index('#include "G4VisAttributes.hh"') < content.index(
+        "G4VisAttributes::GetInvisible"
+    )
+
+
 def test_global_integration_postprocesses_generated_code_for_no_magic_number_gate() -> None:
     from agent_core.g4_codegen.validators.no_magic_number import check_magic_numbers
 
@@ -1055,6 +1291,61 @@ async def _empty_evidence(_query: str) -> list[dict[str, Any]]:
 
 
 @pytest.mark.asyncio
+async def test_global_integration_short_circuits_when_initial_runtime_gate_passes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
+        lambda: _FailIfCalledGateway(),
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_database",
+        _empty_evidence,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_web",
+        _empty_evidence,
+    )
+    gate_calls: list[int] = []
+
+    async def fake_runtime_gate(**kwargs: Any) -> dict[str, Any]:
+        gate_calls.append(int(kwargs["attempt"]))
+        return {
+            "status": "pass",
+            "attempt": kwargs["attempt"],
+            "errors": [],
+            "warnings": [],
+            "missing_outputs": [],
+            "output_quality": {"status": "pass", "errors": []},
+        }
+
+    async def fail_repair(*_args: Any, **_kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        raise AssertionError("repair should not run after an initial runtime gate pass")
+
+    monkeypatch.setattr(gia, "_run_integration_runtime_gate", fake_runtime_gate)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.agentic_repair.run_agentic_repair",
+        fail_repair,
+    )
+
+    repaired, report = await run_global_integration_agent(
+        _patch(),
+        job_id="global_integration_gate_short_circuit",
+        g4_model_ir={"sources": [{"events": 5}]},
+        module_results={"simulation_core": {}, "runtime_app": {}},
+    )
+
+    assert gate_calls == [0]
+    assert report["status"] == "passed"
+    assert report["runtime_gate_attempts"][0]["status"] == "pass"
+    assert report["changed_files"] == []
+    assert "agentic" not in report
+    assert repaired["metadata"]["global_integration_agent"]["runtime_gate_required"] is True
+
+
+@pytest.mark.asyncio
 async def test_integration_runtime_gate_uses_requested_ir_event_count(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1093,6 +1384,7 @@ async def test_integration_runtime_gate_uses_requested_ir_event_count(
             )
             (out / "edep_3d.csv").write_text("x,y,z,edep_MeV\n0,0,0,1.0\n", encoding="utf-8")
             (out / "dose_3d.csv").write_text("x,y,z,dose_Gy\n0,0,0,0.01\n", encoding="utf-8")
+            _write_visual_artifacts(out)
             return {
                 "success": True,
                 "cmake_configure_result": {"success": True},
@@ -1196,6 +1488,133 @@ def test_global_integration_runtime_gate_rejects_event_count_mismatch(tmp_path) 
     assert any("expected 5" in error for error in gate["errors"])
 
 
+def test_model_context_includes_interface_audit() -> None:
+    context_json = gia._model_context_json(
+        {
+            "job_id": "job_interface_audit",
+            "available_modules": ["simulation_core"],
+            "runtime_failure_context": {},
+            "project_files": [],
+            "database_search": {},
+            "web_search": {},
+            "interface_contracts": {},
+            "interface_audit": {
+                "status": "fail",
+                "issues": [
+                    {
+                        "kind": "unknown_method",
+                        "class_name": "PlacementManager",
+                        "method": "RegisterPhysicalVolume",
+                    }
+                ],
+            },
+            "module_contracts": {},
+            "module_result_diagnostics": {},
+            "module_context_summaries": {},
+            "integration_memory": {},
+            "write_contract": {},
+        },
+        max_chars=20_000,
+    )
+
+    assert "interface_audit" in context_json
+    assert "RegisterPhysicalVolume" in context_json
+    assert "PlacementManager" in context_json
+
+
+@pytest.mark.asyncio
+async def test_global_integration_passes_interface_audit_to_agentic_repair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent.get_model_gateway",
+        lambda: object(),
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_database",
+        _empty_evidence,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._search_web",
+        _empty_evidence,
+    )
+
+    async def fake_runtime_gate(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "status": "fail",
+            "attempt": kwargs["attempt"],
+            "errors": ["compile failed"],
+            "warnings": [],
+            "missing_outputs": [],
+        }
+
+    seen: dict[str, Any] = {}
+
+    async def fake_repair(
+        proposed_patch: dict[str, Any],
+        *,
+        runtime_failure_context: dict[str, Any],
+        **_kwargs: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        seen["runtime_failure_context"] = runtime_failure_context
+        return proposed_patch, {"status": "failed", "errors": ["still failed"], "runtime_gate": {}}
+
+    monkeypatch.setattr(gia, "_run_integration_runtime_gate", fake_runtime_gate)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.agentic_repair.run_agentic_repair",
+        fake_repair,
+    )
+
+    await run_global_integration_agent(
+        {
+            "metadata": {
+                "interface_audit": {
+                    "status": "fail",
+                    "issues": [
+                        {
+                            "kind": "constructor_arity_mismatch",
+                            "class_name": "SensitiveDetector",
+                            "path": "src/DetectorConstruction.cc",
+                            "line": 1,
+                        }
+                    ],
+                    "repair_hints": [
+                        "Align src/DetectorConstruction.cc with include/SensitiveDetector.hh: "
+                        "new SensitiveDetector(...) passes 1 argument but the generated header "
+                        "declares arity 2."
+                    ],
+                }
+            },
+            "changed_files": [
+                {
+                    "path": "include/SensitiveDetector.hh",
+                    "new_content": (
+                        "class ScoringManager;\n"
+                        "class SensitiveDetector {\n"
+                        " public:\n"
+                        "  SensitiveDetector(const G4String& name, ScoringManager* scoring);\n"
+                        "};\n"
+                    ),
+                    "module_name": "simulation_core",
+                },
+                {
+                    "path": "src/DetectorConstruction.cc",
+                    "new_content": 'void DetectorConstruction::ConstructSDandField(){ new SensitiveDetector("water"); }\n',
+                    "module_name": "simulation_core",
+                },
+            ]
+        },
+        job_id="job_interface_audit_repair_context",
+    )
+
+    audit = seen["runtime_failure_context"]["interface_audit"]
+    assert audit["status"] == "fail"
+    assert audit["issues"][0]["kind"] == "constructor_arity_mismatch"
+    assert "SensitiveDetector" in audit["repair_hints"][0]
+
+
 def test_global_integration_runtime_gate_rejects_empty_zero_smoke_outputs(tmp_path) -> None:
     project_dir = tmp_path / "geant4_project"
     output_dir = tmp_path / "g4_output_package"
@@ -1243,6 +1662,49 @@ def test_global_integration_runtime_gate_rejects_empty_zero_smoke_outputs(tmp_pa
     assert any("edep_3d.csv has no non-zero edep_MeV bins" in error for error in gate["errors"])
     assert any("dose_3d.csv has no non-zero dose_Gy bins" in error for error in gate["errors"])
     assert any("Smoke simulation stderr" in error for error in gate["errors"])
+
+
+def test_global_integration_runtime_gate_prioritizes_runtime_fatal_error(tmp_path) -> None:
+    project_dir = tmp_path / "geant4_project"
+    output_dir = tmp_path / "g4_output_package"
+    project_dir.mkdir()
+    output_dir.mkdir()
+    fatal = (
+        "*** G4Exception : GeomMgt0002\n"
+        "Logical volume <WorldLV>\n"
+        "does not have a valid material pointer.\n"
+        "Aborted (core dumped)\n"
+    )
+    (output_dir / "smoke_simulation_result.json").write_text(
+        json.dumps(
+            {
+                "success": False,
+                "process_success": False,
+                "runtime_error_patterns": ["FatalException", "core dumped"],
+                "errors": fatal,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    gate = gia._summarize_runtime_gate_result(
+        result={
+            "success": False,
+            "warnings": [fatal],
+            "run_errors": fatal,
+            "runtime_error_patterns": ["FatalException", "core dumped"],
+            "unit_test_result": {"success": False, "errors": "No tests were found!!!\n"},
+        },
+        attempt=1,
+        project_dir=project_dir,
+        output_dir=output_dir,
+        expected_events=5,
+    )
+
+    assert gate["status"] == "fail"
+    assert "GeomMgt0002" in gate["errors"][0]
+    assert "WorldLV" in gate["errors"][0]
+    assert any("Missing output contract files" in error for error in gate["errors"])
 
 
 def test_runtime_failure_context_includes_smoke_log_and_runtime_sources(tmp_path) -> None:

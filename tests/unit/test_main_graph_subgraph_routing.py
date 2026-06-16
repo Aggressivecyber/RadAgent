@@ -69,7 +69,7 @@ class TestRouteAfterTaskPlanning:
             "task_planning_status": "passed",
             "simulation_scope": ["geant4"],
         }
-        assert route_after_task_planning(state) == "g4_modeling_subgraph"
+        assert route_after_task_planning(state) == "requirements_review"
 
     def test_failed_status_reports(self) -> None:
         state: RadAgentMainState = {
@@ -112,6 +112,16 @@ class TestRouteAfterG4Codegen:
 
     def test_failed_reports(self) -> None:
         state: RadAgentMainState = {"g4_codegen_status": "failed"}
+        assert route_after_g4_codegen(state) == "report_subgraph"
+
+    def test_codegen_needs_user_input_never_routes_to_human_confirmation(self) -> None:
+        state: RadAgentMainState = {
+            "g4_codegen_status": "needs_user_input",
+            "human_confirmation_required": True,
+            "confirmation_status": "pending",
+            "confirmation_request_path": "/tmp/codegen-confirmation.json",
+        }
+
         assert route_after_g4_codegen(state) == "report_subgraph"
 
 
@@ -185,13 +195,13 @@ class TestRouteAfterGates:
         }
         assert route_after_gates(state) == "human_confirmation_subgraph"
 
-    def test_blocked_visual_review_gate_routes_to_report(self) -> None:
+    def test_retired_visual_review_gate_is_ignored(self) -> None:
         state: RadAgentMainState = {
             "validation_status": "blocked",
             "retry_count": 0,
             "failed_gates": [{"gate_id": 21, "name": "G4 Visual Review"}],
         }
-        assert route_after_gates(state) == "report_subgraph"
+        assert route_after_gates(state) == "artifact_subgraph"
 
     def test_failed_max_retries_reports(self) -> None:
         state: RadAgentMainState = {

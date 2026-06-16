@@ -91,31 +91,15 @@ class BuildResult(BaseModel):
 
 class SimulationResult(BaseModel):
     success: bool
+    events: int = 0
+    visual_events: int = 100
+    visual_success: bool = False
+    visual_output_dir: str = ""
+    production_success: bool = False
+    production_output_dir: str = ""
     output_dir: str = ""
     log: str = ""
     errors: str = ""
-
-
-class VisualizationWorkbenchResult(BaseModel):
-    success: bool
-    project_dir: str = ""
-    executable: str = ""
-    working_dir: str = ""
-    events: int = 100
-    init_macro: str = ""
-    vis_macro: str = ""
-    gui_macro: str = ""
-    launch_command: list[str] = Field(default_factory=list)
-    environment: dict[str, str] = Field(default_factory=dict)
-    launched: bool = False
-    pid: int | None = None
-    errors: str = ""
-
-
-class VisualReviewResult(BaseModel):
-    status: Literal["approved", "rejected"]
-    blocking: bool = True
-    notes: str = ""
 
 
 class ModelTierConfig(BaseModel):
@@ -128,7 +112,7 @@ class ModelTierConfig(BaseModel):
     max_retries: int = 2
     temperature: float = 0.0
     max_tokens: int = 4096
-    context_window_tokens: int = 128_000
+    context_window_tokens: int = 1_000_000
     thinking_default: bool = False
 
 
@@ -136,6 +120,24 @@ class ModelConfigView(BaseModel):
     env_path: str
     default_api_key_env: str = "RADAGENT_API_KEY"
     tiers: dict[str, ModelTierConfig] = Field(default_factory=dict)
+    agentic_repair_max_turns: int = 48
+    agentic_repair_history_chars: int = 0
+
+
+class ModelHealthTierResult(BaseModel):
+    tier: str
+    status: Literal["ok", "error", "skipped"]
+    model_name: str = ""
+    base_url: str = ""
+    api_key_env: str = ""
+    latency_ms: float = 0.0
+    response_preview: str = ""
+    error: str = ""
+
+
+class ModelHealthReport(BaseModel):
+    tested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    tiers: dict[str, ModelHealthTierResult] = Field(default_factory=dict)
 
 
 class StartupStatusView(BaseModel):
@@ -165,3 +167,5 @@ class ModelConfigUpdate(BaseModel):
     lite_context_window_tokens: int | None = None
     pro_context_window_tokens: int | None = None
     max_context_window_tokens: int | None = None
+    agentic_repair_max_turns: int | None = None
+    agentic_repair_history_chars: int | None = None

@@ -1,0 +1,303 @@
+"""Tests for the full-project Geant4 agentic codegen path."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from agent_core.agent_loop.loop import AgentLoopResult
+from agent_core.models.schemas import ModelTier
+
+
+@pytest.mark.asyncio
+async def test_project_agent_uses_full_project_tool_loop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Project agent should own generation/build/smoke in one workspace loop."""
+    from agent_core.g4_codegen import project_agent
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    seen: dict[str, Any] = {}
+
+    class FakeGateway:
+        pass
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        seen["tier"] = kwargs["tier"]
+        seen["metadata"] = kwargs["metadata"]
+        seen["tool_names"] = [
+            schema["function"]["name"] for schema in kwargs["toolkit"].schemas
+        ]
+        project_dir = kwargs["toolkit"].project_dir
+        (project_dir / "main.cc").write_text("int main(){return 0;}\n", encoding="utf-8")
+        return AgentLoopResult(
+            content="BUILD AND SMOKE PASSED",
+            stop_reason="stop_hook",
+            n_turns=1,
+            messages=[],
+            tool_audit=[{"name": "run_smoke", "ok": True}],
+        )
+
+    async def fake_runtime_gate(**_: Any) -> dict[str, Any]:
+        return {"status": "pass", "attempt": 0, "errors": []}
+
+    monkeypatch.setattr(
+        "agent_core.models.gateway.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(project_agent, "run_agent_loop", fake_run_agent_loop)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
+        fake_runtime_gate,
+    )
+
+    patch, report = await project_agent.run_geant4_project_agent(
+        job_id="job_project_agent",
+        g4_model_ir={"sources": {"events": 5}},
+        codegen_plan={"scenario_type": "shielding"},
+        geometry_strategy_plan={"global_strategy": "geant4"},
+        code_architecture_plan={"classes": []},
+        module_contracts={},
+        interface_contracts={},
+        expected_events=5,
+    )
+
+    assert seen["tier"] == ModelTier.PRO
+    assert seen["metadata"]["module_name"] == "geant4_project_agent"
+    assert seen["metadata"]["enable_thinking"] is True
+    assert "build_project" in seen["tool_names"]
+    assert "run_smoke" in seen["tool_names"]
+    assert "search_geant4_docs" in seen["tool_names"]
+    assert "search_web" in seen["tool_names"]
+    assert report["status"] == "passed"
+    assert report["agent_name"] == "geant4_project_agent"
+    assert patch["metadata"]["source"] == "geant4_project_agent"
+    assert any(entry["path"] == "main.cc" for entry in patch["changed_files"])
+
+
+@pytest.mark.asyncio
+async def test_project_agent_node_surfaces_continuation_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Graph node should preserve repair-continuation semantics for the UI."""
+    from agent_core.g4_codegen import project_agent
+
+    async def fake_run_geant4_project_agent(**_: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        return (
+            {
+                "changed_files": [
+                    {
+                        "path": "main.cc",
+                        "new_content": "int main(){return 0;}\n",
+                        "module_name": "runtime_app",
+                    }
+                ],
+                "metadata": {"source": "geant4_project_agent"},
+            },
+            {
+                "status": "failed",
+                "agent_name": "geant4_project_agent",
+                "errors": ["agent loop exhausted max turns (64)"],
+                "continuation_request": {
+                    "status": "pending",
+                    "reason": "agent_loop_max_turns",
+                    "current_turns": 64,
+                    "increment_turns": 12,
+                },
+                "runtime_gate_attempts": [{"status": "fail", "attempt": 0}],
+                "agentic": {"stop_reason": "max_turns", "n_turns": 64},
+            },
+        )
+
+    monkeypatch.setattr(
+        project_agent,
+        "run_geant4_project_agent",
+        fake_run_geant4_project_agent,
+    )
+
+    update = await project_agent.geant4_project_agent_node(
+        {
+            "job_id": "job_node",
+            "g4_model_ir": {},
+            "codegen_errors": ["prior"],
+        }
+    )
+
+    report = update["global_integration_agent_report"]
+    assert update["current_node"] == "geant4_project_agent"
+    assert report["continuation_request"]["status"] == "pending"
+    assert update["codegen_errors"] == [
+        "prior",
+        "agent loop exhausted max turns (64)",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_project_agent_seeds_workspace_from_previous_patch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Continuation runs should start from the previous project, not a fresh template."""
+    from agent_core.g4_codegen import project_agent
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    seen: dict[str, str] = {}
+
+    class FakeGateway:
+        pass
+
+    async def fake_run_agent_loop(**kwargs: Any) -> AgentLoopResult:
+        project_dir = kwargs["toolkit"].project_dir
+        seen["main_cc"] = (project_dir / "main.cc").read_text(encoding="utf-8")
+        return AgentLoopResult(
+            content="BUILD AND SMOKE PASSED",
+            stop_reason="stop_hook",
+            n_turns=1,
+            messages=[],
+            tool_audit=[{"name": "run_smoke", "ok": True}],
+        )
+
+    async def fake_runtime_gate(**_: Any) -> dict[str, Any]:
+        return {"status": "pass", "attempt": 0, "errors": []}
+
+    monkeypatch.setattr(
+        "agent_core.models.gateway.get_model_gateway",
+        lambda: FakeGateway(),
+    )
+    monkeypatch.setattr(project_agent, "run_agent_loop", fake_run_agent_loop)
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent._run_integration_runtime_gate",
+        fake_runtime_gate,
+    )
+
+    await project_agent.run_geant4_project_agent(
+        job_id="job_seed_patch",
+        seed_patch={
+            "changed_files": [
+                {
+                    "path": "main.cc",
+                    "new_content": "// previous continuation state\nint main(){return 0;}\n",
+                }
+            ]
+        },
+        expected_events=5,
+    )
+
+    assert seen["main_cc"] == "// previous continuation state\nint main(){return 0;}\n"
+
+
+def test_project_agent_prompt_includes_module_context_hard_constraints() -> None:
+    """Full-project agent must keep confirmation-derived module context."""
+    from agent_core.g4_codegen.project_agent import _build_project_user_message
+
+    prompt = _build_project_user_message(
+        job_id="job_constraints",
+        g4_model_ir={"model_ir_id": "ir"},
+        codegen_plan={},
+        geometry_strategy_plan={},
+        code_architecture_plan={},
+        module_contracts={},
+        module_contexts={
+            "simulation_core": {
+                "human_confirmation_context": {
+                    "confirmed_constraints": [
+                        {
+                            "field_path": "components.detector.material",
+                            "value": "HPGe",
+                            "status": "confirmed",
+                        }
+                    ],
+                    "codegen_instruction": "Treat confirmed constraints as hard requirements.",
+                }
+            }
+        },
+        interface_contracts={},
+        runtime_failure_context={},
+        expected_events=25,
+    )
+
+    assert "components.detector.material" in prompt
+    assert "HPGe" in prompt
+    assert "hard requirements" in prompt
+
+
+@pytest.mark.asyncio
+async def test_repair_continuation_uses_project_agent_with_previous_patch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Approved continuation should keep the full-project agentic codegen path."""
+    from agent_core.g4_codegen import graph_nodes
+
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    job_id = "job_project_agent_continue"
+    codegen_dir = tmp_path / "jobs" / job_id / "05_codegen"
+    codegen_dir.mkdir(parents=True)
+    patch_path = codegen_dir / "proposed_patch.json"
+    patch_path.write_text(
+        """
+        {
+          "patch_id": "patch-prev",
+          "changed_files": [
+            {
+              "path": "main.cc",
+              "new_content": "int main(){return 0;}\\n"
+            }
+          ],
+          "metadata": {"source": "geant4_project_agent"}
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    seen: dict[str, Any] = {}
+
+    async def fake_run_geant4_project_agent(**kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        seen.update(kwargs)
+        return (
+            {
+                "changed_files": [
+                    {
+                        "path": "main.cc",
+                        "new_content": "int main(){return 0;}\n",
+                    }
+                ],
+                "metadata": {"source": "geant4_project_agent"},
+            },
+            {
+                "status": "passed",
+                "agent_name": "geant4_project_agent",
+                "errors": [],
+            },
+        )
+
+    async def fail_global_integration_agent(*_: Any, **__: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        raise AssertionError("repair continuation must not use legacy global integration")
+
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.project_agent.run_geant4_project_agent",
+        fake_run_geant4_project_agent,
+    )
+    monkeypatch.setattr(
+        "agent_core.g4_codegen.global_integration_agent.run_global_integration_agent",
+        fail_global_integration_agent,
+    )
+
+    update = await graph_nodes.continue_agentic_repair_node(
+        {
+            "job_id": job_id,
+            "g4_model_ir": {"model": "shielding"},
+            "agentic_repair_max_turns_override": 60,
+            "runtime_failure_context": {"errors": ["previous smoke failed"]},
+        }
+    )
+
+    assert seen["seed_patch"]["patch_id"] == "patch-prev"
+    assert seen["max_turns"] == 60
+    assert seen["runtime_failure_context"] == {"errors": ["previous smoke failed"]}
+    assert update["current_node"] == "continue_agentic_repair"
+    assert update["repair_continuation_status"] == ""
+    assert update["global_integration_agent_report"]["agent_name"] == "geant4_project_agent"

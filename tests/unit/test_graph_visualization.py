@@ -24,9 +24,9 @@ from agent_core.visualization.graph_visualizer import (
 class TestMainGraphTopology:
     """Verify main graph topology matches the actual graph code."""
 
-    def test_main_graph_has_13_nodes(self) -> None:
+    def test_main_graph_has_14_nodes(self) -> None:
         spec = get_main_graph_spec()
-        assert len(spec.nodes) == 13
+        assert len(spec.nodes) == 14
 
     def test_main_graph_has_prepare_workspace(self) -> None:
         spec = get_main_graph_spec()
@@ -39,6 +39,7 @@ class TestMainGraphTopology:
         expected = {
             "context_subgraph",
             "task_planning_subgraph",
+            "requirements_review",
             "g4_modeling_subgraph",
             "human_confirmation_subgraph",
             "g4_codegen_subgraph",
@@ -83,8 +84,8 @@ class TestSubgraphTopology:
             ("task_planning", 3),
             ("g4_modeling", 14),
             ("human_confirmation", 6),
-            ("g4_codegen", 18),
-            ("gate_validation", 6),
+            ("g4_codegen", 11),
+            ("gate_validation", 5),
             ("patch", 3),
             ("artifact", 3),
             ("report", 1),
@@ -171,9 +172,9 @@ class TestSubgraphTopology:
         specs = get_all_subgraph_specs()
         gate = specs["gate_validation"]
 
-        assert "21 道门禁" in gate.description
+        assert "20 道门禁" in gate.description
         assert any(node.label == "G4 门禁 A-H" for node in gate.nodes)
-        assert any(node.label == "可视化验收 21" for node in gate.nodes)
+        assert not any(node.label == "可视化验收 21" for node in gate.nodes)
 
     def test_nine_subgraphs_total(self) -> None:
         assert len(get_all_subgraph_specs()) == 9

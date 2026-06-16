@@ -11,7 +11,6 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-MAX_BASH_OUTPUT = 20_000
 DEFAULT_BASH_TIMEOUT = 120
 
 
@@ -43,8 +42,8 @@ async def run_bash(project_dir: Path, command: str, *, timeout: int = DEFAULT_BA
     return {
         "ok": proc.returncode == 0,
         "exit_code": proc.returncode,
-        "stdout": stdout.decode("utf-8", "replace")[:MAX_BASH_OUTPUT],
-        "stderr": stderr.decode("utf-8", "replace")[:MAX_BASH_OUTPUT],
+        "stdout": stdout.decode("utf-8", "replace"),
+        "stderr": stderr.decode("utf-8", "replace"),
     }
 
 
@@ -60,33 +59,16 @@ async def build_project(project_dir: Path, *, threads: int = 4) -> dict[str, Any
 
     runner = Geant4Runner()
     build_dir = project_dir / "build"
-    build_dir.mkdir(parents=True, exist_ok=True)
-
-    # Reuse build/ across calls for fast incremental makes, but wipe it if the
-    # cmake cache points at a different source dir (e.g. project relocated or a
-    # stale cache was copied in) — otherwise cmake refuses to build.
-    marker = build_dir / ".radagent_source"
-    source_key = str(project_dir.resolve())
-    stale_cache = (build_dir / "CMakeCache.txt").exists() and (
-        not marker.exists() or marker.read_text(encoding="utf-8").strip() != source_key
-    )
-    if stale_cache:
-        import shutil
-
-        shutil.rmtree(build_dir, ignore_errors=True)
-        build_dir.mkdir(parents=True, exist_ok=True)
+    runner.prepare_build_dir(str(project_dir), str(build_dir))
 
     needs_configure = not (build_dir / "CMakeCache.txt").exists()
     if needs_configure:
         cfg = await runner.configure(str(project_dir), str(build_dir))
-        marker.write_text(source_key, encoding="utf-8")
         if not cfg.get("success"):
             return {
                 "ok": False,
                 "stage": "configure",
-                "output": _tail(
-                    f"{cfg.get('cmake_output', '')}\n{cfg.get('errors', '')}"
-                ),
+                "output": f"{cfg.get('cmake_output', '')}\n{cfg.get('errors', '')}",
             }
 
     build = await runner.build(str(build_dir), threads=threads)
@@ -94,21 +76,9 @@ async def build_project(project_dir: Path, *, threads: int = 4) -> dict[str, Any
     return {
         "ok": bool(build.get("success")),
         "stage": "build",
-        "output": _known_fix_hints(_tail(raw)),
+        "output": _known_fix_hints(raw),
         "executable_path": build.get("executable_path"),
     }
-
-
-def _tail(text: str, *, max_chars: int = 20000) -> str:
-    """Keep the END of compiler output — that's where errors + carets live.
-
-    The model has a ~1M-token context window, so we keep a generous tail
-    (20k chars) to preserve the full error context for complex multi-file
-    builds instead of truncating to the last 8k.
-    """
-    if len(text) <= max_chars:
-        return text
-    return "..." + text[-(max_chars - 3):]
 
 
 # Classic Geant4 runtime/compile errors whose fix is deterministic and
@@ -150,6 +120,40 @@ _KNOWN_GEANT4_FIXES: tuple[tuple[str, str], ...] = (
         "G4_POLYSTYRENE is a safe fallback) and that GetMaterial() returns "
         "non-null BEFORE constructing the logical volume. A null material must "
         "be a hard error, not silently passed to G4LogicalVolume.",
+    ),
+    (
+        "does not have a valid material pointer", "Logical volume <",
+        "MATERIAL FIX: a G4LogicalVolume was constructed with a null material "
+        "pointer. For the world volume, build or fetch G4_Galactic with "
+        "G4NistManager::FindOrBuildMaterial(\"G4_Galactic\") before creating "
+        "WorldLV; for detector volumes, verify each IR material_id maps to a "
+        "valid NIST name in MaterialRegistry. Never pass nullptr to "
+        "G4LogicalVolume; fail immediately or use a valid explicit fallback.",
+    ),
+    (
+        "no declaration matches", "OutputManager::WriteSummaryJson()",
+        "OUTPUTMANAGER SIGNATURE FIX: OutputManager.cc defines a no-argument "
+        "WriteSummaryJson() that OutputManager.hh does not declare. Remove the "
+        "stray empty overload and keep the declared WriteSummaryJson(G4int) "
+        "definition; do not add a new unused declaration to the header.",
+    ),
+    (
+        "G4ParticleTable::GetParticleTable()", "incomplete type",
+        "PARTICLE-TABLE INCLUDE FIX: code calls G4ParticleTable methods while "
+        "only seeing a forward declaration. Add #include \"G4ParticleTable.hh\" "
+        "to the source file using G4ParticleTable::GetParticleTable().",
+    ),
+    (
+        "G4Material", "has not been declared",
+        "GEANT4 INCLUDE FIX: a header/source uses G4Material* without including "
+        "\"G4Material.hh\". Add the include before editing signatures; the "
+        "compiler may display the missing type as int* in downstream notes.",
+    ),
+    (
+        "G4VSolid", "incomplete type",
+        "GEANT4 INCLUDE FIX: a source calls methods on G4VSolid through a "
+        "forward declaration. Add #include \"G4VSolid.hh\" before changing "
+        "scoring or geometry logic.",
     ),
 )
 
@@ -200,7 +204,7 @@ async def run_smoke(project_dir: Path, *, events: int = 5, job_id: str = "agenti
     return {
         "ok": bool(result.get("success")) and quality.passed,
         "stage": "smoke",
-        "output": _known_fix_hints(_tail(combined)),
+        "output": _known_fix_hints(combined),
         "details": {
             "events_requested": result.get("events_requested"),
             "build_success": result.get("build_success"),
@@ -219,13 +223,13 @@ async def run_smoke(project_dir: Path, *, events: int = 5, job_id: str = "agenti
 
 def _join_errors(result: dict[str, Any]) -> str:
     parts = []
-    for key in ("cmake_errors", "build_errors", "run_errors", "errors"):
+    for key in ("run_errors", "runtime_error_patterns", "cmake_errors", "build_errors", "errors"):
         value = result.get(key)
         if isinstance(value, list):
             parts.extend(str(x) for x in value)
         elif value:
             parts.append(str(value))
-    return "\n".join(parts)[:MAX_BASH_OUTPUT]
+    return "\n".join(parts)
 
 
 def _smoke_result_for_quality(result: dict[str, Any]) -> dict[str, Any]:

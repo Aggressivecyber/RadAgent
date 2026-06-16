@@ -15,9 +15,21 @@ describe('model settings helpers', () => {
       default_api_key_env: 'RADAGENT_API_KEY',
       tiers: {
         lite: { model_name: 'lite-1', base_url: 'https://api.example/v1' },
-        pro: { model_name: 'pro-1', base_url: 'https://api.example/v1' },
-        max: { model_name: 'max-1', base_url: 'https://api.example/v1' },
+        pro: {
+          model_name: 'pro-1',
+          base_url: 'https://api.example/v1',
+          max_tokens: 8192,
+          context_window_tokens: 128000,
+        },
+        max: {
+          model_name: 'max-1',
+          base_url: 'https://api.example/v1',
+          max_tokens: 16000,
+          context_window_tokens: 200000,
+        },
       },
+      agentic_repair_max_turns: 18,
+      agentic_repair_history_chars: 36000,
     })
 
     expect(draft).toEqual({
@@ -27,6 +39,12 @@ describe('model settings helpers', () => {
       lite_model: 'lite-1',
       pro_model: 'pro-1',
       max_model: 'max-1',
+      pro_max_tokens: '8192',
+      pro_context_window_tokens: '128000',
+      max_max_tokens: '16000',
+      max_context_window_tokens: '200000',
+      agentic_repair_max_turns: '18',
+      agentic_repair_history_chars: '36000',
     })
   })
 
@@ -38,6 +56,12 @@ describe('model settings helpers', () => {
       lite_model: 'lite-2',
       pro_model: 'pro-2',
       max_model: '',
+      pro_max_tokens: ' 8192 ',
+      pro_context_window_tokens: ' 128000 ',
+      max_max_tokens: '',
+      max_context_window_tokens: ' 200000 ',
+      agentic_repair_max_turns: ' 12 ',
+      agentic_repair_history_chars: ' 36000 ',
     })
 
     expect(update).toEqual({
@@ -45,6 +69,11 @@ describe('model settings helpers', () => {
       api_key_env: 'RADAGENT_API_KEY',
       lite_model: 'lite-2',
       pro_model: 'pro-2',
+      pro_max_tokens: 8192,
+      pro_context_window_tokens: 128000,
+      max_context_window_tokens: 200000,
+      agentic_repair_max_turns: 12,
+      agentic_repair_history_chars: 36000,
     })
   })
 
@@ -56,13 +85,16 @@ describe('model settings helpers', () => {
     const started = reduceModelSaveStart(createModelSaveState())
     const saved = reduceModelSaveSuccess(started, { ...draft, api_key: 'secret' })
 
-    expect(started).toEqual({ status: 'saving', message: 'Saving model settings...' })
+    expect(started).toEqual({ status: 'saving', message: '正在保存模型设置...' })
     expect(saved.status).toBe('saved')
-    expect(saved.message).toBe('Model settings saved.')
+    expect(saved.message).toBe('模型设置已保存。')
     const savedDraft = saved.draft
     expect(savedDraft).toBeDefined()
     expect(savedDraft?.api_key).toBe('')
     expect(savedDraft?.pro_model).toBe('pro-1')
+    expect(draft.pro_context_window_tokens).toBe('1000000')
+    expect(draft.max_context_window_tokens).toBe('1000000')
+    expect(draft.agentic_repair_history_chars).toBe('0')
   })
 
   it('keeps the current draft visible when model save fails', () => {
@@ -73,6 +105,12 @@ describe('model settings helpers', () => {
       lite_model: 'lite-1',
       pro_model: 'pro-1',
       max_model: 'max-1',
+      pro_max_tokens: '8192',
+      pro_context_window_tokens: '128000',
+      max_max_tokens: '16000',
+      max_context_window_tokens: '200000',
+      agentic_repair_max_turns: '24',
+      agentic_repair_history_chars: '48000',
     }
 
     const failed = reduceModelSaveFailure(reduceModelSaveStart(createModelSaveState()), current, 'Network failed')
@@ -92,9 +130,15 @@ describe('model settings helpers', () => {
       lite_model: 'lite-1',
       pro_model: 'pro-1',
       max_model: 'max-1',
+      pro_max_tokens: '8192',
+      pro_context_window_tokens: '128000',
+      max_max_tokens: '16000',
+      max_context_window_tokens: '200000',
+      agentic_repair_max_turns: '24',
+      agentic_repair_history_chars: '48000',
     })
 
-    expect(reduceModelViewRefresh(saved).message).toBe('Model settings saved.')
+    expect(reduceModelViewRefresh(saved).message).toBe('模型设置已保存。')
     expect(reduceModelViewRefresh(createModelSaveState()).status).toBe('idle')
   })
 })

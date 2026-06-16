@@ -545,6 +545,202 @@ class TestG4ModelingNodes:
         assert materials["Silicon"]["nist_name"] == "G4_Si"
         assert "Silicon" in " ".join(materials["Silicon"]["source_evidence"])
 
+    async def test_material_definition_knows_polyethylene_shielding_materials(
+        self,
+    ) -> None:
+        """Showcase neutron shielding must not turn common shielding materials into placeholders."""
+        from agent_core.g4_modeling.nodes.material_definition_node import (
+            material_definition_node,
+        )
+
+        model_ir = self._minimal_model_ir()
+        model_ir["components"] = [
+            {
+                "component_id": "world",
+                "display_name": "World Volume",
+                "component_type": "world",
+                "geometry_type": "box",
+                "dimensions": {"dx": 100000.0, "dy": 100000.0, "dz": 100000.0},
+                "material_id": "G4_AIR",
+                "source_evidence": ["world"],
+            },
+            {
+                "component_id": "polyethylene_layer",
+                "display_name": "Polyethylene Shielding Layer",
+                "component_type": "shielding",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 20000.0},
+                "material_id": "G4_POLYETHYLENE",
+                "mother_volume": "world",
+                "source_evidence": ["user request for polyethylene"],
+            },
+            {
+                "component_id": "borated_polyethylene_layer",
+                "display_name": "Borated Polyethylene Shielding Layer",
+                "component_type": "shielding",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 20000.0},
+                "material_id": "G4_BORATED_POLYETHYLENE",
+                "mother_volume": "world",
+                "source_evidence": ["user request for borated polyethylene"],
+            },
+        ]
+
+        result = await material_definition_node({"job_id": "", "g4_model_ir": model_ir})
+        materials = {
+            mat["material_id"]: mat for mat in result["g4_model_ir"]["materials"]
+        }
+
+        assert materials["G4_POLYETHYLENE"]["name"] == "Polyethylene"
+        assert materials["G4_POLYETHYLENE"]["open_issues"] == []
+        assert materials["G4_BORATED_POLYETHYLENE"]["name"] == "Borated Polyethylene"
+        assert materials["G4_BORATED_POLYETHYLENE"]["open_issues"] == []
+
+    async def test_material_definition_covers_common_showcase_materials(
+        self,
+    ) -> None:
+        """Common detector, shielding, phantom, and tracker materials should resolve deterministically."""
+        from agent_core.g4_modeling.nodes.material_definition_node import (
+            material_definition_node,
+        )
+
+        model_ir = self._minimal_model_ir()
+        material_ids = [
+            "G4_AIR",
+            "Graphite",
+            "Concrete",
+            "StainlessSteel",
+            "G4_Cd",
+            "LiF",
+            "G4_PLEXIGLASS",
+            "Kapton",
+            "G4_He",
+            "G4_Ar",
+            "G4_BGO",
+        ]
+        model_ir["components"] = [
+            {
+                "component_id": f"component_{index}",
+                "display_name": f"{material_id} component",
+                "component_type": "world" if index == 0 else "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 100000.0, "dy": 100000.0, "dz": 1000.0},
+                "material_id": material_id,
+                "mother_volume": None if index == 0 else "component_0",
+                "source_evidence": [f"user requirement material {material_id}"],
+            }
+            for index, material_id in enumerate(material_ids)
+        ]
+
+        result = await material_definition_node({"job_id": "", "g4_model_ir": model_ir})
+        materials = {
+            mat["material_id"]: mat for mat in result["g4_model_ir"]["materials"]
+        }
+
+        for material_id in material_ids:
+            assert material_id in materials
+            assert materials[material_id]["open_issues"] == []
+            assert materials[material_id]["source_evidence"]
+
+        assert materials["Graphite"]["classification"] == "nist"
+        assert materials["Graphite"]["nist_name"] == "G4_GRAPHITE"
+        assert materials["Concrete"]["name"] == "Concrete"
+        assert materials["StainlessSteel"]["name"] == "Stainless Steel"
+        assert materials["LiF"]["name"] == "Lithium Fluoride"
+        assert materials["G4_PLEXIGLASS"]["name"] == "PMMA / Plexiglass"
+        assert materials["Kapton"]["name"] == "Kapton Polyimide"
+        assert materials["G4_BGO"]["name"] == "Bismuth Germanate"
+
+    async def test_material_definition_marks_unrecognized_material_for_confirmation_without_placeholder(
+        self,
+    ) -> None:
+        """Unrecognized material references should stay traceable and reviewable, not become Unknown/default text."""
+        from agent_core.g4_modeling.nodes.material_definition_node import (
+            material_definition_node,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+        from agent_core.g4_modeling.validators.no_simplification_validator import (
+            NoSimplificationValidator,
+        )
+
+        model_ir = self._minimal_model_ir()
+        model_ir["components"] = [
+            {
+                "component_id": "target_volume",
+                "display_name": "Target volume",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 1000.0},
+                "material_id": "sample_material_pending_user_selection",
+                "mother_volume": "world",
+                "source_evidence": ["user_requirement: material not provided"],
+            },
+            {
+                "component_id": "world",
+                "display_name": "World Volume",
+                "component_type": "world",
+                "geometry_type": "box",
+                "dimensions": {"dx": 100000.0, "dy": 100000.0, "dz": 100000.0},
+                "material_id": "G4_AIR",
+                "source_evidence": ["world volume envelope"],
+            },
+        ]
+
+        result = await material_definition_node({"job_id": "", "g4_model_ir": model_ir})
+        materials = {
+            mat["material_id"]: mat for mat in result["g4_model_ir"]["materials"]
+        }
+        pending = materials["sample_material_pending_user_selection"]
+
+        assert "Unknown" not in pending["name"]
+        assert "default" not in " ".join(pending["source_evidence"]).lower()
+        assert pending["open_issues"]
+        assert "Silicon" not in pending["name"]
+
+        fixed_ir = G4ModelIR.model_validate(result["g4_model_ir"])
+        passed, errors = NoSimplificationValidator().validate(fixed_ir)
+        assert passed, errors
+
+    def test_geometry_fallback_marks_missing_component_material_for_confirmation(
+        self,
+    ) -> None:
+        """When the user/model omits a material, geometry must request selection instead of assuming silicon."""
+        from agent_core.g4_modeling.nodes.geometry_decomposition_node import (
+            _fallback_components,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+
+        model_ir = G4ModelIR.model_validate(self._minimal_model_ir())
+        components = _fallback_components(
+            model_ir,
+            {
+                "required_components": [
+                    {
+                        "component_id": "world",
+                        "display_name": "World",
+                        "component_type": "world",
+                        "geometry_type": "box",
+                        "material": "Air",
+                    },
+                    {
+                        "component_id": "sample_detector",
+                        "display_name": "Sample detector",
+                        "component_type": "volume",
+                        "geometry_type": "box",
+                        "role": "dose scoring detector",
+                        "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 300.0},
+                    },
+                ]
+            },
+            {"outputs": ["dose_distribution"]},
+        )
+        detector = next(comp for comp in components if comp.component_id == "sample_detector")
+
+        assert detector.material_id == "material_pending_user_selection"
+        assert detector.requires_confirmation is True
+        assert detector.open_issues
+        assert "Silicon" not in detector.material_id
+
     async def test_scope_guard_flags_tcad(self) -> None:
         """Scope guard should still handle geant4+tcad scope."""
         from agent_core.g4_modeling.nodes.model_scope_guard_node import (
@@ -1013,6 +1209,193 @@ class TestG4ModelingNodes:
         assert world["dimensions"] == {"dx": 50000.0, "dy": 50000.0, "dz": 50000.0}
         assert "task_spec.target.size_um" in " ".join(slab["source_evidence"])
         assert "task_spec.target.size_um" in " ".join(world["source_evidence"])
+
+    async def test_geometry_keeps_downstream_detector_outside_shielding_stack(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Shielding showcase geometry should not place detector inside the stack envelope."""
+        from agent_core.g4_modeling.nodes.geometry_decomposition_node import (
+            geometry_decomposition_node,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+        from agent_core.g4_modeling.validators.overlap_policy_validator import (
+            OverlapPolicyValidator,
+        )
+
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        model_ir = self._minimal_model_ir()
+        model_ir["target_system"] = "14 MeV neutron shielding stack with downstream silicon detector"
+        model_ir["components"] = [
+            {
+                "component_id": "world",
+                "display_name": "World Volume",
+                "component_type": "world",
+                "geometry_type": "box",
+                "dimensions": {"dx": 1000000.0, "dy": 1000000.0, "dz": 2000000.0},
+                "material_id": "G4_AIR",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": None,
+                "source_evidence": ["standard Geant4 world volume"],
+            },
+            {
+                "component_id": "shielding_stack",
+                "display_name": "Shielding Stack Assembly",
+                "component_type": "assembly",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 100000.0},
+                "material_id": "G4_AIR",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world",
+                "source_evidence": ["user request for material stack"],
+            },
+            {
+                "component_id": "polyethylene_layer",
+                "display_name": "Polyethylene Shielding Layer",
+                "component_type": "shielding",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 20000.0},
+                "material_id": "G4_POLYETHYLENE",
+                "placement": {"position": [0.0, 0.0, -40000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "shielding_stack",
+                "source_evidence": ["user request for polyethylene"],
+            },
+            {
+                "component_id": "borated_polyethylene_layer",
+                "display_name": "Borated Polyethylene Shielding Layer",
+                "component_type": "shielding",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 20000.0},
+                "material_id": "G4_BORATED_POLYETHYLENE",
+                "placement": {"position": [0.0, 0.0, -20000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "shielding_stack",
+                "source_evidence": ["user request for borated polyethylene"],
+            },
+            {
+                "component_id": "lead_layer",
+                "display_name": "Lead Shielding Layer",
+                "component_type": "shielding",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 20000.0},
+                "material_id": "G4_Pb",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "shielding_stack",
+                "source_evidence": ["user request for lead"],
+            },
+            {
+                "component_id": "silicon_detector",
+                "display_name": "Silicon Detector",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 100000.0, "dy": 100000.0, "dz": 500.0},
+                "material_id": "G4_Si",
+                "placement": {"position": [0.0, 0.0, 30000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world",
+                "sensitive": True,
+                "roles": ["edep_region", "dose_scoring_region"],
+                "source_evidence": ["user request for downstream silicon detector"],
+            },
+        ]
+
+        result = await geometry_decomposition_node(
+            {
+                "job_id": "test",
+                "g4_model_ir": model_ir,
+                "task_spec": {},
+            }
+        )
+
+        fixed_ir = G4ModelIR.model_validate(result["g4_model_ir"])
+        passed, errors = OverlapPolicyValidator().validate(fixed_ir)
+        assert passed, errors
+        detector = next(
+            comp for comp in result["g4_model_ir"]["components"] if comp["component_id"] == "silicon_detector"
+        )
+        assert detector["placement"]["position"][2] >= 50500.0
+
+    async def test_geometry_expands_world_for_bragg_depth_dose_stack(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Layered Bragg benchmark geometry must keep all layers inside the world."""
+        from agent_core.g4_modeling.nodes.geometry_decomposition_node import (
+            geometry_decomposition_node,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+        from agent_core.g4_modeling.validators.overlap_policy_validator import (
+            OverlapPolicyValidator,
+        )
+
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        model_ir = self._minimal_model_ir()
+        model_ir["target_system"] = "150 MeV proton Bragg peak layered depth-dose benchmark"
+        model_ir["components"] = [
+            {
+                "component_id": "world_001",
+                "display_name": "World Volume",
+                "component_type": "world",
+                "geometry_type": "box",
+                "dimensions": {"dx": 100000.0, "dy": 100000.0, "dz": 500000.0},
+                "material_id": "G4_Galactic",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": None,
+                "source_evidence": ["lite draft: world for layered Bragg target"],
+            },
+            {
+                "component_id": "layer_water_001",
+                "display_name": "Water layer",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 300000.0},
+                "material_id": "G4_WATER",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world_001",
+                "source_evidence": ["user requested water layer"],
+            },
+            {
+                "component_id": "layer_aluminum_001",
+                "display_name": "Aluminum layer",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 50000.0},
+                "material_id": "G4_Al",
+                "placement": {"position": [0.0, 0.0, 300000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world_001",
+                "source_evidence": ["user requested aluminum layer"],
+            },
+            {
+                "component_id": "layer_silicon_001",
+                "display_name": "Silicon scoring layer",
+                "component_type": "volume",
+                "geometry_type": "box",
+                "dimensions": {"dx": 10000.0, "dy": 10000.0, "dz": 50000.0},
+                "material_id": "G4_Si",
+                "placement": {"position": [0.0, 0.0, 350000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world_001",
+                "sensitive": True,
+                "roles": ["edep_region", "dose_scoring_region"],
+                "source_evidence": ["user requested silicon Bragg scoring layer"],
+            },
+        ]
+
+        result = await geometry_decomposition_node(
+            {
+                "job_id": "test",
+                "g4_model_ir": model_ir,
+                "task_spec": {},
+            }
+        )
+
+        fixed_ir = G4ModelIR.model_validate(result["g4_model_ir"])
+        passed, errors = OverlapPolicyValidator().validate(fixed_ir)
+        assert passed, errors
+        world = next(
+            comp for comp in result["g4_model_ir"]["components"] if comp["component_id"] == "world_001"
+        )
+        assert world["dimensions"]["dz"] >= 751000.0
+        assert "contain daughter placements" in " ".join(world["source_evidence"])
 
     async def test_scoring_design_creates_edep_and_dose_voxel_scores(self) -> None:
         """3D edep and dose roles should both become explicit scoring specs."""

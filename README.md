@@ -250,6 +250,7 @@ agent_core/
   storage/             SQLite workspace metadata repository
   tools/               web search and Geant4 build/run wrappers
   tui/                 Textual terminal frontend
+  web/                 framework-free HTTP workbench server + API surface
   validators/          shared file, patch, code, and schema validators
   visualization/       graph visualization helpers
   workflow/            copilot-visible workflow context and memory schemas

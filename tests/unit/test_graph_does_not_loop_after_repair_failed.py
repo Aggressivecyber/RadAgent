@@ -15,11 +15,29 @@ def test_passed_layer_routes_to_next_node():
     assert route_fn(state) == "run_runtime_modules"
 
 
-def test_failed_layer_routes_to_persist():
+def test_failed_layer_without_generated_files_routes_to_persist():
     route_fn = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
     state = {
         "layer_gate_results": {
             "core_modules_gate": {"status": "fail"},
+        },
+    }
+    assert route_fn(state) == "persist_codegen_output"
+
+
+def test_failed_layer_with_generated_files_routes_to_persist():
+    route_fn = _route_after_layer_gate("core_modules_gate", "run_runtime_modules")
+    state = {
+        "layer_gate_results": {
+            "core_modules_gate": {"status": "fail"},
+        },
+        "module_results": {
+            "simulation_core": {
+                "status": "failed",
+                "generated_files": [
+                    {"path": "src/DetectorConstruction.cc", "new_content": "broken"}
+                ],
+            }
         },
     }
     assert route_fn(state) == "persist_codegen_output"

@@ -92,6 +92,23 @@ class TestOverlapPolicyValidator:
         passed, errors = validator.validate(ir)
         assert not passed
 
+    def test_child_outside_mother_detected(self):
+        """A child volume whose AABB exceeds its mother must be flagged."""
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            components=[
+                _world(),
+                _layer("inside_layer", z_pos=0.0, dz=100.0),
+                _layer("outside_layer", z_pos=3000.0, dz=100.0),
+            ],
+            materials=[_mat("air"), _mat("silicon")],
+        )
+        validator = OverlapPolicyValidator()
+        passed, errors = validator.validate(ir)
+        assert not passed
+        assert any("outside mother volume" in error for error in errors)
+
     def test_single_child_no_overlap_issue(self):
         """Single child can't overlap with itself."""
         ir = G4ModelIR(

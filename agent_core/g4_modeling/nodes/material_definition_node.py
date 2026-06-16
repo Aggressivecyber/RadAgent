@@ -41,6 +41,17 @@ _NIST_MATERIALS: dict[str, tuple[str, float]] = {
     "Water": ("G4_WATER", 1.000),
     "Galactic": ("G4_Galactic", 1e-25),
     "G4_Galactic": ("G4_Galactic", 1e-25),
+    "Graphite": ("G4_GRAPHITE", 2.267),
+    "G4_GRAPHITE": ("G4_GRAPHITE", 2.267),
+    "Cd": ("G4_Cd", 8.65),
+    "Cadmium": ("G4_Cd", 8.65),
+    "G4_Cd": ("G4_Cd", 8.65),
+    "He": ("G4_He", 0.000166),
+    "Helium": ("G4_He", 0.000166),
+    "G4_He": ("G4_He", 0.000166),
+    "Ar": ("G4_Ar", 0.001662),
+    "Argon": ("G4_Ar", 0.001662),
+    "G4_Ar": ("G4_Ar", 0.001662),
 }
 
 # Well-known custom materials
@@ -76,6 +87,131 @@ _CUSTOM_MATERIALS: dict[str, dict[str, Any]] = {
             {"element": "Br", "fraction": 0.038},
         ],
         "density_g_cm3": 1.85,
+        "state": "solid",
+    },
+    "G4_POLYETHYLENE": {
+        "name": "Polyethylene",
+        "composition": [
+            {"element": "C", "fraction": 0.8563},
+            {"element": "H", "fraction": 0.1437},
+        ],
+        "density_g_cm3": 0.94,
+        "state": "solid",
+    },
+    "Polyethylene": {
+        "name": "Polyethylene",
+        "composition": [
+            {"element": "C", "fraction": 0.8563},
+            {"element": "H", "fraction": 0.1437},
+        ],
+        "density_g_cm3": 0.94,
+        "state": "solid",
+    },
+    "G4_BORATED_POLYETHYLENE": {
+        "name": "Borated Polyethylene",
+        "composition": [
+            {"element": "C", "fraction": 0.7470},
+            {"element": "H", "fraction": 0.1250},
+            {"element": "B", "fraction": 0.0500},
+            {"element": "O", "fraction": 0.0780},
+        ],
+        "density_g_cm3": 1.00,
+        "state": "solid",
+    },
+    "BoratedPolyethylene": {
+        "name": "Borated Polyethylene",
+        "composition": [
+            {"element": "C", "fraction": 0.7470},
+            {"element": "H", "fraction": 0.1250},
+            {"element": "B", "fraction": 0.0500},
+            {"element": "O", "fraction": 0.0780},
+        ],
+        "density_g_cm3": 1.00,
+        "state": "solid",
+    },
+    "Concrete": {
+        "name": "Concrete",
+        "composition": [
+            {"element": "O", "fraction": 0.529},
+            {"element": "Si", "fraction": 0.337},
+            {"element": "Ca", "fraction": 0.044},
+            {"element": "Al", "fraction": 0.034},
+            {"element": "Fe", "fraction": 0.014},
+            {"element": "H", "fraction": 0.010},
+            {"element": "C", "fraction": 0.001},
+        ],
+        "density_g_cm3": 2.30,
+        "state": "solid",
+    },
+    "StainlessSteel": {
+        "name": "Stainless Steel",
+        "composition": [
+            {"element": "Fe", "fraction": 0.70},
+            {"element": "Cr", "fraction": 0.19},
+            {"element": "Ni", "fraction": 0.10},
+            {"element": "Mn", "fraction": 0.01},
+        ],
+        "density_g_cm3": 8.00,
+        "state": "solid",
+    },
+    "LiF": {
+        "name": "Lithium Fluoride",
+        "composition": [
+            {"element": "Li", "fraction": 0.267},
+            {"element": "F", "fraction": 0.733},
+        ],
+        "density_g_cm3": 2.64,
+        "state": "solid",
+    },
+    "G4_PLEXIGLASS": {
+        "name": "PMMA / Plexiglass",
+        "composition": [
+            {"element": "C", "fraction": 0.5998},
+            {"element": "H", "fraction": 0.0805},
+            {"element": "O", "fraction": 0.3197},
+        ],
+        "density_g_cm3": 1.19,
+        "state": "solid",
+    },
+    "Plexiglass": {
+        "name": "PMMA / Plexiglass",
+        "composition": [
+            {"element": "C", "fraction": 0.5998},
+            {"element": "H", "fraction": 0.0805},
+            {"element": "O", "fraction": 0.3197},
+        ],
+        "density_g_cm3": 1.19,
+        "state": "solid",
+    },
+    "Kapton": {
+        "name": "Kapton Polyimide",
+        "composition": [
+            {"element": "C", "fraction": 0.6911},
+            {"element": "O", "fraction": 0.2092},
+            {"element": "N", "fraction": 0.0733},
+            {"element": "H", "fraction": 0.0264},
+        ],
+        "density_g_cm3": 1.42,
+        "state": "solid",
+    },
+    "G4_BGO": {
+        "name": "Bismuth Germanate",
+        "composition": [
+            {"element": "Bi", "fraction": 0.671},
+            {"element": "Ge", "fraction": 0.175},
+            {"element": "O", "fraction": 0.154},
+        ],
+        "density_g_cm3": 7.13,
+        "state": "solid",
+    },
+    "BGO": {
+        "name": "Bismuth Germanate",
+        "composition": [
+            {"element": "Bi", "fraction": 0.671},
+            {"element": "Ge", "fraction": 0.175},
+            {"element": "O", "fraction": 0.154},
+        ],
+        "density_g_cm3": 7.13,
         "state": "solid",
     },
 }
@@ -177,17 +313,18 @@ def _define_material(
             ),
         )
 
-    # Unknown material — flag as open issue
+    # Unresolved material — keep it traceable for review without placeholder text.
     return MaterialSpec(
         material_id=mat_id,
-        name=f"Unknown material '{mat_id}'",
+        name=f"Material pending user selection: {mat_id}",
         classification="custom",
         composition=[ElementFraction(element="Si", fraction=1.0)],
         density_g_cm3=2.33,
         source_evidence=context_evidence or [f"material_reference:{mat_id}"],
         open_issues=[
-            f"Material '{mat_id}' not in known database — composition and density need verification"
+            f"Material '{mat_id}' needs user-confirmed composition and density"
         ],
+        requires_confirmation=True,
     )
 
 

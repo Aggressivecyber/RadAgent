@@ -8,21 +8,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import time
+from pathlib import Path
 from typing import Any
 
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 from agent_core.observability import record_event, write_failure_bundle
-from agent_core.workspace.paths import GEANT4_PROJECT_DIRNAME, STAGE_CODEGEN, STAGE_PATCH
+from agent_core.workspace.paths import (
+    GEANT4_PROJECT_DIRNAME,
+    STAGE_CODEGEN,
+    STAGE_PATCH,
+)
 
 REQUIRED_MODULES = {
     "simulation_core",
     "beam_physics",
     "runtime_app",
 }
-GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS = 8
 RUNTIME_AUDIT_REPAIR_ROUNDS = 4
 PHYSICS_REVIEW_REPAIR_ROUNDS = 4
+AUDIT_REPAIR_CONTINUATION_INCREMENT_TURNS = 12
 
 
 # ── Planning nodes ───────────────────────────────────────────────────
@@ -113,6 +119,7 @@ async def build_module_contexts_node(
     context_decision = state.get("context_decision")
     web_search_available = state.get("web_search_available")
     runtime_failure_context = state.get("runtime_failure_context", {})
+    human_confirmation_context = _load_human_confirmation_context(state)
 
     contexts: dict[str, Any] = {}
     for module_name, contract in module_contracts.items():
@@ -131,10 +138,86 @@ async def build_module_contexts_node(
             context_decision=context_decision,
             web_search_available=web_search_available,
             runtime_failure_context=runtime_failure_context,
+            human_confirmation_context=human_confirmation_context,
         )
         contexts[module_name] = ctx
 
     return {"module_contexts": contexts, "current_node": "build_module_contexts"}
+
+
+def _load_human_confirmation_context(state: G4CodegenSubgraphState) -> dict[str, Any]:
+    """Load compact human-confirmation constraints for module-agent prompts."""
+    confirmed_plan_path = str(state.get("confirmed_model_plan_path") or "")
+    confirmation_status = str(state.get("human_confirmation_status") or "")
+    if not confirmed_plan_path:
+        return {}
+
+    path = Path(confirmed_plan_path)
+    if not path.is_file():
+        return {
+            "status": confirmation_status or "missing",
+            "source_path": confirmed_plan_path,
+            "confirmed_constraints": [],
+            "load_error": "confirmed_model_plan_path does not exist",
+        }
+
+    try:
+        confirmed_plan = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "status": confirmation_status or "unreadable",
+            "source_path": confirmed_plan_path,
+            "confirmed_constraints": [],
+            "load_error": str(exc),
+        }
+
+    agent_context = confirmed_plan.get("agent_context", {})
+    if not isinstance(agent_context, dict):
+        agent_context = {}
+
+    confirmed_constraints = agent_context.get("confirmed_constraints", [])
+    if not isinstance(confirmed_constraints, list):
+        confirmed_constraints = []
+    confirmed_constraints = [
+        item for item in confirmed_constraints if isinstance(item, dict)
+    ]
+    edited_constraints = [
+        item
+        for item in confirmed_constraints
+        if item.get("edited") is True or str(item.get("status") or "").lower() == "edited"
+    ]
+
+    return {
+        "source": "human_confirmation",
+        "source_path": confirmed_plan_path,
+        "status": confirmation_status or str(confirmed_plan.get("confirmation_status") or ""),
+        "purpose": str(agent_context.get("purpose") or "codegen_hard_constraints"),
+        "confirmed_constraints": confirmed_constraints[:40],
+        "constraint_digest": _human_constraint_digest(confirmed_constraints[:40]),
+        "constraint_count": len(confirmed_constraints),
+        "edited_constraint_count": len(edited_constraints),
+        "codegen_instruction": str(
+            agent_context.get("codegen_instruction")
+            or "Treat confirmed constraints as hard requirements; do not override them with defaults."
+        ),
+    }
+
+
+def _human_constraint_digest(constraints: list[dict[str, Any]]) -> list[str]:
+    digest: list[str] = []
+    for item in constraints:
+        field_path = str(item.get("field_path") or "")
+        if not field_path:
+            continue
+        status = str(item.get("status") or "confirmed")
+        category = str(item.get("category") or "other")
+        value = item.get("value")
+        if isinstance(value, (dict, list)):
+            value_text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        else:
+            value_text = str(value)
+        digest.append(f"{status} {category} {field_path} = {value_text}")
+    return digest
 
 
 async def context_coordinator_node(
@@ -286,15 +369,18 @@ def _latest_context_coordination(coordination_by_node: dict[str, Any]) -> dict[s
 def _extract_file_summary(module_name: str, file_data: dict[str, Any]) -> dict[str, Any]:
     """Extract a lightweight summary from a generated file for cross-module context."""
     content = file_data.get("new_content", "") or file_data.get("content", "")
+    public_method_signatures = _extract_public_method_signatures(content)
+    public_methods = _method_names_from_signatures(public_method_signatures)
     return {
         "module_name": module_name,
         "path": file_data.get("path", ""),
         "generated_by": file_data.get("generated_by", f"{module_name}_module_agent"),
         "classes": _extract_classes(content),
-        "public_methods": _extract_public_methods(content),
+        "public_methods": public_methods,
+        "public_method_signatures": public_method_signatures,
         "constructor_signatures": _extract_constructor_signatures(content),
         "includes": _extract_includes(content),
-        "provided_symbols": _extract_classes(content),  # symbols ≈ class names
+        "provided_symbols": sorted(set(_extract_classes(content) + public_methods)),
     }
 
 
@@ -314,24 +400,83 @@ def _extract_classes(content: str) -> list[str]:
 
 def _extract_public_methods(content: str) -> list[str]:
     """Extract public method names from C++ content."""
+    return _method_names_from_signatures(_extract_public_method_signatures(content))
+
+
+def _extract_public_method_signatures(content: str) -> list[str]:
+    """Extract public non-constructor method declaration signatures."""
     import re
 
-    methods: list[str] = []
-    public_blocks = re.findall(
+    comment_free = _strip_cpp_comments(content)
+    class_names = set(_extract_classes(comment_free))
+    signatures: list[str] = []
+    for block in _public_blocks(comment_free):
+        for declaration in _public_declarations(block):
+            signature = re.sub(r"\s+", " ", declaration).strip().rstrip(";")
+            if "(" not in signature or ")" not in signature:
+                continue
+            if (
+                "operator" in signature
+                or signature.endswith("= delete")
+                or signature.endswith("= default")
+            ):
+                continue
+            name = _method_name_from_signature(signature)
+            if not name or name in {"if", "for", "while", "switch", "return"}:
+                continue
+            if name.lstrip("~") in class_names:
+                continue
+            signatures.append(signature)
+    return sorted(set(signatures))
+
+
+def _strip_cpp_comments(content: str) -> str:
+    import re
+
+    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+    return re.sub(r"//.*", "", content)
+
+
+def _public_blocks(content: str) -> list[str]:
+    import re
+
+    return re.findall(
         r"\bpublic:\s*(.*?)(?=\bprivate:|\bprotected:|\n};|$)",
         content,
         re.DOTALL,
     )
-    for block in public_blocks:
-        for match in re.finditer(
-            r"(?:~?[A-Za-z_]\w*|operator\s+\w+)\s*\(",
-            block,
-        ):
-            name = match.group(0).split("(", 1)[0].strip()
-            if name in {"if", "for", "while", "switch", "return"}:
-                continue
-            methods.append(name)
-    return sorted(set(methods))
+
+
+def _public_declarations(block: str) -> list[str]:
+    declarations: list[str] = []
+    current: list[str] = []
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        current.append(line)
+        joined = " ".join(current)
+        if ";" in line:
+            declarations.append(joined.split(";", 1)[0] + ";")
+            current = []
+    return declarations
+
+
+def _method_names_from_signatures(signatures: list[str]) -> list[str]:
+    return sorted(
+        {
+            name
+            for signature in signatures
+            if (name := _method_name_from_signature(signature))
+        }
+    )
+
+
+def _method_name_from_signature(signature: str) -> str:
+    before_args = signature.split("(", 1)[0].strip()
+    if not before_args:
+        return ""
+    return before_args.split()[-1].strip("*&")
 
 
 def _extract_constructor_signatures(content: str) -> list[str]:
@@ -498,9 +643,102 @@ async def integration_assembler_node(
     job_id = state.get("job_id", "unknown")
 
     patch = assemble_proposed_patch(module_results, job_id)
+    interface_audit = (
+        patch.get("metadata", {}).get("interface_audit", {})
+        if isinstance(patch.get("metadata"), dict)
+        else {}
+    )
+    interface_warnings = _interface_audit_warnings(interface_audit)
+    if interface_warnings:
+        record_event(
+            job_id=job_id,
+            event_type="integration_interface_audit",
+            status="failed",
+            phase="g4_codegen",
+            module_name="integration_assembler",
+            summary="Generated project has cross-module interface mismatches.",
+            metrics={"issue_count": len(interface_audit.get("issues", []) or [])},
+            warnings=interface_warnings,
+            details=interface_audit,
+        )
     return {
         "proposed_patch": patch,
         "current_node": "integration_assembler",
+        "codegen_warnings": list(state.get("codegen_warnings", [])) + interface_warnings,
+    }
+
+
+def _interface_audit_warnings(interface_audit: Any) -> list[str]:
+    if not isinstance(interface_audit, dict) or interface_audit.get("status") != "fail":
+        return []
+    hints = interface_audit.get("repair_hints")
+    if isinstance(hints, list) and hints:
+        return [str(item) for item in hints[:20] if item]
+    issues = interface_audit.get("issues")
+    if not isinstance(issues, list):
+        return []
+    warnings: list[str] = []
+    for issue in issues[:20]:
+        if not isinstance(issue, dict):
+            continue
+        warnings.append(str(issue.get("message") or issue))
+    return warnings
+
+
+async def continue_agentic_repair_node(
+    state: G4CodegenSubgraphState,
+) -> dict[str, Any]:
+    """Continue repair with the full-project agent after user approval."""
+    from agent_core.g4_codegen.project_agent import run_geant4_project_agent
+    from agent_core.g4_codegen.runtime_execution_auditor import (
+        RUNTIME_EXECUTION_AUDIT_PATH,
+        runtime_audit_to_runtime_observation,
+    )
+    from agent_core.tools.geant4_workbench import resolve_self_check_events
+    from agent_core.workspace.io import get_job_dir
+
+    job_id = state.get("job_id", "unknown")
+    job_dir = get_job_dir(job_id)
+    patch_path = job_dir / STAGE_CODEGEN / "proposed_patch.json"
+    if patch_path.is_file():
+        proposed_patch = json.loads(patch_path.read_text(encoding="utf-8"))
+    else:
+        proposed_patch = state.get("proposed_patch", {})
+
+    audit_path = job_dir / RUNTIME_EXECUTION_AUDIT_PATH
+    runtime_failure_context = state.get("runtime_failure_context", {})
+    if not runtime_failure_context and audit_path.is_file():
+        try:
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            runtime_failure_context = runtime_audit_to_runtime_observation(audit)
+        except (OSError, json.JSONDecodeError):
+            runtime_failure_context = {
+                "status": "fail",
+                "phase": "repair_continuation",
+                "errors": ["Previous runtime audit could not be loaded."],
+            }
+
+    repaired_patch, report = await run_geant4_project_agent(
+        job_id=job_id,
+        g4_model_ir=state.get("g4_model_ir", {}),
+        codegen_plan=state.get("codegen_plan", {}),
+        geometry_strategy_plan=state.get("geometry_strategy_plan", {}),
+        code_architecture_plan=state.get("code_architecture_plan", {}),
+        module_contracts=state.get("module_contracts", {}),
+        module_contexts=state.get("module_contexts", {}),
+        interface_contracts=state.get("interface_contracts", {}),
+        runtime_failure_context=runtime_failure_context,
+        seed_patch=proposed_patch,
+        expected_events=resolve_self_check_events(g4_model_ir=state.get("g4_model_ir", {})),
+        max_turns=_agentic_max_turns_override(state),
+    )
+    return {
+        "proposed_patch": repaired_patch,
+        "global_integration_agent_report": report,
+        "repair_continuation_status": "",
+        "repair_continuation_request": {},
+        "current_node": "continue_agentic_repair",
+        "codegen_errors": list(state.get("codegen_errors", [])) + report.get("errors", []),
     }
 
 
@@ -575,55 +813,10 @@ async def layer_consistency_gate_node(
     return updates
 
 
-async def global_integration_agent_node(
-    state: G4CodegenSubgraphState,
-) -> dict[str, Any]:
-    """Run the high-privilege global integration agent."""
-    from agent_core.g4_codegen.global_integration_agent import (
-        run_global_integration_agent,
-    )
-
-    job_id = state.get("job_id", "unknown")
-    repaired_patch, report = await run_global_integration_agent(
-        state.get("proposed_patch", {}),
-        job_id=job_id,
-        g4_model_ir=state.get("g4_model_ir", {}),
-        module_results=state.get("module_results", {}),
-        module_contracts=state.get("module_contracts", {}),
-        module_contexts=state.get("module_contexts", {}),
-        interface_contracts=state.get("interface_contracts", {}),
-        runtime_failure_context=state.get("runtime_failure_context", {}),
-        runtime_repair_rounds=GLOBAL_INTEGRATION_RUNTIME_REPAIR_ROUNDS,
-    )
-    record_event(
-        job_id=job_id,
-        event_type="global_integration_agent_result",
-        status="passed" if report.get("status") == "passed" else "failed",
-        phase="g4_codegen",
-        module_name="global_integration_agent",
-        summary="Global integration agent completed",
-        metrics={
-            "issues_fixed": len(report.get("issues_fixed", [])),
-            "changed_file_count": len(report.get("changed_files", [])),
-        },
-        errors=report.get("errors", []),
-        details=report,
-    )
-    return {
-        "proposed_patch": repaired_patch,
-        "global_integration_agent_report": report,
-        "current_node": "global_integration_agent",
-        "codegen_errors": list(state.get("codegen_errors", [])) + report.get("errors", []),
-    }
-
-
 async def runtime_execution_audit_node(
     state: G4CodegenSubgraphState,
 ) -> dict[str, Any]:
     """Audit whether the latest runtime gate actually produced trustworthy artifacts."""
-    from agent_core.g4_codegen.global_integration_agent import (
-        run_global_integration_agent,
-    )
     from agent_core.g4_codegen.runtime_execution_auditor import (
         run_runtime_execution_auditor,
         runtime_audit_to_runtime_observation,
@@ -631,6 +824,32 @@ async def runtime_execution_audit_node(
 
     job_id = state.get("job_id", "unknown")
     global_report = state.get("global_integration_agent_report", {})
+    continuation_request = _repair_continuation_request(global_report)
+    if continuation_request:
+        audit = {
+            "status": "blocked",
+            "blocking_errors": [
+                "Agentic repair exhausted its turn budget and requires user approval to continue."
+            ],
+            "warnings": [],
+            "continuation_request": continuation_request,
+        }
+        record_event(
+            job_id=job_id,
+            event_type="runtime_execution_audit",
+            status="paused",
+            phase="g4_codegen",
+            module_name="runtime_execution_auditor",
+            summary="Runtime execution audit paused for repair continuation approval.",
+            details=audit,
+        )
+        return {
+            "runtime_execution_audit": audit,
+            "repair_continuation_request": continuation_request,
+            "repair_continuation_status": "pending",
+            "current_node": "runtime_execution_audit",
+        }
+
     audit = await run_runtime_execution_auditor(
         job_id=job_id,
         global_integration_report=global_report,
@@ -659,34 +878,17 @@ async def runtime_execution_audit_node(
     }
     if audit.get("status") == "pass":
         return updates
-
-    observation = runtime_audit_to_runtime_observation(audit)
-    repair_patch, repair_report = await run_global_integration_agent(
-        state.get("proposed_patch", {}),
-        job_id=job_id,
-        g4_model_ir=state.get("g4_model_ir", {}),
-        module_results=state.get("module_results", {}),
-        module_contracts=state.get("module_contracts", {}),
-        module_contexts=state.get("module_contexts", {}),
-        interface_contracts=state.get("interface_contracts", {}),
-        runtime_failure_context=observation,
-        runtime_repair_rounds=RUNTIME_AUDIT_REPAIR_ROUNDS,
-        runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
-    )
-    second_audit = await run_runtime_execution_auditor(
-        job_id=job_id,
-        global_integration_report=repair_report,
-    )
-    second_audit["previous_audit"] = audit
+    attempt_count = _increment_attempt_count(state.get("runtime_audit_repair_attempts"))
     updates.update(
         {
-            "proposed_patch": repair_patch,
-            "global_integration_agent_report": repair_report,
-            "runtime_execution_audit": second_audit,
+            "runtime_audit_repair_attempts": attempt_count,
+            "runtime_failure_context": _merge_runtime_failure_context(
+                state.get("runtime_failure_context", {}),
+                runtime_audit_to_runtime_observation(audit),
+            ),
             "codegen_errors": (
                 list(state.get("codegen_errors", []))
-                + repair_report.get("errors", [])
-                + list(second_audit.get("blocking_errors", []))
+                + list(audit.get("blocking_errors", []))
             ),
         }
     )
@@ -697,9 +899,6 @@ async def physics_quality_review_node(
     state: G4CodegenSubgraphState,
 ) -> dict[str, Any]:
     """Run an LLM physics fidelity review and optionally return fixes to integration."""
-    from agent_core.g4_codegen.global_integration_agent import (
-        run_global_integration_agent,
-    )
     from agent_core.g4_codegen.physics_quality_reviewer import (
         physics_review_to_runtime_observation,
         run_physics_quality_reviewer,
@@ -742,40 +941,19 @@ async def physics_quality_review_node(
     }
     if review.get("status") == "pass":
         return updates
-
-    observation = physics_review_to_runtime_observation(review)
-    repair_patch, repair_report = await run_global_integration_agent(
-        proposed_patch,
-        job_id=job_id,
-        g4_model_ir=state.get("g4_model_ir", {}),
-        module_results=state.get("module_results", {}),
-        module_contracts=state.get("module_contracts", {}),
-        module_contexts=state.get("module_contexts", {}),
-        interface_contracts=state.get("interface_contracts", {}),
-        runtime_failure_context=observation,
-        runtime_repair_rounds=PHYSICS_REVIEW_REPAIR_ROUNDS,
-        runtime_attempt_offset=len(global_report.get("runtime_gate_attempts", [])),
-    )
-    second_review = await run_physics_quality_reviewer(
-        proposed_patch=repair_patch,
-        g4_model_ir=state.get("g4_model_ir", {}),
-        module_contracts=state.get("module_contracts", {}),
-        module_contexts=state.get("module_contexts", {}),
-        global_integration_report=repair_report,
-        job_id=job_id,
-    )
-    second_review["previous_review"] = review
+    attempt_count = _increment_attempt_count(state.get("physics_review_repair_attempts"))
     updates.update(
         {
-            "proposed_patch": repair_patch,
-            "global_integration_agent_report": repair_report,
-            "physics_quality_review": second_review,
+            "physics_review_repair_attempts": attempt_count,
+            "runtime_failure_context": _merge_runtime_failure_context(
+                state.get("runtime_failure_context", {}),
+                physics_review_to_runtime_observation(review),
+            ),
             "codegen_errors": (
                 list(state.get("codegen_errors", []))
-                + repair_report.get("errors", [])
                 + [
                     f"{fix.get('target', 'physics_review')}: {fix.get('message', '')}"
-                    for fix in second_review.get("required_fixes", [])
+                    for fix in review.get("required_fixes", [])
                     if isinstance(fix, dict)
                 ]
             ),
@@ -784,14 +962,39 @@ async def physics_quality_review_node(
     return updates
 
 
+def _increment_attempt_count(value: Any) -> int:
+    try:
+        return int(value or 0) + 1
+    except (TypeError, ValueError):
+        return 1
+
+
+def _merge_runtime_failure_context(
+    previous: Any,
+    current: dict[str, Any],
+) -> dict[str, Any]:
+    """Preserve previous failure notes while making the newest failure primary."""
+    if not isinstance(previous, dict) or not previous:
+        return current
+    merged = dict(current)
+    history = previous.get("history", [])
+    if not isinstance(history, list):
+        history = []
+    previous_without_history = {k: v for k, v in previous.items() if k != "history"}
+    merged["history"] = history + [previous_without_history]
+    return merged
+
+
 async def persist_codegen_output_node(
     state: G4CodegenSubgraphState,
 ) -> dict[str, Any]:
     """Persist final codegen output."""
+    from agent_core.g4_codegen.template_project import create_minimal_geant4_project
+    from agent_core.g4_codegen.project_agent import PROJECT_AGENT_WORKSPACE
+    from agent_core.workspace.io import get_job_dir
+
     job_id = state.get("job_id", "unknown")
     proposed_patch = state.get("proposed_patch", {})
-
-    from agent_core.workspace.io import get_job_dir
 
     job_dir = get_job_dir(job_id)
     codegen_dir = job_dir / STAGE_CODEGEN
@@ -808,20 +1011,46 @@ async def persist_codegen_output_node(
     physics_review = state.get("physics_quality_review", {})
 
     module_results = state.get("module_results", {})
+    patch_metadata = (
+        proposed_patch.get("metadata", {})
+        if isinstance(proposed_patch.get("metadata"), dict)
+        else {}
+    )
+    project_agent_source = patch_metadata.get("source") == "geant4_project_agent"
     modules_in_patch = {
         f.get("module_name") for f in proposed_patch.get("changed_files", []) if isinstance(f, dict)
     }
-    missing_modules = REQUIRED_MODULES - set(module_results.keys())
-    missing_from_patch = REQUIRED_MODULES - modules_in_patch
-    failed_modules = [
-        module_name
-        for module_name in REQUIRED_MODULES
-        if module_results.get(module_name, {}).get("status") not in {"generated", "repaired"}
-    ]
+    if project_agent_source:
+        missing_modules: set[str] = set()
+        missing_from_patch: set[str] = set()
+        failed_modules: list[str] = []
+    else:
+        missing_modules = REQUIRED_MODULES - set(module_results.keys())
+        missing_from_patch = REQUIRED_MODULES - modules_in_patch
+        failed_modules = [
+            module_name
+            for module_name in REQUIRED_MODULES
+            if module_results.get(module_name, {}).get("status") not in {"generated", "repaired"}
+        ]
 
     new_errors: list[str] = []
 
-    if not has_code:
+    continuation_request = _repair_continuation_request(global_integration)
+    if not continuation_request:
+        if runtime_audit and runtime_audit.get("status") != "pass":
+            continuation_request = _audit_failure_continuation_request(
+                state,
+                audit_kind="runtime_execution_audit",
+            )
+        elif physics_review and physics_review.get("status") != "pass":
+            continuation_request = _audit_failure_continuation_request(
+                state,
+                audit_kind="physics_quality_review",
+            )
+
+    if continuation_request:
+        status = "needs_user_input"
+    elif not has_code:
         status = "failed"
     elif missing_modules or missing_from_patch or failed_modules:
         status = "failed"
@@ -838,7 +1067,45 @@ async def persist_codegen_output_node(
 
     # Target directory for generated Geant4 files.
     geant4_dir = job_dir / STAGE_PATCH / GEANT4_PROJECT_DIRNAME
-    geant4_dir.mkdir(parents=True, exist_ok=True)
+    template_manifest_path = codegen_dir / "template_manifest.json"
+    if project_agent_source and (job_dir / PROJECT_AGENT_WORKSPACE).is_dir():
+        project_agent_dir = job_dir / PROJECT_AGENT_WORKSPACE
+        if geant4_dir.exists():
+            shutil.rmtree(geant4_dir)
+        shutil.copytree(
+            project_agent_dir,
+            geant4_dir,
+            ignore=shutil.ignore_patterns(
+                "build",
+                "cmake-build-*",
+                "CMakeFiles",
+                "CMakeCache.txt",
+                "*.o",
+                "*.so",
+                "*.a",
+                "radagent",
+            ),
+        )
+        template_manifest = _project_agent_workspace_manifest(
+            project_agent_dir,
+            source="geant4_project_agent_workspace",
+        )
+    else:
+        if geant4_dir.exists():
+            shutil.rmtree(geant4_dir)
+        geant4_dir.mkdir(parents=True, exist_ok=True)
+        template_manifest = create_minimal_geant4_project(geant4_dir, events=100)
+        if project_agent_source:
+            _overlay_patch_changed_files(geant4_dir, proposed_patch)
+            template_manifest = _project_agent_workspace_manifest(
+                geant4_dir,
+                source="geant4_project_agent_patch_overlay",
+            )
+    template_manifest_path = codegen_dir / "template_manifest.json"
+    template_manifest_path.write_text(
+        json.dumps(template_manifest, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     generated_code_dir = str(geant4_dir)
 
     if missing_modules:
@@ -854,7 +1121,13 @@ async def persist_codegen_output_node(
     if runtime_audit and runtime_audit.get("status") != "pass":
         new_errors.append("Runtime execution auditor rejected the simulation artifacts")
     if physics_review and physics_review.get("status") != "pass":
-        new_errors.append("Physics quality reviewer requested revision or failed")
+        if _physics_review_needs_user_input(physics_review):
+            new_errors.append(
+                "Physics quality reviewer found an upstream model confirmation gap "
+                "after codegen; post-codegen human confirmation is disabled"
+            )
+        else:
+            new_errors.append("Physics quality reviewer requested revision or failed")
 
     updates: dict[str, Any] = {
         "proposed_patch_path": str(patch_path),
@@ -862,6 +1135,9 @@ async def persist_codegen_output_node(
         "g4_codegen_status": status,
         "current_node": "persist_codegen_output",
     }
+    if continuation_request:
+        updates["repair_continuation_request"] = continuation_request
+        updates["repair_continuation_status"] = "pending"
     if new_errors:
         updates["codegen_errors"] = list(state.get("codegen_errors", [])) + new_errors
     record_event(
@@ -876,7 +1152,11 @@ async def persist_codegen_output_node(
             "failed_module_count": len(failed_modules),
             "physics_review_score": physics_review.get("overall_score"),
         },
-        artifacts=[{"path": str(patch_path)}, {"path": generated_code_dir}],
+        artifacts=[
+            {"path": str(patch_path)},
+            {"path": str(template_manifest_path)},
+            {"path": generated_code_dir},
+        ],
         errors=list(state.get("codegen_errors", [])) + new_errors,
     )
     if status != "passed":
@@ -885,7 +1165,11 @@ async def persist_codegen_output_node(
             status=status,
             phase="g4_codegen",
             errors=list(state.get("codegen_errors", [])) + new_errors,
-            artifacts=[{"path": str(patch_path)}, {"path": generated_code_dir}],
+            artifacts=[
+                {"path": str(patch_path)},
+                {"path": str(template_manifest_path)},
+                {"path": generated_code_dir},
+            ],
             details={
                 "missing_modules": sorted(missing_modules),
                 "missing_from_patch": sorted(missing_from_patch),
@@ -895,3 +1179,158 @@ async def persist_codegen_output_node(
             },
         )
     return updates
+
+
+def _physics_review_needs_user_input(review: dict[str, Any]) -> bool:
+    if str(review.get("status") or "").lower() == "needs_user_input":
+        return True
+    if str(review.get("routing_recommendation") or "").lower() == "request_user_input":
+        return True
+    needs_user_input = review.get("needs_user_input")
+    return isinstance(needs_user_input, list) and bool(needs_user_input)
+
+
+def _project_agent_workspace_manifest(project_dir: Path, *, source: str) -> dict[str, Any]:
+    files = [
+        str(path.relative_to(project_dir))
+        for path in sorted(project_dir.rglob("*"))
+        if path.is_file() and not _is_build_artifact_path(path.relative_to(project_dir))
+    ]
+    return {
+        "source": source,
+        "project_dir": str(project_dir),
+        "files": files,
+    }
+
+
+def _is_build_artifact_path(path: Path) -> bool:
+    if not path.parts:
+        return False
+    if path.parts[0] == "build":
+        return True
+    return path.name in {"CMakeCache.txt"} or "CMakeFiles" in path.parts
+
+
+def _overlay_patch_changed_files(project_dir: Path, patch: dict[str, Any]) -> None:
+    for entry in patch.get("changed_files", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        rel_path = str(entry.get("path") or "")
+        content = entry.get("new_content")
+        if not rel_path or content is None:
+            continue
+        path = Path(rel_path)
+        if path.is_absolute() or ".." in path.parts:
+            continue
+        target = project_dir / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(str(content), encoding="utf-8")
+
+
+def _repair_continuation_request(
+    global_integration: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(global_integration, dict):
+        return {}
+    request = global_integration.get("continuation_request")
+    if isinstance(request, dict) and request.get("status") == "pending":
+        return request
+    agentic = global_integration.get("agentic")
+    if isinstance(agentic, dict):
+        nested = agentic.get("continuation_request")
+        if isinstance(nested, dict) and nested.get("status") == "pending":
+            return nested
+    return {}
+
+
+def _audit_failure_continuation_request(
+    state: dict[str, Any],
+    *,
+    audit_kind: str,
+) -> dict[str, Any]:
+    audit_key = (
+        "physics_quality_review"
+        if audit_kind == "physics_quality_review"
+        else "runtime_execution_audit"
+    )
+    attempts_key = (
+        "physics_review_repair_attempts"
+        if audit_key == "physics_quality_review"
+        else "runtime_audit_repair_attempts"
+    )
+    audit = state.get(audit_key)
+    if not isinstance(audit, dict) or audit.get("status") in {None, "pass"}:
+        return {}
+    if audit_key == "physics_quality_review" and _physics_review_needs_user_input(audit):
+        return {}
+    try:
+        attempts = int(state.get(attempts_key) or 0)
+    except (TypeError, ValueError):
+        attempts = 0
+    current_turns = _latest_agentic_turn_count(state)
+    requested_total = current_turns + AUDIT_REPAIR_CONTINUATION_INCREMENT_TURNS
+
+    errors = audit.get("blocking_errors") or audit.get("required_fixes") or []
+    if not isinstance(errors, list):
+        errors = [str(errors)]
+    summary = "、".join(str(item)[:120] for item in errors[:3] if item)
+    reason = f"{audit_key}_repair_budget_exhausted"
+    message = (
+        f"{audit_key} 仍未通过，自动修复轮次已耗尽。"
+        f"是否增加 {AUDIT_REPAIR_CONTINUATION_INCREMENT_TURNS} 轮继续修复？"
+    )
+    if summary:
+        message += f" 当前阻塞项：{summary}"
+    return {
+        "status": "pending",
+        "reason": reason,
+        "current_turns": current_turns,
+        "repair_attempts": attempts,
+        "increment_turns": AUDIT_REPAIR_CONTINUATION_INCREMENT_TURNS,
+        "requested_total_turns": requested_total,
+        "message": message,
+    }
+
+
+def _latest_agentic_turn_count(state: dict[str, Any]) -> int:
+    global_integration = state.get("global_integration_agent_report")
+    if isinstance(global_integration, dict):
+        agentic = global_integration.get("agentic")
+        if isinstance(agentic, dict):
+            try:
+                parsed = int(agentic.get("n_turns") or 0)
+            except (TypeError, ValueError):
+                parsed = 0
+            if parsed > 0:
+                return parsed
+    try:
+        parsed = int(state.get("agentic_repair_max_turns_override") or 0)
+    except (TypeError, ValueError):
+        parsed = 0
+    if parsed > 0:
+        return parsed
+    from agent_core.g4_codegen.project_agent import DEFAULT_PROJECT_AGENT_MAX_TURNS
+
+    return DEFAULT_PROJECT_AGENT_MAX_TURNS
+
+
+def _agentic_max_turns_override(state: dict[str, Any]) -> int | None:
+    try:
+        value = int(state.get("agentic_repair_max_turns_override") or 0)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _next_runtime_attempt_index(job_dir: Path) -> int:
+    integration_dir = job_dir / STAGE_CODEGEN / "integration"
+    if not integration_dir.is_dir():
+        return 0
+    max_seen = -1
+    for path in integration_dir.glob("runtime_attempt_*"):
+        suffix = path.name.removeprefix("runtime_attempt_")
+        try:
+            max_seen = max(max_seen, int(suffix))
+        except ValueError:
+            continue
+    return max_seen + 1

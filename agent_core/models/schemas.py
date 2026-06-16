@@ -43,7 +43,7 @@ class ModelProfile(BaseModel):
     max_retries: int = 2
     temperature: float = 0.0
     max_tokens: int = 4096
-    context_window_tokens: int = 128_000
+    context_window_tokens: int = 1_000_000
 
 
 class ModelCallRequest(BaseModel):

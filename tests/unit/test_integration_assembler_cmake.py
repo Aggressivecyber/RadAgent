@@ -23,6 +23,7 @@ def test_assembler_overrides_model_cmake_with_canonical_template(tmp_path, monke
     assert cmake["new_content"] == RADAGENT_CMAKE_TEMPLATE
     assert cmake["generated_by"] == "canonical_cmake_template"
     assert "file(GLOB sources" in cmake["new_content"]
+    assert "CMAKE_CXX_STANDARD 17" in cmake["new_content"]
     # the non-CMake file is preserved untouched
     assert any(c["path"] == "src/main.cc" for c in patch["changed_files"])
 

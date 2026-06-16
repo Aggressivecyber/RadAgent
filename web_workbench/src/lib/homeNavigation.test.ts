@@ -12,6 +12,7 @@ describe('home showcase navigation', () => {
       difficulty: 'advanced',
       tags: ['HPGe', 'anti-coincidence'],
       validationFocus: ['geometry', 'scoring'],
+      deliverables: ['Geant4 工程'],
     }
 
     expect(createShowcaseLaunchTarget(example)).toEqual({
@@ -30,6 +31,7 @@ describe('home showcase navigation', () => {
       difficulty: 'advanced',
       tags: [],
       validationFocus: [],
+      deliverables: [],
     }
 
     expect(createShowcaseLaunchTarget(example)).toBeNull()

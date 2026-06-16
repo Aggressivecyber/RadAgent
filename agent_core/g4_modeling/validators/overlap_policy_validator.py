@@ -53,7 +53,45 @@ class OverlapPolicyValidator:
             if msg not in approved:
                 errors.append(msg)
 
+        # 4. Parent containment for box components. Geant4 aborts during
+        # voxelization if a daughter is outside its mother, so catch this in IR.
+        errors.extend(self._detect_box_containment_errors(model_ir))
+
         return len(errors) == 0, errors
+
+    def _detect_box_containment_errors(self, model_ir: G4ModelIR) -> list[str]:
+        components = {comp.component_id: comp for comp in model_ir.components}
+        errors: list[str] = []
+        for child in model_ir.components:
+            mother_id = child.mother_volume
+            if not mother_id:
+                continue
+            mother = components.get(mother_id)
+            if mother is None:
+                continue
+            if child.geometry_type != "box" or mother.geometry_type != "box":
+                continue
+            child_pos = self._position(child)
+            child_half = self._half_lengths(child)
+            mother_half = self._half_lengths(mother)
+            for axis, cp, ch, mh in zip(
+                ("x", "y", "z"),
+                child_pos,
+                child_half,
+                mother_half,
+            ):
+                low = cp - ch
+                high = cp + ch
+                parent_low = -mh
+                parent_high = mh
+                if low < parent_low or high > parent_high:
+                    errors.append(
+                        f"Component '{child.component_id}' is outside mother volume "
+                        f"'{mother_id}' on {axis}: child [{low}, {high}] exceeds "
+                        f"mother [{parent_low}, {parent_high}]"
+                    )
+                    break
+        return errors
 
     def _detect_box_overlaps(self, model_ir: G4ModelIR) -> list[str]:
         """Simple AABB overlap detection for box components.
@@ -122,3 +160,15 @@ class OverlapPolicyValidator:
                 return False
 
         return True
+
+    def _position(self, comp: object) -> list[float]:
+        placement = getattr(comp, "placement", None)
+        return [float(v) for v in getattr(placement, "position", [0.0, 0.0, 0.0])]
+
+    def _half_lengths(self, comp: object) -> list[float]:
+        dims = getattr(comp, "dimensions", {})
+        return [
+            float(dims.get("half_x", dims.get("dx", 0) / 2.0)),
+            float(dims.get("half_y", dims.get("dy", 0) / 2.0)),
+            float(dims.get("half_z", dims.get("dz", 0) / 2.0)),
+        ]
