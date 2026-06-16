@@ -240,6 +240,10 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
     outputs = _parse_outputs(user_query)
     metadata: dict[str, str] = {}
     model_plan: dict[str, Any] = {}
+    if target and "size_um" not in target:
+        metadata["target_material_hint"] = str(target.get("material") or "")
+        metadata["target_dimensions_missing"] = "true"
+        target = None
 
     # Parse particle info. Use explicit transport particle mentions before
     # secondary products so a neutron shielding task is not misclassified as
@@ -494,6 +498,8 @@ def _normalize_model_target(value: Any) -> dict[str, Any] | None:
         parsed = [_optional_positive_float(item, 0.0) for item in size]
         if all(item > 0 for item in parsed):
             target["size_um"] = parsed
+    if "size_um" not in target:
+        return None
     return target
 
 

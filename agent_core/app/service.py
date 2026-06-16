@@ -43,8 +43,8 @@ from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.storage import RadAgentStore
 from agent_core.workspace.manager import WorkspaceManager
 from agent_core.workspace.paths import (
-    HC_REQUEST_TEMPLATE,
     HC_REPORT,
+    HC_REQUEST_TEMPLATE,
     STAGE_CODEGEN,
     STAGE_GATE_VALIDATION,
     STAGE_HUMAN_CONFIRMATION,
@@ -71,6 +71,7 @@ TEXT_ARTIFACT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
+REQUIREMENTS_REVIEW_WAITING_STATUSES = frozenset({"pending", "needs_user_input"})
 
 
 def _active_gate_results(results: Any) -> list[dict[str, Any]]:
@@ -127,6 +128,10 @@ def _confirmation_actionable(state: dict[str, Any]) -> bool:
     if _state_has_legacy_codegen_physics_confirmation(state):
         return False
     return bool(state.get("human_confirmation_required") or status == "pending")
+
+
+def _requirements_review_waiting_status(value: Any) -> bool:
+    return str(value or "").strip().lower() in REQUIREMENTS_REVIEW_WAITING_STATUSES
 
 
 def _state_has_legacy_codegen_physics_confirmation(state: dict[str, Any]) -> bool:
@@ -1641,7 +1646,10 @@ class RadAgentAppService:
             return f"context status is {self.state.get('context_decision') or 'missing'}"
         expectations = {
             "task_planning": ("task_planning_status", {"passed"}),
-            "requirements_review": ("requirements_review_status", {"approved", "pending"}),
+            "requirements_review": (
+                "requirements_review_status",
+                {"approved", "pending", "needs_user_input"},
+            ),
             "g4_modeling": ("g4_modeling_status", {"passed"}),
             "g4_codegen": ("g4_codegen_status", {"passed"}),
             "patch": ("patch_status", {"applied"}),
@@ -1672,7 +1680,7 @@ class RadAgentAppService:
 
     def _is_requirements_review_pending(self) -> bool:
         return (
-            str(self.state.get("requirements_review_status") or "") == "pending"
+            _requirements_review_waiting_status(self.state.get("requirements_review_status"))
             and bool(self.state.get("human_confirmation_required"))
             and not bool(self.state.get("raw_human_response"))
         )
@@ -1730,7 +1738,10 @@ class RadAgentAppService:
                 "auto_build_result": build.model_dump(),
                 "auto_simulation_result": simulation.model_dump(),
                 "patch_status": "failed",
-                "errors": [*(self.state.get("errors") or []), simulation.errors or "simulation failed"],
+                "errors": [
+                    *(self.state.get("errors") or []),
+                    simulation.errors or "simulation failed",
+                ],
             }
 
         return {
@@ -2110,7 +2121,7 @@ class RadAgentAppService:
             return self._modeling_failure_review(state)
         if _state_has_legacy_codegen_physics_confirmation(state):
             return self._legacy_codegen_physics_confirmation_review(state)
-        if str(state.get("requirements_review_status") or "") == "pending":
+        if _requirements_review_waiting_status(state.get("requirements_review_status")):
             return self._requirements_review_confirmation_review(state)
         request = state.get("repair_continuation_request")
         if (
@@ -2209,17 +2220,21 @@ class RadAgentAppService:
         *,
         job_id: str | None = None,
     ) -> dict[str, Any]:
-        status = self.get_status() if not job_id or job_id == self.state.get("job_id") else JobStatus(
-            job_id=str(state.get("job_id", job_id or "")),
-            user_query=str(state.get("user_query", "")),
-            status=str(state.get("status", "running")),
-            current_phase=str(state.get("current_node", "")),
-            current_phase_idx=int(state.get("current_phase_idx", 0)),
-            completed_phases=list(state.get("completed_phases", [])),
-            execution_mode=str(state.get("execution_mode", self.execution_mode)),
-            run_mode=str(state.get("run_mode", "strict")),
-            workspace_root=str(state.get("workspace_root", self.workspace.root)),
-            job_workspace=str(state.get("job_workspace", "")),
+        status = (
+            self.get_status()
+            if not job_id or job_id == self.state.get("job_id")
+            else JobStatus(
+                job_id=str(state.get("job_id", job_id or "")),
+                user_query=str(state.get("user_query", "")),
+                status=str(state.get("status", "running")),
+                current_phase=str(state.get("current_node", "")),
+                current_phase_idx=int(state.get("current_phase_idx", 0)),
+                completed_phases=list(state.get("completed_phases", [])),
+                execution_mode=str(state.get("execution_mode", self.execution_mode)),
+                run_mode=str(state.get("run_mode", "strict")),
+                workspace_root=str(state.get("workspace_root", self.workspace.root)),
+                job_workspace=str(state.get("job_workspace", "")),
+            )
         )
         if _is_modeling_failure_state(state):
             review = self._modeling_failure_review(state)
@@ -2297,6 +2312,27 @@ class RadAgentAppService:
                 "hard_rules": {"confirmation_actionable": True},
                 "model_enhanced": False,
             }
+        if self._is_requirements_review_pending():
+            review = self.get_confirmation_review(job_id)
+            request_path = str(review.get("request_path") or "")
+            return {
+                "ui_state": "requirements_review_pending",
+                "severity": "warning",
+                "phase": "requirements_review",
+                "status": status.model_dump(mode="json"),
+                "user_message": str(review.get("summary") or "需要先核对 Geant4 建模需求参数。"),
+                "blocking_reason": "requirements_review_status is needs_user_input",
+                "confirmation_actionable": True,
+                "allowed_actions": [
+                    "review_requirements",
+                    "approve_requirements",
+                    "reject_requirements",
+                ],
+                "next_step_hint": "确认参数卡片后再进入 Geant4 建模；不明确时在反馈中补充参数。",
+                "artifacts": [request_path] if request_path else [],
+                "hard_rules": {"confirmation_actionable": True},
+                "model_enhanced": False,
+            }
         if status.needs_confirmation:
             review = self.get_confirmation_review(job_id)
             return {
@@ -2307,9 +2343,17 @@ class RadAgentAppService:
                 "user_message": str(review.get("summary") or "需要人工确认模型假设和关键参数。"),
                 "blocking_reason": "human_confirmation_required",
                 "confirmation_actionable": True,
-                "allowed_actions": ["review_confirmation", "approve_confirmation", "ask_more", "reject_confirmation"],
+                "allowed_actions": [
+                    "review_confirmation",
+                    "approve_confirmation",
+                    "ask_more",
+                    "reject_confirmation",
+                ],
                 "next_step_hint": "打开确认项，确认参数含义后再批准；不清楚时要求 Agent 继续追问。",
-                "artifacts": [str(review.get("request_path") or ""), str(review.get("report_path") or "")],
+                "artifacts": [
+                    str(review.get("request_path") or ""),
+                    str(review.get("report_path") or ""),
+                ],
                 "hard_rules": {"confirmation_actionable": True},
                 "model_enhanced": False,
             }
@@ -2318,7 +2362,10 @@ class RadAgentAppService:
             "severity": "info" if status.status not in {"failed"} else "error",
             "phase": status.current_phase,
             "status": status.model_dump(mode="json"),
-            "user_message": f"当前工作流状态：{status.status}，阶段：{status.current_phase or 'idle'}。",
+            "user_message": (
+                f"当前工作流状态：{status.status}，阶段："
+                f"{status.current_phase or 'idle'}。"
+            ),
             "blocking_reason": str(state.get("termination_reason") or ""),
             "confirmation_actionable": False,
             "allowed_actions": ["status", "logs"],

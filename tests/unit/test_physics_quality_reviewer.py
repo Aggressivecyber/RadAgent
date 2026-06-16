@@ -348,6 +348,58 @@ def test_physics_quality_reviewer_prompt_audits_composite_source_parameters() ->
     assert "relative_weight" in prompt
 
 
+def test_physics_review_treats_unconfirmed_model_parameters_as_advisory() -> None:
+    from agent_core.g4_codegen.physics_quality_reviewer import _normalize_review
+
+    review = _normalize_review(
+        {
+            "status": "needs_user_input",
+            "routing_recommendation": "request_user_input",
+            "overall_score": 65,
+            "needs_user_input": [
+                {
+                    "target": "components.polyethylene_layer.dimensions",
+                    "message": (
+                        "requires_confirmation=true and confirmed_by_user=false; "
+                        "exact shielding layer thickness is not specified."
+                    ),
+                }
+            ],
+        }
+    )
+
+    assert review["status"] == "pass"
+    assert review["routing_recommendation"] == "accept"
+    assert review["required_fixes"] == []
+    assert review["needs_user_input"] == []
+    assert review["advisory_findings"]
+
+
+def test_physics_review_keeps_overlap_as_code_repairable() -> None:
+    from agent_core.g4_codegen.physics_quality_reviewer import _normalize_review
+
+    review = _normalize_review(
+        {
+            "status": "revise",
+            "required_fixes": [
+                {
+                    "target": "src/DetectorConstruction.cc",
+                    "message": (
+                        "Two sibling G4PVPlacement volumes overlap because z centers "
+                        "use full thickness instead of half-length offsets; fix "
+                        "placement math and keep CheckOverlaps enabled."
+                    ),
+                }
+            ],
+        }
+    )
+
+    assert review["status"] == "revise"
+    assert review["routing_recommendation"] == "repair_code"
+    assert review["required_fixes"]
+    assert review["needs_user_input"] == []
+
+
 def test_project_file_review_prioritizes_behavior_sources_over_headers() -> None:
     from agent_core.g4_codegen.physics_quality_reviewer import _project_files_for_review
 
@@ -360,7 +412,10 @@ def test_project_file_review_prioritizes_behavior_sources_over_headers() -> None
             },
             {
                 "path": "include/OutputManager.hh",
-                "new_content": "class OutputManager { void WriteEnergyDepositsJson(); };\n" + filler,
+                "new_content": (
+                    "class OutputManager { void WriteEnergyDepositsJson(); };\n"
+                    + filler
+                ),
             },
             {
                 "path": "src/PrimaryGeneratorAction.cc",

@@ -9,7 +9,6 @@ from agent_core.models.schemas import ModelTask, ModelTier
 from agent_core.workspace.io import get_stage_dir
 from agent_core.workspace.paths import STAGE_TASK_PLAN
 
-
 REQUIREMENTS_REVIEW_REQUEST = "requirements_review_request.json"
 REQUIREMENTS_REVIEW_RESPONSE = "requirements_review_response.json"
 CONFIRMED_REQUIREMENT_PLAN = "confirmed_requirement_plan.json"
@@ -28,7 +27,15 @@ Return JSON only with:
   "ambiguous_parameters": [{"field_path":"...", "proposed_value":"...", "reason":"..."}],
   "physics_risks": ["..."],
   "questions": [{"field_path":"...", "question":"...", "proposed_value":"..."}],
-  "proposed_parameters": [{"field_path":"...", "proposed_value":..., "source_type":"user|model_inferred|default", "confidence":0.0, "requires_confirmation": true}],
+  "proposed_parameters": [
+    {
+      "field_path":"...",
+      "proposed_value":...,
+      "source_type":"user|model_inferred|default",
+      "confidence":0.0,
+      "requires_confirmation": true
+    }
+  ],
   "proposed_defaults": [{"field_path":"...", "proposed_value":..., "reason":"..."}]
 }
 
@@ -88,7 +95,7 @@ async def requirements_review_node(state: dict[str, Any]) -> dict[str, Any]:
     request_path = review_dir / REQUIREMENTS_REVIEW_REQUEST
     request_path.write_text(json.dumps(request, indent=2, ensure_ascii=False), encoding="utf-8")
     return {
-        "requirements_review_status": "pending",
+        "requirements_review_status": "needs_user_input",
         "requirements_review_request_path": str(request_path),
         "confirmation_status": "pending",
         "confirmation_request_path": str(request_path),
@@ -105,7 +112,11 @@ def approve_requirements_review(
     job_id = str(state.get("job_id") or "unknown")
     review_dir = get_stage_dir(job_id, STAGE_TASK_PLAN)
     review_dir.mkdir(parents=True, exist_ok=True)
-    request_path = str(state.get("requirements_review_request_path") or state.get("confirmation_request_path") or "")
+    request_path = str(
+        state.get("requirements_review_request_path")
+        or state.get("confirmation_request_path")
+        or ""
+    )
     request = _read_json(request_path)
     response_path = review_dir / REQUIREMENTS_REVIEW_RESPONSE
     confirmed_path = review_dir / CONFIRMED_REQUIREMENT_PLAN

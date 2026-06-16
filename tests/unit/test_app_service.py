@@ -248,7 +248,7 @@ async def test_requirements_review_uses_max_model_and_blocks_for_confirmation(
     assert result.success is True
     assert result.status.status == "paused"
     assert result.status.needs_confirmation is True
-    assert service.state["requirements_review_status"] == "pending"
+    assert service.state["requirements_review_status"] == "needs_user_input"
     assert service.state["confirmation_status"] == "pending"
     assert service.state["human_confirmation_required"] is True
     assert calls[0]["tier"] == ModelTier.MAX
@@ -292,7 +292,7 @@ async def test_requirements_review_approval_resumes_at_g4_modeling(tmp_path) -> 
         "user_query": "Build proton benchmark",
         "job_workspace": str(job_dir),
         "workspace_root": str(tmp_path),
-        "requirements_review_status": "pending",
+        "requirements_review_status": "needs_user_input",
         "requirements_review_request_path": str(request_path),
         "confirmation_status": "pending",
         "human_confirmation_required": True,
@@ -820,14 +820,22 @@ async def test_workflow_diagnosis_uses_lite_model_without_overriding_hard_action
 
     class FakeGateway:
         async def call(self, *args, **kwargs):
-            from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
+            from agent_core.models.schemas import (
+                ModelCallResult,
+                ModelProvider,
+                ModelTask,
+                ModelTier,
+            )
 
             return ModelCallResult(
                 task=ModelTask.FAILURE_DIAGNOSIS,
                 tier=ModelTier.LITE,
                 provider=ModelProvider.MOCK,
                 model_name="fake-lite",
-                content='{"user_message":"模型误判为需要 oxide。","allowed_actions":["approve"],"next_step_hint":"重新运行建模"}',
+                content=(
+                    '{"user_message":"模型误判为需要 oxide。",'
+                    '"allowed_actions":["approve"],"next_step_hint":"重新运行建模"}'
+                ),
                 parsed_json={
                     "user_message": "模型误判为需要 oxide。",
                     "allowed_actions": ["approve"],
@@ -870,7 +878,12 @@ async def test_workflow_diagnosis_explains_codegen_failure(tmp_path, monkeypatch
 
     class FakeGateway:
         async def call(self, *args, **kwargs):
-            from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
+            from agent_core.models.schemas import (
+                ModelCallResult,
+                ModelProvider,
+                ModelTask,
+                ModelTier,
+            )
 
             return ModelCallResult(
                 task=ModelTask.FAILURE_DIAGNOSIS,
@@ -891,6 +904,55 @@ async def test_workflow_diagnosis_explains_codegen_failure(tmp_path, monkeypatch
     assert diagnosis["allowed_actions"] == ["view_codegen_patch", "view_logs", "retry_codegen"]
     assert "simulation_core did not pass layer gate" in diagnosis["blocking_reason"]
     assert str(patch_path) in diagnosis["artifacts"]
+
+
+@pytest.mark.asyncio
+async def test_workflow_diagnosis_identifies_pending_requirements_review(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    review_dir = tmp_path / "jobs" / "job_requirements_review" / STAGE_TASK_PLAN
+    review_dir.mkdir(parents=True)
+    request_path = review_dir / "requirements_review_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "requirements_review_v1",
+                "summary_for_user": "请确认水箱尺寸和 depth-dose bin 宽度。",
+                "questions": [
+                    {
+                        "field_path": "scoring.depth_dose.bin_width",
+                        "question": "Confirm bin width?",
+                        "proposed_value": "1 mm",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": "job_requirements_review",
+        "job_workspace": str(tmp_path / "jobs" / "job_requirements_review"),
+        "requirements_review_status": "needs_user_input",
+        "requirements_review_request_path": str(request_path),
+        "confirmation_status": "pending",
+        "human_confirmation_required": True,
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+
+    diagnosis = await service.get_workflow_diagnosis()
+    review = service.get_confirmation_review()
+
+    assert diagnosis["ui_state"] == "requirements_review_pending"
+    assert diagnosis["phase"] == "requirements_review"
+    assert diagnosis["confirmation_actionable"] is True
+    assert diagnosis["allowed_actions"] == [
+        "review_requirements",
+        "approve_requirements",
+        "reject_requirements",
+    ]
+    assert diagnosis["artifacts"] == [str(request_path)]
+    assert review["type"] == "requirements_review"
+    assert review["questions"][0]["field_path"] == "scoring.depth_dose.bin_width"
 
 
 @pytest.mark.asyncio
@@ -1542,7 +1604,10 @@ async def test_preapproved_job_does_not_block_after_g4_modeling_requires_confirm
 
 
 @pytest.mark.asyncio
-async def test_patch_phase_auto_builds_and_runs_visual_simulation_before_gate(tmp_path, monkeypatch) -> None:
+async def test_patch_phase_auto_builds_and_runs_visual_simulation_before_gate(
+    tmp_path,
+    monkeypatch,
+) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
     project = service.current_project()
     job_id = "job_patch_auto_visual"

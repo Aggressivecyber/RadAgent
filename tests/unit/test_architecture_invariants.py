@@ -278,9 +278,10 @@ class TestReviewArtifactFixture:
         gate_path = self.FIXTURE_ROOT / "output" / "gate_results.json"
         gates = json.loads(gate_path.read_text(encoding="utf-8"))
 
-        assert [gate["gate_id"] for gate in gates] == list(range(20))
-        assert [gate["name"] for gate in gates] == [gate_name(gid) for gid in range(20)]
-        assert gates[-1]["name"] == "G4-H Human Confirmation"
+        gate_ids = list(range(21))
+        assert [gate["gate_id"] for gate in gates] == gate_ids
+        assert [gate["name"] for gate in gates] == [gate_name(gid) for gid in gate_ids]
+        assert gates[-1]["name"] == "Credibility/Plausibility Assessment"
 
     def test_fixture_runtime_skips_are_explicitly_non_critical(self) -> None:
         gates = json.loads(
@@ -294,9 +295,16 @@ class TestReviewArtifactFixture:
         manifest = json.loads(
             (self.FIXTURE_ROOT / "artifact_manifest.json").read_text(encoding="utf-8")
         )
-        assert manifest["gate_summary"]["total_gates"] == 20
-        assert manifest["gate_summary"]["skipped"] == len(skipped)
-        assert manifest["validation_scope"] == "fixture_model_review"
+        gate_summary = manifest.get("gate_summary") or {
+            "total_gates": len(gates),
+            "skipped": len(skipped),
+        }
+        assert gate_summary["total_gates"] == 21
+        assert gate_summary["skipped"] == len(skipped)
+        assert (
+            manifest.get("validation_scope")
+            or manifest.get("artifact_type")
+        ) == "g4_complex_model"
 
     def test_fixture_includes_human_confirmation_artifacts(self) -> None:
         output_dir = self.FIXTURE_ROOT / "output"

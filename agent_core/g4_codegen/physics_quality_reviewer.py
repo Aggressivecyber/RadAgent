@@ -51,21 +51,32 @@ REVIEW_SOURCE_KEYWORDS = (
 
 PHYSICS_REVIEW_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 物理质量审核 Agent。
 
-你不写代码。你负责审核最终 Geant4 工程是否忠实满足原始 G4ModelIR 和用户需求。
+你不写代码。你只负责审核最终 Geant4 工程的代码层物理实现质量，
+而不是重新审查或追问建模参数。
 重点关注：
 1. 物理模型/physics list 是否适合粒子、能量、材料和 scoring 目标。
 2. 粒子源是否忠实保留粒子类型、能量、方向、位置、空间分布和单位。
 3. 对复合辐射场，必须审核 all G4ModelIR sources；不得只看第一个 source。逐项核验
    每个 source 的 spectrum、angular_distribution、events 和 relative_weight 是否保留。
-4. 几何、材料、敏感体和 scoring 是否被擅自简化。
-5. transport precision 是否足够，包括 production cuts、range cuts、step limits、
+4. 代码中的几何实现是否会造成重叠或放置错误，包括 G4PVPlacement mother volume、
+   z center、半长尺寸/全长混用、层间间距、CheckOverlaps 设置和敏感体放置冲突。
+5. 材料、敏感体和 scoring 的代码实现是否与已确认/已给定的 IR 一致。
+6. transport precision 是否足够，包括 production cuts、range cuts、step limits、
    user limits、最小步长或等效控制是否合理。
-6. 输出 artifact 是否代表真实 event/scoring 数据，而不是表头、固定零值或 fallback 假数据。
-7. 如果使用 Geant4 示例代码，是否只是参考真实接口，而不是把 B1/B2 示例需求照搬进当前需求。
-8. 如果 runtime_verification_summary 显示最新 runtime gate 已通过，必须把该最新通过事实
+7. 输出 artifact 是否代表真实 event/scoring 数据，而不是表头、固定零值或 fallback 假数据。
+8. 如果使用 Geant4 示例代码，是否只是参考真实接口，而不是把 B1/B2 示例需求照搬进当前需求。
+9. 如果 runtime_verification_summary 显示最新 runtime gate 已通过，必须把该最新通过事实
    作为 runtime/build/artifact 状态的权威证据；不得因为早期 repair attempt 的旧失败
    要求已经被最新通过结果否定的修复。仍可基于当前 project_files 和 G4ModelIR 提出
    未被 runtime pass 覆盖的真实物理保真度问题。
+
+禁止事项：
+- 不要审查“用户是否确认了几何尺寸/材料厚度/源位置/统计事件数”等建模参数问题。
+- 不要因为 confirmed_by_user=false、requires_confirmation=true、unconfirmed_fields、
+  open_issues 或“需要用户确认参数”返回 needs_user_input/request_user_input。
+- 如果发现参数未确认，只能作为 advisory_findings 记录，不能阻塞 codegen。
+- 后置审核阶段允许阻塞的几何问题仅限代码可修复问题，例如实际体积重叠、
+  G4PVPlacement 放置错误、mother volume 错误、半长尺寸使用错误或 CheckOverlaps 缺失。
 
 只返回 JSON，不要输出 Markdown fence。
 
@@ -89,17 +100,14 @@ PHYSICS_REVIEW_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 物理质量审核 
 硬性分类规则：
 - required_fixes 只能包含 Geant4 工程 Agent 能通过编辑项目文件直接修复的问题。
 - 不要把“获取用户确认”“确认材料/几何选择”“confirmed_by_user=false”
-  “requires_confirmation=true”“修改/澄清 G4ModelIR metadata”放进 required_fixes。
-  这些属于上游建模确认缺口，只能放入 needs_user_input 或 advisory_findings。
-- 如果 G4ModelIR 自身矛盾，且需要在人类选择后才能知道正确材料、几何或 scoring，
-  返回 status="needs_user_input"、routing_recommendation="request_user_input"。
-- 这是 codegen 之后的审核阶段，禁止向用户发起新的人工确认流程；确认材料、几何、
-  physics cuts、scoring 语义等问题必须在 codegen 前的 human_confirmation 阶段完成。
-  因此这里的 needs_user_input 只表示“上游确认缺口/流程失败”，不会被路由到用户确认。
+  “requires_confirmation=true”“修改/澄清 G4ModelIR metadata”放进 required_fixes 或
+  needs_user_input；这类内容只能放入 advisory_findings，且不得阻塞。
+- 这是 codegen 之后的审核阶段，禁止向用户发起新的人工确认流程。
 - 如果最新 runtime gate 已通过，且 deterministic output_quality 已通过，
   event_table 额外列、大小写列名、附加 CSV 是否写入 IR 这类格式偏好默认放入
   advisory_findings；除非缺少真实用户要求的物理量或 artifact 是空/假/固定值。
-- 如果所有阻塞项都需要用户或上游 IR 澄清，required_fixes 必须为空。
+- 如果所有问题都只是用户参数/上游 IR 澄清，status 必须为 "pass"，
+  routing_recommendation 必须为 "accept"，required_fixes 和 needs_user_input 必须为空。
 """
 
 
@@ -130,18 +138,20 @@ async def run_physics_quality_reviewer(
             max_chars_per_file=PROJECT_FILE_REVIEW_CHARS_PER_FILE,
         ),
         "review_instruction": (
-            "Score physics/model/source/geometry/transport/output fidelity. "
+            "Score code-level physics model/source implementation/geometry "
+            "placement overlap/transport/output fidelity. Do not re-audit "
+            "whether modeling parameters were user-confirmed. "
             "If runtime_verification_summary.latest_runtime_gate_passed is true, "
             "treat the latest passing runtime gate as authoritative for build/run/"
             "artifact status and do not request fixes solely from earlier failed "
             "runtime attempts. "
             "When status is revise or fail, required_fixes must contain ONLY "
             "code-repairable issues that the Geant4 project agent can fix by "
-            "editing project files. This is a post-codegen review, so never ask "
-            "the user to confirm parameters here. Put upstream G4ModelIR "
-            "clarification/metadata gaps into needs_user_input as a workflow "
-            "contract failure, and put nonblocking output-format preferences into "
-            "advisory_findings."
+            "editing project files. Overlapping volumes caused by project code "
+            "placement math are repairable. This is a post-codegen review, so "
+            "never ask the user to confirm parameters here. Put upstream G4ModelIR "
+            "clarification/metadata gaps into advisory_findings only, and put "
+            "nonblocking output-format preferences into advisory_findings."
         ),
     }
     prompt = _review_prompt_json(context, max_chars=MAX_REVIEW_CONTEXT_CHARS)
@@ -239,7 +249,8 @@ def _normalize_review(data: Any) -> dict[str, Any]:
         needs_user_input=classified["needs_user_input"],
     )
     if routing == "request_user_input" and not classified["required_fixes"]:
-        status = "needs_user_input"
+        routing = "accept"
+        status = "pass"
     elif routing == "repair_code" and status == "needs_user_input":
         status = "revise"
     elif routing == "accept":
@@ -260,9 +271,9 @@ def _normalize_review(data: Any) -> dict[str, Any]:
         "reviewer_notes": str(data.get("reviewer_notes", "")),
     }
     if status in {"revise", "fail"} and not review["required_fixes"]:
-        if review["needs_user_input"]:
-            review["status"] = "needs_user_input"
-            review["routing_recommendation"] = "request_user_input"
+        if review["advisory_findings"]:
+            review["status"] = "pass"
+            review["routing_recommendation"] = "accept"
         else:
             review["required_fixes"] = [
                 {
@@ -283,13 +294,14 @@ def _classify_required_fixes(
     needs_user_input: list[dict[str, Any]],
     advisory_findings: list[dict[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Split old-style required_fixes into repairable, user-input, and advisory sets."""
+    """Split old-style required_fixes into repairable and nonblocking advisory sets."""
     repairable: list[dict[str, Any]] = []
-    user_input = list(needs_user_input)
+    user_input: list[dict[str, Any]] = []
     advisory = list(advisory_findings)
+    advisory.extend(_fix_to_advisory(item) for item in needs_user_input)
     for fix in required_fixes:
         if _is_user_input_fix(fix):
-            user_input.append(fix)
+            advisory.append(_fix_to_advisory(fix))
         elif _is_advisory_output_format_fix(fix):
             advisory.append(_fix_to_advisory(fix))
         else:
@@ -309,14 +321,16 @@ def _normalize_routing_recommendation(
     needs_user_input: list[dict[str, Any]],
 ) -> str:
     recommendation = str(value or "").strip().lower()
+    if required_fixes:
+        return "repair_code"
+    if recommendation == "request_user_input" and not needs_user_input:
+        return "accept"
     if recommendation in {"accept", "repair_code", "request_user_input", "fail"}:
         return recommendation
     if status == "pass":
         return "accept"
     if status == "needs_user_input":
-        return "request_user_input"
-    if required_fixes:
-        return "repair_code"
+        return "request_user_input" if needs_user_input else "accept"
     if needs_user_input:
         return "request_user_input"
     return "fail"

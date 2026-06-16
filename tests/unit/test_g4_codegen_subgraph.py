@@ -230,8 +230,8 @@ class TestG4CodegenSubgraphCompilation:
 
         assert next_node == "persist_codegen_output"
 
-    def test_physics_review_old_style_user_confirmation_is_not_repairable(self) -> None:
-        """Old reviewer JSON should still be classified before routing."""
+    def test_physics_review_old_style_user_confirmation_is_advisory(self) -> None:
+        """Post-codegen parameter confirmation gaps should not reopen user review."""
         from agent_core.g4_codegen.physics_quality_reviewer import _normalize_review
         from agent_core.graph.subgraphs.g4_codegen_graph import (
             _route_after_physics_quality_review,
@@ -253,10 +253,11 @@ class TestG4CodegenSubgraphCompilation:
             }
         )
 
-        assert review["status"] == "needs_user_input"
-        assert review["routing_recommendation"] == "request_user_input"
+        assert review["status"] == "pass"
+        assert review["routing_recommendation"] == "accept"
         assert review["required_fixes"] == []
-        assert review["needs_user_input"]
+        assert review["needs_user_input"] == []
+        assert review["advisory_findings"]
         assert (
             _route_after_physics_quality_review(
                 {
@@ -265,6 +266,50 @@ class TestG4CodegenSubgraphCompilation:
                 }
             )
             == "persist_codegen_output"
+        )
+
+    def test_physics_review_code_fixes_take_priority_over_user_input_route(self) -> None:
+        """Code-level review fixes must go back to the project agent even if routing is noisy."""
+        from agent_core.g4_codegen.physics_quality_reviewer import _normalize_review
+        from agent_core.graph.subgraphs.g4_codegen_graph import (
+            _route_after_physics_quality_review,
+        )
+
+        review = _normalize_review(
+            {
+                "status": "needs_user_input",
+                "routing_recommendation": "request_user_input",
+                "required_fixes": [
+                    {
+                        "target": "src/DetectorConstruction.cc",
+                        "message": (
+                            "Two G4PVPlacement layers overlap because z centers "
+                            "use full thickness offsets; fix placement math and "
+                            "keep CheckOverlaps enabled."
+                        ),
+                    }
+                ],
+                "needs_user_input": [
+                    {
+                        "target": "components.layers",
+                        "message": "confirmed_by_user=false for layer thickness.",
+                    }
+                ],
+            }
+        )
+
+        assert review["status"] == "revise"
+        assert review["routing_recommendation"] == "repair_code"
+        assert review["required_fixes"]
+        assert review["needs_user_input"] == []
+        assert (
+            _route_after_physics_quality_review(
+                {
+                    "physics_quality_review": review,
+                    "physics_review_repair_attempts": 0,
+                }
+            )
+            == "geant4_project_agent"
         )
 
     def test_physics_review_code_fix_still_routes_to_project_agent(self) -> None:
@@ -825,7 +870,10 @@ async def test_build_module_contexts_injects_confirmed_human_constraints(
     )
     assert human_context["edited_constraint_count"] == 1
     assert human_context["constraint_digest"] == [
-        "edited dimension components.water_tank.geometry = {\"radius\": \"50 cm\", \"shape\": \"cylinder\"}"
+        (
+            "edited dimension components.water_tank.geometry = "
+            '{"radius": "50 cm", "shape": "cylinder"}'
+        )
     ]
     assert "hard" in human_context["codegen_instruction"].lower()
 

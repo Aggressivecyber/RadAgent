@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 
 import pytest
+from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask
 from agent_core.planning.nodes import parse_task, save_task_spec, validate_task_spec
-from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 
 
 @pytest.fixture
@@ -61,6 +61,12 @@ class TestParseTask:
         assert result["task_spec_errors"] == []
         assert "particle_flux" in result["task_spec"]["outputs"]
         assert "dose_distribution" in result["task_spec"]["outputs"]
+        assert "target" not in result["task_spec"]
+
+        from agent_core.schemas.task_spec import validate_task_spec
+
+        _, errors = validate_task_spec(result["task_spec"])
+        assert errors == []
 
     async def test_muon_showcase_query_extracts_cosmic_source(
         self,

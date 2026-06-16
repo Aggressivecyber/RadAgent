@@ -353,6 +353,55 @@ class TestCmdStatus:
         repl_with_state.console.print.assert_called()
 
 
+# ─── cmd_run ─────────────────────────────────────────────────────────
+
+
+class TestCmdRun:
+    """Test /run pipeline orchestration."""
+
+    @pytest.mark.asyncio
+    async def test_run_uses_canonical_phase_order_through_requirements_review(
+        self,
+        repl: RadAgentREPL,
+    ) -> None:
+        """The REPL must not bypass the pre-modeling requirements review phase."""
+        phases: list[str] = []
+
+        async def fake_run_phase(phase: str, **_: object) -> bool:
+            phases.append(phase)
+            if phase == "prepare_workspace":
+                repl.state.update({"job_id": "job_repl"})
+            if phase == "task_planning":
+                repl.state.update(
+                    {
+                        "task_planning_status": "passed",
+                        "simulation_scope": ["geant4"],
+                    }
+                )
+            if phase == "requirements_review":
+                repl.state.update(
+                    {
+                        "requirements_review_status": "needs_user_input",
+                        "human_confirmation_required": True,
+                    }
+                )
+                repl.current_phase_idx = _PIPELINE_PHASES.index("requirements_review") + 1
+                return False
+            repl.current_phase_idx = _PIPELINE_PHASES.index(phase) + 1
+            return True
+
+        with patch.object(repl, "_run_phase", side_effect=fake_run_phase):
+            await repl.cmd_run("Build a Geant4 shielding study")
+
+        assert phases == [
+            "prepare_workspace",
+            "context",
+            "task_planning",
+            "requirements_review",
+        ]
+        assert "g4_modeling" not in phases
+
+
 # ─── cmd_model ───────────────────────────────────────────────────────
 
 
@@ -550,6 +599,56 @@ class TestCmdConfirm:
     """Test /confirm command."""
 
     @pytest.mark.asyncio
+    async def test_confirm_approves_pending_requirements_review(
+        self,
+        repl_with_state: RadAgentREPL,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A pending requirements review should resume at g4_modeling, not human_confirmation."""
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        request_path = tmp_path / "requirements_review_request.json"
+        request_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "requirements_review_v1",
+                    "summary_for_user": "确认屏蔽体厚度。",
+                    "questions": [
+                        {
+                            "field_path": "components.shield.thickness",
+                            "question": "Confirm shield thickness?",
+                            "proposed_value": "25 mm",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        repl_with_state.state.update(
+            {
+                "requirements_review_status": "needs_user_input",
+                "requirements_review_request_path": str(request_path),
+                "confirmation_request_path": str(request_path),
+                "human_confirmation_required": True,
+            }
+        )
+
+        with (
+            patch.object(repl_with_state, "_prompt_choice", return_value="a"),
+            patch.object(repl_with_state, "_run_phase", new_callable=AsyncMock) as run_phase,
+            patch.object(repl_with_state, "_auto_remaining", new_callable=AsyncMock) as auto,
+            patch.object(repl_with_state, "_persist_phase_state"),
+        ):
+            await repl_with_state.cmd_confirm()
+
+        assert repl_with_state.state["requirements_review_status"] == "approved"
+        assert repl_with_state.state["confirmation_status"] == "approved"
+        assert repl_with_state.state["confirmed_requirement_plan_path"]
+        assert repl_with_state.current_phase_idx == _PIPELINE_PHASES.index("g4_modeling")
+        run_phase.assert_not_called()
+        auto.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_confirm_no_questions_requires_user_input(
         self, repl_with_state: RadAgentREPL, tmp_path: Path
     ) -> None:
@@ -717,6 +816,7 @@ class TestBuildSubgraphNodes:
         expected = {
             "context",
             "task_planning",
+            "requirements_review",
             "g4_modeling",
             "human_confirmation",
             "g4_codegen",

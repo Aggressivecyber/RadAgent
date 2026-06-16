@@ -61,7 +61,8 @@ class RadAgentMainState(TypedDict, total=False):
     task_planning_status: str  # "passed" | "failed" | "reserved"
 
     # ── Requirements Review outputs ──
-    requirements_review_status: str  # "pending" | "approved" | "rejected" | "failed"
+    # "needs_user_input" | "pending" | "approved" | "rejected" | "failed"
+    requirements_review_status: str
     requirements_review_request_path: str
     requirements_review_response_path: str
     confirmed_requirement_plan_path: str

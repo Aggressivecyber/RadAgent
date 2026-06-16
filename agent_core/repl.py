@@ -51,6 +51,7 @@ logger = logging.getLogger(__name__)
 _PIPELINE_PHASES: list[str] = list(PIPELINE_PHASES)
 _AUTO_PHASES: set[str] = set(AUTO_PHASES)
 _INTERACTIVE_PHASES: set[str] = set(INTERACTIVE_PHASES)
+_REQUIREMENTS_REVIEW_WAITING_STATUSES = {"pending", "needs_user_input"}
 
 
 class _QuitREPLError(Exception):
@@ -342,28 +343,8 @@ class RadAgentREPL:
         if self._chat_agent is not None:
             self._chat_agent.reset()
 
-        # Phase 0: prepare_workspace
-        await self._run_phase("prepare_workspace")
-
-        # Auto phases: context → task_planning → g4_modeling
-        for phase in ["context", "task_planning", "g4_modeling"]:
-            if not await self._run_phase(phase):
-                return
-
-        # Check if human confirmation is needed
-        if self.state.get("human_confirmation_required"):
-            n_assumptions = self.state.get("unconfirmed_assumptions_count", "?")
-            self.console.print(
-                "\n[bold yellow]⚠ Human confirmation required[/bold yellow]"
-                f" — {n_assumptions} assumptions need review"
-            )
-            self.console.print(
-                "  [dim]Use /confirm to review assumptions, then /step to continue.[/dim]\n"
-            )
-            self.current_phase_idx = _PIPELINE_PHASES.index("human_confirmation")
-            return
-
-        # Continue: codegen → patch → gate → artifact → report
+        # Run the canonical phase order. This keeps the REPL aligned with
+        # Web/TUI entry points when new guard phases are inserted.
         await self._auto_remaining()
 
     async def cmd_chat(self, message: str) -> None:
@@ -588,6 +569,32 @@ class RadAgentREPL:
                 "edits": edits,
                 "user_notes": f"Interactive REPL confirmation ({decision})",
             }
+
+        if self.state.get("requirements_review_status") in _REQUIREMENTS_REVIEW_WAITING_STATUSES:
+            if self.state["raw_human_response"].get("user_decision") == "reject":
+                from agent_core.requirements_review import reject_requirements_review
+
+                self.state = {
+                    **self.state,
+                    **reject_requirements_review(self.state, self.state["raw_human_response"]),
+                }
+                self._persist_phase_state("requirements_review")
+                self.console.print("  [red]✗ 已拒绝[/red]")
+                return
+
+            from agent_core.requirements_review import approve_requirements_review
+
+            self.state = {
+                **self.state,
+                **approve_requirements_review(self.state, self.state["raw_human_response"]),
+            }
+            if "requirements_review" not in self._completed_phases:
+                self._completed_phases.append("requirements_review")
+            self.current_phase_idx = _PIPELINE_PHASES.index("g4_modeling")
+            self._persist_phase_state("requirements_review")
+            self.console.print("  [green]✓ requirements_review[/green]")
+            await self._auto_remaining()
+            return
 
         # ── Step 5: Run human_confirmation phase to merge ──────────────
         merge_success = await self._run_phase("human_confirmation")
@@ -1025,6 +1032,16 @@ class RadAgentREPL:
         if result:
             self.state = {**self.state, **result}
 
+        if (
+            phase == "requirements_review"
+            and self.state.get("requirements_review_status")
+            in _REQUIREMENTS_REVIEW_WAITING_STATUSES
+        ):
+            self._persist_phase_state(phase)
+            self.console.print("  [yellow]⚠ requirements_review pending[/yellow]")
+            self.console.print("  [dim]Use /confirm to review parameters.[/dim]")
+            return False
+
         self._completed_phases.append(phase)
         self.current_phase_idx = _PIPELINE_PHASES.index(phase) + 1
         self._persist_phase_state(phase)
@@ -1145,6 +1162,15 @@ class RadAgentREPL:
         while self.current_phase_idx < len(_PIPELINE_PHASES):
             phase = _PIPELINE_PHASES[self.current_phase_idx]
 
+            if (
+                phase == "requirements_review"
+                and self.state.get("requirements_review_status")
+                in _REQUIREMENTS_REVIEW_WAITING_STATUSES
+            ):
+                self.console.print("\n  [bold yellow]⚠ Requirements review required[/bold yellow]")
+                self.console.print("  [dim]Use /confirm to review parameters.[/dim]\n")
+                return
+
             # Unified human-confirmation gate
             if phase == "human_confirmation" and not self.state.get("raw_human_response"):
                 self.console.print("\n  [bold yellow]⚠ Human confirmation required[/bold yellow]")
@@ -1153,7 +1179,8 @@ class RadAgentREPL:
 
             success = await self._run_phase(phase)
             if not success:
-                self.console.print(f"[red]Pipeline stopped at {phase}.[/red]")
+                if phase != "requirements_review":
+                    self.console.print(f"[red]Pipeline stopped at {phase}.[/red]")
                 return
 
             # Post-g4_modeling confirmation check

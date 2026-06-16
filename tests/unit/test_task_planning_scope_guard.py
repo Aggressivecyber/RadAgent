@@ -15,10 +15,10 @@ class TestTaskPlanningScopeGuard:
             "simulation_scope": scope,
         }
 
-    def test_geant4_proceeds_to_modeling(self) -> None:
-        """Pure geant4 scope must enter g4_modeling_subgraph."""
+    def test_geant4_proceeds_to_requirements_review(self) -> None:
+        """Pure geant4 scope must enter pre-modeling requirements review."""
         state = self._make_state(["geant4"])
-        assert route_after_task_planning(state) == "g4_modeling_subgraph"
+        assert route_after_task_planning(state) == "requirements_review"
 
     def test_tcad_blocked(self) -> None:
         """TCAD scope must be routed to report_subgraph."""

@@ -36,8 +36,8 @@ from agent_core.g4_codegen.graph_nodes import (
     plan_geometry_strategy_node,
     runtime_execution_audit_node,
 )
-from agent_core.g4_codegen.project_agent import geant4_project_agent_node
 from agent_core.g4_codegen.io_nodes import load_model_ir
+from agent_core.g4_codegen.project_agent import geant4_project_agent_node
 from agent_core.g4_codegen.schemas import G4CodegenSubgraphState
 
 AUDIT_REPAIR_ROUTE_LIMIT = 2
@@ -195,14 +195,14 @@ def _route_after_physics_quality_review(state: G4CodegenSubgraphState) -> str:
     recommendation = str(review.get("routing_recommendation") or "").lower()
     if status == "pass" or recommendation == "accept":
         return "persist_codegen_output"
-    if status == "needs_user_input" or recommendation == "request_user_input":
-        return "persist_codegen_output"
     has_required_fixes = bool(review.get("required_fixes"))
     if (
         (recommendation == "repair_code" or has_required_fixes)
         and _repair_attempts_remaining(state.get("physics_review_repair_attempts"))
     ):
         return "geant4_project_agent"
+    if status == "needs_user_input" or recommendation == "request_user_input":
+        return "persist_codegen_output"
     return "persist_codegen_output"
 
 
