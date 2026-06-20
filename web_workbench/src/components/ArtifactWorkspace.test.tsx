@@ -71,6 +71,7 @@ describe('ArtifactWorkspace', () => {
         error=""
         onSelectArtifact={() => {}}
         onOpenInspector={() => {}}
+        sourcePackageUrl="/api/source-package?job_id=job-42"
       />,
     )
 
@@ -82,6 +83,8 @@ describe('ArtifactWorkspace', () => {
     expect(markup).toContain('源码')
     expect(markup).toContain('8 KB')
     expect(markup).toContain('#include &quot;DetectorConstruction.hh&quot;')
+    expect(markup).toContain('下载源文件')
+    expect(markup).toContain('/api/source-package?job_id=job-42')
   })
 
   it('renders a staged artifact waiting state before files are created', () => {
@@ -98,6 +101,7 @@ describe('ArtifactWorkspace', () => {
         error=""
         onSelectArtifact={() => {}}
         onOpenInspector={() => {}}
+        sourcePackageUrl=""
       />,
     )
 

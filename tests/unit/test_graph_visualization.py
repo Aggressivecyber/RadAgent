@@ -69,7 +69,7 @@ class TestMainGraphTopology:
         assert "context_subgraph" in retry_targets
         assert "task_planning_subgraph" in retry_targets
         assert "g4_modeling_subgraph" in retry_targets
-        assert "human_confirmation_subgraph" in retry_targets
+        assert "requirements_review" in retry_targets
         assert "g4_codegen_subgraph" in retry_targets
         assert "patch_subgraph" in retry_targets
 

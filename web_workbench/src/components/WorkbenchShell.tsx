@@ -54,6 +54,7 @@ import AgentStatusRail from './AgentStatusRail'
 import ArtifactWorkspace from './ArtifactWorkspace'
 import InspectorPanel from './InspectorPanel'
 import LlmDebugPanel from './LlmDebugPanel'
+import SimulationCharts from './SimulationCharts'
 import SimulationViewportFallback from './SimulationViewportFallback'
 
 const SimulationViewport = lazy(() => import('./SimulationViewport'))
@@ -224,7 +225,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     setArtifactLoading(true)
     setArtifactError('')
     try {
-      const detail = await fetchArtifactContent(path)
+      const detail = await fetchArtifactContent(path, 200_000, selectedJobId || status?.job_id || '')
       setSelectedArtifact(detail)
       setState((current) => reduceDetailSelection(current, 'artifact', detail))
     } catch (error) {
@@ -248,7 +249,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     }).llmDebugCalls
   }
 
-  async function refreshLlmResponsePreviews(calls: LlmDebugCall[]) {
+  async function refreshLlmResponsePreviews(calls: LlmDebugCall[], jobId = '') {
     const candidates = calls
       .filter((call) => call.artifactPath && call.artifactPath !== '未记录 artifact 路径')
       .slice(0, 5)
@@ -259,7 +260,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     const entries = await Promise.all(
       candidates.map(async (call) => {
         try {
-          const artifact = await fetchArtifactContent(call.artifactPath, 260_000)
+          const artifact = await fetchArtifactContent(call.artifactPath, 260_000, jobId)
           if (!artifact.exists) {
             return null
           }
@@ -310,7 +311,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           setVisualization(normalizeVisualizationPayload(currentVisualization))
         }
         const initialArtifacts = await refreshArtifacts(initialJobId)
-        await refreshLlmResponsePreviews(llmCallsFromData(currentStatus, currentEvents, initialArtifacts))
+        await refreshLlmResponsePreviews(llmCallsFromData(currentStatus, currentEvents, initialArtifacts), initialJobId)
         setState((current) => reduceEvents(current, currentEvents))
         setLoadState(`${catalog.length} 个功能可用`)
       } catch (error) {
@@ -359,7 +360,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       if (document.hidden) {
         return
       }
-      Promise.all([fetchStatus(), fetchEvents()])
+      Promise.all([fetchStatus(), fetchEvents(80, selectedJobId)])
         .then(async ([nextStatus, nextEvents]) => {
           setStatus(nextStatus)
           setEvents(nextEvents)
@@ -371,6 +372,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           const nextArtifacts = await refreshArtifacts(refreshJobId)
           await refreshLlmResponsePreviews(
             llmCallsFromData(nextStatus, nextEvents, nextArtifacts, selectedArtifact?.path || ''),
+            refreshJobId,
           )
           try {
             const nextVisualization = await fetchVisualization(refreshJobId)
@@ -404,6 +406,10 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
   const workflowInstruction = runRequest.trim()
   const reviewCallout = createReviewCallout(status)
   const isWorkflowRunning = workflowRunState === 'running' || runtimeActive
+  const targetJobId = selectedJobId || status?.job_id || ''
+  const sourcePackageUrl = targetJobId
+    ? `/api/source-package?job_id=${encodeURIComponent(targetJobId)}`
+    : ''
 
   const controlSections = useMemo(() => createWorkbenchControlSections(commands), [commands])
   const quickActions = useMemo(
@@ -447,7 +453,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
     try {
       const result = await sendCommand(trimmed)
       setState((current) => reduceCommandResponse(current, result))
-      const [nextStatus, nextEvents] = await Promise.all([fetchStatus(), fetchEvents()])
+      const [nextStatus, nextEvents] = await Promise.all([fetchStatus(), fetchEvents(80, selectedJobId)])
       setStatus(nextStatus)
       setEvents(nextEvents)
       const resultJobId =
@@ -462,6 +468,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       const nextArtifacts = await refreshArtifacts(refreshJobId)
       await refreshLlmResponsePreviews(
         llmCallsFromData(nextStatus, nextEvents, nextArtifacts, selectedArtifact?.path || ''),
+        refreshJobId,
       )
       setState((current) => reduceEvents(current, nextEvents))
       setLoadState(result.ok ? `${result.command || '功能'} 已完成` : result.error || '执行失败')
@@ -527,6 +534,14 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
       requestWorkflowStart()
       return
     }
+    if (name === 'build') {
+      executeCommand(targetJobId ? `/build ${targetJobId}` : '/build')
+      return
+    }
+    if (name === 'simulate') {
+      executeCommand(buildSimulateCommand(simulationEvents, targetJobId))
+      return
+    }
     executeCommand(`/${name}`)
   }
 
@@ -590,7 +605,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
         normalized,
       )
     if (opensConfirmationReview) {
-      setState((current) => ({ ...current, activeInspector: 'confirmation' }))
+      setState((current) => ({ ...current, activeInspector: 'confirmation', inspectorData: { ...current.inspectorData, confirmation: { _loading: true } } }))
       setInspectorOpen(true)
     }
     executeCommand(command)
@@ -605,6 +620,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
         const nextArtifacts = await refreshArtifacts(record.job_id)
         await refreshLlmResponsePreviews(
           llmCallsFromData(status, events, nextArtifacts, selectedArtifact?.path || ''),
+          record.job_id,
         )
         await refreshVisualization(record.job_id)
         setLoadState(`已切换到作业 ${record.job_id}`)
@@ -822,6 +838,8 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
           />
         </Suspense>
 
+        <SimulationCharts payload={visualization} />
+
         <section className="timeline-panel">
           <div className="panel-title">
             <TerminalSquare size={18} />
@@ -892,7 +910,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
               className="primary-action"
               type="button"
               title={commandPresentation({ name: 'simulate', description: 'simulate', visible: true }).tip}
-              onClick={() => executeCommand(buildSimulateCommand(simulationEvents))}
+              onClick={() => executeCommand(buildSimulateCommand(simulationEvents, targetJobId))}
               disabled={busy}
             >
               <Play size={15} />
@@ -925,7 +943,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
                       title={action.tip}
                       onClick={() =>
                         action.name === 'simulate'
-                          ? executeCommand(buildSimulateCommand(simulationEvents))
+                          ? executeCommand(buildSimulateCommand(simulationEvents, targetJobId))
                           : executeNamedAction(action.name)
                       }
                       disabled={busy}
@@ -960,6 +978,7 @@ export default function WorkbenchShell({ onHome, launchTarget = null }: Workbenc
         selectedArtifact={selectedArtifact}
         loading={artifactLoading}
         error={artifactError}
+        sourcePackageUrl={sourcePackageUrl}
         onSelectArtifact={selectArtifactPath}
         onOpenInspector={() => {
           setState((current) => ({

@@ -3,9 +3,10 @@ export function buildRunCommand(request: string): string {
   return trimmed ? `/run ${trimmed}` : ''
 }
 
-export function buildSimulateCommand(events: number): string {
+export function buildSimulateCommand(events: number, jobId = ''): string {
   const safeEvents = Number.isFinite(events) && events > 0 ? Math.floor(events) : 1
-  return `/simulate ${safeEvents}`
+  const targetJob = jobId.trim()
+  return targetJob ? `/simulate ${safeEvents} ${targetJob}` : `/simulate ${safeEvents}`
 }
 
 export function composeCommandTemplate(command: string): string {

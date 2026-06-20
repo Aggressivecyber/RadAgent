@@ -49,7 +49,7 @@ const phaseLabels: Record<string, string> = {
   task_planning: '任务规划',
   requirements_review: '参数核对',
   g4_modeling: 'Geant4 建模',
-  human_confirmation: '人工确认',
+  human_confirmation: '参数核对',
   g4_codegen: '工程生成',
   patch: '修订补丁',
   gate: '验证门禁',
@@ -155,7 +155,7 @@ export function createOverviewPanel({ status, events, commands }: OverviewInput)
     ? [
         {
           label: reviewCallout.primaryLabel,
-          labelEn: reviewCallout.kind === 'repair-continuation' ? 'Approve repair' : 'Review',
+          labelEn: reviewCallout.kind === 'repair-continuation' ? 'Approve repair' : 'Requirements',
           command: reviewCallout.primaryCommand,
           tip: reviewCallout.title,
           tone: 'primary' as const,

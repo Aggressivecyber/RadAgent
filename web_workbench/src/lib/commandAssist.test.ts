@@ -5,6 +5,7 @@ describe('command assist builders', () => {
   it('builds slash commands for run and simulate controls', () => {
     expect(buildRunCommand('  build a detector  ')).toBe('/run build a detector')
     expect(buildSimulateCommand(250)).toBe('/simulate 250')
+    expect(buildSimulateCommand(250, 'job-saved')).toBe('/simulate 250 job-saved')
   })
 
   it('guards empty run requests and invalid event counts', () => {

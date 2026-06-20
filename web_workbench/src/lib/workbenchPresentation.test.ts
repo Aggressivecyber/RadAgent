@@ -32,7 +32,7 @@ describe('workbench presentation', () => {
     expect(createWorkbenchHero(activeStatus)).toEqual({
       eyebrow: 'Proton Depth Dose',
       title: '150 MeV proton depth-dose benchmark',
-      subtitle: '当前推进到 Geant4 工程生成，已完成 4/11 个阶段。',
+      subtitle: '当前推进到 Geant4 工程生成，已完成 4/10 个阶段。',
       statusText: '运行中 · Geant4 工程生成',
       statusTone: 'running',
     })
@@ -117,7 +117,6 @@ describe('workbench presentation', () => {
       'task_planning',
       'requirements_review',
       'g4_modeling',
-      'human_confirmation',
       'g4_codegen',
       'patch',
       'gate',
@@ -132,6 +131,7 @@ describe('workbench presentation', () => {
       label: '工程生成',
       state: 'active',
     })
+    expect(track.find((phase) => phase.id === 'human_confirmation')).toBeUndefined()
   })
 
   it('presents timeline rows as auditable agent evidence', () => {
@@ -167,7 +167,6 @@ describe('workbench presentation', () => {
       '任务规划',
       '参数核对',
       'Geant4 建模',
-      '人工确认',
       '工程生成',
       '修订补丁',
       '验证门禁',
@@ -243,17 +242,19 @@ describe('workbench presentation', () => {
     expect(callout).toBeNull()
   })
 
-  it('prompts for model confirmation only while ordinary confirmation is pending', () => {
+  it('prompts for requirements review while pre-modeling confirmation is pending', () => {
     const callout = createReviewCallout({
       ...activeStatus,
       status: 'paused',
-      current_phase: 'human_confirmation',
+      current_phase: 'requirements_review',
       current_phase_idx: 4,
       needs_confirmation: true,
       key_statuses: {
         confirmation_status: 'pending',
+        requirements_review_status: 'needs_user_input',
       },
       state: {
+        requirements_review_status: 'needs_user_input',
         confirmation_status: 'pending',
         human_confirmation_required: true,
       },
@@ -261,10 +262,12 @@ describe('workbench presentation', () => {
 
     expect(callout).toMatchObject({
       kind: 'human-confirmation',
-      eyebrow: '需要人工确认',
-      primaryLabel: '查看确认项',
+      eyebrow: '需要参数核对',
+      primaryLabel: '打开参数核对',
       primaryCommand: '/confirm job-42',
     })
+    expect(callout?.detail).toContain('模型会再次评估')
+    expect(callout?.detail).not.toContain('MAX')
   })
 
   it('does not keep the current node on human confirmation after approval advances the phase', () => {
@@ -496,7 +499,7 @@ describe('workbench presentation', () => {
     expect(cockpit.agent.statusChips).toEqual(
       expect.arrayContaining([
         { label: '当前节点', value: 'G4 Codegen Subgraph', tone: 'neutral' },
-        { label: 'Codegen', value: '等待人工确认', tone: 'warning' },
+        { label: 'Codegen', value: '等待修复批准', tone: 'warning' },
         { label: '构建模块', value: 'Runtime Execution Auditor', tone: 'running' },
         { label: '修复轮数', value: '48/60', tone: 'warning' },
         { label: '等待事项', value: '批准继续修复', tone: 'warning' },

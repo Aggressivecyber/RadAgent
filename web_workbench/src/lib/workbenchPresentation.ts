@@ -114,7 +114,6 @@ const pipelinePhases = [
   'task_planning',
   'requirements_review',
   'g4_modeling',
-  'human_confirmation',
   'g4_codegen',
   'patch',
   'gate',
@@ -128,7 +127,7 @@ const phaseLabels: Record<string, { label: string; labelEn: string }> = {
   task_planning: { label: '任务规划', labelEn: 'Planning' },
   requirements_review: { label: '参数核对', labelEn: 'Requirements' },
   g4_modeling: { label: 'Geant4 建模', labelEn: 'Model IR' },
-  human_confirmation: { label: '人工确认', labelEn: 'Review' },
+  human_confirmation: { label: '参数核对', labelEn: 'Requirements' },
   g4_codegen: { label: '工程生成', labelEn: 'Codegen' },
   patch: { label: '修订补丁', labelEn: 'Patch' },
   gate: { label: '验证门禁', labelEn: 'Gates' },
@@ -174,7 +173,7 @@ const confirmationStatusLabels: Record<string, string> = {
 const codegenStatusLabels: Record<string, { value: string; tone: AgentCockpitStatusChip['tone'] }> = {
   passed: { value: '已通过', tone: 'success' },
   failed: { value: '失败', tone: 'error' },
-  needs_user_input: { value: '等待人工确认', tone: 'warning' },
+  needs_user_input: { value: '等待修复批准', tone: 'warning' },
   running: { value: '运行中', tone: 'running' },
 }
 
@@ -328,18 +327,30 @@ export function createReviewCallout(status: JobStatus | null): ReviewCallout | n
   }
 
   const confirmationStatus = statusValue(status, 'confirmation_status')
+  const requirementsReviewStatus = statusValue(status, 'requirements_review_status')
+  const requirementsReviewPending = ['pending', 'needs_user_input'].includes(requirementsReviewStatus)
   const humanConfirmationRequired = Boolean(status.state?.human_confirmation_required)
   const humanConfirmationPending =
-    confirmationStatus === 'pending' || status.current_phase === 'human_confirmation' || humanConfirmationRequired
+    requirementsReviewPending ||
+    confirmationStatus === 'pending' ||
+    status.current_phase === 'human_confirmation' ||
+    humanConfirmationRequired
 
   if (humanConfirmationPending && confirmationStatus !== 'approved') {
-    return {
-      kind: 'human-confirmation',
-      eyebrow: '需要人工确认',
-      title: '当前工作流正在等待你确认模型假设、关键参数或继续执行条件。',
-      detail: '打开确认面板后，可以查看到底要确认什么；如果参数含糊，填写补充说明让 Agent 继续追问。',
-      primaryLabel: '查看确认项',
-      primaryCommand: reviewCommand,
+    if (
+      requirementsReviewPending ||
+      status.current_phase === 'requirements_review' ||
+      status.current_phase === 'human_confirmation' ||
+      humanConfirmationRequired
+    ) {
+      return {
+        kind: 'human-confirmation',
+        eyebrow: '需要参数核对',
+        title: '建模前需要你确认关键 Geant4 参数。',
+        detail: '逐项查看模型建议的推荐答案。确认推荐或填写修改后，模型会再次评估，直到参数足够明确再进入建模。',
+        primaryLabel: '打开参数核对',
+        primaryCommand: reviewCommand,
+      }
     }
   }
 
@@ -517,7 +528,10 @@ function waitingChip(status: JobStatus | null): AgentCockpitStatusChip | null {
     return { label: '等待事项', value: '批准继续修复', tone: 'warning' }
   }
   if (status?.needs_confirmation) {
-    return { label: '等待事项', value: '人工确认', tone: 'warning' }
+    if (statusRawValue(status, 'requirements_review_status')) {
+      return { label: '等待事项', value: '参数核对', tone: 'warning' }
+    }
+    return { label: '等待事项', value: '确认', tone: 'warning' }
   }
   return null
 }

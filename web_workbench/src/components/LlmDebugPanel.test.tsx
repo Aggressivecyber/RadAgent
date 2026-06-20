@@ -93,6 +93,7 @@ describe('LlmDebugPanel', () => {
     expect(markup).toContain('first hidden line')
     expect(markup).toContain('second hidden line')
     expect(markup).toContain('实时片段')
+    expect(markup).not.toContain('最新三行')
   })
 
   it('renders only the two most recent LLM call cards', () => {
@@ -123,7 +124,8 @@ describe('LlmDebugPanel', () => {
     )
 
     expect(markup).toContain('等待模型响应片段')
-    expect(markup).toContain('工作流运行时会在这里显示最近三行响应。')
+    expect(markup).toContain('工作流运行时会在这里显示模型响应。')
+    expect(markup).not.toContain('最近三行')
   })
 
   it('renders a resumable state when the job is not actively running', () => {
@@ -135,7 +137,7 @@ describe('LlmDebugPanel', () => {
     )
 
     expect(markup).toContain('后台未运行')
-    expect(markup).toContain('当前作业可继续；恢复后会在这里显示最近三行模型响应。')
-    expect(markup).not.toContain('工作流运行时会在这里显示最近三行响应。')
+    expect(markup).toContain('当前作业可继续；恢复后会在这里显示模型响应。')
+    expect(markup).not.toContain('最近三行')
   })
 })

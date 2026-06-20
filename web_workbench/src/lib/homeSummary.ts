@@ -71,7 +71,7 @@ const fallbackWorkflowCapabilities: WorkflowCapability[] = [
   },
   {
     name: '门禁审核 / Gate review',
-    description: '在继续前展示验证门禁和人工确认。',
+    description: '在继续前展示验证门禁和建模前参数核对。',
     command: '审核门禁',
   },
   {

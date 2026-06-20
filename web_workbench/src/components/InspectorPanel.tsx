@@ -8,7 +8,11 @@ import {
   buildConfirmationCommand,
   buildRejectCommand,
 } from '../lib/confirmationActions'
-import { createConfirmationReviewView } from '../lib/confirmationReview'
+import {
+  buildQuestionCardSupplement,
+  createConfirmationReviewView,
+  type ConfirmationQuestionAnswer,
+} from '../lib/confirmationReview'
 import {
   buildModelUpdate,
   createModelSaveState,
@@ -65,7 +69,7 @@ const inspectorTitles: Record<string, { label: string; labelEn: string }> = {
   gate: { label: '门禁详情', labelEn: 'Gate' },
   logs: { label: '日志', labelEn: 'Logs' },
   model: { label: '模型设置', labelEn: 'Model' },
-  confirmation: { label: '人工确认', labelEn: 'Review' },
+  confirmation: { label: '参数核对', labelEn: 'Requirements' },
   diagnosis: { label: '诊断', labelEn: 'Workflow diagnosis' },
   memory: { label: '工作记忆', labelEn: 'Memory' },
   credibility: { label: '可信度', labelEn: 'Credibility' },
@@ -734,17 +738,99 @@ function ModelSettingsPanel({
 
 function ConfirmationPanel({
   data,
+  status,
+  events,
   onExecuteCommand,
 }: {
   data: unknown
+  status: JobStatus | null
+  events: RadAgentEvent[]
   onExecuteCommand: (command: string) => Promise<void>
 }) {
   const review = asRecord(data)
+  const isLoading = Boolean(review._loading)
   const view = createConfirmationReviewView(data)
   const [rejectReason, setRejectReason] = useState('')
   const [question, setQuestion] = useState('')
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, ConfirmationQuestionAnswer>>({})
   const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | 'ask-more' | ''>('')
-  const status = presentConfirmationStatus(review.status)
+  const [slowPendingAction, setSlowPendingAction] = useState(false)
+  const reviewJobId = text(review.job_id || status?.job_id)
+  const displayStatus = presentConfirmationStatus(review.status)
+  const questionCardKey = view.questionCards
+    .map((item) => `${item.fieldPath}:${item.question}:${item.recommendedValue}`)
+    .join('|')
+  const workflowState = asRecord(status?.state)
+  const workflowKeyStatuses = asRecord(status?.key_statuses)
+  const requirementsStatus = text(
+    workflowState.requirements_review_status || workflowKeyStatuses.requirements_review_status,
+  )
+  const confirmationStatus = text(
+    workflowState.confirmation_status || workflowKeyStatuses.confirmation_status,
+  )
+  const hasSubmittedSupplements = asArray(workflowState.requirements_review_supplements).length > 0
+  const requirementsModelRunning = events.some((event) => {
+    const payload = asRecord(event.payload)
+    const details = asRecord(payload.details)
+    const metadata = asRecord(details.metadata)
+    const moduleName = text(metadata.module_name).toLowerCase()
+    return (
+      event.status === 'running' &&
+      (moduleName.includes('requirements_review') || event.phase === 'requirements_review')
+    )
+  })
+  const reviewIterationRunning =
+    pendingAction === 'ask-more' ||
+    slowPendingAction ||
+    requirementsModelRunning ||
+    (status?.status === 'running' &&
+      hasSubmittedSupplements &&
+      requirementsStatus === 'needs_user_input' &&
+      confirmationStatus === 'pending')
+
+  useEffect(() => {
+    setQuestionAnswers((current) => {
+      const next: Record<string, ConfirmationQuestionAnswer> = {}
+      for (const card of view.questionCards) {
+        next[card.fieldPath] =
+          current[card.fieldPath] || {
+            mode: 'recommended',
+            value: card.recommendedValue,
+          }
+      }
+      return next
+    })
+  }, [questionCardKey])
+
+  useEffect(() => {
+    if (pendingAction !== 'ask-more' && pendingAction !== 'approve') {
+      setSlowPendingAction(false)
+      return
+    }
+    setSlowPendingAction(false)
+    const timer = window.setTimeout(() => setSlowPendingAction(true), 1000)
+    return () => window.clearTimeout(timer)
+  }, [pendingAction])
+
+  function updateQuestionAnswer(fieldPath: string, update: Partial<ConfirmationQuestionAnswer>) {
+    setQuestionAnswers((current) => {
+      const currentAnswer = current[fieldPath] || { mode: 'recommended', value: '' }
+      return {
+        ...current,
+        [fieldPath]: {
+          ...currentAnswer,
+          ...update,
+        },
+      }
+    })
+  }
+
+  function submitParameterAnswers() {
+    const supplement = buildQuestionCardSupplement(view.questionCards, questionAnswers, question, {
+      includeMachinePayload: true,
+    })
+    return run(buildAskMoreCommand(supplement || question || '确认当前推荐参数', reviewJobId), 'ask-more')
+  }
 
   async function run(command: string, action: 'approve' | 'reject' | 'ask-more') {
     if (command) {
@@ -757,101 +843,121 @@ function ConfirmationPanel({
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="confirmation-panel">
+        <div className="confirmation-loading">
+          <strong>正在加载参数核对数据...</strong>
+          <p>正在从后端获取最新的模型参数建议，请稍候。</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="confirmation-panel">
       <article className="metric-tile">
         <span>状态</span>
-        <strong>{status || '未加载确认项'}</strong>
+        <strong>{displayStatus || '未加载确认项'}</strong>
       </article>
       <section className="confirmation-summary-card">
-        <span>确认对象</span>
-        <strong>确认 Geant4 模型参数与继续执行条件</strong>
+        <span>核对对象</span>
+        <strong>Geant4 建模前参数核对</strong>
         <p>{view.summary}</p>
       </section>
-      {view.parameterChecklist.length > 0 ? (
-        <section className="confirmation-parameter-review" aria-label="参数核对">
-          <div className="confirmation-parameter-heading">
-            <h3>参数核对</h3>
-            <span>
-              {view.parameterChecklist.filter((item) => item.tone === 'confirmed').length} 明确 ·{' '}
-              {view.parameterChecklist.filter((item) => item.tone === 'needs-review').length} 需确认
-            </span>
-          </div>
-          {view.parameterChecklist.map((item) => (
-            <article className={`confirmation-parameter-row ${item.tone}`} key={`${item.title}-${item.value}`}>
-              <div>
-                <span className="confirmation-parameter-status">{item.statusLabel}</span>
-                {item.meta ? <em>{item.meta}</em> : null}
-              </div>
-              <strong>{item.title}</strong>
-              {item.value ? <code>{item.value}</code> : null}
-              {item.detail ? <p>{item.detail}</p> : null}
-            </article>
-          ))}
+      {reviewIterationRunning ? (
+        <section className="confirmation-iteration-status" aria-live="polite">
+          <strong>模型正在复核参数</strong>
+          <p>已提交你的参数补充，系统会重新评估是否还缺信息；通过后会自动进入 Geant4 建模。</p>
         </section>
       ) : null}
-      {view.proposedItems.length > 0 ? (
-        <section className="confirmation-review-section">
-          <h3>模型草案</h3>
-          {view.proposedItems.map((item) => (
-            <article key={`${item.title}-${item.meta}`}>
-              <span>{item.meta}</span>
-              <strong>{item.title}</strong>
-              {item.detail ? <p>{item.detail}</p> : null}
-            </article>
-          ))}
-        </section>
-      ) : null}
-      {view.assumptions.length > 0 ? (
+      {view.assumptions.length > 0 || view.missingInformation.length > 0 ? (
         <section className="confirmation-review-section warning">
-          <h3>默认补全与模型假设</h3>
+          <h3>模型假设</h3>
           {view.assumptions.map((item, index) => (
             <p key={`${item}-${index}`}>{item}</p>
           ))}
-        </section>
-      ) : null}
-      {view.missingInformation.length > 0 ? (
-        <section className="confirmation-review-section warning">
-          <h3>仍需补充的参数</h3>
           {view.missingInformation.map((item, index) => (
-            <p key={`${item}-${index}`}>{item}</p>
+            <p key={`missing-${item}-${index}`}>{item}</p>
           ))}
         </section>
       ) : null}
-      {view.criticalConfirmations.length > 0 ? (
-        <section className="confirmation-review-section">
-          <h3>关键确认项</h3>
-          {view.criticalConfirmations.map((item) => (
-            <article key={`${item.title}-${item.meta}`}>
-              <span>{item.meta}</span>
-              <strong>{item.title}</strong>
-              {item.detail ? <p>{item.detail}</p> : null}
+      {view.questionCards.length > 0 ? (
+        <section className="confirmation-question-cards" aria-label="需要确认的问题">
+          <h3>需要确认的问题</h3>
+          {view.questionCards.map((item) => (
+            <article className="confirmation-question-card" key={`${item.fieldPath}-${item.question}`}>
+              <div>
+                <span>问题</span>
+                <strong>{item.question}</strong>
+              </div>
+              <div>
+                <span>推荐答案</span>
+                <code>{item.recommendedValue || '请补充具体值'}</code>
+              </div>
+              {item.reason ? (
+                <div className="confirmation-question-note">
+                  <span>备注</span>
+                  <p>{item.reason}</p>
+                </div>
+              ) : null}
+              <div className="confirmation-question-actions">
+                <button
+                  type="button"
+                  className={questionAnswers[item.fieldPath]?.mode !== 'modified' ? 'active' : ''}
+                  onClick={() =>
+                    updateQuestionAnswer(item.fieldPath, {
+                      mode: 'recommended',
+                      value: item.recommendedValue,
+                    })
+                  }
+                >
+                  确认推荐
+                </button>
+                <button
+                  type="button"
+                  className={questionAnswers[item.fieldPath]?.mode === 'modified' ? 'active' : ''}
+                  onClick={() =>
+                    updateQuestionAnswer(item.fieldPath, {
+                      mode: 'modified',
+                      value: questionAnswers[item.fieldPath]?.value || item.recommendedValue,
+                    })
+                  }
+                >
+                  修改
+                </button>
+              </div>
+              {questionAnswers[item.fieldPath]?.mode === 'modified' ? (
+                <label className="confirmation-question-edit">
+                  <span>修改为</span>
+                  <input
+                    value={questionAnswers[item.fieldPath]?.value || ''}
+                    onChange={(event) =>
+                      updateQuestionAnswer(item.fieldPath, {
+                        mode: 'modified',
+                        value: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+              ) : null}
             </article>
           ))}
         </section>
       ) : null}
-      {view.questions.length > 0 ? (
-        <section className="confirmation-review-section">
-          <h3>需要你确认的问题</h3>
-          {view.questions.map((item) => (
-            <article key={`${item.title}-${item.meta}`}>
-              <span>{item.meta}</span>
-              <strong>{item.title}</strong>
-              {item.detail ? <p>{item.detail}</p> : null}
-            </article>
-          ))}
-        </section>
-      ) : null}
-      {view.preview ? <pre className="artifact-preview">{view.preview}</pre> : <p className="empty-state">暂无确认预览。</p>}
       {view.actionable ? (
         <div className="confirmation-actions">
           <button
             type="button"
             className="approve-button"
-            onClick={() => run(buildConfirmationCommand(), 'approve')}
+            onClick={() =>
+              view.questionCards.length > 0
+                ? submitParameterAnswers()
+                : run(buildConfirmationCommand(reviewJobId), 'approve')
+            }
             disabled={Boolean(pendingAction)}
           >
-            {pendingAction === 'approve' ? '批准中' : '批准'}
+            {pendingAction === 'approve' || pendingAction === 'ask-more' ? '提交中' : '确认所选参数'}
           </button>
           <label>
             <span>拒绝原因</span>
@@ -859,7 +965,7 @@ function ConfirmationPanel({
           </label>
           <button
             type="button"
-            onClick={() => run(buildRejectCommand(rejectReason), 'reject')}
+            onClick={() => run(buildRejectCommand(rejectReason, reviewJobId), 'reject')}
             disabled={Boolean(pendingAction) || !rejectReason.trim()}
           >
             {pendingAction === 'reject' ? '提交中' : '拒绝'}
@@ -870,7 +976,7 @@ function ConfirmationPanel({
           </label>
           <button
             type="button"
-            onClick={() => run(buildAskMoreCommand(question), 'ask-more')}
+            onClick={() => run(buildAskMoreCommand(question, reviewJobId), 'ask-more')}
             disabled={Boolean(pendingAction) || !question.trim()}
           >
             {pendingAction === 'ask-more' ? '发送中' : '发送补充'}
@@ -925,7 +1031,7 @@ export default function InspectorPanel({
         <ModelSettingsPanel data={data} onSave={onSaveModelConfig} onTestHealth={onTestModelHealth} />
       ) : null}
       {active === 'confirmation' ? (
-        <ConfirmationPanel data={data} onExecuteCommand={onExecuteCommand} />
+        <ConfirmationPanel data={data} status={status} events={events} onExecuteCommand={onExecuteCommand} />
       ) : null}
       {active === 'diagnosis' ? <DiagnosisPanel data={data} /> : null}
       {active === 'help' ? <CommandPanel commands={commands} onSelectCommand={onSelectCommand} /> : null}

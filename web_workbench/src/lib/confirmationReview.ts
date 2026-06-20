@@ -2,6 +2,8 @@ export type ConfirmationReviewItem = {
   title: string
   detail: string
   meta: string
+  fieldPath?: string
+  recommendedValue?: string
 }
 
 export type ConfirmationParameterChecklistItem = {
@@ -13,6 +15,22 @@ export type ConfirmationParameterChecklistItem = {
   statusLabel: string
 }
 
+export type ConfirmationQuestionCard = {
+  fieldPath: string
+  question: string
+  recommendedValue: string
+  reason: string
+}
+
+export type ConfirmationQuestionAnswer = {
+  mode: 'recommended' | 'modified'
+  value: string
+}
+
+export type BuildQuestionCardSupplementOptions = {
+  includeMachinePayload?: boolean
+}
+
 export type ConfirmationReviewView = {
   status: string
   actionable: boolean
@@ -21,9 +39,54 @@ export type ConfirmationReviewView = {
   missingInformation: string[]
   criticalConfirmations: ConfirmationReviewItem[]
   questions: ConfirmationReviewItem[]
+  questionCards: ConfirmationQuestionCard[]
   proposedItems: ConfirmationReviewItem[]
   assumptions: string[]
   preview: string
+}
+
+export function buildQuestionCardSupplement(
+  cards: ConfirmationQuestionCard[],
+  answers: Record<string, ConfirmationQuestionAnswer>,
+  freeformNote = '',
+  options: BuildQuestionCardSupplementOptions = {},
+): string {
+  const lines: string[] = []
+  const confirmedParameters: Record<string, string>[] = []
+  for (const card of cards) {
+    const answer = answers[card.fieldPath]
+    if (!answer) {
+      continue
+    }
+    const value = answer.value.trim()
+    if (!value) {
+      continue
+    }
+    const modeLabel = answer.mode === 'modified' ? '修改为' : '确认推荐'
+    lines.push(`${card.fieldPath}: ${modeLabel} ${value}`)
+    confirmedParameters.push({
+      field_path: card.fieldPath,
+      question: card.question,
+      decision: answer.mode === 'modified' ? 'modify' : 'accept_recommended',
+      selected_value: value,
+      recommended_value: card.recommendedValue,
+      reason: card.reason,
+    })
+  }
+  const note = freeformNote.trim()
+  if (note) {
+    lines.push(`补充说明: ${note}`)
+  }
+  if (options.includeMachinePayload && confirmedParameters.length > 0) {
+    lines.push(
+      `RADAGENT_CONFIRMATION_JSON:${JSON.stringify({
+        schema_version: 'requirements_review_answers_v1',
+        confirmed_parameters: confirmedParameters,
+        user_note: note,
+      })}`,
+    )
+  }
+  return lines.join('\n')
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -50,10 +113,15 @@ function itemFromCritical(value: unknown, index: number): ConfirmationReviewItem
 
 function itemFromQuestion(value: unknown, index: number): ConfirmationReviewItem {
   const item = asRecord(value)
+  const recommendedValue = summarizeValue(
+    item.recommended_value ?? item.proposed_value ?? item.default_value,
+  )
   return {
     title: text(item.question || item.field_path, `问题 ${index + 1}`),
     detail: text(item.impact || item.reason),
-    meta: text(item.proposed_value || item.category || item.field_path),
+    meta: text(recommendedValue || item.category || item.field_path),
+    fieldPath: text(item.field_path, `question.${index + 1}`),
+    recommendedValue,
   }
 }
 
@@ -197,6 +265,31 @@ function dedupeParameterRows(rows: ConfirmationParameterChecklistItem[]): Confir
   })
 }
 
+function questionCardFromItem(value: unknown, index: number): ConfirmationQuestionCard {
+  const item = asRecord(value)
+  const fieldPath = text(item.field_path, `question.${index + 1}`)
+  return {
+    fieldPath,
+    question: text(item.question || item.field_path, `请确认 ${fieldPath}`),
+    recommendedValue: summarizeValue(
+      item.recommended_value ?? item.proposed_value ?? item.default_value,
+    ),
+    reason: text(item.reason || item.impact || item.detail),
+  }
+}
+
+function dedupeQuestionCards(cards: ConfirmationQuestionCard[]): ConfirmationQuestionCard[] {
+  const seen = new Set<string>()
+  return cards.filter((card) => {
+    const key = `${card.fieldPath}\n${card.question}\n${card.recommendedValue}`
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
+
 export function createConfirmationReviewView(data: unknown): ConfirmationReviewView {
   const review = asRecord(data)
   const requirementsReview = asRecord(review.requirements_review)
@@ -223,7 +316,7 @@ export function createConfirmationReviewView(data: unknown): ConfirmationReviewV
       ? proposedItems
       : [
           {
-            title: '人工确认报告',
+            title: '参数核对报告',
             detail: preview,
             meta: 'report',
           },
@@ -267,6 +360,13 @@ export function createConfirmationReviewView(data: unknown): ConfirmationReviewV
       parameterRowFromItem(item, index, '问题', ambiguousByField, true),
     ),
   ])
+  const rawQuestions = [
+    ...asArray(requirementsReview.questions),
+    ...asArray(review.questions),
+    ...asArray(request.questions),
+  ]
+  const questions = rawQuestions.map(itemFromQuestion)
+  const questionCards = dedupeQuestionCards(rawQuestions.map(questionCardFromItem))
 
   return {
     status,
@@ -286,10 +386,8 @@ export function createConfirmationReviewView(data: unknown): ConfirmationReviewV
       ...asArray(review.critical_confirmations),
       ...asArray(request.critical_confirmations),
     ].map(itemFromCritical),
-    questions: [
-      ...asArray(review.questions),
-      ...asArray(request.questions),
-    ].map(itemFromQuestion),
+    questions,
+    questionCards,
     proposedItems: proposedItemsWithFallback,
     assumptions: [
       ...asArray(review.assumptions),

@@ -8,7 +8,9 @@ import SimulationViewport, {
   particleColorForName,
   particleColorLegendFor,
   shouldShowSourcePreview,
+  sourceStartMarkersForViewport,
   trackPointsForViewport,
+  trackTubeRadiusForExtent,
   visualizationSceneSignature,
 } from './SimulationViewport'
 import type { VisualizationPayload } from '../lib/visualizationPayload'
@@ -22,6 +24,10 @@ const viewportPayload: VisualizationPayload = {
       sourceId: 'primary_gamma',
       particle: 'gamma',
       energy: { value: 662, unit: 'keV' },
+      sourceShape: 'point',
+      directionMode: 'mono',
+      sampleIndex: 0,
+      sampleCount: 1,
       start: [0, 0, -150.5],
       end: [0, 0, 75.25],
     },
@@ -172,7 +178,17 @@ describe('SimulationViewport', () => {
       ...viewportPayload,
       sourceRays: [
         ...viewportPayload.sourceRays,
-        { sourceId: 'face_source', particle: 'neutron', energy: { value: 1, unit: 'MeV' }, start: [0, -2, 0], end: [0, 2, 0] },
+        {
+          sourceId: 'face_source',
+          particle: 'neutron',
+          energy: { value: 1, unit: 'MeV' },
+          sourceShape: 'rectangle',
+          directionMode: 'mono',
+          sampleIndex: 0,
+          sampleCount: 1,
+          start: [0, -2, 0],
+          end: [0, 2, 0],
+        },
       ],
       tracks: [
         ...viewportPayload.tracks,
@@ -195,6 +211,102 @@ describe('SimulationViewport', () => {
   it('shows source direction preview only before real particle tracks exist', () => {
     expect(shouldShowSourcePreview({ ...viewportPayload, tracks: [] })).toBe(true)
     expect(shouldShowSourcePreview(viewportPayload)).toBe(false)
+  })
+
+  it('marks source start points from real particle-flow samples before preview rays', () => {
+    const tracks = Array.from({ length: 12 }, (_, index) => ({
+      eventId: index,
+      trackId: index + 1,
+      particle: 'proton',
+      energyMeV: 150,
+      points: [
+        [index, 0, -10],
+        [index, 0, 10],
+      ],
+    })) satisfies VisualizationPayload['tracks']
+    const markers = sourceStartMarkersForViewport({ ...viewportPayload, tracks }, true)
+
+    expect(markers).toHaveLength(10)
+    expect(markers.every((marker) => marker.kind === 'track')).toBe(true)
+    expect(markers[0]).toMatchObject({
+      label: 'source-start-1',
+      start: [0, 0, -10],
+      end: [0, 0, 10],
+      particle: 'proton',
+    })
+  })
+
+  it('keeps source start markers visible for point, beam, and surface preview rays', () => {
+    const markers = sourceStartMarkersForViewport(
+      {
+        ...viewportPayload,
+        tracks: [],
+        sourceRays: [
+          {
+            sourceId: 'isotropic_point',
+            particle: 'gamma',
+            energy: {},
+            sourceShape: 'point',
+            directionMode: 'random',
+            sampleIndex: 0,
+            sampleCount: 3,
+            start: [0, 0, 0],
+            end: [10, 0, 0],
+          },
+          {
+            sourceId: 'isotropic_point:1',
+            particle: 'gamma',
+            energy: {},
+            sourceShape: 'point',
+            directionMode: 'random',
+            sampleIndex: 1,
+            sampleCount: 3,
+            start: [0, 0, 0],
+            end: [0, 10, 0],
+          },
+          {
+            sourceId: 'face_source',
+            particle: 'neutron',
+            energy: {},
+            sourceShape: 'rectangle',
+            directionMode: 'mono',
+            sampleIndex: 0,
+            sampleCount: 2,
+            start: [-5, -5, -20],
+            end: [-5, -5, 20],
+          },
+          {
+            sourceId: 'face_source:1',
+            particle: 'neutron',
+            energy: {},
+            sourceShape: 'rectangle',
+            directionMode: 'mono',
+            sampleIndex: 1,
+            sampleCount: 2,
+            start: [5, 5, -20],
+            end: [5, 5, 20],
+          },
+        ],
+      },
+      true,
+    )
+
+    expect(markers.map((marker) => marker.kind)).toEqual(['point', 'point', 'surface', 'surface'])
+    expect(markers.every((marker) => marker.label.startsWith('source-start-'))).toBe(true)
+  })
+
+  it('keeps neutron tracks from becoming oversized while thickening secondary tracks', () => {
+    const neutronRadius = trackTubeRadiusForExtent(
+      { eventId: 0, trackId: 1, particle: 'neutron', energyMeV: 14, points: [[0, 0, 0], [0, 0, 1]] },
+      150,
+    )
+    const electronRadius = trackTubeRadiusForExtent(
+      { eventId: 0, trackId: 2, particle: 'e-', energyMeV: 1, points: [[0, 0, 0], [0, 0, 1]] },
+      150,
+    )
+
+    expect(neutronRadius).toBeLessThan(0.5)
+    expect(electronRadius).toBeGreaterThan(0.2)
   })
 
   it('adds a human-review focus layer when model confirmation is pending', () => {

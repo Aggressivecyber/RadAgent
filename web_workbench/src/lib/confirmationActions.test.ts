@@ -8,6 +8,16 @@ describe('confirmation action command builders', () => {
     expect(buildAskMoreCommand('  clarify source energy  ')).toBe('/ask-more clarify source energy')
   })
 
+  it('scopes confirmation actions to a selected job when provided', () => {
+    expect(buildConfirmationCommand('job-7')).toBe('/confirm --job=job-7 approve')
+    expect(buildRejectCommand('  missing detector dimensions  ', 'job-7')).toBe(
+      '/reject --job=job-7 missing detector dimensions',
+    )
+    expect(buildAskMoreCommand('  clarify source energy  ', 'job-7')).toBe(
+      '/ask-more --job=job-7 clarify source energy',
+    )
+  })
+
   it('does not create empty reject or ask-more commands', () => {
     expect(buildRejectCommand('')).toBe('')
     expect(buildAskMoreCommand('   ')).toBe('')

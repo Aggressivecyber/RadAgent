@@ -53,7 +53,7 @@ const phaseLabels: Record<string, string> = {
   requirements_review: '参数核对',
   requirements: '参数核对',
   g4_modeling: 'Geant4 建模',
-  human_confirmation: '人工确认',
+  human_confirmation: '参数核对',
   coding: '工程编码',
   patch: '修订补丁',
   gates: '验证门禁',

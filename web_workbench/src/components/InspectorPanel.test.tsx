@@ -7,7 +7,7 @@ const status: JobStatus = {
   job_id: 'job_42',
   user_query: 'Build a neutron shielding benchmark.',
   status: 'failed',
-  current_phase: 'human_confirmation',
+  current_phase: 'requirements_review',
   current_phase_idx: 4,
   completed_phases: ['prepare_workspace', 'context', 'task_planning', 'g4_modeling'],
   execution_mode: 'strict',
@@ -20,18 +20,29 @@ const status: JobStatus = {
 }
 
 describe('InspectorPanel', () => {
-  it('renders a color-coded parameter checklist in the confirmation panel', () => {
+  it('renders a focused requirements review with assumptions and question cards', () => {
     const markup = renderToStaticMarkup(
       <InspectorPanel
         active="confirmation"
         data={{
           status: 'pending',
           confirmation_request: {
-            summary_for_user: '模型已用默认值补全，请人工确认后继续。',
+            summary_for_user: '模型已用默认值补全，请参数核对后继续。',
             ambiguous_fields: [
               {
                 field_path: 'components.detector.material',
                 proposed_value: 'G4_Si',
+                reason: '用户只说了半导体探测器，材料由 AI 补全。',
+              },
+            ],
+          },
+          requirements_review: {
+            physics_risks: ['物理列表建议使用 QGSP_BIC_HP。'],
+            questions: [
+              {
+                field_path: 'components.detector.material',
+                question: '探测器材料是否使用 G4_Si？',
+                recommended_value: 'G4_Si',
                 reason: '用户只说了半导体探测器，材料由 AI 补全。',
               },
             ],
@@ -66,12 +77,13 @@ describe('InspectorPanel', () => {
     )
 
     expect(markup).toContain('参数核对')
-    expect(markup).toContain('confirmation-parameter-row confirmed')
-    expect(markup).toContain('confirmation-parameter-row needs-review')
-    expect(markup).toContain('sources.primary.energy')
-    expect(markup).toContain('明确')
-    expect(markup).toContain('components.detector.material')
-    expect(markup).toContain('AI 补全 / 需确认')
+    expect(markup).toContain('模型假设')
+    expect(markup).toContain('物理列表建议使用 QGSP_BIC_HP。')
+    expect(markup).toContain('需要确认的问题')
+    expect(markup).toContain('探测器材料是否使用 G4_Si？')
+    expect(markup).toContain('G4_Si')
+    expect(markup).not.toContain('模型草案')
+    expect(markup).not.toContain('confirmation-parameter-row')
     expect(markup).toContain('修改意见或补充参数')
   })
 
@@ -86,6 +98,7 @@ describe('InspectorPanel', () => {
             questions: [
               {
                 field_path: 'components.water.dimensions',
+                question: '水层厚度是否按 300 mm 建模？',
                 proposed_value: { dz: 300000.0 },
                 impact: '影响 Bragg peak 位置。',
               },
@@ -125,11 +138,88 @@ describe('InspectorPanel', () => {
 
     expect(markup).toContain('请确认水层厚度。')
     expect(markup).toContain('参数核对')
-    expect(markup).toContain('components.water.dimensions')
-    expect(markup).toContain('AI 补全 / 需确认')
+    expect(markup).toContain('需要确认的问题')
+    expect(markup).toContain('水层厚度是否按 300 mm 建模？')
+    expect(markup).toContain('推荐答案')
+    expect(markup).toContain('备注')
+    expect(markup).toContain('确认推荐')
+    expect(markup).toContain('修改')
+    expect(markup).toContain('确认所选参数')
+    expect(markup).not.toContain('模型草案')
+    expect(markup).not.toContain('AI 补全 / 需确认')
     expect(markup).toContain('Step limiter settings need definition.')
-    expect(markup).toContain('human confirmation report')
+    expect(markup).not.toContain('human confirmation report')
     expect(markup).not.toContain('暂无确认预览。')
+  })
+
+  it('keeps parameter review visibly busy while the max model is rechecking submitted answers', () => {
+    const markup = renderToStaticMarkup(
+      <InspectorPanel
+        active="confirmation"
+        data={{
+          status: 'pending',
+          confirmation_request: {
+            summary_for_user: '请确认屏蔽层厚度。',
+            questions: [
+              {
+                field_path: 'shielding.layer_thicknesses',
+                question: '各屏蔽层的厚度分别是多少？',
+                recommended_value: '聚乙烯 5 cm，含硼聚乙烯 5 cm，铅 2 cm，硅探测器 3 mm',
+                reason: '缺少厚度时无法构建可靠几何。',
+              },
+            ],
+          },
+        }}
+        commands={[]}
+        status={{
+          ...status,
+          status: 'running',
+          needs_confirmation: false,
+          key_statuses: {
+            requirements_review_status: 'needs_user_input',
+            confirmation_status: 'pending',
+          },
+          state: {
+            requirements_review_status: 'needs_user_input',
+            confirmation_status: 'pending',
+            human_confirmation_required: true,
+            requirements_review_supplements: [
+              {
+                user_decision: 'ask_more',
+                feedback: 'shielding.layer_thicknesses: 确认推荐 聚乙烯 5 cm',
+              },
+            ],
+          },
+        }}
+        events={[
+          {
+            event_type: 'model_call_start',
+            status: 'running',
+            summary: 'model_readiness is generating',
+            phase: 'model_readiness',
+            job_id: 'job_42',
+            run_id: 'run_1',
+            payload: {
+              details: {
+                metadata: {
+                  module_name: 'requirements_review',
+                },
+              },
+            },
+            created_at: '2026-06-17T06:00:00Z',
+          },
+        ]}
+        onSelectCommand={() => {}}
+        onSelectRecord={() => {}}
+        onSaveModelConfig={async () => {}}
+        onTestModelHealth={async () => ({ tested_at: '', tiers: {} })}
+        onExecuteCommand={async () => {}}
+      />,
+    )
+
+    expect(markup).toContain('模型正在复核参数')
+    expect(markup).not.toContain('MAX 正在复核参数')
+    expect(markup).toContain('已提交你的参数补充')
   })
 
   it('renders workflow diagnosis as a readable non-approval panel', () => {
@@ -140,7 +230,7 @@ describe('InspectorPanel', () => {
           ui_state: 'modeling_failed',
           severity: 'error',
           phase: 'g4_modeling',
-          user_message: '建模阶段失败，人工确认不能批准。',
+          user_message: '建模阶段失败，需要回到参数核对或重新运行建模。',
           blocking_reason: 'No oxide layer is required for this shielding stack.',
           next_step_hint: '查看建模校验报告并重新运行建模。',
           confirmation_actionable: false,
@@ -165,7 +255,7 @@ describe('InspectorPanel', () => {
 
     expect(markup).toContain('诊断')
     expect(markup).toContain('Workflow diagnosis')
-    expect(markup).toContain('建模阶段失败，人工确认不能批准。')
+    expect(markup).toContain('建模阶段失败，需要回到参数核对或重新运行建模。')
     expect(markup).toContain('No oxide layer is required for this shielding stack.')
     expect(markup).toContain('查看建模校验报告并重新运行建模。')
     expect(markup).toContain('不可审批')

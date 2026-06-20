@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import inspect
+import re
 from typing import Any
 
 from pydantic import BaseModel
 
 from agent_core.pipeline import PIPELINE_PHASES
 from agent_core.tui.commands import CommandParseError, command_suggestions, parse_command
+
+
+SUCCESS_TERMINATION_REASONS = frozenset({"completed_passed"})
 
 
 PANEL_COMMANDS: dict[str, str] = {
@@ -30,7 +34,7 @@ PANEL_COMMANDS: dict[str, str] = {
 
 _REQUIRED_COMMANDS: dict[str, str] = {
     "accept-revision": "Accept a saved revision",
-    "approve": "Approve active human confirmation",
+    "approve": "Approve active requirements review",
     "artifact": "Preview one artifact path",
     "ask-more": "Request more human-confirmation detail",
     "build": "Build generated code",
@@ -47,7 +51,7 @@ _REQUIRED_COMMANDS: dict[str, str] = {
     "options": "Open workbench options",
     "project": "Switch project",
     "projects": "List projects",
-    "reject": "Reject active human confirmation",
+    "reject": "Reject active requirements review",
     "reject-revision": "Reject a saved revision",
     "revision": "Open one revision",
     "simulate": "Run the generated simulator",
@@ -62,10 +66,10 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "tip": "Start a real RadAgent workflow from a simulation request.",
     },
     "approve": {
-        "module": "human_confirmation",
+        "module": "requirements_review",
         "connection": "service",
         "visible": True,
-        "tip": "Approve the active human-confirmation gate without blocking the web request.",
+        "tip": "Approve the active requirements-review gate without blocking the web request.",
     },
     "check": {
         "module": "runtime/tools",
@@ -182,10 +186,10 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "tip": "Ask RadAgent Copilot about the current workflow or next action.",
     },
     "confirm": {
-        "module": "human_confirmation",
+        "module": "requirements_review",
         "connection": "service",
         "visible": True,
-        "tip": "Open the active confirmation review before approving or rejecting.",
+        "tip": "Open the active requirements review before approving or rejecting.",
     },
     "credibility": {
         "module": "gates/credibility",
@@ -260,10 +264,10 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "tip": "Accept a validated revision sandbox into the active generated project.",
     },
     "ask-more": {
-        "module": "human_confirmation",
+        "module": "requirements_review",
         "connection": "service",
         "visible": True,
-        "tip": "Pause confirmation and ask for more detail before continuing.",
+        "tip": "Add more parameter detail and rerun requirements review before continuing.",
     },
     "reject-revision": {
         "module": "revision",
@@ -272,10 +276,10 @@ _COMMAND_AUDIT: dict[str, dict[str, str | bool]] = {
         "tip": "Reject a saved revision sandbox without applying it.",
     },
     "reject": {
-        "module": "human_confirmation",
+        "module": "requirements_review",
         "connection": "service",
         "visible": True,
-        "tip": "Reject the active confirmation with a reason.",
+        "tip": "Reject the active requirements review with a reason.",
     },
     "revision": {
         "module": "revision",
@@ -312,7 +316,7 @@ _WORKFLOW_CAPABILITIES: tuple[dict[str, str], ...] = (
     },
     {
         "name": "门禁审核 / Gate review",
-        "description": "在继续前展示验证门禁和人工确认。",
+        "description": "在继续前展示验证门禁和建模前参数核对。",
         "command": "审核门禁",
     },
     {
@@ -553,10 +557,12 @@ async def _maybe_await(value: Any) -> Any:
 
 def _should_continue_after_approval(value: Any) -> bool:
     status = _as_dict(value)
-    if str(status.get("status") or "").lower() == "failed":
+    status_value = str(status.get("status") or "").lower()
+    if status_value in {"failed", "paused", "pending_confirmation"}:
         return False
     state = _as_dict(status.get("state"))
-    if state.get("termination_reason"):
+    termination_reason = str(state.get("termination_reason") or "").strip()
+    if termination_reason and termination_reason not in SUCCESS_TERMINATION_REASONS:
         return False
     try:
         current_idx = int(status.get("current_phase_idx", 0))
@@ -587,7 +593,9 @@ def _approval_continue_reason(value: Any) -> str:
     state = _as_dict(status.get("state"))
     if state.get("repair_continuation_status") == "approved":
         return "repair_continuation_approved"
-    return "human_confirmation_approved"
+    if state.get("requirements_review_status") == "approved":
+        return "requirements_review_approved"
+    return "requirements_review_approved"
 
 
 def _active_job_id(service: Any) -> str:
@@ -604,6 +612,31 @@ def _active_job_id(service: Any) -> str:
 
 def _command_job_id_or_active(service: Any, args: str) -> str:
     return _text(args) or _active_job_id(service)
+
+
+def _parse_simulate_args(args: str) -> tuple[int, str]:
+    parts = args.split()
+    if not parts:
+        return 1000, ""
+    try:
+        events = int(parts[0])
+        job_id = parts[1] if len(parts) > 1 else ""
+    except ValueError:
+        events = 1000
+        job_id = parts[0]
+    return max(1, events), job_id
+
+
+def _activate_command_job(service: Any, job_id: str) -> None:
+    if job_id:
+        service.resume_job(job_id)
+
+
+def _extract_scoped_job_arg(args: str) -> tuple[str, str]:
+    match = re.match(r"^--job=([^\s]+)\s*(.*)$", args.strip(), flags=re.DOTALL)
+    if not match:
+        return args.strip(), ""
+    return match.group(2).strip(), match.group(1).strip()
 
 
 async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
@@ -670,8 +703,10 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                     service.continue_in_background(reason=_approval_continue_reason(data))
                 view = "status"
             case "confirm":
-                if command.args.strip().lower() in {"approve", "approved", "yes", "y", "确认", "同意"}:
-                    response = {"user_decision": "approve", "feedback": command.args}
+                scoped_args, scoped_job_id = _extract_scoped_job_arg(command.args)
+                if scoped_args.strip().lower() in {"approve", "approved", "yes", "y", "确认", "同意"}:
+                    _activate_command_job(service, scoped_job_id)
+                    response = {"user_decision": "approve", "feedback": scoped_args}
                     if _has_pending_repair_continuation(service):
                         data = await _maybe_await(
                             service.submit_repair_continuation(response, auto_continue=False)
@@ -684,10 +719,12 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                         service.continue_in_background(reason=_approval_continue_reason(data))
                     view = "status"
                 else:
-                    data = service.get_confirmation_review(_text(command.args) or None)
+                    data = service.get_confirmation_review(scoped_job_id or _text(scoped_args) or None)
                     view = "confirmation"
             case "reject":
-                response = {"user_decision": "reject", "feedback": command.args}
+                scoped_args, scoped_job_id = _extract_scoped_job_arg(command.args)
+                _activate_command_job(service, scoped_job_id)
+                response = {"user_decision": "reject", "feedback": scoped_args}
                 if _has_pending_repair_continuation(service):
                     data = await _maybe_await(
                         service.submit_repair_continuation(response, auto_continue=False)
@@ -698,12 +735,16 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                     )
                 view = "status"
             case "ask-more":
+                scoped_args, scoped_job_id = _extract_scoped_job_arg(command.args)
+                _activate_command_job(service, scoped_job_id)
                 data = await _maybe_await(
                     service.submit_confirmation(
-                        {"user_decision": "ask_more", "feedback": command.args},
+                        {"user_decision": "ask_more", "feedback": scoped_args},
                         auto_continue=False,
                     )
                 )
+                if _should_continue_after_approval(data):
+                    service.continue_in_background(reason=_approval_continue_reason(data))
                 view = "status"
             case "credibility":
                 data = service.get_credibility_report(None)
@@ -818,7 +859,9 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                 service.continue_in_background(reason="retry")
                 view = "status"
             case "build":
+                job_id = _text(command.args)
                 try:
+                    _activate_command_job(service, job_id)
                     data = await _maybe_await(service.build_generated_code())
                 except Exception as exc:
                     data = {
@@ -830,8 +873,9 @@ async def dispatch_web_command(service: Any, text: str) -> dict[str, Any]:
                     }
                 view = "build"
             case "simulate":
-                events = int(command.args) if command.args else 1000
+                events, job_id = _parse_simulate_args(command.args)
                 try:
+                    _activate_command_job(service, job_id)
                     data = await _maybe_await(service.run_simulation(events=events))
                 except Exception as exc:
                     data = {

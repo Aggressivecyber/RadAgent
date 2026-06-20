@@ -8,7 +8,7 @@ const labels: Record<string, string> = {
   '03': '空间辐射源与屏蔽材料检查',
   '04': '本地 Geant4 构建运行',
   '05': '验证门禁与结果产物',
-  '06': '可复查产物与人工确认',
+  '06': '可复查产物与参数核对',
 }
 
 export default function WorkflowMiniDemo({ index }: WorkflowMiniDemoProps) {

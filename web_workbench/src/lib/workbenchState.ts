@@ -112,6 +112,39 @@ function eventId(event: RadAgentEvent): string {
   ].join(':')
 }
 
+function eventPayloadRecord(event: RadAgentEvent): Record<string, unknown> {
+  return event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+    ? event.payload
+    : {}
+}
+
+function isCompletedPassedEvent(event: RadAgentEvent): boolean {
+  const payload = eventPayloadRecord(event)
+  return (
+    String(payload.reason || '').trim() === 'completed_passed' ||
+    String(event.summary || '').trim() === 'completed_passed'
+  )
+}
+
+function presentEvent(event: RadAgentEvent): {
+  title: string
+  body: string
+  status: TimelineStatus
+} {
+  if (isCompletedPassedEvent(event)) {
+    return {
+      title: 'workflow continue finished',
+      body: '工作流已完成',
+      status: 'success',
+    }
+  }
+  return {
+    title: event.event_type.replaceAll('_', ' '),
+    body: event.summary || event.phase || event.job_id || 'Service event',
+    status: event.status,
+  }
+}
+
 export function reduceEvents(state: WorkbenchState, events: RadAgentEvent[]): WorkbenchState {
   const seenEventIds = new Set(state.seenEventIds)
   const timeline = [...state.timeline]
@@ -122,12 +155,13 @@ export function reduceEvents(state: WorkbenchState, events: RadAgentEvent[]): Wo
       continue
     }
     seenEventIds.add(id)
+    const presented = presentEvent(event)
     timeline.push({
       id: `event:${id}`,
       kind: 'event',
-      title: event.event_type.replaceAll('_', ' '),
-      body: event.summary || event.phase || event.job_id || 'Service event',
-      status: event.status,
+      title: presented.title,
+      body: presented.body,
+      status: presented.status,
       meta: event.phase || undefined,
       details: event.payload,
     })

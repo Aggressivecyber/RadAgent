@@ -22,7 +22,7 @@ describe('submission feedback', () => {
     expect(createSubmissionFeedback({ status: 'paused' })).toEqual({
       tone: 'paused',
       title: '等待审查',
-      detail: '工作流停在人工确认点，请在审查面板处理后继续。',
+      detail: '工作流停在参数核对或修复批准点，请在审查面板处理后继续。',
     })
     expect(createSubmissionFeedback({ status: 'success', command: 'run' })).toMatchObject({
       tone: 'success',

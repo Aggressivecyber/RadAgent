@@ -42,9 +42,9 @@ const actionLabels: Record<string, Pick<CommandPresentation, 'primary' | 'second
     tip: '复用当前作业，重新执行失败的当前阶段。',
   },
   confirm: {
-    primary: '处理确认',
-    secondary: 'Review confirmation',
-    tip: '打开需要人工确认的门禁并继续审批。',
+    primary: '参数核对',
+    secondary: 'Requirements',
+    tip: '打开建模前参数核对卡片，确认推荐或补充修改。',
   },
   diagnose: {
     primary: '诊断阻塞',
@@ -52,9 +52,9 @@ const actionLabels: Record<string, Pick<CommandPresentation, 'primary' | 'second
     tip: '解释当前失败或等待原因，并区分可审批事项与系统阻塞。',
   },
   approve: {
-    primary: '批准',
+    primary: '确认参数',
     secondary: 'Approve',
-    tip: '批准当前确认项。',
+    tip: '提交当前核对结果，等待模型复核是否可以继续。',
   },
   reject: {
     primary: '拒绝',
@@ -62,9 +62,9 @@ const actionLabels: Record<string, Pick<CommandPresentation, 'primary' | 'second
     tip: '带原因拒绝当前确认项。',
   },
   'ask-more': {
-    primary: '追问补充',
-    secondary: 'Ask more',
-    tip: '向当前确认项追加问题或要求更多信息。',
+    primary: '补充参数',
+    secondary: 'Supplement',
+    tip: '向当前参数核对追加说明，让模型重新评估是否足够明确。',
   },
   gates: {
     primary: '查看门禁',

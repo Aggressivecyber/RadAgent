@@ -24,6 +24,15 @@ type ViewportBounds = {
   max: Vector3
 }
 
+export type SourceStartMarker = {
+  id: string
+  kind: 'track' | 'point' | 'beam' | 'surface'
+  label: string
+  particle: string
+  start: Vector3
+  end: Vector3
+}
+
 export type ParticleColorLegendItem = {
   particle: string
   label: string
@@ -107,6 +116,41 @@ export function particleColorLegendFor(payload: VisualizationPayload): ParticleC
 
 export function shouldShowSourcePreview(payload: VisualizationPayload): boolean {
   return payload.sourceRays.length > 0 && payload.tracks.length === 0
+}
+
+export function sourceStartMarkersForViewport(
+  payload: VisualizationPayload,
+  showParticles: boolean,
+  limit = 10,
+): SourceStartMarker[] {
+  if (!showParticles) {
+    return []
+  }
+  if (payload.tracks.length > 0) {
+    return orderedParticleTracks(payload, true, VISIBLE_PARTICLE_TRACK_LIMIT)
+      .filter((track) => track.points.length >= 2)
+      .slice(0, limit)
+      .map((track, index) => ({
+        id: `track:${track.eventId}:${track.trackId}`,
+        kind: 'track',
+        label: `source-start-${index + 1}`,
+        particle: track.particle,
+        start: track.points[0],
+        end: track.points[1],
+      }))
+  }
+  return payload.sourceRays.slice(0, limit).map((ray, index) => ({
+    id: `source:${ray.sourceId}:${ray.sampleIndex}`,
+    kind: ray.sourceShape === 'rectangle' || ray.sourceShape === 'circle'
+      ? 'surface'
+      : ray.directionMode === 'random'
+        ? 'point'
+        : 'beam',
+    label: `source-start-${index + 1}`,
+    particle: ray.particle,
+    start: ray.start,
+    end: ray.end,
+  }))
 }
 
 function particleColorLookup(payload: VisualizationPayload): Map<string, string> {
@@ -451,8 +495,24 @@ function colorForTrack(track: VisualizationTrack, colors: Map<string, string>): 
   return colorHexToNumber(colors.get(track.particle) ?? particleColorForName(track.particle))
 }
 
+export function trackTubeRadiusForExtent(track: VisualizationTrack, extent: number): number {
+  const normalized = track.particle.toLowerCase()
+  const base = Math.max(0.28, Math.min(0.82, extent * 0.003))
+  if (normalized.includes('neutron')) {
+    return base * 0.92
+  }
+  if (isPrimaryLikeParticle(track.particle)) {
+    return base
+  }
+  return base * 0.72
+}
+
 function sourceRayColor(ray: VisualizationSourceRay, colors: Map<string, string>): number {
   return colorHexToNumber(colors.get(ray.particle) ?? particleColorForName(ray.particle))
+}
+
+function colorForMarker(marker: SourceStartMarker, colors: Map<string, string>): number {
+  return colorHexToNumber(colors.get(marker.particle) ?? particleColorForName(marker.particle))
 }
 
 function addSourceRay(root: THREE.Group, ray: VisualizationSourceRay, extent: number, colors: Map<string, string>): void {
@@ -489,6 +549,60 @@ function addSourceRay(root: THREE.Group, ray: VisualizationSourceRay, extent: nu
   )
 }
 
+function addSourceStartMarker(
+  root: THREE.Group,
+  marker: SourceStartMarker,
+  extent: number,
+  colors: Map<string, string>,
+): void {
+  const start = toVector3(marker.start)
+  const end = toVector3(marker.end)
+  const delta = end.clone().sub(start)
+  const length = delta.length()
+  if (length <= 1e-8) {
+    return
+  }
+  const color = colorForMarker(marker, colors)
+  const group = new THREE.Group()
+  group.name = marker.label
+  group.position.copy(start)
+  const sphereRadius = Math.max(0.9, Math.min(3.2, extent * 0.014))
+  const markerMaterial = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.36,
+    roughness: 0.36,
+    metalness: 0.08,
+    depthTest: false,
+  })
+  group.add(new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 20, 12), markerMaterial))
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(sphereRadius * 1.8, Math.max(0.08, sphereRadius * 0.12), 8, 36),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: marker.kind === 'surface' ? 0.7 : 0.54,
+      depthTest: false,
+    }),
+  )
+  ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), delta.clone().normalize())
+  group.add(ring)
+  root.add(group)
+
+  const arrowLength = Math.max(Math.min(length, extent * 0.22), extent * 0.08)
+  root.add(
+    new THREE.ArrowHelper(
+      delta.normalize(),
+      start,
+      arrowLength,
+      color,
+      Math.max(4, Math.min(12, extent * 0.055)),
+      Math.max(1.8, Math.min(6, extent * 0.028)),
+    ),
+  )
+}
+
 function addParticleTrack(
   root: THREE.Group,
   track: VisualizationTrack,
@@ -504,7 +618,7 @@ function addParticleTrack(
   const color = colorForTrack(track, colors)
   const geometry = new THREE.BufferGeometry().setFromPoints(points)
   const isHighlighted = isPrimaryLikeParticle(track.particle)
-  const opacity = isHighlighted ? 0.74 : 0.3
+  const opacity = isHighlighted ? 0.54 : 0.42
   root.add(
     new THREE.Line(
       geometry,
@@ -517,8 +631,8 @@ function addParticleTrack(
     ),
   )
 
-  if (isHighlighted && index < 12) {
-    const tubeRadius = Math.max(0.18, Math.min(1.25, extent * 0.004))
+  if (index < 72) {
+    const tubeRadius = trackTubeRadiusForExtent(track, extent)
     const curve = new THREE.CatmullRomCurve3(points)
     root.add(
       new THREE.Mesh(
@@ -526,7 +640,7 @@ function addParticleTrack(
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.46,
+          opacity: isHighlighted ? 0.5 : 0.36,
           depthTest: false,
         }),
       ),
@@ -538,13 +652,17 @@ function disposeObjectTree(object: THREE.Object3D): void {
   object.traverse((node) => {
     const resource = node as THREE.Object3D & {
       geometry?: THREE.BufferGeometry
-      material?: THREE.Material | THREE.Material[]
+      material?: (THREE.Material & { map?: THREE.Texture }) | Array<THREE.Material & { map?: THREE.Texture }>
     }
     resource.geometry?.dispose()
     const material = resource.material
     if (Array.isArray(material)) {
-      material.forEach((item) => item.dispose())
+      material.forEach((item) => {
+        item.map?.dispose()
+        item.dispose()
+      })
     } else {
+      material?.map?.dispose()
       material?.dispose()
     }
   })
@@ -600,7 +718,7 @@ export default function SimulationViewport({
     const root = new THREE.Group()
     scene.add(root)
     root.add(new THREE.AxesHelper(8))
-    const hasSceneData = data.components.length > 0 || data.tracks.length > 0 || data.deposits.length > 0
+    const hasSceneData = data.components.length > 0 || data.sourceRays.length > 0 || data.tracks.length > 0 || data.deposits.length > 0
 
     const bounds = boundsFor(data)
     const center = new THREE.Vector3()
@@ -620,12 +738,16 @@ export default function SimulationViewport({
     }
 
     const visibleTracks = orderedParticleTracks(data, showParticles)
+    const sourceMarkers = sourceStartMarkersForViewport(data, showParticles)
     const colors = particleColorLookup(data)
     if (showParticles) {
       if (shouldShowSourcePreview(data)) {
         for (const sourceRay of data.sourceRays) {
           addSourceRay(root, sourceRay, extent, colors)
         }
+      }
+      for (const marker of sourceMarkers) {
+        addSourceStartMarker(root, marker, extent, colors)
       }
       for (const [index, track] of visibleTracks.entries()) {
         addParticleTrack(root, track, index, extent, viewportBounds, colors)

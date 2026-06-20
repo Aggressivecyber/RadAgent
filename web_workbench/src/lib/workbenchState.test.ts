@@ -121,6 +121,34 @@ describe('workbench state reducer', () => {
     })
   })
 
+  it('presents completed_passed workflow continuation events as successful completion', () => {
+    const state = createInitialWorkbenchState()
+
+    const next = reduceEvents(state, [
+      {
+        event_type: 'workflow_continue_failed',
+        status: 'error',
+        summary: 'completed_passed',
+        phase: '',
+        job_id: 'job-done',
+        run_id: 'run-1',
+        payload: {
+          reason: 'completed_passed',
+          trigger: 'requirements_review_approved',
+          status: 'failed',
+          current_phase: '',
+        },
+        created_at: '2026-06-16T18:00:00Z',
+      },
+    ])
+
+    expect(next.timeline.at(-1)).toMatchObject({
+      title: 'workflow continue finished',
+      body: '工作流已完成',
+      status: 'success',
+    })
+  })
+
   it('stores selected detail previews by inspector view', () => {
     const state = createInitialWorkbenchState()
 

@@ -46,6 +46,17 @@ class FakeService:
         self.calls.append(("read_artifact", (path, max_chars)))
         return ArtifactContent(path=path, exists=True, kind="text", text="artifact body")
 
+    def package_generated_source_files(self, job_id: str | None = None) -> dict[str, object]:
+        self.calls.append(("package_generated_source_files", job_id))
+        return {
+            "success": True,
+            "path": "/tmp/job-1/downloads/job-1_geant4_source.zip",
+            "filename": "job-1_geant4_source.zip",
+            "content_type": "application/zip",
+            "data": b"PK\x03\x04zip",
+            "size_bytes": 7,
+        }
+
     def get_visualization_payload(self, job_id: str | None = None) -> dict[str, object]:
         self.calls.append(("get_visualization_payload", job_id))
         return {
@@ -420,6 +431,45 @@ async def test_dispatch_workflow_operation_commands_use_service_methods() -> Non
 
 
 @pytest.mark.asyncio
+async def test_dispatch_build_and_simulate_can_target_saved_job() -> None:
+    class TargetJobService(FakeService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.state = {}
+
+        def resume_job(self, job_id: str, *, clear_failure: bool = False) -> JobStatus:
+            self.calls.append(("resume_job", (job_id, clear_failure)))
+            self.state["job_id"] = job_id
+            self.state["generated_code_dir"] = f"/workspace/jobs/{job_id}/06_patch/geant4_project"
+            self.state["_executable_path"] = f"/workspace/jobs/{job_id}/06_patch/geant4_project/build/radagent"
+            return JobStatus(job_id=job_id, status="completed", state=dict(self.state))
+
+        async def build_generated_code(self) -> BuildResult:
+            self.calls.append(("build_generated_code", self.state.get("job_id")))
+            return BuildResult(success=True, executable_path=str(self.state.get("_executable_path", "")))
+
+        async def run_simulation(self, *, events: int = 1000) -> SimulationResult:
+            self.calls.append(("run_simulation", (events, self.state.get("job_id"))))
+            return SimulationResult(success=True, events=events, output_dir="/workspace/output")
+
+    service = TargetJobService()
+
+    build = await dispatch_web_command(service, "/build job-saved")
+    simulation = await dispatch_web_command(service, "/simulate 25 job-saved")
+
+    assert build["view"] == "build"
+    assert build["data"]["success"] is True
+    assert simulation["view"] == "simulation"
+    assert simulation["data"]["success"] is True
+    assert service.calls == [
+        ("resume_job", ("job-saved", False)),
+        ("build_generated_code", "job-saved"),
+        ("resume_job", ("job-saved", False)),
+        ("run_simulation", (25, "job-saved")),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_removed_native_visual_workbench_commands_are_unavailable() -> None:
     service = FakeService()
 
@@ -523,7 +573,7 @@ async def test_dispatch_confirmation_decision_commands_use_service_methods() -> 
                 False,
             ),
         ),
-        ("continue_in_background", "human_confirmation_approved"),
+        ("continue_in_background", "requirements_review_approved"),
         (
             "submit_confirmation",
             (
@@ -540,6 +590,98 @@ async def test_dispatch_confirmation_decision_commands_use_service_methods() -> 
                 {
                     "user_decision": "ask_more",
                     "feedback": "clarify the source energy",
+                },
+                False,
+            ),
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_affirmative_requirements_supplement_continues_in_background() -> None:
+    class RequirementsReviewService(FakeService):
+        async def submit_confirmation(
+            self,
+            response: dict[str, object],
+            *,
+            auto_continue: bool = True,
+        ) -> JobStatus:
+            self.calls.append(("submit_confirmation", (response, auto_continue)))
+            return JobStatus(
+                job_id="job-1",
+                status="running",
+                current_phase="g4_modeling",
+                current_phase_idx=PIPELINE_PHASES.index("g4_modeling"),
+                state={
+                    "requirements_review_status": "approved",
+                    "confirmation_status": "approved",
+                },
+            )
+
+    service = RequirementsReviewService()
+
+    result = await dispatch_web_command(service, "/ask-more 全部按照你的推荐")
+
+    assert result["view"] == "status"
+    assert result["data"]["status"] == "running"
+    assert service.calls == [
+        (
+            "submit_confirmation",
+            (
+                {"user_decision": "ask_more", "feedback": "全部按照你的推荐"},
+                False,
+            ),
+        ),
+        ("continue_in_background", "requirements_review_approved"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_scoped_confirmation_actions_resume_target_job() -> None:
+    service = FakeService()
+
+    approve = await dispatch_web_command(service, "/confirm --job=job-7 approve")
+    ask_more = await dispatch_web_command(
+        service,
+        "/ask-more --job=job-8 clarify source energy\n"
+        'RADAGENT_CONFIRMATION_JSON: {"confirmed_parameters": []}',
+    )
+    reject = await dispatch_web_command(service, "/reject --job=job-9 missing detector dimensions")
+
+    assert approve["view"] == "status"
+    assert ask_more["view"] == "status"
+    assert reject["view"] == "status"
+    assert service.calls == [
+        ("resume_job", ("job-7", False)),
+        (
+            "submit_confirmation",
+            (
+                {"user_decision": "approve", "feedback": "approve"},
+                False,
+            ),
+        ),
+        ("continue_in_background", "requirements_review_approved"),
+        ("resume_job", ("job-8", False)),
+        (
+            "submit_confirmation",
+            (
+                {
+                    "user_decision": "ask_more",
+                    "feedback": (
+                        "clarify source energy\n"
+                        'RADAGENT_CONFIRMATION_JSON: {"confirmed_parameters": []}'
+                    ),
+                },
+                False,
+            ),
+        ),
+        ("resume_job", ("job-9", False)),
+        (
+            "submit_confirmation",
+            (
+                {
+                    "user_decision": "reject",
+                    "feedback": "missing detector dimensions",
                 },
                 False,
             ),
@@ -658,8 +800,8 @@ async def test_dispatch_approve_does_not_continue_background_after_failed_status
             return JobStatus(
                 job_id="job-1",
                 status="failed",
-                current_phase="human_confirmation",
-                current_phase_idx=PIPELINE_PHASES.index("human_confirmation"),
+                current_phase="requirements_review",
+                current_phase_idx=PIPELINE_PHASES.index("requirements_review"),
                 state={"termination_reason": "g4_modeling status is failed"},
                 key_statuses={"g4_modeling_status": "failed"},
             )
@@ -774,7 +916,7 @@ async def test_dispatch_project_and_revision_commands_use_service_methods() -> N
                 False,
             ),
         ),
-        ("continue_in_background", "human_confirmation_approved"),
+        ("continue_in_background", "requirements_review_approved"),
     ]
 
 
@@ -938,6 +1080,21 @@ def test_create_api_handler_serves_active_job_artifact_list() -> None:
         {"job_id": "job-7", "path": "/tmp/report.md", "kind": "report"}
     ]
     assert service.calls == [("list_artifacts", "job-7")]
+
+
+def test_create_api_handler_serves_generated_source_package_download() -> None:
+    from agent_core.web.server import create_api_handler
+
+    service = FakeService()
+    handler = create_api_handler(service)
+
+    status, headers, body = handler("GET", "/api/source-package?job_id=job-7", b"")
+
+    assert status == 200
+    assert headers["Content-Type"] == "application/zip"
+    assert headers["Content-Disposition"] == 'attachment; filename="job-1_geant4_source.zip"'
+    assert body == b"PK\x03\x04zip"
+    assert service.calls == [("package_generated_source_files", "job-7")]
 
 
 def test_create_api_handler_serves_visualization_payload() -> None:

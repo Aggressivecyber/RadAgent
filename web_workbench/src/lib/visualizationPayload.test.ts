@@ -44,6 +44,37 @@ describe('visualization payload helpers', () => {
         },
       ],
       deposits: [{ event_id: 1, track_id: 7, position_mm: [0, 0, 0], edep_MeV: 0.5 }],
+      analysis: {
+        source: 'full_run',
+        stats: { track_count: 250, deposit_count: 500, total_edep_MeV: 12.5 },
+        particle_counts: [
+          { particle: 'proton', count: 180 },
+          { particle: 'gamma', count: 70 },
+        ],
+        energy_points: [
+          { x: 0, y: 0, z: 0, edep_MeV: 0.5 },
+        ],
+        slice_planes: {
+          z: {
+            axis: 'z',
+            values: [0],
+            slices: [
+              {
+                value: 0,
+                x_axis: 'x',
+                y_axis: 'y',
+                x: [-1, 0, 1],
+                y: [-1, 0, 1],
+                z: [
+                  [0, 0, 0],
+                  [0, 0.5, 0],
+                  [0, 0, 0],
+                ],
+              },
+            ],
+          },
+        },
+      },
     })
 
     expect(payload.status).toBe('ready')
@@ -53,6 +84,13 @@ describe('visualization payload helpers', () => {
     expect(payload.sourceRays[0].end).toEqual([0, 0, 75.25])
     expect(payload.tracks[0].points.at(-1)).toEqual([0.1, 0, 5])
     expect(payload.deposits[0].edepMeV).toBe(0.5)
+    expect(payload.analysis!.stats.trackCount).toBe(250)
+    expect(payload.analysis!.particleCounts).toEqual([
+      { particle: 'proton', count: 180 },
+      { particle: 'gamma', count: 70 },
+    ])
+    expect(payload.analysis!.energyPoints[0]).toEqual({ x: 0, y: 0, z: 0, edepMeV: 0.5 })
+    expect(payload.analysis!.slicePlanes.z?.slices[0].z[1][1]).toBe(0.5)
   })
 
   it('keeps deposits visible while particle tracks are toggled off', () => {
@@ -63,6 +101,13 @@ describe('visualization payload helpers', () => {
       sourceRays: [],
       tracks: [{ eventId: 0, trackId: 1, particle: 'proton', energyMeV: 10, points: [[0, 0, -1], [0, 0, 1]] }],
       deposits: [{ eventId: 0, trackId: 1, volume: 'detector', position: [0, 0, 0], edepMeV: 1 }],
+      analysis: {
+        source: 'full_run',
+        stats: { trackCount: 1, depositCount: 1, totalEdepMeV: 1 },
+        particleCounts: [{ particle: 'proton', count: 1 }],
+        energyPoints: [{ x: 0, y: 0, z: 0, edepMeV: 1 }],
+        slicePlanes: {},
+      },
       warnings: [],
     }
 
@@ -98,6 +143,13 @@ describe('visualization payload helpers', () => {
       sourceRays: [],
       tracks,
       deposits: [{ eventId: 3, trackId: 4, volume: 'detector', position: [0, 0, 0], edepMeV: 0.2 }],
+      analysis: {
+        source: 'full_run',
+        stats: { trackCount: 105, depositCount: 1, totalEdepMeV: 0.2 },
+        particleCounts: [{ particle: 'proton', count: 105 }],
+        energyPoints: [{ x: 0, y: 0, z: 0, edepMeV: 0.2 }],
+        slicePlanes: {},
+      },
       warnings: [],
     }
 

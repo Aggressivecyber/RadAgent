@@ -15,7 +15,6 @@ function ResponsePreview({ preview }: { preview?: LlmResponsePreview }) {
     <div className="llm-response-preview" aria-label="LLM 响应片段">
       <div className="llm-response-preview-heading">
         <strong>{preview.isLive ? '实时片段' : '最近响应'}</strong>
-        <span>最新三行</span>
       </div>
       {preview.visibleLines.length > 0 ? (
         <pre className="llm-response-lines">{preview.visibleLines.join('\n')}</pre>
@@ -94,12 +93,12 @@ export default function LlmDebugPanel({ cockpit, responsePreviews = {} }: LlmDeb
           {cockpit.runtimeActive ? (
             <>
               <strong>等待模型响应片段</strong>
-              <p>工作流运行时会在这里显示最近三行响应。</p>
+              <p>工作流运行时会在这里显示模型响应。</p>
             </>
           ) : (
             <>
               <strong>后台未运行</strong>
-              <p>当前作业可继续；恢复后会在这里显示最近三行模型响应。</p>
+              <p>当前作业可继续；恢复后会在这里显示模型响应。</p>
             </>
           )}
         </div>

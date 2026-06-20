@@ -19,7 +19,8 @@ from agent_core.web.api import (
     to_jsonable,
 )
 
-ApiHandler = Callable[[str, str, bytes], tuple[int, dict[str, Any]]]
+ApiResponse = tuple[int, dict[str, Any]] | tuple[int, dict[str, str], bytes]
+ApiHandler = Callable[[str, str, bytes], ApiResponse]
 ServiceProvider = Callable[[], Any]
 
 
@@ -56,7 +57,8 @@ def _create_api_handler(get_service: ServiceProvider) -> ApiHandler:
                 case "GET", "/api/events":
                     service = get_service()
                     limit = int(query.get("limit", ["80"])[0])
-                    return HTTPStatus.OK, {"events": to_jsonable(service.recent_events(limit))}
+                    job_id = str(query.get("job_id", [""])[0]).strip() or None
+                    return HTTPStatus.OK, {"events": to_jsonable(service.recent_events(limit, job_id=job_id))}
                 case "GET", "/api/visualization":
                     service = get_service()
                     job_id = str(query.get("job_id", [""])[0]).strip() or None
@@ -67,6 +69,22 @@ def _create_api_handler(get_service: ServiceProvider) -> ApiHandler:
                     service = get_service()
                     job_id = str(query.get("job_id", [""])[0]).strip() or None
                     return HTTPStatus.OK, {"artifacts": to_jsonable(service.list_artifacts(job_id))}
+                case "GET", "/api/source-package":
+                    service = get_service()
+                    job_id = str(query.get("job_id", [""])[0]).strip() or None
+                    package = service.package_generated_source_files(job_id)
+                    raw = bytes(package.get("data") or b"")
+                    if not raw:
+                        path = Path(str(package.get("path") or ""))
+                        raw = path.read_bytes()
+                    filename = str(package.get("filename") or "radagent_source.zip")
+                    content_type = str(package.get("content_type") or "application/zip")
+                    return HTTPStatus.OK, {
+                        "Content-Type": content_type,
+                        "Content-Length": str(len(raw)),
+                        "Content-Disposition": f'attachment; filename="{filename}"',
+                        "Cache-Control": "no-store",
+                    }, raw
                 case "POST", "/api/command":
                     service = get_service()
                     payload = _read_json(body)
@@ -92,7 +110,8 @@ def _create_api_handler(get_service: ServiceProvider) -> ApiHandler:
                     if not path:
                         return HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Missing artifact path."}
                     max_chars = int(payload.get("max_chars", 200_000))
-                    artifact = service.read_artifact(path, max_chars=max_chars)
+                    artifact_job_id = str(payload.get("job_id", "")).strip() or None
+                    artifact = service.read_artifact(path, max_chars=max_chars, job_id=artifact_job_id)
                     return HTTPStatus.OK, {"artifact": to_jsonable(artifact)}
                 case "POST", "/api/model":
                     service = get_service()
@@ -154,7 +173,16 @@ class RadAgentWebHandler(BaseHTTPRequestHandler):
     def _send_api_response(self, method: str) -> None:
         length = int(self.headers.get("Content-Length", "0") or 0)
         body = self.rfile.read(length) if length else b""
-        status, payload = self.api_handler(method, self.path, body)
+        response = self.api_handler(method, self.path, body)
+        if len(response) == 3:
+            status, headers, raw = response
+            self.send_response(int(status))
+            for key, value in headers.items():
+                self.send_header(str(key), str(value))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
+        status, payload = response
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(int(status))
         self.send_header("Content-Type", "application/json; charset=utf-8")

@@ -80,6 +80,86 @@ def test_visualization_payload_loads_real_tracks_deposits_and_geometry(
     }
 
 
+def test_visualization_payload_groups_flat_step_rows_into_tracks(
+    tmp_path: Path,
+) -> None:
+    _write_json(
+        tmp_path / "geometry_view.json",
+        {
+            "components": [
+                {
+                    "id": "moderator",
+                    "shape": "box",
+                    "material": "G4_POLYETHYLENE",
+                    "size_mm": [10.0, 10.0, 10.0],
+                    "position_mm": [0.0, 0.0, 0.0],
+                }
+            ],
+        },
+    )
+    _write_json(
+        tmp_path / "particle_tracks.json",
+        {
+            "tracks": [
+                {
+                    "event_id": 0,
+                    "track_id": 1,
+                    "particle": "neutron",
+                    "position_mm": [0.0, 0.0, -5.0],
+                    "kinetic_MeV": 14.0,
+                },
+                {
+                    "event_id": 0,
+                    "track_id": 1,
+                    "particle": "neutron",
+                    "position_mm": [0.0, 0.0, 0.0],
+                    "kinetic_MeV": 13.8,
+                },
+                {
+                    "event_id": 0,
+                    "track_id": 1,
+                    "particle": "neutron",
+                    "position_mm": [0.0, 0.0, 5.0],
+                    "kinetic_MeV": 13.4,
+                },
+            ],
+        },
+    )
+    _write_json(
+        tmp_path / "energy_deposits.json",
+        {
+            "deposits": [
+                {
+                    "event_id": 0,
+                    "track_id": 1,
+                    "volume": "moderator",
+                    "position_mm": [0.0, 0.0, 0.0],
+                    "edep_MeV": 0.25,
+                }
+            ]
+        },
+    )
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-flat-tracks",
+        model_ir={},
+        visual_events=100,
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["tracks"] == [
+        {
+            "event_id": 0,
+            "track_id": 1,
+            "particle": "neutron",
+            "energy_MeV": 14.0,
+            "points_mm": [[0.0, 0.0, -5.0], [0.0, 0.0, 0.0], [0.0, 0.0, 5.0]],
+        }
+    ]
+    assert payload["stats"]["track_points"] == 3
+
+
 def test_visualization_payload_repairs_default_cylinder_radius_from_model_ir(
     tmp_path: Path,
 ) -> None:
@@ -163,6 +243,10 @@ def test_visualization_payload_includes_source_rays_from_model_ir(
             "source_id": "primary_gamma",
             "particle": "gamma",
             "energy": {"value": 662.0, "unit": "keV"},
+            "source_shape": "point",
+            "direction_mode": "mono",
+            "sample_index": 0,
+            "sample_count": 1,
             "start_mm": [0.0, 0.0, -150.5],
             "end_mm": [0.0, 0.0, 36.4],
         }
@@ -251,7 +335,53 @@ def test_visualization_payload_expands_rectangle_source_into_parallel_preview_ra
         [10.0, 5.0, -100.0],
     ]
     assert {ray["particle"] for ray in payload["source_rays"]} == {"gamma"}
+    assert {ray["source_shape"] for ray in payload["source_rays"]} == {"rectangle"}
+    assert {ray["direction_mode"] for ray in payload["source_rays"]} == {"mono"}
+    assert {ray["sample_count"] for ray in payload["source_rays"]} == {5}
     assert {ray["end_mm"][2] > 0.0 for ray in payload["source_rays"]} == {True}
+
+
+def test_visualization_payload_expands_random_point_source_into_ten_preview_rays(
+    tmp_path: Path,
+) -> None:
+    model_ir = {
+        "global_units": {"length": "mm"},
+        "sources": [
+            {
+                "source_id": "iso_point",
+                "particle_type": "gamma",
+                "energy": {"value": 1.0, "unit": "MeV"},
+                "beam": {
+                    "position": [0.0, 0.0, 0.0],
+                    "direction": [0.0, 0.0, 1.0],
+                    "surface_shape": "point",
+                    "angular_distribution": "isotropic",
+                },
+            }
+        ],
+        "components": [
+            {
+                "component_id": "detector",
+                "geometry_type": "box",
+                "dimensions": {"dx": 20.0, "dy": 20.0, "dz": 20.0},
+                "placement": {"position": [0.0, 0.0, 0.0]},
+            }
+        ],
+    }
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-random-point-source",
+        model_ir=model_ir,
+        visual_events=100,
+    )
+
+    assert len(payload["source_rays"]) == 10
+    assert {tuple(ray["start_mm"]) for ray in payload["source_rays"]} == {(0.0, 0.0, 0.0)}
+    assert {ray["source_shape"] for ray in payload["source_rays"]} == {"point"}
+    assert {ray["direction_mode"] for ray in payload["source_rays"]} == {"random"}
+    assert {ray["sample_count"] for ray in payload["source_rays"]} == {10}
+    assert len({tuple(ray["end_mm"]) for ray in payload["source_rays"]}) > 6
 
 
 def test_visualization_payload_marks_missing_tracks_without_inventing_fake_data(
@@ -345,5 +475,93 @@ def test_visualization_payload_caps_browser_tracks_to_visual_event_budget(
     assert len(payload["tracks"]) == 100
     assert payload["stats"]["tracks"] == 100
     assert payload["stats"]["track_points"] == 200
+    assert payload["analysis"]["source"] == "full_run"
+    assert payload["analysis"]["stats"]["track_count"] == 105
+    assert payload["analysis"]["particle_counts"] == [{"particle": "proton", "count": 105}]
     assert payload["deposits"][0]["event_id"] == 104
     assert "particle_tracks.json limited to 100 visual tracks" in payload["warnings"]
+
+
+def test_visualization_payload_builds_full_run_energy_heatmap_analysis(
+    tmp_path: Path,
+) -> None:
+    _write_json(
+        tmp_path / "particle_tracks.json",
+        {
+            "tracks": [
+                {"event_id": 0, "track_id": 1, "particle": "neutron", "points_mm": [[0, 0, -1], [0, 0, 1]]},
+                {"event_id": 1, "track_id": 2, "particle": "gamma", "points_mm": [[0, 0, -1], [0, 0, 1]]},
+                {"event_id": 2, "track_id": 3, "particle": "neutron", "points_mm": [[0, 0, -1], [0, 0, 1]]},
+            ]
+        },
+    )
+    _write_json(
+        tmp_path / "energy_deposits.json",
+        {
+            "deposits": [
+                {"event_id": 0, "track_id": 1, "position_mm": [-1, 0, -2], "edep_MeV": 0.1},
+                {"event_id": 1, "track_id": 2, "position_mm": [0, 0, 0], "edep_MeV": 0.5},
+                {"event_id": 2, "track_id": 3, "position_mm": [1, 0, 2], "edep_MeV": 0.2},
+            ]
+        },
+    )
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-analysis",
+        model_ir={},
+        visual_events=1,
+    )
+
+    analysis = payload["analysis"]
+    assert len(payload["tracks"]) == 1
+    assert analysis["stats"] == {
+        "track_count": 3,
+        "deposit_count": 3,
+        "total_edep_MeV": 0.8,
+    }
+    assert analysis["particle_counts"] == [
+        {"particle": "neutron", "count": 2},
+        {"particle": "gamma", "count": 1},
+    ]
+    assert analysis["energy_points"][1] == {"x": 0.0, "y": 0.0, "z": 0.0, "edep_MeV": 0.5}
+    assert analysis["slice_planes"]["z"]["values"]
+
+
+def test_visualization_payload_samples_heatmap_points_but_keeps_full_energy_total(
+    tmp_path: Path,
+) -> None:
+    _write_json(
+        tmp_path / "particle_tracks.json",
+        {
+            "tracks": [
+                {"event_id": 0, "track_id": 1, "particle": "proton", "points_mm": [[0, 0, -1], [0, 0, 1]]},
+            ]
+        },
+    )
+    _write_json(
+        tmp_path / "energy_deposits.json",
+        {
+            "deposits": [
+                {
+                    "event_id": index,
+                    "track_id": 1,
+                    "position_mm": [index % 10, (index // 10) % 10, index % 25],
+                    "edep_MeV": 1.0,
+                }
+                for index in range(8001)
+            ]
+        },
+    )
+
+    payload = build_visualization_payload(
+        output_dir=tmp_path,
+        job_id="job-analysis-sampled",
+        model_ir={},
+        visual_events=100,
+    )
+
+    analysis = payload["analysis"]
+    assert analysis["stats"]["deposit_count"] == 8001
+    assert analysis["stats"]["total_edep_MeV"] == 8001.0
+    assert len(analysis["energy_points"]) <= 8000

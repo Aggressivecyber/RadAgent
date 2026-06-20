@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createConfirmationReviewView } from './confirmationReview'
+import { buildQuestionCardSupplement, createConfirmationReviewView } from './confirmationReview'
 
 describe('confirmation review presentation', () => {
   it('extracts ambiguous fields, critical confirmations and questions', () => {
@@ -38,6 +38,8 @@ describe('confirmation review presentation', () => {
       title: '请确认 primary source 的 energy',
       detail: '影响粒子类型、能量、方向和轨迹预览。',
       meta: '150 MeV',
+      recommendedValue: '150 MeV',
+      fieldPath: 'sources.primary.energy',
     })
   })
 
@@ -69,7 +71,7 @@ describe('confirmation review presentation', () => {
 
     expect(view.proposedItems).toEqual([
       {
-        title: '人工确认报告',
+        title: '参数核对报告',
         detail: '# Human Confirmation Report\n\n## Task Summary\n\n确认 14 MeV neutron 屏蔽模型。',
         meta: 'report',
       },
@@ -105,7 +107,7 @@ describe('confirmation review presentation', () => {
     const view = createConfirmationReviewView({
       status: 'pending',
       confirmation_request: {
-        summary_for_user: '模型已用默认值补全，请人工确认后继续。',
+        summary_for_user: '模型已用默认值补全，请参数核对后继续。',
         questions: [],
       },
       proposed_model_completion: {
@@ -254,5 +256,151 @@ describe('confirmation review presentation', () => {
         statusLabel: 'AI 补全 / 需确认',
       },
     ])
+  })
+
+  it('normalizes requirements review questions into recommendation cards', () => {
+    const view = createConfirmationReviewView({
+      type: 'requirements_review',
+      status: 'pending',
+      confirmation_request: {
+        questions: [
+          {
+            field_path: 'source.energy',
+            question: '束流能量是否使用 160 MeV？',
+            recommended_value: '160 MeV',
+            reason: '用户补充说能量改成 160 MeV。',
+          },
+          {
+            field_path: 'scoring.sensitive_volume',
+            question: '是否在敏感体内记录 dose/edep/step length？',
+            proposed_value: '记录通用 sensitive volume 内的 dose、edep、step length、track id。',
+            reason: '这是管线能在代码中实现的通用计分逻辑。',
+          },
+        ],
+      },
+    })
+
+    expect(view.questionCards).toEqual([
+      {
+        fieldPath: 'source.energy',
+        question: '束流能量是否使用 160 MeV？',
+        recommendedValue: '160 MeV',
+        reason: '用户补充说能量改成 160 MeV。',
+      },
+      {
+        fieldPath: 'scoring.sensitive_volume',
+        question: '是否在敏感体内记录 dose/edep/step length？',
+        recommendedValue: '记录通用 sensitive volume 内的 dose、edep、step length、track id。',
+        reason: '这是管线能在代码中实现的通用计分逻辑。',
+      },
+    ])
+  })
+
+  it('dedupes requirements questions mirrored through request and review payloads', () => {
+    const question = {
+      field_path: 'shielding.layer_thicknesses',
+      question: '各屏蔽层的厚度分别是多少？',
+      recommended_value: '聚乙烯 5 cm，含硼聚乙烯 5 cm，铅 2 cm，硅探测器 3 mm',
+      reason: '缺少厚度时无法构建可靠几何。',
+    }
+    const view = createConfirmationReviewView({
+      type: 'requirements_review',
+      status: 'pending',
+      questions: [question],
+      confirmation_request: {
+        questions: [question],
+      },
+      requirements_review: {
+        questions: [question],
+      },
+    })
+
+    expect(view.questionCards).toHaveLength(1)
+    expect(view.questionCards[0]).toMatchObject({
+      fieldPath: 'shielding.layer_thicknesses',
+      question: '各屏蔽层的厚度分别是多少？',
+    })
+  })
+
+  it('builds a compact supplement from per-question card answers', () => {
+    const supplement = buildQuestionCardSupplement(
+      [
+        {
+          fieldPath: 'source.energy',
+          question: '束流能量是否使用 160 MeV？',
+          recommendedValue: '160 MeV',
+          reason: '',
+        },
+        {
+          fieldPath: 'scoring.bin_width',
+          question: '剂量深度 bin 是否使用 1 mm？',
+          recommendedValue: '1 mm',
+          reason: '',
+        },
+      ],
+      {
+        'source.energy': { mode: 'recommended', value: '160 MeV' },
+        'scoring.bin_width': { mode: 'modified', value: '0.5 mm' },
+      },
+      '事件数使用 10000。',
+    )
+
+    expect(supplement).toBe(
+      'source.energy: 确认推荐 160 MeV\n' +
+        'scoring.bin_width: 修改为 0.5 mm\n' +
+        '补充说明: 事件数使用 10000。',
+    )
+  })
+
+  it('can append machine-readable confirmed parameter answers for the backend prompt', () => {
+    const supplement = buildQuestionCardSupplement(
+      [
+        {
+          fieldPath: 'environment.medium',
+          question: '是否坚持当前真空环境，还是改为冷却水介质？',
+          recommendedValue: '保持真空环境',
+          reason: '用户已指定真空环境，冷却水只是模型改进建议。',
+        },
+        {
+          fieldPath: 'geometry.robot_model',
+          question: '机器人几何是否采用分层壳体？',
+          recommendedValue: '保持 10cm x 10cm x 20cm 铁质机器人简化模型',
+          reason: '用户原始需求只要求铁质机器人。',
+        },
+      ],
+      {
+        'environment.medium': { mode: 'recommended', value: '保持真空环境' },
+        'geometry.robot_model': {
+          mode: 'modified',
+          value: '采用分层壳体机器人模型，但保留外形 10cm x 10cm x 20cm',
+        },
+      },
+      '先按本轮选择继续。',
+      { includeMachinePayload: true },
+    )
+
+    expect(supplement).toContain('environment.medium: 确认推荐 保持真空环境')
+    expect(supplement).toContain('geometry.robot_model: 修改为 采用分层壳体机器人模型')
+
+    const marker = 'RADAGENT_CONFIRMATION_JSON:'
+    const payload = JSON.parse(supplement.slice(supplement.indexOf(marker) + marker.length))
+    expect(payload).toMatchObject({
+      schema_version: 'requirements_review_answers_v1',
+      user_note: '先按本轮选择继续。',
+      confirmed_parameters: [
+        {
+          field_path: 'environment.medium',
+          decision: 'accept_recommended',
+          selected_value: '保持真空环境',
+          recommended_value: '保持真空环境',
+        },
+        {
+          field_path: 'geometry.robot_model',
+          decision: 'modify',
+          selected_value: '采用分层壳体机器人模型，但保留外形 10cm x 10cm x 20cm',
+          recommended_value: '保持 10cm x 10cm x 20cm 铁质机器人简化模型',
+        },
+      ],
+    })
   })
 })

@@ -17,11 +17,11 @@ describe('home rotating particle sphere presence', () => {
     expect(app).toContain('<HeroSphere variant="field" />')
   })
 
-  it('makes the home rotating particle sphere 1.5x larger as a first-screen feature', () => {
+  it('keeps the home rotating particle sphere prominent without overwhelming the hero copy', () => {
     const css = readStyles()
 
-    expect(css).toContain('width: min(168vw, 1470px)')
-    expect(css).toContain('opacity: 0.72')
+    expect(css).toContain('width: min(132vw, 1180px)')
+    expect(css).toContain('opacity: 0.82')
     expect(css).toContain('mix-blend-mode: multiply')
     expect(css).toContain('.home-ambient-sphere .hero-sphere-field')
   })

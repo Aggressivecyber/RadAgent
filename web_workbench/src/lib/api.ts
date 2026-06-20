@@ -185,9 +185,13 @@ export async function fetchStatus(): Promise<JobStatus> {
   return payload.status
 }
 
-export async function fetchEvents(limit = 80): Promise<RadAgentEvent[]> {
+export async function fetchEvents(limit = 80, jobId = ''): Promise<RadAgentEvent[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (jobId) {
+    params.set('job_id', jobId)
+  }
   const payload = await readJson<{ events: RadAgentEvent[] }>(
-    await fetch(`/api/events?limit=${encodeURIComponent(String(limit))}`),
+    await fetch(`/api/events?${params.toString()}`),
   )
   return payload.events
 }
@@ -229,12 +233,16 @@ export async function fetchJobDetail(jobId: string): Promise<Record<string, unkn
   return payload.job
 }
 
-export async function fetchArtifactContent(path: string, maxChars = 200_000): Promise<ArtifactContent> {
+export async function fetchArtifactContent(path: string, maxChars = 200_000, jobId = ''): Promise<ArtifactContent> {
+  const body: Record<string, unknown> = { path, max_chars: maxChars }
+  if (jobId) {
+    body.job_id = jobId
+  }
   const payload = await readJson<{ artifact: ArtifactContent }>(
     await fetch('/api/artifact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, max_chars: maxChars }),
+      body: JSON.stringify(body),
     }),
   )
   return payload.artifact

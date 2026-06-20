@@ -29,10 +29,55 @@ export type VisualizationDeposit = {
   edepMeV: number
 }
 
+export type VisualizationEnergyPoint = {
+  x: number
+  y: number
+  z: number
+  edepMeV: number
+}
+
+export type VisualizationParticleCount = {
+  particle: string
+  count: number
+}
+
+export type VisualizationSliceAxis = 'x' | 'y' | 'z'
+
+export type VisualizationSliceHeatmap = {
+  value: number
+  xAxis: VisualizationSliceAxis
+  yAxis: VisualizationSliceAxis
+  x: number[]
+  y: number[]
+  z: number[][]
+}
+
+export type VisualizationSlicePlane = {
+  axis: VisualizationSliceAxis
+  values: number[]
+  slices: VisualizationSliceHeatmap[]
+}
+
+export type VisualizationAnalysis = {
+  source: 'full_run'
+  stats: {
+    trackCount: number
+    depositCount: number
+    totalEdepMeV: number
+  }
+  particleCounts: VisualizationParticleCount[]
+  energyPoints: VisualizationEnergyPoint[]
+  slicePlanes: Partial<Record<VisualizationSliceAxis, VisualizationSlicePlane>>
+}
+
 export type VisualizationSourceRay = {
   sourceId: string
   particle: string
   energy: Record<string, unknown>
+  sourceShape: 'point' | 'circle' | 'rectangle'
+  directionMode: 'mono' | 'gaussian' | 'custom' | 'random'
+  sampleIndex: number
+  sampleCount: number
   start: Vector3
   end: Vector3
 }
@@ -44,6 +89,7 @@ export type VisualizationPayload = {
   sourceRays: VisualizationSourceRay[]
   tracks: VisualizationTrack[]
   deposits: VisualizationDeposit[]
+  analysis?: VisualizationAnalysis
   warnings: string[]
 }
 
@@ -137,6 +183,112 @@ function normalizeDeposit(value: unknown): VisualizationDeposit | null {
   }
 }
 
+function normalizeEnergyPoint(value: unknown): VisualizationEnergyPoint | null {
+  const row = asRecord(value)
+  const edepMeV = numberValue(row.edep_MeV ?? row.edepMeV)
+  if (edepMeV <= 0) {
+    return null
+  }
+  return {
+    x: numberValue(row.x),
+    y: numberValue(row.y),
+    z: numberValue(row.z),
+    edepMeV,
+  }
+}
+
+function normalizeParticleCount(value: unknown): VisualizationParticleCount | null {
+  const row = asRecord(value)
+  const particle = text(row.particle, 'unknown')
+  const count = numberValue(row.count)
+  if (count <= 0) {
+    return null
+  }
+  return { particle, count }
+}
+
+function normalizeSliceAxis(value: unknown, fallback: VisualizationSliceAxis): VisualizationSliceAxis {
+  const normalized = text(value, fallback).toLowerCase()
+  return normalized === 'x' || normalized === 'y' || normalized === 'z' ? normalized : fallback
+}
+
+function normalizeNumberArray(value: unknown): number[] {
+  return asArray(value)
+    .map((item) => numberValue(item, Number.NaN))
+    .filter(Number.isFinite)
+}
+
+function normalizeHeatmapGrid(value: unknown): number[][] {
+  return asArray(value)
+    .map((row) => normalizeNumberArray(row))
+    .filter((row) => row.length > 0)
+}
+
+function normalizeSliceHeatmap(value: unknown, axis: VisualizationSliceAxis): VisualizationSliceHeatmap | null {
+  const row = asRecord(value)
+  const axes = (['x', 'y', 'z'] as VisualizationSliceAxis[]).filter((item) => item !== axis)
+  const z = normalizeHeatmapGrid(row.z)
+  if (z.length === 0) {
+    return null
+  }
+  return {
+    value: numberValue(row.value),
+    xAxis: normalizeSliceAxis(row.x_axis ?? row.xAxis, axes[0] ?? 'x'),
+    yAxis: normalizeSliceAxis(row.y_axis ?? row.yAxis, axes[1] ?? 'y'),
+    x: normalizeNumberArray(row.x),
+    y: normalizeNumberArray(row.y),
+    z,
+  }
+}
+
+function normalizeSlicePlane(value: unknown, fallbackAxis: VisualizationSliceAxis): VisualizationSlicePlane | null {
+  const row = asRecord(value)
+  const axis = normalizeSliceAxis(row.axis, fallbackAxis)
+  const slices = asArray(row.slices)
+    .map((slice) => normalizeSliceHeatmap(slice, axis))
+    .filter((slice): slice is VisualizationSliceHeatmap => Boolean(slice))
+  if (slices.length === 0) {
+    return null
+  }
+  const values = normalizeNumberArray(row.values)
+  return {
+    axis,
+    values: values.length > 0 ? values : slices.map((slice) => slice.value),
+    slices,
+  }
+}
+
+function normalizeAnalysis(value: unknown): VisualizationAnalysis | undefined {
+  const row = asRecord(value)
+  if (Object.keys(row).length === 0) {
+    return undefined
+  }
+  const stats = asRecord(row.stats)
+  const rawSlicePlanes = asRecord(row.slice_planes ?? row.slicePlanes)
+  const slicePlanes: VisualizationAnalysis['slicePlanes'] = {}
+  for (const axis of ['x', 'y', 'z'] as VisualizationSliceAxis[]) {
+    const plane = normalizeSlicePlane(rawSlicePlanes[axis], axis)
+    if (plane) {
+      slicePlanes[axis] = plane
+    }
+  }
+  return {
+    source: 'full_run',
+    stats: {
+      trackCount: numberValue(stats.track_count ?? stats.trackCount),
+      depositCount: numberValue(stats.deposit_count ?? stats.depositCount),
+      totalEdepMeV: numberValue(stats.total_edep_MeV ?? stats.totalEdepMeV),
+    },
+    particleCounts: asArray(row.particle_counts ?? row.particleCounts)
+      .map(normalizeParticleCount)
+      .filter((count): count is VisualizationParticleCount => Boolean(count)),
+    energyPoints: asArray(row.energy_points ?? row.energyPoints)
+      .map(normalizeEnergyPoint)
+      .filter((point): point is VisualizationEnergyPoint => Boolean(point)),
+    slicePlanes,
+  }
+}
+
 function normalizeSourceRay(value: unknown): VisualizationSourceRay | null {
   const row = asRecord(value)
   const sourceId = text(row.source_id ?? row.sourceId ?? row.id)
@@ -149,9 +301,26 @@ function normalizeSourceRay(value: unknown): VisualizationSourceRay | null {
     sourceId,
     particle: text(row.particle, 'particle'),
     energy: asRecord(row.energy),
+    sourceShape: sourceShapeValue(row.source_shape ?? row.sourceShape),
+    directionMode: directionModeValue(row.direction_mode ?? row.directionMode),
+    sampleIndex: numberValue(row.sample_index ?? row.sampleIndex),
+    sampleCount: Math.max(1, numberValue(row.sample_count ?? row.sampleCount, 1)),
     start,
     end,
   }
+}
+
+function sourceShapeValue(value: unknown): VisualizationSourceRay['sourceShape'] {
+  const normalized = text(value, 'point').toLowerCase()
+  return normalized === 'circle' || normalized === 'rectangle' ? normalized : 'point'
+}
+
+function directionModeValue(value: unknown): VisualizationSourceRay['directionMode'] {
+  const normalized = text(value, 'mono').toLowerCase()
+  if (normalized === 'isotropic' || normalized === 'cosine' || normalized === 'random') {
+    return 'random'
+  }
+  return normalized === 'gaussian' || normalized === 'custom' ? normalized : 'mono'
 }
 
 export function normalizeVisualizationPayload(value: unknown): VisualizationPayload {
@@ -178,6 +347,7 @@ export function normalizeVisualizationPayload(value: unknown): VisualizationPayl
     sourceRays,
     tracks,
     deposits,
+    analysis: normalizeAnalysis(row.analysis),
     warnings: asArray(row.warnings).map((item) => text(item)).filter(Boolean),
   }
 }

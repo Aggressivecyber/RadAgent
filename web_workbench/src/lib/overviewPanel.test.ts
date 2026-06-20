@@ -15,7 +15,7 @@ const commands: CommandCatalogEntry[] = [
     name: 'confirm',
     description: 'Open confirmation review',
     tip: 'Open the active confirmation review before approving or rejecting.',
-    module: 'human_confirmation',
+    module: 'requirements_review',
     connection: 'service',
     visible: true,
   },
@@ -45,10 +45,12 @@ describe('overview panel presentation', () => {
       needs_confirmation: true,
       key_statuses: {
         confirmation_status: 'pending',
+        requirements_review_status: 'needs_user_input',
       },
       state: {
         project_slug: 'detectors',
         confirmation_status: 'pending',
+        requirements_review_status: 'needs_user_input',
         human_confirmation_required: true,
       },
     }
@@ -56,7 +58,7 @@ describe('overview panel presentation', () => {
       {
         event_type: 'gate_blocked',
         status: 'warning',
-        summary: 'Needs human confirmation',
+        summary: 'Needs requirements review',
         phase: 'validation',
         job_id: 'job-1',
         run_id: 'run-1',
@@ -75,11 +77,11 @@ describe('overview panel presentation', () => {
     ])
     expect(panel.alerts[0]).toMatchObject({
       status: 'warning',
-      title: '需要人工确认',
+      title: '需要参数核对',
     })
     expect(panel.actions[0]).toMatchObject({
-      label: '查看确认项',
-      labelEn: 'Review',
+      label: '打开参数核对',
+      labelEn: 'Requirements',
       command: '/confirm job-1',
       tone: 'primary',
       mode: 'execute',
@@ -87,7 +89,7 @@ describe('overview panel presentation', () => {
     expect(panel.recentEvents[0]).toMatchObject({
       title: 'gate blocked',
       status: 'warning',
-      detail: 'Needs human confirmation',
+      detail: 'Needs requirements review',
       meta: '验证门禁',
     })
   })

@@ -1,4 +1,4 @@
-import { FileText, FolderOpen, PanelRightOpen } from 'lucide-react'
+import { Download, FileText, FolderOpen, PanelRightOpen } from 'lucide-react'
 import type { ArtifactContent } from '../lib/api'
 import type { AgentCockpit } from '../lib/workbenchPresentation'
 
@@ -7,6 +7,7 @@ type ArtifactWorkspaceProps = {
   selectedArtifact: ArtifactContent | null
   loading: boolean
   error: string
+  sourcePackageUrl: string
   onSelectArtifact: (path: string) => void
   onOpenInspector: () => void
 }
@@ -31,6 +32,7 @@ export default function ArtifactWorkspace({
   selectedArtifact,
   loading,
   error,
+  sourcePackageUrl,
   onSelectArtifact,
   onOpenInspector,
 }: ArtifactWorkspaceProps) {
@@ -44,6 +46,12 @@ export default function ArtifactWorkspace({
           <span>文件与产物</span>
           <strong>Files</strong>
         </div>
+        {sourcePackageUrl ? (
+          <a className="artifact-download-button" href={sourcePackageUrl} download title="下载生成工程源码">
+            <Download size={16} />
+            <span>下载源文件</span>
+          </a>
+        ) : null}
         <button type="button" onClick={onOpenInspector} title="打开审查面板">
           <PanelRightOpen size={16} />
           <span>审查</span>
