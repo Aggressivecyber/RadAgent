@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agent_core.observability import record_event, write_failure_bundle
+from agent_core.observability import clear_failure_bundle, record_event, write_failure_bundle
 from agent_core.workspace.io import get_job_dir
 from agent_core.workspace.paths import STAGE_GATE_VALIDATION
 
@@ -149,7 +149,9 @@ async def finalize_gate_results(state: GateSubgraphState) -> dict[str, Any]:
         errors=[g.get("message", str(g)) for g in failed_gates],
         warnings=[g.get("message", str(g)) for g in skipped_gates],
     )
-    if status != "passed":
+    if status == "passed":
+        clear_failure_bundle(job_id=job_id)
+    else:
         write_failure_bundle(
             job_id=job_id,
             status=status,

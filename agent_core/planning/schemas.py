@@ -20,7 +20,7 @@ class TaskPlanningOutput(TypedDict, total=False):
 
     task_spec_path: str
     simulation_scope: list[str]
-    task_planning_status: str  # "passed" | "failed" | "reserved" | "needs_user_input"
+    task_planning_status: str  # "passed" | "failed" | "needs_user_input"
     task_spec_errors: list[str]
     termination_reason: str
 

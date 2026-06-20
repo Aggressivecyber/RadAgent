@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import shutil
 import threading
+import zipfile
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from pathlib import Path
@@ -36,10 +38,10 @@ from agent_core.config.environment import (
     write_project_env_values,
 )
 from agent_core.gates.gate_runner import normalize_run_mode
-from agent_core.graph.main_routes import route_after_context, route_after_gates
+from agent_core.graph.main_routes import route_after_context, route_after_gates, route_after_patch
 from agent_core.models.registry import thinking_for_task
 from agent_core.models.schemas import ModelTask, ModelTier
-from agent_core.pipeline import PIPELINE_PHASES
+from agent_core.pipeline import LEGACY_PIPELINE_PHASES, PIPELINE_PHASES
 from agent_core.storage import RadAgentStore
 from agent_core.workspace.manager import WorkspaceManager
 from agent_core.workspace.paths import (
@@ -72,6 +74,29 @@ TEXT_ARTIFACT_SUFFIXES = {
     ".yml",
 }
 REQUIREMENTS_REVIEW_WAITING_STATUSES = frozenset({"pending", "needs_user_input"})
+SUCCESS_TERMINATION_REASONS = frozenset({"completed_passed"})
+CONFIRMATION_REJECTION_DECISIONS = frozenset(
+    {"reject", "rejected", "no", "n", "拒绝", "否", "不同意"}
+)
+VISUAL_OUTPUT_ARTIFACT_NAMES = (
+    "geometry_view.json",
+    "particle_tracks.json",
+    "energy_deposits.json",
+    "edep_3d.csv",
+)
+VISUAL_OUTPUT_STATE_KEYS = (
+    "visual_geometry_view_path",
+    "visual_particle_tracks_path",
+    "visual_energy_deposits_path",
+    "visual_edep_3d_path",
+)
+VISUAL_FRESHNESS_SOURCE_KEYS = (
+    "g4_model_ir_path",
+    "code_module_plan_path",
+    "proposed_patch_path",
+    "generated_code_dir",
+)
+LEGACY_HUMAN_CONFIRMATION_PHASE = "human_confirmation"
 
 
 def _active_gate_results(results: Any) -> list[dict[str, Any]]:
@@ -132,6 +157,66 @@ def _confirmation_actionable(state: dict[str, Any]) -> bool:
 
 def _requirements_review_waiting_status(value: Any) -> bool:
     return str(value or "").strip().lower() in REQUIREMENTS_REVIEW_WAITING_STATUSES
+
+
+def _is_failure_termination_reason(value: Any) -> bool:
+    reason = str(value or "").strip()
+    return bool(reason and reason not in SUCCESS_TERMINATION_REASONS)
+
+
+def _requirements_review_rejection_requested(response: dict[str, Any]) -> bool:
+    decision = str(response.get("user_decision", "") or "").lower()
+    return decision in CONFIRMATION_REJECTION_DECISIONS
+
+
+def _phase_index(phase: str) -> int | None:
+    if phase in PIPELINE_PHASES:
+        return PIPELINE_PHASES.index(phase)  # type: ignore[arg-type]
+    if phase == LEGACY_HUMAN_CONFIRMATION_PHASE:
+        return PIPELINE_PHASES.index("g4_codegen")
+    return None
+
+
+def _completed_pipeline_phases(phases: list[str]) -> list[str]:
+    completed: list[str] = []
+    for phase in phases:
+        if phase == LEGACY_HUMAN_CONFIRMATION_PHASE:
+            if "requirements_review" not in completed:
+                completed.append("requirements_review")
+            continue
+        if phase in PIPELINE_PHASES and phase not in completed:
+            completed.append(phase)
+    return completed
+
+
+def _normalize_phase_idx_from_legacy(idx: int, completed_phases: list[str]) -> int:
+    if (
+        LEGACY_HUMAN_CONFIRMATION_PHASE not in completed_phases
+        and idx <= len(PIPELINE_PHASES)
+    ):
+        return min(max(idx, 0), len(PIPELINE_PHASES))
+    if not completed_phases:
+        return min(max(idx, 0), len(PIPELINE_PHASES))
+    legacy_completed_idx = -1
+    for phase in completed_phases:
+        if phase in LEGACY_PIPELINE_PHASES:
+            legacy_completed_idx = max(
+                legacy_completed_idx,
+                LEGACY_PIPELINE_PHASES.index(phase),
+            )
+    if legacy_completed_idx < 0:
+        return min(max(idx, 0), len(PIPELINE_PHASES))
+    next_legacy = min(legacy_completed_idx + 1, len(LEGACY_PIPELINE_PHASES))
+    while (
+        next_legacy < len(LEGACY_PIPELINE_PHASES)
+        and LEGACY_PIPELINE_PHASES[next_legacy] == LEGACY_HUMAN_CONFIRMATION_PHASE
+    ):
+        next_legacy += 1
+    if next_legacy >= len(LEGACY_PIPELINE_PHASES):
+        return len(PIPELINE_PHASES)
+    phase = LEGACY_PIPELINE_PHASES[next_legacy]
+    mapped = _phase_index(phase)
+    return mapped if mapped is not None else min(max(idx, 0), len(PIPELINE_PHASES))
 
 
 def _state_has_legacy_codegen_physics_confirmation(state: dict[str, Any]) -> bool:
@@ -731,24 +816,25 @@ class RadAgentAppService:
     # Event stream
     # ------------------------------------------------------------------
 
-    def recent_events(self, limit: int | None = None) -> list[RadAgentEvent]:
+    def recent_events(self, limit: int | None = None, *, job_id: str | None = None) -> list[RadAgentEvent]:
+        target_job_id = job_id or str(self.state.get("job_id", ""))
         events = [
             *self._events,
-            *self._recent_job_log_events(),
-            *self._active_model_call_events(),
+            *self._recent_job_log_events(target_job_id),
+            *self._active_model_call_events(target_job_id),
         ]
         events.sort(key=lambda event: event.created_at)
         if limit is None:
             return events
         return events[-int(limit) :]
 
-    def _active_model_call_events(self) -> list[RadAgentEvent]:
+    def _active_model_call_events(self, job_id: str | None = None) -> list[RadAgentEvent]:
         if not self._runtime_active():
             return []
-        job_id = str(self.state.get("job_id", ""))
-        if not job_id:
+        active_job_id = job_id or str(self.state.get("job_id", ""))
+        if not active_job_id:
             return []
-        active_path = self.workspace.root / "jobs" / job_id / "logs" / "active_model_call.json"
+        active_path = self.workspace.root / "jobs" / active_job_id / "logs" / "active_model_call.json"
         if not active_path.exists():
             return []
         try:
@@ -794,11 +880,11 @@ class RadAgentAppService:
             )
         ]
 
-    def _recent_job_log_events(self, limit: int = 120) -> list[RadAgentEvent]:
-        job_id = str(self.state.get("job_id", ""))
-        if not job_id:
+    def _recent_job_log_events(self, job_id: str | None = None, limit: int = 120) -> list[RadAgentEvent]:
+        active_job_id = job_id or str(self.state.get("job_id", ""))
+        if not active_job_id:
             return []
-        events_path = self.workspace.root / "jobs" / job_id / "logs" / "events.jsonl"
+        events_path = self.workspace.root / "jobs" / active_job_id / "logs" / "events.jsonl"
         if not events_path.exists():
             return []
         events: list[RadAgentEvent] = []
@@ -1081,9 +1167,9 @@ class RadAgentAppService:
         if name == "confirmation":
             review = self.get_confirmation_review()
             if not review:
-                return "当前没有人工确认报告。"
+                return "当前没有参数核对报告。"
             return (
-                f"人工确认状态: {review.get('status', 'unknown')}; "
+                f"参数核对状态: {review.get('status', 'unknown')}; "
                 f"report={review.get('report_path', '')}"
             )
         return "这个命令还没有安全只读实现。"
@@ -1176,14 +1262,6 @@ class RadAgentAppService:
                     },
                 )
                 return self.get_status()
-            if phase == "human_confirmation" and not self.state.get("raw_human_response"):
-                self._emit(
-                    "human_confirmation_required",
-                    status="warning",
-                    phase=phase,
-                    summary="Human confirmation is pending.",
-                )
-                return self.get_status()
             result = await self.run_phase(phase)
             if not result.success:
                 if self._route_after_failed_phase(phase):
@@ -1203,30 +1281,46 @@ class RadAgentAppService:
                     payload=self.state.get("repair_continuation_request", {}),
                 )
                 return self.get_status()
-            if (
-                phase == "g4_modeling"
-                and self.state.get("human_confirmation_required")
-                and not self.state.get("raw_human_response")
-            ):
-                self._emit(
-                    "human_confirmation_required",
-                    status="warning",
-                    phase=phase,
-                    summary="Modeling produced assumptions requiring review.",
-                    payload={
-                        "unconfirmed_assumptions_count": self.state.get(
-                            "unconfirmed_assumptions_count", 0
-                        )
-                    },
-                )
-                return self.get_status()
         self._emit("job_finished", status="success", summary="Pipeline complete.")
         return self.get_status()
 
     def _route_after_failed_phase(self, phase: str) -> bool:
+        if phase == "patch":
+            return self._route_failed_patch()
         if phase == "gate":
             return self._route_failed_gate()
         return False
+
+    def _route_failed_patch(self) -> bool:
+        target_node = route_after_patch(self.state)
+        target_phase = self._phase_for_route_node(target_node)
+        if target_phase != "g4_codegen":
+            return False
+        self._clear_previous_failure()
+        self.current_phase_idx = PIPELINE_PHASES.index(target_phase)
+        self.completed_phases = [
+            completed_phase
+            for completed_phase in self.completed_phases
+            if (idx := _phase_index(completed_phase)) is not None
+            and idx < self.current_phase_idx
+        ]
+        self.state["g4_codegen_status"] = "failed"
+        self._emit(
+            "phase_retry_routed",
+            status="warning",
+            phase="patch",
+            summary="Patch rejection routed back to g4_codegen.",
+            payload={
+                "from_phase": "patch",
+                "target_phase": target_phase,
+                "target_node": target_node,
+                "patch_status": self.state.get("patch_status", ""),
+                "patch_retry_count": self.state.get("patch_retry_count", 0),
+                "patch_review_path": self.state.get("patch_review_path", ""),
+            },
+        )
+        self._persist_phase_state(target_phase, status_override="running")
+        return True
 
     def _route_failed_gate(self) -> bool:
         target_node = route_after_gates(self.state)
@@ -1240,7 +1334,8 @@ class RadAgentAppService:
         self.completed_phases = [
             completed_phase
             for completed_phase in self.completed_phases
-            if PIPELINE_PHASES.index(completed_phase) < self.current_phase_idx
+            if (idx := _phase_index(completed_phase)) is not None
+            and idx < self.current_phase_idx
         ]
         self._emit(
             "phase_retry_routed",
@@ -1263,6 +1358,8 @@ class RadAgentAppService:
             return "artifact"
         if node == "report_subgraph":
             return "report"
+        if node == "human_confirmation_subgraph":
+            return "requirements_review"
         suffix = "_subgraph"
         if node.endswith(suffix):
             phase = node[: -len(suffix)]
@@ -1306,7 +1403,8 @@ class RadAgentAppService:
         return await self.run_phase(phase)
 
     async def run_phase(self, phase: str) -> PhaseResult:
-        if phase not in PIPELINE_PHASES:
+        is_legacy_human_confirmation = phase == LEGACY_HUMAN_CONFIRMATION_PHASE
+        if phase not in PIPELINE_PHASES and not is_legacy_human_confirmation:
             raise ValueError(f"Unknown phase: {phase}")
         started = self._emit(
             "phase_started",
@@ -1315,11 +1413,12 @@ class RadAgentAppService:
             summary=f"Running {phase}",
         )
         try:
-            if phase == "prepare_workspace":
-                result = await self._exec_prepare_workspace()
-            else:
-                nodes = self._get_subgraph_nodes()
-                result = await nodes[phase](self.state)
+            with self._workspace_root_env():
+                if phase == "prepare_workspace":
+                    result = await self._exec_prepare_workspace()
+                else:
+                    nodes = self._get_subgraph_nodes()
+                    result = await nodes[phase](self.state)
         except Exception as exc:
             self._set_termination_reason(str(exc))
             self._persist_phase_state(phase, status_override="failed")
@@ -1420,9 +1519,12 @@ class RadAgentAppService:
                         status=self.get_status(),
                         events=[started, failed],
                     )
-        if phase not in self.completed_phases:
+        if phase in PIPELINE_PHASES and phase not in self.completed_phases:
             self.completed_phases.append(phase)
-        self.current_phase_idx = PIPELINE_PHASES.index(phase) + 1
+        if phase in PIPELINE_PHASES:
+            self.current_phase_idx = PIPELINE_PHASES.index(phase) + 1
+        elif is_legacy_human_confirmation:
+            self.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
         self._persist_phase_state(phase)
         finished = self._emit(
             "phase_finished",
@@ -1437,7 +1539,19 @@ class RadAgentAppService:
             state_delta=result or {},
             status=self.get_status(),
             events=[started, finished],
-        )
+            )
+
+    @contextlib.contextmanager
+    def _workspace_root_env(self):
+        old_value = os.environ.get("RADAGENT_WORKSPACE_ROOT")
+        os.environ["RADAGENT_WORKSPACE_ROOT"] = str(self.workspace.root)
+        try:
+            yield
+        finally:
+            if old_value is None:
+                os.environ.pop("RADAGENT_WORKSPACE_ROOT", None)
+            else:
+                os.environ["RADAGENT_WORKSPACE_ROOT"] = old_value
 
     async def submit_confirmation(
         self,
@@ -1453,12 +1567,12 @@ class RadAgentAppService:
         if not self.state.get("job_id"):
             raise RuntimeError("No active job.")
         if self._is_requirements_review_pending():
-            return await self._submit_requirements_review_confirmation(
-                response,
-                auto_continue=auto_continue,
-            )
+            with self._workspace_root_env():
+                return await self._submit_requirements_review_confirmation(
+                    response,
+                    auto_continue=auto_continue,
+                )
         decision = str(response.get("user_decision", "") or "")
-        confirmation_idx = PIPELINE_PHASES.index("human_confirmation")
         modeling_status = str(self.state.get("g4_modeling_status") or "")
         if self._is_legacy_codegen_physics_confirmation_pending():
             return self._reject_legacy_codegen_physics_confirmation(response)
@@ -1468,25 +1582,25 @@ class RadAgentAppService:
                 or f"g4_modeling status is {modeling_status}"
             )
             self._set_termination_reason(reason)
-            self.current_phase_idx = confirmation_idx
+            self.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
             self._emit(
                 "human_confirmation_blocked_by_modeling_failure",
                 status="error",
-                phase="human_confirmation",
+                phase="requirements_review",
                 summary=reason,
                 payload=response,
             )
-            self._persist_phase_state("human_confirmation", status_override="failed")
+            self._persist_phase_state("requirements_review", status_override="failed")
             return self.get_status()
         if (
             decision == "approve"
             and self.state.get("confirmation_status") == "approved"
-            and self.current_phase_idx > confirmation_idx
+            and self.current_phase_idx > PIPELINE_PHASES.index("g4_codegen")
         ):
             self._emit(
                 "human_confirmation_already_approved",
                 status="info",
-                phase="human_confirmation",
+                phase="requirements_review",
                 summary="Approval already recorded.",
                 payload=response,
             )
@@ -1499,8 +1613,6 @@ class RadAgentAppService:
             summary=decision,
             payload=response,
         )
-        if self.current_phase_idx != confirmation_idx:
-            self.current_phase_idx = confirmation_idx
         await self.run_phase("human_confirmation")
         if auto_continue:
             await self.run_until_blocked()
@@ -1545,27 +1657,31 @@ class RadAgentAppService:
         auto_continue: bool,
     ) -> JobStatus:
         from agent_core.requirements_review import (
-            approve_requirements_review,
             reject_requirements_review,
         )
 
-        decision = str(response.get("user_decision", "") or "").lower()
-        approved = decision in {"approve", "approved", "yes", "y", "确认", "同意"}
-        if approved:
-            updates = approve_requirements_review(self.state, response)
+        if not _requirements_review_rejection_requested(response):
+            updates = self._record_requirements_review_supplement(response)
             self.state.update(updates)
-            self.current_phase_idx = PIPELINE_PHASES.index("g4_modeling")
+            self.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
             self.state.pop("termination_reason", None)
             self._emit(
-                "requirements_review_approved",
+                "requirements_review_supplement_received",
                 status="info",
                 phase="requirements_review",
-                summary="Simulation requirements review approved.",
+                summary="Simulation requirements review supplement recorded.",
                 payload=updates,
             )
-            self._persist_phase_state("requirements_review", status_override="success")
-            if auto_continue:
-                await self.run_until_blocked()
+            result = await self.run_phase("requirements_review")
+            if result.success and not self._is_requirements_review_pending():
+                self.current_phase_idx = PIPELINE_PHASES.index("g4_modeling")
+                if "requirements_review" not in self.completed_phases:
+                    self.completed_phases.append("requirements_review")
+                self._persist_phase_state("g4_modeling", status_override="running")
+                if auto_continue:
+                    await self.run_until_blocked()
+                return self.get_status()
+            self._persist_phase_state("requirements_review", status_override="paused")
             return self.get_status()
 
         updates = reject_requirements_review(self.state, response)
@@ -1580,6 +1696,19 @@ class RadAgentAppService:
         )
         self._persist_phase_state("requirements_review", status_override="failed")
         return self.get_status()
+
+    def _record_requirements_review_supplement(
+        self,
+        response: dict[str, Any],
+    ) -> dict[str, Any]:
+        supplements = list(self.state.get("requirements_review_supplements") or [])
+        supplements.append(response)
+        return {
+            "requirements_review_status": "needs_user_input",
+            "requirements_review_supplements": supplements,
+            "confirmation_status": "pending",
+            "human_confirmation_required": True,
+        }
 
     async def submit_repair_continuation(
         self,
@@ -1645,7 +1774,7 @@ class RadAgentAppService:
         if phase == "context" and route_after_context(self.state) != "task_planning_subgraph":
             return f"context status is {self.state.get('context_decision') or 'missing'}"
         expectations = {
-            "task_planning": ("task_planning_status", {"passed"}),
+            "task_planning": ("task_planning_status", {"passed", "needs_user_input"}),
             "requirements_review": (
                 "requirements_review_status",
                 {"approved", "pending", "needs_user_input"},
@@ -1682,7 +1811,6 @@ class RadAgentAppService:
         return (
             _requirements_review_waiting_status(self.state.get("requirements_review_status"))
             and bool(self.state.get("human_confirmation_required"))
-            and not bool(self.state.get("raw_human_response"))
         )
 
     def _is_human_confirmation_pending(self) -> bool:
@@ -1702,7 +1830,10 @@ class RadAgentAppService:
         """Build and run the generated project so the browser 3D view has real data."""
         if self.state.get("patch_status") != "applied":
             return {}
-        if self.state.get("auto_visualization_status") == "ready":
+        if (
+            self.state.get("auto_visualization_status") == "ready"
+            and not self._visual_output_stale_reason(self.state)
+        ):
             return {}
 
         try:
@@ -1795,6 +1926,13 @@ class RadAgentAppService:
         job_id = str(self.state.get("job_id", ""))
         if not job_id:
             return
+        persisted_phase = phase
+        if phase == LEGACY_HUMAN_CONFIRMATION_PHASE:
+            persisted_phase = (
+                "g4_codegen"
+                if self.state.get("confirmation_status") == "approved"
+                else "requirements_review"
+            )
         status = status_override or ("completed" if phase == "report" else "running")
         if self.state.get("confirmation_status") == "pending":
             status = "paused"
@@ -1804,7 +1942,7 @@ class RadAgentAppService:
             job_id=job_id,
             state=self.state,
             completed_phases=self.completed_phases,
-            phase=phase,
+            phase=persisted_phase,
             current_phase_idx=self.current_phase_idx,
             status=status,
         )
@@ -1861,7 +1999,7 @@ class RadAgentAppService:
                 status = "paused"
             if _state_has_legacy_codegen_physics_confirmation(self.state):
                 status = "failed"
-            if self.state.get("termination_reason"):
+            if _is_failure_termination_reason(self.state.get("termination_reason")):
                 status = "failed"
         return JobStatus(
             job_id=str(self.state.get("job_id", "")),
@@ -1875,15 +2013,9 @@ class RadAgentAppService:
             workspace_root=str(self.state.get("workspace_root", self.workspace.root)),
             job_workspace=str(self.state.get("job_workspace", "")),
             needs_confirmation=(
-                (
-                    bool(self.state.get("human_confirmation_required"))
-                    or self.state.get("confirmation_status") == "pending"
-                )
-                and not _is_modeling_failure_state(self.state)
-                and not _state_has_legacy_codegen_physics_confirmation(self.state)
-            )
-            or self._is_requirements_review_pending()
-            or self._is_repair_continuation_pending(),
+                self._is_requirements_review_pending()
+                or self._is_repair_continuation_pending()
+            ),
             key_statuses=key_statuses,
             state={**dict(self.state), "runtime_active": runtime_active},
         )
@@ -1908,6 +2040,11 @@ class RadAgentAppService:
             self.state = dict(snapshot["state"])
             self.current_phase_idx = int(snapshot["current_phase_idx"])
             self.completed_phases = list(snapshot["completed_phases"])
+            self.current_phase_idx = _normalize_phase_idx_from_legacy(
+                self.current_phase_idx,
+                self.completed_phases,
+            )
+            self.completed_phases = _completed_pipeline_phases(self.completed_phases)
         else:
             self.state = {
                 "job_id": job["job_id"],
@@ -1920,7 +2057,16 @@ class RadAgentAppService:
                 "max_retries_reached": False,
                 "skipped_gates": [],
             }
-            self.current_phase_idx = int(job["current_phase_idx"])
+            current_idx = int(job["current_phase_idx"])
+            legacy_completed = (
+                list(LEGACY_PIPELINE_PHASES[:current_idx])
+                if str(job.get("current_phase") or "") == LEGACY_HUMAN_CONFIRMATION_PHASE
+                else []
+            )
+            self.current_phase_idx = _normalize_phase_idx_from_legacy(
+                current_idx,
+                legacy_completed,
+            )
             self.completed_phases = list(PIPELINE_PHASES[: self.current_phase_idx])
         self._normalize_resumed_progress()
         if clear_failure:
@@ -1930,6 +2076,7 @@ class RadAgentAppService:
         return self.get_status()
 
     def _normalize_resumed_progress(self) -> None:
+        self.completed_phases = _completed_pipeline_phases(self.completed_phases)
         highest_completed_idx = -1
         for phase in self.completed_phases:
             if phase in PIPELINE_PHASES:
@@ -1990,8 +2137,8 @@ class RadAgentAppService:
             return []
         return [ArtifactSummary(**row) for row in self.store.list_artifacts(job_id)]
 
-    def read_artifact(self, path: str, *, max_chars: int = 200_000) -> ArtifactContent:
-        artifact_path = self._resolve_artifact_path(path)
+    def read_artifact(self, path: str, *, max_chars: int = 200_000, job_id: str | None = None) -> ArtifactContent:
+        artifact_path = self._resolve_artifact_path(path, job_id=job_id)
         if not artifact_path.exists():
             return ArtifactContent(path=path, exists=False)
         size = artifact_path.stat().st_size
@@ -2036,16 +2183,146 @@ class RadAgentAppService:
             truncated=truncated,
         )
 
-    def _resolve_artifact_path(self, path: str) -> Path:
+    def package_generated_source_files(self, job_id: str | None = None) -> dict[str, Any]:
+        state = self._state_for_job(job_id)
+        active_job_id = str(state.get("job_id") or job_id or self.state.get("job_id") or "")
+        if not active_job_id:
+            raise RuntimeError("No active job for source package.")
+        source_dir = Path(str(state.get("generated_code_dir") or ""))
+        if not source_dir.is_dir():
+            raise RuntimeError("No generated code directory in current state.")
+        job_workspace = Path(str(state.get("job_workspace") or self.workspace.job_dir(active_job_id)))
+        package_dir = job_workspace / "downloads"
+        package_dir.mkdir(parents=True, exist_ok=True)
+        archive_path = package_dir / f"{active_job_id}_geant4_source.zip"
+        included = 0
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(source_dir.rglob("*")):
+                if not path.is_file() or self._exclude_from_source_package(path, source_dir):
+                    continue
+                archive.write(path, path.relative_to(source_dir).as_posix())
+                included += 1
+        if included == 0:
+            archive_path.unlink(missing_ok=True)
+            raise RuntimeError("Generated code directory has no source files to package.")
+        if self.store.get_job(active_job_id) is None:
+            self.store.upsert_job(
+                job_id=active_job_id,
+                user_query=str(state.get("user_query", "")),
+                job_workspace=str(job_workspace),
+            )
+        self.store.record_artifact(
+            job_id=active_job_id,
+            path=str(archive_path),
+            stage="downloads",
+            kind="generated_source_package",
+            mime_type="application/zip",
+        )
+        return {
+            "success": True,
+            "path": str(archive_path),
+            "filename": archive_path.name,
+            "content_type": "application/zip",
+            "size_bytes": archive_path.stat().st_size,
+            "file_count": included,
+        }
+
+    @staticmethod
+    def _exclude_from_source_package(path: Path, source_dir: Path) -> bool:
+        relative = path.relative_to(source_dir)
+        parts = set(relative.parts)
+        if parts & {
+            "build",
+            "CMakeFiles",
+            ".git",
+            ".cache",
+            "__pycache__",
+            "output",
+            "outputs",
+            "g4_output",
+        }:
+            return True
+        name = path.name
+        if name in {"CMakeCache.txt", "cmake_install.cmake", "Makefile"}:
+            return True
+        if path.suffix.lower() in {".o", ".so", ".a", ".dylib", ".dll", ".exe", ".bin"}:
+            return True
+        return False
+
+    def _resolve_artifact_path(self, path: str, *, job_id: str | None = None) -> Path:
         artifact_path = Path(path)
         if artifact_path.is_absolute() or artifact_path.exists():
             return artifact_path
-        job_id = str(self.state.get("job_id", ""))
+        active_job_id = job_id or str(self.state.get("job_id", ""))
+        if active_job_id:
+            job_relative = self.workspace.root / "jobs" / active_job_id / path
+            if job_relative.exists():
+                return job_relative
+        return artifact_path
+
+    def _resolve_state_path(self, state: dict[str, Any], value: Any) -> Path | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        path = Path(value)
+        if path.is_absolute() or path.exists():
+            return path
+        job_id = str(state.get("job_id") or "")
         if job_id:
             job_relative = self.workspace.root / "jobs" / job_id / path
             if job_relative.exists():
                 return job_relative
-        return artifact_path
+        workspace_relative = self.workspace.root / path
+        if workspace_relative.exists():
+            return workspace_relative
+        return path
+
+    def _visual_output_dir_from_state(self, state: dict[str, Any]) -> str:
+        return (
+            str(state.get("_visual_output_dir") or "")
+            or str(state.get("visual_output_dir") or "")
+            or str(state.get("_sim_output_dir") or "")
+        )
+
+    def _path_mtime(self, path: Path | None) -> float | None:
+        if path is None or not path.exists():
+            return None
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return None
+
+    def _latest_visual_output_mtime(self, state: dict[str, Any], output_dir: str) -> float | None:
+        paths: list[Path] = []
+        for key in VISUAL_OUTPUT_STATE_KEYS:
+            path = self._resolve_state_path(state, state.get(key))
+            if path is not None:
+                paths.append(path)
+        root = self._resolve_state_path(state, output_dir)
+        if root is not None:
+            paths.extend(root / name for name in VISUAL_OUTPUT_ARTIFACT_NAMES)
+        mtimes = [mtime for path in paths if (mtime := self._path_mtime(path)) is not None]
+        return max(mtimes) if mtimes else None
+
+    def _latest_visual_source_mtime(self, state: dict[str, Any]) -> float | None:
+        mtimes: list[float] = []
+        for key in VISUAL_FRESHNESS_SOURCE_KEYS:
+            path = self._resolve_state_path(state, state.get(key))
+            mtime = self._path_mtime(path)
+            if mtime is not None:
+                mtimes.append(mtime)
+        return max(mtimes) if mtimes else None
+
+    def _visual_output_stale_reason(self, state: dict[str, Any]) -> str:
+        output_dir = self._visual_output_dir_from_state(state)
+        source_mtime = self._latest_visual_source_mtime(state)
+        if not source_mtime:
+            return ""
+        visual_mtime = self._latest_visual_output_mtime(state, output_dir)
+        if visual_mtime is None:
+            return "visualization artifacts are missing for the latest generated model"
+        if visual_mtime + 1e-6 < source_mtime:
+            return "visualization artifacts are stale; showing the latest model preview until the simulation reruns"
+        return ""
 
     def get_model_ir(self, job_id: str | None = None) -> dict[str, Any] | None:
         state = self._state_for_job(job_id)
@@ -2059,20 +2336,28 @@ class RadAgentAppService:
         from agent_core.web.visualization import build_visualization_payload
 
         state = self._state_for_job(job_id)
-        output_dir = (
-            str(state.get("_visual_output_dir") or "")
-            or str(state.get("visual_output_dir") or "")
-            or str(state.get("_sim_output_dir") or "")
-        )
+        output_dir = self._visual_output_dir_from_state(state)
+        stale_reason = self._visual_output_stale_reason(state)
+        stale_output_dir = output_dir if stale_reason else ""
+        if stale_reason:
+            output_dir = ""
         model_ir = state.get("g4_model_ir")
         if not isinstance(model_ir, dict):
             model_ir = self.get_model_ir(job_id) or {}
-        return build_visualization_payload(
+        payload = build_visualization_payload(
             output_dir=output_dir or None,
             job_id=str(job_id or state.get("job_id", "")),
             model_ir=model_ir,
             visual_events=VISUAL_WORKBENCH_EVENTS,
         )
+        if stale_reason:
+            warnings = payload.setdefault("warnings", [])
+            if isinstance(warnings, list):
+                warnings.insert(0, stale_reason)
+            source = payload.setdefault("source", {})
+            if isinstance(source, dict):
+                source["stale_output_dir"] = stale_output_dir
+        return payload
 
     def get_gate_results(self, job_id: str | None = None) -> list[dict[str, Any]]:
         state = self._state_for_job(job_id)
@@ -2117,12 +2402,12 @@ class RadAgentAppService:
 
     def get_confirmation_review(self, job_id: str | None = None) -> dict[str, Any]:
         state = self._state_for_job(job_id)
+        if _requirements_review_waiting_status(state.get("requirements_review_status")):
+            return self._requirements_review_confirmation_review(state)
         if _is_modeling_failure_state(state):
             return self._modeling_failure_review(state)
         if _state_has_legacy_codegen_physics_confirmation(state):
             return self._legacy_codegen_physics_confirmation_review(state)
-        if _requirements_review_waiting_status(state.get("requirements_review_status")):
-            return self._requirements_review_confirmation_review(state)
         request = state.get("repair_continuation_request")
         if (
             isinstance(request, dict)
@@ -2174,6 +2459,7 @@ class RadAgentAppService:
             confirmation_request.get("assumptions")
         )
         return {
+            "job_id": state.get("job_id", ""),
             "status": state.get("confirmation_status", ""),
             "required": bool(state.get("human_confirmation_required")),
             "actionable": _confirmation_actionable(state),
@@ -2197,7 +2483,8 @@ class RadAgentAppService:
         state = self._state_for_job(job_id)
         baseline = self._deterministic_workflow_diagnosis(state, job_id=job_id)
         try:
-            model_patch = await self._lite_workflow_diagnosis_patch(state, baseline)
+            with self._workspace_root_env():
+                model_patch = await self._lite_workflow_diagnosis_patch(state, baseline)
         except Exception as exc:
             return {
                 **baseline,
@@ -2245,11 +2532,11 @@ class RadAgentAppService:
                 "severity": "error",
                 "phase": "g4_modeling",
                 "status": status.model_dump(mode="json"),
-                "user_message": f"建模阶段失败，人工确认不能批准。{summary}",
+                "user_message": f"建模阶段失败，需要回到参数核对或重新运行建模。{summary}",
                 "blocking_reason": summary,
                 "confirmation_actionable": False,
                 "allowed_actions": ["view_modeling_report", "retry_modeling"],
-                "next_step_hint": "请先查看建模校验报告并重新运行建模；通过后才会进入人工确认。",
+                "next_step_hint": "请先查看建模校验报告；如果是需求不清，回到参数核对补充后再进入建模。",
                 "artifacts": [report_path] if report_path else [],
                 "hard_rules": {
                     "confirmation_actionable": False,
@@ -2284,7 +2571,7 @@ class RadAgentAppService:
                 "severity": "error",
                 "phase": "g4_codegen",
                 "status": status.model_dump(mode="json"),
-                "user_message": f"Geant4 工程生成失败，不能进入人工确认。{summary}",
+                "user_message": f"Geant4 工程生成失败，需要继续代码修复。{summary}",
                 "blocking_reason": summary,
                 "confirmation_actionable": False,
                 "allowed_actions": ["view_codegen_patch", "view_logs", "retry_codegen"],
@@ -2336,20 +2623,20 @@ class RadAgentAppService:
         if status.needs_confirmation:
             review = self.get_confirmation_review(job_id)
             return {
-                "ui_state": "human_confirmation_pending",
+                "ui_state": "requirements_review_pending",
                 "severity": "warning",
-                "phase": "human_confirmation",
+                "phase": "requirements_review",
                 "status": status.model_dump(mode="json"),
-                "user_message": str(review.get("summary") or "需要人工确认模型假设和关键参数。"),
-                "blocking_reason": "human_confirmation_required",
+                "user_message": str(review.get("summary") or "需要先核对 Geant4 建模需求参数。"),
+                "blocking_reason": "requirements_review_required",
                 "confirmation_actionable": True,
                 "allowed_actions": [
-                    "review_confirmation",
-                    "approve_confirmation",
+                    "review_requirements",
+                    "approve_requirements",
                     "ask_more",
-                    "reject_confirmation",
+                    "reject_requirements",
                 ],
-                "next_step_hint": "打开确认项，确认参数含义后再批准；不清楚时要求 Agent 继续追问。",
+                "next_step_hint": "打开参数核对，确认推荐答案或补充参数后，模型会再次评估。",
                 "artifacts": [
                     str(review.get("request_path") or ""),
                     str(review.get("report_path") or ""),
@@ -2437,6 +2724,7 @@ class RadAgentAppService:
         if not message:
             message = f"修复 Agent 已耗尽 {current_turns} 轮，是否增加 {increment} 轮继续修复？"
         return {
+            "job_id": state.get("job_id", ""),
             "status": "pending",
             "required": True,
             "type": "repair_continuation",
@@ -2508,6 +2796,7 @@ class RadAgentAppService:
             preview_lines.extend(f"- {error}" for error in errors[:12])
         return {
             "type": "modeling_failure",
+            "job_id": state.get("job_id", ""),
             "status": "failed",
             "required": False,
             "actionable": False,
@@ -2540,6 +2829,7 @@ class RadAgentAppService:
         )
         return {
             "type": "requirements_review",
+            "job_id": state.get("job_id", ""),
             "status": state.get("requirements_review_status", "pending"),
             "required": True,
             "actionable": True,
@@ -2580,6 +2870,7 @@ class RadAgentAppService:
         )
         return {
             "type": "legacy_codegen_physics_confirmation_disabled",
+            "job_id": state.get("job_id", ""),
             "status": "failed",
             "required": False,
             "actionable": False,

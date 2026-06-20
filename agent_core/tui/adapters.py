@@ -34,8 +34,9 @@ _PHASE_LABELS = {
     "prepare_workspace": "Prepare workspace",
     "context": "Context",
     "task_planning": "Task planning",
+    "requirements_review": "Requirements review",
     "g4_modeling": "G4 modeling",
-    "human_confirmation": "Human confirmation",
+    "human_confirmation": "Requirements review",
     "g4_codegen": "G4 codegen",
     "patch": "Patch",
     "gate": "Gate checks",
@@ -46,7 +47,7 @@ _STANDARD_WORKFLOW = (
     ("parse_request", "Parse request", ()),
     ("prepare_workspace", "Prepare workspace", ("prepare_workspace",)),
     ("load_context", "Load context", ("context",)),
-    ("plan_simulation", "Plan simulation", ("task_planning", "g4_modeling", "human_confirmation")),
+    ("plan_simulation", "Plan simulation", ("task_planning", "requirements_review", "g4_modeling", "human_confirmation")),
     ("generate_macro", "Generate macro / script", ("g4_codegen", "patch")),
     ("run_tools", "Run checks / tools", ("gate", "artifact")),
     ("generate_report", "Generate report", ("report",)),
@@ -218,9 +219,10 @@ def render_startup_status(status: Any) -> str:
 
 def render_task_context(status: JobStatus, *, language: Any = "en") -> str:
     """Render the right-side task summary and adjacent workflow steps."""
+    current_phase = _present_phase(status.current_phase)
     phase = (
-        _PHASE_LABELS.get(status.current_phase, status.current_phase.replace("_", " ").title())
-        if status.current_phase
+        _PHASE_LABELS.get(current_phase, current_phase.replace("_", " ").title())
+        if current_phase
         else "completed" if status.status == "completed" else "waiting"
     )
     lines = [
@@ -465,8 +467,10 @@ def _summary_for_language(value: Any, *, language: Any) -> str:
 
 
 def _workflow_step_lines(status: JobStatus) -> list[str]:
-    current = status.current_phase if status.current_phase in PIPELINE_PHASES else ""
-    completed = set(status.completed_phases)
+    current = _present_phase(status.current_phase)
+    if current not in PIPELINE_PHASES:
+        current = ""
+    completed = {_present_phase(phase) for phase in status.completed_phases}
     lines: list[str] = []
     for virtual_key, label, phases in _STANDARD_WORKFLOW:
         phase_set = set(phases)
@@ -490,9 +494,16 @@ def _workflow_step_lines(status: JobStatus) -> list[str]:
 
 
 def _current_phase_index(status: JobStatus) -> int:
-    if status.current_phase in PIPELINE_PHASES:
-        return PIPELINE_PHASES.index(status.current_phase)
+    current_phase = _present_phase(status.current_phase)
+    if current_phase in PIPELINE_PHASES:
+        return PIPELINE_PHASES.index(current_phase)
     return max(0, min(int(status.current_phase_idx), len(PIPELINE_PHASES) - 1))
+
+
+def _present_phase(phase: str) -> str:
+    if phase == "human_confirmation":
+        return "requirements_review"
+    return phase
 
 
 def _workflow_line(symbol: str, role: str, index: int | None) -> str:

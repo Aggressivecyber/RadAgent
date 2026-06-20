@@ -176,6 +176,82 @@ class TestScoreCombinedContext:
         assert report["user_missing_hard_required"] == []
         assert report["rag_missing_hard_required"] == ["source"]
 
+    async def test_missing_user_parameters_routes_to_requirements_review_not_context_failure(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        job_dir = temp_workspace / "jobs" / "test_job" / STAGE_CONTEXT
+        job_dir.mkdir(parents=True)
+
+        state = {
+            "job_id": "test_job",
+            "user_context_requirements": {
+                "coverage": {
+                    "geometry": False,
+                    "materials": False,
+                    "source": False,
+                    "physics": False,
+                    "scoring": False,
+                    "output": False,
+                },
+                "missing_hard_required": ["geometry", "materials", "scoring", "source"],
+                "missing_information": [
+                    "MOSFET 几何结构",
+                    "辐照源类型、能量和方向",
+                    "敏感体积和计分目标",
+                ],
+                "extraction_source": "lite_model",
+            },
+            "rag_score": 0.2,
+            "rag_report": {"missing_hard_required": ["source"]},
+            "web_context": [],
+        }
+
+        result = await score_combined_context(state)
+
+        assert result["context_decision"] == "allow_with_web_supplement"
+        report = json.loads(Path(result["context_report_path"]).read_text())
+        assert report["decision_reason"] == "missing_user_parameters_requirements_review"
+        assert report["user_missing_hard_required"] == [
+            "geometry",
+            "materials",
+            "scoring",
+            "source",
+        ]
+
+    async def test_empty_request_without_requirement_signal_still_blocks(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        job_dir = temp_workspace / "jobs" / "test_job" / STAGE_CONTEXT
+        job_dir.mkdir(parents=True)
+
+        state = {
+            "job_id": "test_job",
+            "user_query": "",
+            "user_context_requirements": {
+                "coverage": {
+                    "geometry": False,
+                    "materials": False,
+                    "source": False,
+                    "physics": False,
+                    "scoring": False,
+                    "output": False,
+                },
+                "missing_hard_required": ["geometry", "materials", "scoring", "source"],
+                "missing_information": [],
+                "confidence": 0.0,
+                "extraction_source": "heuristic",
+            },
+            "rag_score": 0.0,
+            "rag_report": {"missing_hard_required": ["geometry", "materials", "scoring", "source"]},
+            "web_context": [],
+        }
+
+        result = await score_combined_context(state)
+
+        assert result["context_decision"] == "block_no_context"
+
 
 class TestRetrieveWebContext:
     async def test_no_web_tool(self, temp_workspace: Path) -> None:

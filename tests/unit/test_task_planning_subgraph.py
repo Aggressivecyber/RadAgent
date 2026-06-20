@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask
+from agent_core.planning.graph import build_task_planning_subgraph
 from agent_core.planning.nodes import parse_task, save_task_spec, validate_task_spec
 
 
@@ -138,7 +139,7 @@ class TestParseTask:
         assert particle["energy_MeV"] == 5.5
         assert result["task_spec_errors"] == []
 
-    async def test_mosfet_tid_requires_clarification_instead_of_default_geant4(
+    async def test_mosfet_tid_requires_geant4_parameter_review(
         self,
         temp_workspace: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -183,19 +184,95 @@ class TestParseTask:
 
         task_spec = result["task_spec"]
         assert result["task_planning_status"] == "needs_user_input"
-        assert result["simulation_scope"] == ["tcad"]
+        assert result["simulation_scope"] == ["geant4"]
         assert "particle" not in task_spec
         assert task_spec["clarification_request"]["reason"] == "ambiguous_device_tid"
         assert task_spec["clarification_request"]["missing_information"] == [
             "MOSFET geometry and dimensions",
             "gate oxide thickness and material stack",
             "radiation source particle, energy or spectrum, and fluence or dose",
-            "TID observable: oxide dose only or electrical response such as threshold shift",
-            "whether to run Geant4 dose scoring, TCAD device simulation, or a coupled workflow",
+            "sensitive volume for Geant4 oxide dose and energy-deposition scoring",
         ]
-        assert result["task_spec_errors"] == [
-            "MOSFET/TID request needs user clarification before code generation."
-        ]
+        assert result["task_spec_errors"] == []
+        assert result["termination_reason"] == ""
+        assert calls == []
+
+    async def test_mosfet_parameter_review_subgraph_stops_without_retry_loop(
+        self,
+        temp_workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def fail_if_called(**kwargs):
+            raise AssertionError("under-specified MOSFET irradiation should not retry planner")
+
+        class FakeGateway:
+            call = fail_if_called
+
+        monkeypatch.setattr(
+            "agent_core.models.gateway.get_model_gateway",
+            lambda: FakeGateway(),
+        )
+        graph = build_task_planning_subgraph().compile()
+
+        result = await graph.ainvoke(
+            {
+                "job_id": "test_job",
+                "user_query": "仿真一个mosfet的tid效应",
+            },
+            {"recursion_limit": 10},
+        )
+
+        assert result["task_planning_status"] == "needs_user_input"
+        assert result["clarification_request"]["reason"] == "ambiguous_device_tid"
+        assert result["termination_reason"] == ""
+
+    async def test_mosfet_g4_irradiation_defers_missing_source_to_requirements_review(
+        self,
+        temp_workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[dict[str, object]] = []
+
+        class FakeGateway:
+            async def call(self, **kwargs):
+                calls.append(kwargs)
+                return ModelCallResult(
+                    task=kwargs["task"],
+                    tier=kwargs["tier"],
+                    provider=ModelProvider.MOCK,
+                    model_name="fake",
+                    content="{}",
+                    parsed_json={
+                        "target": {
+                            "material": "Silicon",
+                            "geometry_type": "mosfet",
+                        },
+                        "outputs": ["energy_deposition", "dose_distribution"],
+                    },
+                )
+
+        monkeypatch.setattr(
+            "agent_core.models.gateway.get_model_gateway",
+            lambda: FakeGateway(),
+        )
+
+        result = await parse_task(
+            {
+                "job_id": "test_job",
+                "user_query": "做一个mosfet的g4辐照仿真",
+            }
+        )
+
+        task_spec = result["task_spec"]
+        assert result["simulation_scope"] == ["geant4"]
+        assert result["task_spec_errors"] == []
+        assert result["task_planning_status"] == "needs_user_input"
+        assert task_spec["metadata"]["clarification_required"] == "true"
+        assert task_spec["clarification_request"]["reason"] == "ambiguous_device_tid"
+        assert any(
+            "radiation source particle" in item
+            for item in task_spec["clarification_request"]["missing_information"]
+        )
         assert calls == []
 
     async def test_simple_slab_query_normalizes_source_and_target(
@@ -236,16 +313,17 @@ class TestParseTask:
         _, errors = validate_task_spec(result["task_spec"])
         assert errors == []
 
-    async def test_tcad_reserved_scope(self, temp_workspace: Path) -> None:
+    async def test_non_geant4_tool_words_do_not_change_geant4_scope(
+        self,
+        temp_workspace: Path,
+    ) -> None:
         state = {
             "job_id": "test_job",
-            "user_query": "simulate proton in silicon then TCAD analysis",
+            "user_query": "simulate proton in silicon then external device analysis",
         }
         result = await parse_task(state)
-        assert "tcad" in result["simulation_scope"]
-        # TCAD keyword present → tcad detected. proton/silicon are not
-        # geant4 scope keywords, so scope is ["tcad"] only.
-        # This will be blocked by scope guard regardless.
+        assert result["simulation_scope"] == ["geant4"]
+        assert result["task_spec"]["particle"]["type"] == "proton"
 
     async def test_approved_ap8ae8_briefing_writes_particle_for_g4(
         self,

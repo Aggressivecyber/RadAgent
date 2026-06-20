@@ -1,4 +1,4 @@
-"""Tests for Task Planning Scope Guard — TCAD/SPICE must be blocked."""
+"""Tests for Task Planning Scope Guard."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from agent_core.planning.nodes import detect_scope, validate_supported_scope
 
 
 class TestTaskPlanningScopeGuard:
-    """Verify TCAD/SPICE scopes are hard-blocked from G4 subgraphs."""
+    """Verify task planning routes all supported requests to requirements review."""
 
     def _make_state(self, scope: list[str], status: str = "completed") -> dict:
         return {
@@ -20,59 +20,29 @@ class TestTaskPlanningScopeGuard:
         state = self._make_state(["geant4"])
         assert route_after_task_planning(state) == "requirements_review"
 
-    def test_tcad_blocked(self) -> None:
-        """TCAD scope must be routed to report_subgraph."""
-        state = self._make_state(["tcad"])
-        assert route_after_task_planning(state) == "report_subgraph"
+    def test_non_empty_scope_words_proceed_to_requirements_review(self) -> None:
+        state = self._make_state(["external_tool"])
+        assert route_after_task_planning(state) == "requirements_review"
 
-    def test_spice_blocked(self) -> None:
-        """SPICE scope must be routed to report_subgraph."""
-        state = self._make_state(["spice"])
-        assert route_after_task_planning(state) == "report_subgraph"
-
-    def test_geant4_plus_tcad_blocked(self) -> None:
-        """Mixed geant4+tcad must be blocked — no partial G4 modeling."""
-        state = self._make_state(["geant4", "tcad"])
-        assert route_after_task_planning(state) == "report_subgraph"
-
-    def test_full_chain_blocked(self) -> None:
-        """full_chain scope must be blocked."""
-        state = self._make_state(["full_chain"])
-        assert route_after_task_planning(state) == "report_subgraph"
-
-    def test_geant4_tcad_spice_blocked(self) -> None:
-        """All three scopes together must be blocked."""
-        state = self._make_state(["geant4", "tcad", "spice"])
-        assert route_after_task_planning(state) == "report_subgraph"
-
-    def test_geant4_to_tcad_blocked(self) -> None:
-        """geant4_to_tcad bridge scope must be blocked."""
-        state = self._make_state(["geant4_to_tcad"])
-        assert route_after_task_planning(state) == "report_subgraph"
-
-    def test_tcad_to_spice_blocked(self) -> None:
-        """tcad_to_spice bridge scope must be blocked."""
-        state = self._make_state(["tcad_to_spice"])
-        assert route_after_task_planning(state) == "report_subgraph"
+    def test_needs_user_input_proceeds_to_requirements_review(self) -> None:
+        state = self._make_state(["geant4"], status="needs_user_input")
+        assert route_after_task_planning(state) == "requirements_review"
 
     def test_failed_status_goes_to_report(self) -> None:
         """Failed planning always goes to report, regardless of scope."""
         state = self._make_state(["geant4"], status="failed")
         assert route_after_task_planning(state) == "report_subgraph"
 
-    def test_empty_scope_goes_to_report(self) -> None:
-        """Empty scope goes to report."""
+    def test_empty_scope_defaults_to_requirements_review(self) -> None:
         state = self._make_state([])
-        assert route_after_task_planning(state) == "report_subgraph"
+        assert route_after_task_planning(state) == "requirements_review"
 
-    def test_unknown_scope_goes_to_report(self) -> None:
-        """Unknown scope string goes to report."""
+    def test_unknown_scope_defaults_to_requirements_review(self) -> None:
         state = self._make_state(["unknown_scope"])
-        assert route_after_task_planning(state) == "report_subgraph"
+        assert route_after_task_planning(state) == "requirements_review"
 
-    def test_reserved_status_goes_to_report(self) -> None:
-        """Reserved status (TCAD/SPICE detected) goes to report."""
-        state = self._make_state(["geant4", "tcad"], status="reserved")
+    def test_reserved_status_goes_to_report_for_legacy_snapshots(self) -> None:
+        state = self._make_state(["geant4", "legacy_reserved"], status="reserved")
         assert route_after_task_planning(state) == "report_subgraph"
 
 
@@ -91,25 +61,13 @@ class TestDetectScope:
     def test_geant4_dose_keyword(self) -> None:
         assert "geant4" in detect_scope("剂量分布计算")
 
-    def test_tcad_english_keyword(self) -> None:
-        result = detect_scope("TCAD device simulation with sentaurus")
-        assert "tcad" in result
+    def test_mosfet_g4_irradiation_is_geant4_scope(self) -> None:
+        result = detect_scope("做一个mosfet的g4辐照仿真")
+        assert result == ["geant4"]
 
-    def test_tcad_chinese_keyword(self) -> None:
+    def test_device_simulation_words_return_geant4_scope(self) -> None:
         result = detect_scope("半导体器件仿真")
-        assert "tcad" in result
-
-    def test_spice_english_keyword(self) -> None:
-        result = detect_scope("ngspice circuit simulation")
-        assert "spice" in result
-
-    def test_spice_chinese_keyword(self) -> None:
-        result = detect_scope("电路仿真网表")
-        assert "spice" in result
-
-    def test_full_chain_chinese_keyword(self) -> None:
-        result = detect_scope("联合仿真全链路")
-        assert "full_chain" in result
+        assert result == ["geant4"]
 
     def test_default_geant4_when_no_keywords(self) -> None:
         result = detect_scope("模拟探测器响应")
@@ -127,26 +85,11 @@ class TestValidateSupportedScope:
     def test_pure_geant4_passes(self) -> None:
         result = validate_supported_scope(["geant4"])
         assert result["task_planning_status"] == "passed"
-        assert result["reserved_scopes"] == []
 
-    def test_tcad_is_reserved(self) -> None:
-        result = validate_supported_scope(["tcad"])
-        assert result["task_planning_status"] == "reserved"
-        assert "tcad" in result["reserved_scopes"]
+    def test_external_scope_word_is_supported(self) -> None:
+        result = validate_supported_scope(["external_tool"])
+        assert result["task_planning_status"] == "passed"
 
-    def test_spice_is_reserved(self) -> None:
-        result = validate_supported_scope(["spice"])
-        assert result["task_planning_status"] == "reserved"
-        assert "spice" in result["reserved_scopes"]
-
-    def test_geant4_tcad_is_reserved(self) -> None:
-        result = validate_supported_scope(["geant4", "tcad"])
-        assert result["task_planning_status"] == "reserved"
-
-    def test_full_chain_is_reserved(self) -> None:
-        result = validate_supported_scope(["full_chain"])
-        assert result["task_planning_status"] == "reserved"
-
-    def test_unknown_scope_fails(self) -> None:
+    def test_unknown_scope_is_treated_as_geant4_context(self) -> None:
         result = validate_supported_scope(["unknown"])
-        assert result["task_planning_status"] == "failed"
+        assert result["task_planning_status"] == "passed"

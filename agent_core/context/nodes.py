@@ -4,7 +4,7 @@ Rules:
 1. Use the lite model to extract what the user request explicitly specifies.
 2. Use RAG/Web for Geant4 implementation evidence, not to decide whether the
    user mentioned a source or geometry.
-3. Missing hard user requirements → block_no_context.
+3. Missing hard user requirements → continue to requirements review.
 4. Never use model built-in knowledge as sole implementation source.
 5. All web results must have URLs.
 6. All evidence goes to evidence_map.
@@ -842,6 +842,9 @@ async def score_combined_context(state: ContextSubgraphState) -> dict[str, Any]:
     Decision logic:
       - User request has all hard-required modelling dimensions → allow_rag
         (RAG gaps are implementation-evidence warnings, not user-context blockers)
+      - User request is missing hard-required modelling dimensions →
+        allow_with_web_supplement so the pre-modeling requirements review can
+        ask the user for parameters instead of ending the job.
       - RAG sufficient (score >= 0.7, no hard-required missing) → allow_rag
       - Web quality sufficient → allow_with_web_supplement
       - Otherwise → block_no_context
@@ -853,18 +856,29 @@ async def score_combined_context(state: ContextSubgraphState) -> dict[str, Any]:
     if not isinstance(user_requirements, dict):
         user_requirements = {}
     user_missing_hard = user_requirements.get("missing_hard_required", [])
+    has_user_requirement_signal = _has_user_requirement_signal(
+        state.get("user_query", ""),
+        user_requirements,
+    )
 
     web_context = state.get("web_context", [])
     web_quality = score_web_quality(web_context)
 
-    if user_requirements and not user_missing_hard:
+    if user_requirements and has_user_requirement_signal and not user_missing_hard:
         decision = "allow_rag"
+        decision_reason = "user_request_has_required_parameters"
+    elif user_requirements and has_user_requirement_signal and user_missing_hard:
+        decision = "allow_with_web_supplement"
+        decision_reason = "missing_user_parameters_requirements_review"
     elif rag_score >= 0.7 and not rag_missing_hard:
         decision = "allow_rag"
+        decision_reason = "rag_has_required_implementation_evidence"
     elif web_quality["sufficient"]:
         decision = "allow_with_web_supplement"
+        decision_reason = "web_has_supplemental_implementation_evidence"
     else:
         decision = "block_no_context"
+        decision_reason = "no_user_requirements_or_retrieval_evidence"
 
     report = {
         "rag_score": rag_score,
@@ -873,6 +887,7 @@ async def score_combined_context(state: ContextSubgraphState) -> dict[str, Any]:
         "user_missing_hard_required": user_missing_hard,
         "web_quality": web_quality,
         "decision": decision,
+        "decision_reason": decision_reason,
     }
 
     context_dir = _get_context_dir(state.get("job_id", "unknown"))
@@ -884,6 +899,20 @@ async def score_combined_context(state: ContextSubgraphState) -> dict[str, Any]:
         "context_decision": decision,
         "context_report_path": str(context_dir / "context_sufficiency_report.json"),
     }
+
+
+def _has_user_requirement_signal(user_query: Any, user_requirements: dict[str, Any]) -> bool:
+    if str(user_query or "").strip():
+        return True
+    coverage = user_requirements.get("coverage")
+    if isinstance(coverage, dict) and any(bool(value) for value in coverage.values()):
+        return True
+    evidence = user_requirements.get("evidence")
+    if isinstance(evidence, dict) and any(bool(value) for value in evidence.values()):
+        return True
+    if _string_list(user_requirements.get("missing_information")):
+        return True
+    return _float(user_requirements.get("confidence"), 0.0) > 0.0
 
 
 async def save_evidence_map(state: ContextSubgraphState) -> dict[str, Any]:

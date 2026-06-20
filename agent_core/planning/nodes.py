@@ -1,8 +1,6 @@
 """Task Planning Subgraph nodes.
 
-Converts user query into a structured task specification.
-Only "geant4" scope is supported in this phase.
-TCAD/SPICE/full_chain are recorded as reserved.
+Converts user query into a structured Geant4 task specification.
 """
 
 from __future__ import annotations
@@ -22,9 +20,6 @@ def _get_task_dir(job_id: str) -> Path:
     return get_stage_dir(job_id, STAGE_TASK_PLAN)
 
 
-# Reserved scopes that are not yet implemented
-_RESERVED_SCOPES = {"tcad", "spice", "geant4_to_tcad", "tcad_to_spice", "full_chain"}
-
 # Keyword sets for scope detection
 _GEANT4_KEYWORDS = [
     "geant4",
@@ -36,38 +31,6 @@ _GEANT4_KEYWORDS = [
     "剂量分布",
     "monte carlo",
 ]
-_TCAD_KEYWORDS = [
-    "tcad",
-    "sentaurus",
-    "silvaco",
-    "技术计算机辅助设计",
-    "半导体器件仿真",
-    "器件仿真",
-    "mosfet",
-    "nmos",
-    "pmos",
-    "finfet",
-    "晶体管",
-    "阈值",
-    "阈值漂移",
-]
-_SPICE_KEYWORDS = [
-    "spice",
-    "ngspice",
-    "hspice",
-    "ltspice",
-    "电路仿真",
-    "网表",
-]
-_FULL_CHAIN_KEYWORDS = [
-    "联合仿真",
-    "全链路",
-    "geant4到tcad",
-    "tcad到spice",
-    "g4到tcad",
-    "全流程",
-]
-
 _ENERGY_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(MeV|keV|GeV|eV)\b", re.IGNORECASE)
 _EVENTS_RE = re.compile(
     r"(?:run\s*)?(\d+)\s*(?:events?|histories|particles|事件|粒子)\b",
@@ -119,80 +82,33 @@ _DEVICE_TID_KEYWORDS = (
     "finfet",
     "晶体管",
 )
-_TID_KEYWORDS = ("tid", "total ionizing dose", "总剂量", "阈值漂移")
-_EXPLICIT_GEANT4_DOSIMETRY_MARKERS = (
-    "geant4",
-    "g4",
-    "energy deposition",
-    "edep",
-    "dose",
-    "剂量沉积",
-    "能量沉积",
-)
 _MOSFET_TID_MISSING = [
     "MOSFET geometry and dimensions",
     "gate oxide thickness and material stack",
     "radiation source particle, energy or spectrum, and fluence or dose",
-    "TID observable: oxide dose only or electrical response such as threshold shift",
-    "whether to run Geant4 dose scoring, TCAD device simulation, or a coupled workflow",
+    "sensitive volume for Geant4 oxide dose and energy-deposition scoring",
 ]
 
 
 def detect_scope(query: str) -> list[str]:
-    """Detect simulation scope from user query using keyword matching.
+    """Return the executable pipeline scope.
 
-    Returns a deduplicated list of scope strings.
-    Default is ["geant4"] if no keywords match.
+    RadAgent currently has one executable path: Geant4. Other domain terms are
+    surfaced through task metadata and MAX requirements review instead of
+    changing the route.
     """
-    q = query.lower()
-    scope: list[str] = []
-
-    if _is_ambiguous_device_tid_request(q):
-        return ["tcad"]
-
-    if any(k in q for k in _GEANT4_KEYWORDS):
-        scope.append("geant4")
-    if any(k in q for k in _TCAD_KEYWORDS):
-        scope.append("tcad")
-    if any(k in q for k in _SPICE_KEYWORDS):
-        scope.append("spice")
-    if any(k in q for k in _FULL_CHAIN_KEYWORDS):
-        scope.append("full_chain")
-
-    if not scope:
-        scope = ["geant4"]
-
-    # Deduplicate while preserving order
-    return list(dict.fromkeys(scope))
+    return ["geant4"]
 
 
 def validate_supported_scope(scope: list[str]) -> dict[str, Any]:
-    """Check whether the detected scope is supported.
-
-    Returns a status dict with task_planning_status set to:
-      - "reserved" if TCAD/SPICE/full_chain detected
-      - "passed" if pure geant4
-      - "failed" for unsupported combinations
-    """
-    reserved = [s for s in scope if s in _RESERVED_SCOPES]
-
-    if reserved:
-        return {
-            "task_planning_status": "reserved",
-            "reserved_scopes": reserved,
-            "termination_reason": ("TCAD/SPICE/full-chain simulation is reserved."),
-        }
-
-    if scope == ["geant4"]:
+    """Check whether the detected executable scope is supported."""
+    if scope:
         return {
             "task_planning_status": "passed",
-            "reserved_scopes": [],
             "termination_reason": "",
         }
-
     return {
         "task_planning_status": "failed",
-        "reserved_scopes": [],
         "termination_reason": f"Unsupported simulation scope: {scope}",
     }
 
@@ -209,7 +125,7 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
     # Determine simulation scope from query using keyword detection
     scope = detect_scope(user_query)
     query_lower = user_query.lower()
-    if _is_ambiguous_device_tid_request(query_lower):
+    if _is_under_specified_device_irradiation_request(query_lower):
         clarification = _device_tid_clarification_request()
         task_spec = {
             "job_id": job_id,
@@ -224,13 +140,11 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
         }
         return {
             "task_spec": task_spec,
-            "task_spec_errors": [
-                "MOSFET/TID request needs user clarification before code generation."
-            ],
+            "task_spec_errors": [],
             "simulation_scope": scope,
             "clarification_request": clarification,
             "task_planning_status": "needs_user_input",
-            "termination_reason": clarification["message"],
+            "termination_reason": "",
             "current_node": "parse_task",
         }
 
@@ -307,7 +221,10 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
 
     # Validate
     if not particle:
-        errors.append("Cannot determine particle type from query")
+        metadata["source_particle_missing"] = "true"
+        metadata["requirements_review_required"] = "true"
+        task_spec["metadata"] = metadata
+        task_spec["requirements_review_hints"] = _missing_source_requirements_review_hints()
 
     # Increment retry counter for loop guard
     retry_count = state.get("_parse_retry_count", 0) + 1
@@ -317,6 +234,37 @@ async def parse_task(state: TaskPlanningState) -> dict[str, Any]:
         "task_spec_errors": errors,
         "simulation_scope": scope,
         "_parse_retry_count": retry_count,
+    }
+
+
+def _missing_source_requirements_review_hints() -> dict[str, Any]:
+    return {
+        "missing_information": [
+            "radiation source particle",
+            "source energy or spectrum",
+            "fluence, dose, or event count",
+            "source position, direction, and shape",
+        ],
+        "questions": [
+            {
+                "field_path": "source.particle",
+                "question": "请确认辐照粒子类型。",
+                "recommended_value": "gamma",
+                "reason": "MOSFET G4 辐照常见可先用 gamma 做氧化层剂量基准；也可以改为 proton/electron/neutron。",
+            },
+            {
+                "field_path": "source.energy",
+                "question": "请确认粒子能量或能谱。",
+                "recommended_value": "1 MeV mono",
+                "reason": "用户没有给出源项能量，先给出可构建的单能基准。",
+            },
+            {
+                "field_path": "source.geometry",
+                "question": "请确认源的位置、方向和形状。",
+                "recommended_value": "沿 +Z 方向垂直入射 MOSFET 栅氧区域的平行束",
+                "reason": "垂直束流便于做器件局部剂量和能量沉积基准。",
+            },
+        ],
     }
 
 
@@ -386,32 +334,39 @@ async def _model_assisted_task_plan(user_query: str, job_id: str) -> dict[str, A
         return {}
 
 
-def _is_ambiguous_device_tid_request(query_lower: str) -> bool:
+def _is_under_specified_device_irradiation_request(query_lower: str) -> bool:
     has_device = any(keyword in query_lower for keyword in _DEVICE_TID_KEYWORDS)
-    has_tid = any(keyword in query_lower for keyword in _TID_KEYWORDS)
-    has_geant4_dose_only = (
-        ("geant4" in query_lower or "g4" in query_lower)
-        and any(marker in query_lower for marker in _EXPLICIT_GEANT4_DOSIMETRY_MARKERS)
-        and not any(marker in query_lower for marker in ("阈值", "threshold", "电学"))
+    has_irradiation = any(
+        marker in query_lower
+        for marker in (
+            "tid",
+            "total ionizing dose",
+            "总剂量",
+            "辐照",
+            "irradiation",
+            "radiation",
+            "dose",
+            "剂量",
+        )
     )
-    return has_device and has_tid and not has_geant4_dose_only
+    has_source = bool(_detect_particle(query_lower))
+    return has_device and has_irradiation and not has_source
 
 
 def _device_tid_clarification_request() -> dict[str, Any]:
     return {
         "reason": "ambiguous_device_tid",
         "message": (
-            "MOSFET TID can mean Geant4 oxide-dose scoring, TCAD electrical "
-            "response, or a coupled workflow. The workflow needs clarification "
-            "before generating code."
+            "MOSFET TID needs Geant4 geometry, source, and sensitive-volume "
+            "details before generating code."
         ),
         "missing_information": list(_MOSFET_TID_MISSING),
         "questions": [
             {
-                "id": "workflow_scope",
+                "id": "sensitive_volume",
                 "question": (
-                    "Should this run Geant4 dose scoring only, TCAD electrical "
-                    "response, or a coupled Geant4-to-TCAD workflow?"
+                    "Which MOSFET region should be scored as the sensitive volume "
+                    "for dose and energy deposition?"
                 ),
             },
             {
@@ -425,7 +380,7 @@ def _device_tid_clarification_request() -> dict[str, Any]:
                 "id": "device_geometry",
                 "question": (
                     "What MOSFET structure should be modeled: oxide thickness, "
-                    "channel dimensions, material stack, doping, contacts, and bias?"
+                    "channel dimensions, material stack, and package or shielding?"
                 ),
             },
         ],
@@ -676,8 +631,7 @@ class _PlanningFluxEvaluator:
 async def validate_task_spec(state: TaskPlanningState) -> dict[str, Any]:
     """Validate the parsed task spec.
 
-    Uses validate_supported_scope to check for reserved scopes.
-    Sets task_planning_status to "reserved" if TCAD/SPICE detected.
+    Scope words outside Geant4 are treated as requirements-review context.
     """
     task_spec = state.get("task_spec", {})
     errors = list(state.get("task_spec_errors", []))
@@ -690,7 +644,7 @@ async def validate_task_spec(state: TaskPlanningState) -> dict[str, Any]:
             "clarification_request": task_spec.get(
                 "clarification_request", state.get("clarification_request", {})
             ),
-            "termination_reason": state.get("termination_reason", ""),
+            "termination_reason": "",
         }
 
     if not task_spec.get("simulation_scope"):
@@ -701,14 +655,6 @@ async def validate_task_spec(state: TaskPlanningState) -> dict[str, Any]:
     # Check for reserved scopes
     scope_result = validate_supported_scope(scope)
     status = scope_result["task_planning_status"]
-
-    if status == "reserved":
-        return {
-            "task_spec_errors": errors,
-            "task_planning_status": "reserved",
-            "reserved_scopes": scope_result["reserved_scopes"],
-            "termination_reason": scope_result["termination_reason"],
-        }
 
     if errors:
         status = "failed"

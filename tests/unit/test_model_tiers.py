@@ -38,6 +38,10 @@ class TestTaskDefaultTier:
         """Context summary should use LITE tier."""
         assert tier_for_task(ModelTask.CONTEXT_SUMMARY) == ModelTier.LITE
 
+    def test_model_readiness_uses_lite(self) -> None:
+        """Pre-modeling requirements review should use the fast LITE tier."""
+        assert tier_for_task(ModelTask.MODEL_READINESS) == ModelTier.LITE
+
     def test_task_planning_uses_pro(self) -> None:
         """Task planning should use PRO tier."""
         assert tier_for_task(ModelTask.TASK_PLANNING) == ModelTier.PRO
@@ -72,6 +76,7 @@ class TestTaskDefaultTier:
         assert thinking_for_task(ModelTask.INTENT_ROUTING) is False
         assert thinking_for_task(ModelTask.SIMPLE_EXTRACTION) is False
         assert thinking_for_task(ModelTask.CONTEXT_SUMMARY) is False
+        assert thinking_for_task(ModelTask.MODEL_READINESS) is False
         assert thinking_for_task(ModelTask.HUMAN_CONFIRMATION) is False
         assert thinking_for_task(ModelTask.G4_MODELING) is True
         assert thinking_for_task(ModelTask.CODEGEN) is True
@@ -84,6 +89,7 @@ class TestTaskDefaultTier:
             ModelTask.INTENT_ROUTING,
             ModelTask.SIMPLE_EXTRACTION,
             ModelTask.CONTEXT_SUMMARY,
+            ModelTask.MODEL_READINESS,
             ModelTask.CREDIBILITY_ASSESSMENT,
             ModelTask.SIMULATION_BRIEFING,
         }

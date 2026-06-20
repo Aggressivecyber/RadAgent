@@ -78,13 +78,19 @@ class TestRouteAfterTaskPlanning:
         }
         assert route_after_task_planning(state) == "report_subgraph"
 
-    def test_reserved_scope_blocked(self) -> None:
-        """TCAD/SPICE reserved scopes are BLOCKED from G4 modeling."""
+    def test_foreign_scope_terms_still_route_to_requirements_review(self) -> None:
         state: RadAgentMainState = {
             "task_planning_status": "passed",
-            "simulation_scope": ["geant4", "tcad"],
+            "simulation_scope": ["geant4", "external_tool"],
         }
-        assert route_after_task_planning(state) == "report_subgraph"
+        assert route_after_task_planning(state) == "requirements_review"
+
+    def test_needs_user_input_routes_to_requirements_review(self) -> None:
+        state: RadAgentMainState = {
+            "task_planning_status": "needs_user_input",
+            "simulation_scope": ["geant4"],
+        }
+        assert route_after_task_planning(state) == "requirements_review"
 
 
 class TestRouteAfterG4Modeling:
@@ -134,6 +140,13 @@ class TestRouteAfterPatch:
 
     def test_rejected_reports(self) -> None:
         state: RadAgentMainState = {"patch_status": "rejected"}
+        assert route_after_patch(state) == "g4_codegen_subgraph"
+
+    def test_rejected_reports_after_patch_retry_limit(self) -> None:
+        state: RadAgentMainState = {
+            "patch_status": "rejected",
+            "patch_retry_count": 4,
+        }
         assert route_after_patch(state) == "report_subgraph"
 
 
@@ -187,13 +200,13 @@ class TestRouteAfterGates:
         }
         assert route_after_gates(state) == "g4_codegen_subgraph"
 
-    def test_failed_human_confirmation_gate_routes_to_confirmation(self) -> None:
+    def test_failed_human_confirmation_gate_routes_to_requirements_review(self) -> None:
         state: RadAgentMainState = {
             "validation_status": "failed",
             "retry_count": 0,
             "failed_gates": [{"gate_id": 19, "name": "G4-H Human Confirmation"}],
         }
-        assert route_after_gates(state) == "human_confirmation_subgraph"
+        assert route_after_gates(state) == "requirements_review"
 
     def test_retired_visual_review_gate_is_ignored(self) -> None:
         state: RadAgentMainState = {

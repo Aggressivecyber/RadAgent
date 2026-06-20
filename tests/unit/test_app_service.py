@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
+import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from agent_core.app import PIPELINE_PHASES, RadAgentAppService
 from agent_core.models.schemas import ModelCallResult, ModelProvider, ModelTask, ModelTier
 from agent_core.workspace.paths import (
+    STAGE_CONTEXT,
     STAGE_GATE_VALIDATION,
     STAGE_HUMAN_CONFIRMATION,
     STAGE_INPUT,
@@ -23,6 +27,8 @@ def test_service_exposes_pipeline_contract(tmp_path) -> None:
 
     assert PIPELINE_PHASES[0] == "prepare_workspace"
     assert PIPELINE_PHASES[3] == "requirements_review"
+    assert "human_confirmation" not in PIPELINE_PHASES
+    assert len(PIPELINE_PHASES) == 10
     status = service.get_status()
     assert status.status == "idle"
     assert status.workspace_root == str(tmp_path)
@@ -168,7 +174,7 @@ def test_recent_events_includes_active_model_call_while_background_worker_is_run
 
 
 @pytest.mark.asyncio
-async def test_requirements_review_uses_max_model_and_blocks_for_confirmation(
+async def test_requirements_review_uses_lite_model_and_blocks_for_confirmation(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -208,9 +214,9 @@ async def test_requirements_review_uses_max_model_and_blocks_for_confirmation(
             calls.append(kwargs)
             return ModelCallResult(
                 task=ModelTask.MODEL_READINESS,
-                tier=ModelTier.MAX,
+                tier=ModelTier.LITE,
                 provider=ModelProvider.MOCK,
-                model_name="max-review",
+                model_name="lite-review",
                 content="{}",
                 parsed_json={
                     "summary_for_user": "请确认质子束、水箱尺寸和 scoring。",
@@ -251,7 +257,8 @@ async def test_requirements_review_uses_max_model_and_blocks_for_confirmation(
     assert service.state["requirements_review_status"] == "needs_user_input"
     assert service.state["confirmation_status"] == "pending"
     assert service.state["human_confirmation_required"] is True
-    assert calls[0]["tier"] == ModelTier.MAX
+    assert calls[0]["tier"] == ModelTier.LITE
+    assert "所有面向用户显示的文字必须使用简体中文" in str(calls[0]["system_prompt"])
     request_path = Path(service.state["requirements_review_request_path"])
     assert request_path.is_file()
     request = json.loads(request_path.read_text(encoding="utf-8"))
@@ -261,7 +268,523 @@ async def test_requirements_review_uses_max_model_and_blocks_for_confirmation(
 
 
 @pytest.mark.asyncio
-async def test_requirements_review_approval_resumes_at_g4_modeling(tmp_path) -> None:
+async def test_requirements_review_repairs_invalid_json_with_lite_model(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_repair"
+    task_dir = tmp_path / "jobs" / job_id / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "particle": {"type": "neutron", "energy_MeV": 14},
+                "materials": ["polyethylene", "borated polyethylene", "lead", "silicon"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build a 14 MeV neutron shielding stack study.",
+        "task_spec_path": str(task_spec_path),
+        "simulation_scope": ["geant4"],
+        "task_planning_status": "passed",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return ModelCallResult(
+                    task=ModelTask.MODEL_READINESS,
+                    tier=ModelTier.LITE,
+                    provider=ModelProvider.MOCK,
+                    model_name="lite-review",
+                    content=(
+                        "```json\n"
+                        "{\n"
+                        '  "summary_for_user": "请确认屏蔽体参数。",\n'
+                        '  "missing_information": ["硅探测器尺寸未指定"],\n'
+                        '  "ambiguous_parameters": [\n'
+                        '    {"field_path": "geometry.stack", "proposed_value": "PE->BPE->Pb->Si", '
+                        '"reason": “层厚未确认”}\n'
+                        "  ]\n"
+                        "}\n"
+                        "```"
+                    ),
+                    parsed_json=None,
+                )
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "summary_for_user": "请确认屏蔽体参数。",
+                    "missing_information": ["硅探测器尺寸未指定"],
+                    "ambiguous_parameters": [
+                        {
+                            "field_path": "geometry.stack",
+                            "proposed_value": "PE->BPE->Pb->Si",
+                            "reason": "层厚未确认",
+                        }
+                    ],
+                    "questions": [],
+                    "physics_risks": [],
+                    "proposed_parameters": [],
+                    "proposed_defaults": [],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    result = await service.run_phase("requirements_review")
+
+    assert result.success is True
+    assert len(calls) == 2
+    assert calls[0]["tier"] == ModelTier.LITE
+    assert calls[1]["tier"] == ModelTier.LITE
+    assert "JSON parse failed" in str(calls[1]["user_prompt"])
+    assert "Return only the repaired JSON object" in str(calls[1]["system_prompt"])
+    request_path = Path(service.state["requirements_review_request_path"])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    assert request["summary_for_user"] == "请确认屏蔽体参数。"
+    assert request["missing_information"] == ["硅探测器尺寸未指定"]
+    assert request["ambiguous_parameters"][0]["reason"] == "层厚未确认"
+    assert request["model_error"] == ""
+    assert "JSON parse failed" in request["json_repair"]["initial_error"]
+    assert request["json_repair"]["repaired"] is True
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_extracts_cards_when_json_repair_fails(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_malformed_cards"
+    task_dir = tmp_path / "jobs" / job_id / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "particle": {
+                    "type": "neutron",
+                    "pdg_code": 2112,
+                    "energy_MeV": 14.0,
+                    "energy_unit": "MeV",
+                },
+                "materials": ["polyethylene", "borated polyethylene", "lead", "silicon"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build a 14 MeV neutron shielding stack study.",
+        "task_spec_path": str(task_spec_path),
+        "simulation_scope": ["geant4"],
+        "task_planning_status": "passed",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return ModelCallResult(
+                    task=ModelTask.MODEL_READINESS,
+                    tier=ModelTier.LITE,
+                    provider=ModelProvider.MOCK,
+                    model_name="lite-review",
+                    content=(
+                        "{\n"
+                        '  "status": "needs_user_input",\n'
+                        '  "summary_for_user": "请确认仿真目标、关键参数和继续执行条件。",\n'
+                        '  "missing_information": [\n'
+                        '    "各屏蔽层的厚度（聚乙烯、含硼聚乙烯、铅各多厚？）",\n'
+                        '    ""材料堆叠灵敏度"具体指什么？"\n'
+                        "  ],\n"
+                        '  "questions": [\n'
+                        "    {\n"
+                        '      "field_path": "shielding.layer_thicknesses",\n'
+                        '      "question": "各屏蔽层的厚度分别是多少？",\n'
+                        '      "recommended_value": "聚乙烯 5 cm，含硼聚乙烯 5 cm，铅 2 cm，硅探测器 3 mm",\n'
+                        '      "reason": "这些是屏蔽研究中常用的典型厚度。"\n'
+                        "    },\n"
+                        "    {\n"
+                        '      "field_path": "shielding.stack_order",\n'
+                        '      "question": "屏蔽层从源到硅探测器的排列顺序是什么？",\n'
+                        '      "recommended_value": "源 -> 聚乙烯 -> 含硼聚乙烯 -> 铅 -> 硅探测器",\n'
+                    ),
+                    parsed_json=None,
+                )
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="",
+                parsed_json=None,
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    result = await service.run_phase("requirements_review")
+
+    assert result.success is True
+    assert result.status.needs_confirmation is True
+    assert service.state["requirements_review_status"] == "needs_user_input"
+    assert len(calls) == 2
+    request_path = Path(service.state["requirements_review_request_path"])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    assert request["missing_information"]
+    assert request["questions"]
+    assert request["questions"][0]["field_path"] == "shielding.layer_thicknesses"
+    assert request["questions"][0]["recommended_value"]
+    assert request["json_repair"]["attempted"] is True
+    assert request["json_repair"]["repaired"] is False
+    assert request["json_repair"]["fallback_extracted"] is True
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_uses_question_tool_when_json_and_repair_are_unusable(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_question_tool"
+    task_dir = tmp_path / "jobs" / job_id / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "simulation_scope": ["geant4"],
+                "modeling_mode": "realistic",
+                "requirements_review_hints": {
+                    "questions": [
+                        {
+                            "field_path": "source.particle",
+                            "question": "请确认辐照粒子类型。",
+                            "recommended_value": "gamma",
+                            "reason": "MOSFET 辐照基准可先用 gamma 做氧化层剂量基准。",
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "做一个mosfet的g4辐照仿真",
+        "task_spec_path": str(task_spec_path),
+        "simulation_scope": ["geant4"],
+        "task_planning_status": "needs_user_input",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return ModelCallResult(
+                    task=ModelTask.MODEL_READINESS,
+                    tier=ModelTier.LITE,
+                    provider=ModelProvider.MOCK,
+                    model_name="lite-review",
+                    content="模型输出被截断，无法解析。",
+                    parsed_json=None,
+                )
+            if len(calls) == 2:
+                return ModelCallResult(
+                    task=ModelTask.MODEL_READINESS,
+                    tier=ModelTier.LITE,
+                    provider=ModelProvider.MOCK,
+                    model_name="lite-review",
+                    content="not json",
+                    parsed_json=None,
+                )
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "status": "needs_user_input",
+                    "summary_for_user": "请先确认 MOSFET Geant4 辐照建模参数。",
+                    "missing_information": ["辐照源、器件几何和敏感体积未明确"],
+                    "cards": [
+                        {
+                            "field_path": "source.particle",
+                            "question": "请确认辐照粒子类型。",
+                            "recommended_value": "gamma",
+                            "note": "用于先建立可运行的 MOSFET 氧化层剂量基准。",
+                        },
+                        {
+                            "field_path": "geometry.sensitive_volume",
+                            "question": "请确认敏感体积。",
+                            "recommended_value": "栅氧化层",
+                            "note": "Geant4 阶段只计算敏感体积内能量沉积和剂量。",
+                        },
+                    ],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    result = await service.run_phase("requirements_review")
+
+    assert result.success is True
+    assert len(calls) == 3
+    assert calls[2]["metadata"]["module_name"] == "requirements_review_question_tool"
+    assert "问题" in str(calls[2]["system_prompt"])
+    assert "推荐" in str(calls[2]["system_prompt"])
+    assert "备注" in str(calls[2]["system_prompt"])
+    request_path = Path(service.state["requirements_review_request_path"])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    question_text = json.dumps(request["questions"], ensure_ascii=False)
+    assert "MAX 输出格式异常" not in question_text
+    assert request["summary_for_user"] == "请先确认 MOSFET Geant4 辐照建模参数。"
+    assert request["questions"][0] == {
+        "field_path": "source.particle",
+        "question": "请确认辐照粒子类型。",
+        "recommended_value": "gamma",
+        "reason": "用于先建立可运行的 MOSFET 氧化层剂量基准。",
+        "proposed_value": "gamma",
+    }
+    assert request["json_repair"]["question_tool_attempted"] is True
+    assert request["json_repair"]["question_tool_used"] is True
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_filters_runtime_event_count_questions(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_filter_events"
+    task_dir = tmp_path / "jobs" / job_id / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps({"simulation_scope": ["geant4"], "modeling_mode": "realistic"}),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "做一个mosfet的g4辐照仿真",
+        "task_spec_path": str(task_spec_path),
+        "simulation_scope": ["geant4"],
+        "task_planning_status": "passed",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "status": "needs_user_input",
+                    "summary_for_user": "请确认 Geant4 建模参数。",
+                    "missing_information": ["源项和敏感体积未明确"],
+                    "questions": [
+                        {
+                            "field_path": "run.events",
+                            "question": "您希望模拟多少个粒子事件？",
+                            "recommended_value": "100000",
+                            "reason": "事件数越多，统计精度越高。",
+                        },
+                        {
+                            "field_path": "source.particle",
+                            "question": "请确认辐照粒子类型。",
+                            "recommended_value": "gamma",
+                            "reason": "这是 Geant4 源项定义所需参数。",
+                        },
+                    ],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    result = await service.run_phase("requirements_review")
+
+    assert result.success is True
+    request_path = Path(service.state["requirements_review_request_path"])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    question_blob = json.dumps(request["questions"], ensure_ascii=False)
+    assert "run.events" not in question_blob
+    assert "粒子事件" not in question_blob
+    assert "100000" not in question_blob
+    assert request["questions"] == [
+        {
+            "field_path": "source.particle",
+            "question": "请确认辐照粒子类型。",
+            "recommended_value": "gamma",
+            "reason": "这是 Geant4 源项定义所需参数。",
+            "proposed_value": "gamma",
+        }
+    ]
+
+
+def test_requirements_review_default_questions_do_not_ask_runtime_events() -> None:
+    from agent_core.requirements_review import _fallback_review_from_malformed_content
+
+    review = _fallback_review_from_malformed_content(
+        '{"missing_information": ["需要模拟的初级粒子事件数（影响统计精度）"]}',
+        task_spec={"simulation_scope": ["geant4"]},
+        include_defaults=True,
+    )
+
+    question_blob = json.dumps(review["questions"], ensure_ascii=False)
+    assert "run.events" not in question_blob
+    assert "事件数" not in question_blob
+    assert "粒子事件" not in question_blob
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_fallbacks_when_repair_returns_non_review_json(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_repair_echo"
+    task_dir = tmp_path / "jobs" / job_id / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "particle": {
+                    "type": "neutron",
+                    "pdg_code": 2112,
+                    "energy_MeV": 14.0,
+                    "energy_unit": "MeV",
+                },
+                "materials": ["polyethylene", "borated polyethylene", "lead", "silicon"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build a 14 MeV neutron shielding stack study.",
+        "task_spec_path": str(task_spec_path),
+        "simulation_scope": ["geant4"],
+        "task_planning_status": "passed",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return ModelCallResult(
+                    task=ModelTask.MODEL_READINESS,
+                    tier=ModelTier.LITE,
+                    provider=ModelProvider.MOCK,
+                    model_name="lite-review",
+                    content=(
+                        "{\n"
+                        '  "status": "needs_user_input",\n'
+                        '  "summary_for_user": "请确认仿真目标、关键参数和继续执行条件。",\n'
+                        '  "missing_information": ["各屏蔽层的厚度"],\n'
+                        '  "questions": [\n'
+                        "    {\n"
+                        '      "field_path": "shielding.layer_thicknesses",\n'
+                        '      "question": "各屏蔽层的厚度分别是多少？",\n'
+                        '      "recommended_value": "聚乙烯 5 cm，含硼聚乙烯 5 cm，铅 2 cm，硅探测器 3 mm",\n'
+                        '      "reason": "缺少厚度时无法构建可靠几何。"\n'
+                        "    }\n"
+                        "  ],\n"
+                        '  "physics_risks": ["次级伽马代理定义不明确"],\n'
+                    ),
+                    parsed_json=None,
+                )
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content='{"instruction":"JSON parse failed","malformed_content":{}}',
+                parsed_json={
+                    "instruction": "JSON parse failed",
+                    "parse_error": "JSON parse failed at line 1, column 1",
+                    "malformed_content": {},
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    result = await service.run_phase("requirements_review")
+
+    assert result.success is True
+    request_path = Path(service.state["requirements_review_request_path"])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    assert request["summary_for_user"] == "请确认仿真目标、关键参数和继续执行条件。"
+    assert request["missing_information"] == ["各屏蔽层的厚度"]
+    assert request["questions"][0]["field_path"] == "shielding.layer_thicknesses"
+    assert request["json_repair"]["attempted"] is True
+    assert request["json_repair"]["repaired"] is False
+    assert request["json_repair"]["fallback_extracted"] is True
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_approval_reinvokes_lite_before_modeling(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
     project = service.current_project()
     job_id = "job_requirements_review_approve"
@@ -299,6 +822,43 @@ async def test_requirements_review_approval_resumes_at_g4_modeling(tmp_path) -> 
         "errors": [],
     }
     service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    task_spec_path = review_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps({"particle": {"type": "proton", "energy_MeV": 150}}),
+        encoding="utf-8",
+    )
+    service.state["task_spec_path"] = str(task_spec_path)
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "status": "pass",
+                    "summary_for_user": "用户确认后参数足够明确。",
+                    "missing_information": [],
+                    "ambiguous_parameters": [],
+                    "physics_risks": [],
+                    "questions": [],
+                    "proposed_parameters": [
+                        {
+                            "field_path": "scoring.bin_width",
+                            "proposed_value": "1 mm",
+                            "source_type": "user_supplement",
+                            "confidence": 0.99,
+                        }
+                    ],
+                    "proposed_defaults": [],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
 
     status = await service.submit_confirmation(
         {"user_decision": "approve", "feedback": "Use 1 mm scoring bins."},
@@ -309,11 +869,500 @@ async def test_requirements_review_approval_resumes_at_g4_modeling(tmp_path) -> 
     assert status.current_phase == "g4_modeling"
     assert service.state["requirements_review_status"] == "approved"
     assert service.state["human_confirmation_required"] is False
+    assert len(calls) == 1
+    assert "Use 1 mm scoring bins." in str(calls[0]["user_prompt"])
     confirmed_path = Path(service.state["confirmed_requirement_plan_path"])
     assert confirmed_path.is_file()
     confirmed = json.loads(confirmed_path.read_text(encoding="utf-8"))
     assert confirmed["schema_version"] == "confirmed_requirement_plan_v1"
-    assert confirmed["user_response"]["feedback"] == "Use 1 mm scoring bins."
+    assert confirmed["user_response"]["user_decision"] == "model_pass"
+    assert confirmed["user_response"]["requirements_review_supplements"] == [
+        {"user_decision": "approve", "feedback": "Use 1 mm scoring bins."}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_affirmative_supplement_reinvokes_lite_before_modeling(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_affirmative_supplement"
+    job_dir = tmp_path / "jobs" / job_id
+    review_dir = job_dir / STAGE_TASK_PLAN
+    review_dir.mkdir(parents=True)
+    request_path = review_dir / "requirements_review_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "requirements_review_v1",
+                "summary_for_user": "请确认参数。",
+                "proposed_defaults": [
+                    {
+                        "field_path": "scoring.bin_width",
+                        "proposed_value": "1 mm",
+                        "reason": "Depth-dose benchmark default.",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build proton benchmark",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "requirements_review_status": "needs_user_input",
+        "requirements_review_request_path": str(request_path),
+        "confirmation_status": "pending",
+        "human_confirmation_required": True,
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    task_spec_path = review_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps({"particle": {"type": "proton", "energy_MeV": 150}}),
+        encoding="utf-8",
+    )
+    service.state["task_spec_path"] = str(task_spec_path)
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "status": "pass",
+                    "summary_for_user": "全部按推荐后参数足够明确。",
+                    "missing_information": [],
+                    "ambiguous_parameters": [],
+                    "physics_risks": [],
+                    "questions": [],
+                    "proposed_parameters": [
+                        {
+                            "field_path": "scoring.bin_width",
+                            "proposed_value": "1 mm",
+                            "source_type": "model_recommended_and_user_accepted",
+                            "confidence": 0.99,
+                        }
+                    ],
+                    "proposed_defaults": [],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    status = await service.submit_confirmation(
+        {"user_decision": "ask_more", "feedback": "全部按照你的推荐"},
+        auto_continue=False,
+    )
+
+    assert status.status == "running"
+    assert status.current_phase == "g4_modeling"
+    assert service.state["requirements_review_status"] == "approved"
+    assert service.state["confirmation_status"] == "approved"
+    assert len(calls) == 1
+    assert "全部按照你的推荐" in str(calls[0]["user_prompt"])
+    assert not service.state.get("termination_reason")
+    confirmed = json.loads(
+        Path(service.state["confirmed_requirement_plan_path"]).read_text(
+            encoding="utf-8",
+        )
+    )
+    assert confirmed["user_response"]["user_decision"] == "model_pass"
+    assert confirmed["user_response"]["requirements_review_supplements"] == [
+        {"user_decision": "ask_more", "feedback": "全部按照你的推荐"}
+    ]
+    assert str(service.state["requirements_review_response_path"]).startswith(str(tmp_path))
+    assert str(service.state["confirmed_requirement_plan_path"]).startswith(str(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_writes_only_to_service_workspace(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_workspace_isolation"
+    task_dir = tmp_path / "jobs" / job_id / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps({"particle": {"type": "proton", "energy_MeV": 150}}),
+        encoding="utf-8",
+    )
+    real_workspace_job = Path("simulation_workspace") / "jobs" / job_id
+    assert not real_workspace_job.exists()
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build a 150 MeV proton depth-dose benchmark.",
+        "task_spec_path": str(task_spec_path),
+        "simulation_scope": ["geant4"],
+        "task_planning_status": "passed",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "summary_for_user": "请确认参数。",
+                    "missing_information": [],
+                    "ambiguous_parameters": [],
+                    "physics_risks": [],
+                    "questions": [],
+                    "proposed_parameters": [],
+                    "proposed_defaults": [],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    result = await service.run_phase("requirements_review")
+
+    assert result.success is True
+    assert service.state["requirements_review_request_path"].startswith(str(tmp_path))
+    assert not real_workspace_job.exists()
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_supplement_reinvokes_lite_until_pass(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_supplement"
+    job_dir = tmp_path / "jobs" / job_id
+    review_dir = job_dir / STAGE_TASK_PLAN
+    review_dir.mkdir(parents=True)
+    request_path = review_dir / "requirements_review_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "requirements_review_v1",
+                "summary_for_user": "请确认参数。",
+                "questions": [
+                    {
+                        "field_path": "source.energy",
+                        "question": "请确认束流能量。",
+                        "proposed_value": "150 MeV",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build proton benchmark",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "requirements_review_status": "needs_user_input",
+        "requirements_review_request_path": str(request_path),
+        "confirmation_status": "pending",
+        "human_confirmation_required": True,
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    task_spec_path = review_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps({"particle": {"type": "proton", "energy_MeV": 150}}),
+        encoding="utf-8",
+    )
+    service.state["task_spec_path"] = str(task_spec_path)
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "status": "pass",
+                    "summary_for_user": "补充信息已足够，可以进入 Geant4 建模。",
+                    "missing_information": [],
+                    "ambiguous_parameters": [],
+                    "physics_risks": [],
+                    "questions": [],
+                    "proposed_parameters": [
+                        {
+                            "field_path": "source.energy",
+                            "proposed_value": "160 MeV",
+                            "source_type": "user_supplement",
+                            "confidence": 0.99,
+                        }
+                    ],
+                    "proposed_defaults": [],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    status = await service.submit_confirmation(
+        {"user_decision": "ask_more", "feedback": "能量改成 160 MeV"},
+        auto_continue=False,
+    )
+
+    assert status.status == "running"
+    assert status.current_phase == "g4_modeling"
+    assert status.needs_confirmation is False
+    assert service.state["requirements_review_status"] == "approved"
+    assert service.state["confirmation_status"] == "approved"
+    assert service.state["human_confirmation_required"] is False
+    assert service.state["requirements_review_supplements"] == [
+        {"user_decision": "ask_more", "feedback": "能量改成 160 MeV"}
+    ]
+    assert len(calls) == 1
+    assert calls[0]["tier"] == ModelTier.LITE
+    assert "requirements_review_supplements" in str(calls[0]["user_prompt"])
+    assert "能量改成 160 MeV" in str(calls[0]["user_prompt"])
+    confirmed_path = Path(service.state["confirmed_requirement_plan_path"])
+    assert confirmed_path.is_file()
+    assert not service.state.get("termination_reason")
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_confirmed_answers_are_hard_constraints(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_confirmed_answers"
+    job_dir = tmp_path / "jobs" / job_id
+    review_dir = job_dir / STAGE_TASK_PLAN
+    review_dir.mkdir(parents=True)
+    request_path = review_dir / "requirements_review_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "requirements_review_v1",
+                "summary_for_user": "请确认机器人环境和几何。",
+                "questions": [
+                    {
+                        "field_path": "environment.medium",
+                        "question": "是否坚持真空环境，还是改为冷却水介质？",
+                        "recommended_value": "保持真空环境",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    task_spec_path = review_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "particle": {"type": "gamma", "energy_MeV": 10},
+                "target": {"material": "iron", "dimensions": [10, 10, 20]},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "10 MeV gamma 垂直入射铁质机器人，真空环境。",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "requirements_review_status": "needs_user_input",
+        "requirements_review_request_path": str(request_path),
+        "task_spec_path": str(task_spec_path),
+        "confirmation_status": "pending",
+        "human_confirmation_required": True,
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    calls: list[dict[str, object]] = []
+
+    class FakeGateway:
+        async def call(self, **kwargs):
+            calls.append(kwargs)
+            return ModelCallResult(
+                task=ModelTask.MODEL_READINESS,
+                tier=ModelTier.LITE,
+                provider=ModelProvider.MOCK,
+                model_name="lite-review",
+                content="{}",
+                parsed_json={
+                    "status": "needs_user_input",
+                    "summary_for_user": "仍需确认环境。",
+                    "missing_information": ["真空环境是否保持不变仍需确认。"],
+                    "ambiguous_parameters": [],
+                    "physics_risks": [],
+                    "questions": [
+                        {
+                            "field_path": "environment.medium",
+                            "question": "是否坚持真空环境，还是改为冷却水介质？",
+                            "recommended_value": "保持真空环境",
+                            "reason": "模型重复询问已确认字段。",
+                        }
+                    ],
+                    "proposed_parameters": [],
+                    "proposed_defaults": [],
+                },
+            )
+
+    monkeypatch.setattr("agent_core.models.gateway.get_model_gateway", lambda: FakeGateway())
+
+    payload = {
+        "schema_version": "requirements_review_answers_v1",
+        "confirmed_parameters": [
+            {
+                "field_path": "environment.medium",
+                "question": "是否坚持真空环境，还是改为冷却水介质？",
+                "decision": "accept_recommended",
+                "selected_value": "保持真空环境",
+                "recommended_value": "保持真空环境",
+            }
+        ],
+        "user_note": "先坚持当前简化方案。",
+    }
+    status = await service.submit_confirmation(
+        {
+            "user_decision": "ask_more",
+            "feedback": (
+                "environment.medium: 确认推荐 保持真空环境\n"
+                f"RADAGENT_CONFIRMATION_JSON: {json.dumps(payload, ensure_ascii=False)}"
+            ),
+        },
+        auto_continue=False,
+    )
+
+    assert status.status == "running"
+    assert status.current_phase == "g4_modeling"
+    assert service.state["requirements_review_status"] == "approved"
+    assert service.state["confirmation_status"] == "approved"
+    assert service.state["human_confirmation_required"] is False
+    assert len(calls) == 1
+    prompt = str(calls[0]["user_prompt"])
+    assert "confirmed_requirement_answers" in prompt
+    assert "environment.medium" in prompt
+    assert "Do not ask again" in prompt
+    confirmed = json.loads(
+        Path(service.state["confirmed_requirement_plan_path"]).read_text(
+            encoding="utf-8",
+        )
+    )
+    assert confirmed["review"]["questions"] == []
+    assert confirmed["review"]["missing_information"] == []
+    assert confirmed["review"]["confirmed_requirement_answers"][0]["field_path"] == "environment.medium"
+
+
+@pytest.mark.asyncio
+async def test_requirements_review_pending_ignores_prior_briefing_approval(
+    tmp_path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_requirements_review_prior_briefing"
+    job_dir = tmp_path / "jobs" / job_id
+    review_dir = job_dir / STAGE_TASK_PLAN
+    review_dir.mkdir(parents=True)
+    request_path = review_dir / "requirements_review_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "requirements_review_v1",
+                "summary_for_user": "请确认束流参数。",
+                "questions": [
+                    {
+                        "field_path": "source.energy",
+                        "question": "请确认质子束能量。",
+                        "recommended_value": "150 MeV",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.store.upsert_job(
+        job_id=job_id,
+        user_query="Build proton benchmark",
+        project_id=str(project["id"]),
+        status="paused",
+        current_phase="requirements_review",
+        current_phase_idx=PIPELINE_PHASES.index("requirements_review"),
+        job_workspace=str(job_dir),
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "Build proton benchmark",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "requirements_review_status": "needs_user_input",
+        "requirements_review_request_path": str(request_path),
+        "confirmation_status": "pending",
+        "human_confirmation_required": True,
+        "raw_human_response": {
+            "user_decision": "approve",
+            "user_notes": "Approved before pipeline start through RadAgent briefing.",
+        },
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    called_phases: list[str] = []
+
+    async def requirements_review(state: dict) -> dict:
+        called_phases.append("requirements_review")
+        return {
+            "requirements_review_status": "approved",
+            "confirmation_status": "approved",
+            "human_confirmation_required": False,
+            "confirmed_requirement_plan_path": str(review_dir / "confirmed_requirement_plan.json"),
+        }
+
+    async def human_confirmation(state: dict) -> dict:
+        raise AssertionError("requirements review supplement must not enter legacy confirmation")
+
+    service._subgraph_nodes = {
+        "requirements_review": requirements_review,
+        "human_confirmation": human_confirmation,
+    }
+
+    assert service.get_status().needs_confirmation is True
+
+    status = await service.submit_confirmation(
+        {"user_decision": "ask_more", "feedback": "全部按照推荐参数"},
+        auto_continue=False,
+    )
+
+    assert called_phases == ["requirements_review"]
+    assert status.status == "running"
+    assert status.current_phase == "g4_modeling"
+    assert status.needs_confirmation is False
+    assert service.state["requirements_review_supplements"] == [
+        {"user_decision": "ask_more", "feedback": "全部按照推荐参数"}
+    ]
 
 
 def test_recent_events_ignores_stale_active_model_call_without_runtime_worker(
@@ -339,6 +1388,178 @@ def test_recent_events_ignores_stale_active_model_call_without_runtime_worker(
     events = service.recent_events(limit=1)
 
     assert not any(event.event_type == "model_call_start" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_run_until_blocked_routes_task_planning_user_input_to_requirements_review(
+    tmp_path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_task_planning_needs_review"
+    job_dir = tmp_path / "jobs" / job_id
+    task_dir = job_dir / STAGE_TASK_PLAN
+    task_dir.mkdir(parents=True)
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "job_id": job_id,
+                "user_query": "做一个mosfet的g4辐照仿真",
+                "simulation_scope": ["geant4"],
+                "particle": {},
+                "requirements_review_hints": {
+                    "missing_information": ["radiation source particle"]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "做一个mosfet的g4辐照仿真",
+        "workspace_root": str(tmp_path),
+        "job_workspace": str(job_dir),
+        "errors": [],
+    }
+    service.store.upsert_job(
+        job_id=job_id,
+        user_query="做一个mosfet的g4辐照仿真",
+        project_id=str(project["id"]),
+        status="running",
+        current_phase="task_planning",
+        current_phase_idx=PIPELINE_PHASES.index("task_planning"),
+        job_workspace=str(job_dir),
+    )
+    service.current_phase_idx = PIPELINE_PHASES.index("task_planning")
+    calls: list[str] = []
+
+    async def task_planning(state: dict) -> dict:
+        calls.append("task_planning")
+        return {
+            "task_spec_path": str(task_spec_path),
+            "simulation_scope": ["geant4"],
+            "task_planning_status": "needs_user_input",
+            "task_spec_errors": [],
+            "clarification_request": {},
+            "termination_reason": "",
+        }
+
+    async def requirements_review(state: dict) -> dict:
+        calls.append("requirements_review")
+        return {
+            "requirements_review_status": "needs_user_input",
+            "requirements_review_request_path": str(task_dir / "requirements_review_request.json"),
+            "confirmation_status": "pending",
+            "human_confirmation_required": True,
+            "confirmation_summary": "请确认辐照粒子类型和能量。",
+        }
+
+    service._subgraph_nodes = {
+        "task_planning": task_planning,
+        "requirements_review": requirements_review,
+    }
+
+    status = await service.run_until_blocked()
+
+    assert calls == ["task_planning", "requirements_review"]
+    assert status.status == "paused"
+    assert status.current_phase == "requirements_review"
+    assert status.needs_confirmation is True
+    assert service.state["task_planning_status"] == "needs_user_input"
+    assert service.state["requirements_review_status"] == "needs_user_input"
+    assert not service.state.get("termination_reason")
+
+
+@pytest.mark.asyncio
+async def test_run_until_blocked_context_missing_parameters_enters_requirements_review(
+    tmp_path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_context_missing_params"
+    job_dir = tmp_path / "jobs" / job_id
+    context_dir = job_dir / STAGE_CONTEXT
+    task_dir = job_dir / STAGE_TASK_PLAN
+    context_dir.mkdir(parents=True)
+    task_dir.mkdir(parents=True)
+    context_report_path = context_dir / "context_sufficiency_report.json"
+    evidence_map_path = context_dir / "evidence_map.json"
+    task_spec_path = task_dir / "task_spec.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "job_id": job_id,
+                "user_query": "做一个mosfet的g4辐照仿真",
+                "simulation_scope": ["geant4"],
+                "clarification_request": {"reason": "ambiguous_device_tid"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "做一个mosfet的g4辐照仿真",
+        "workspace_root": str(tmp_path),
+        "job_workspace": str(job_dir),
+        "errors": [],
+    }
+    service.store.upsert_job(
+        job_id=job_id,
+        user_query="做一个mosfet的g4辐照仿真",
+        project_id=str(project["id"]),
+        status="running",
+        current_phase="context",
+        current_phase_idx=PIPELINE_PHASES.index("context"),
+        job_workspace=str(job_dir),
+    )
+    service.current_phase_idx = PIPELINE_PHASES.index("context")
+    calls: list[str] = []
+
+    async def context(state: dict) -> dict:
+        calls.append("context")
+        return {
+            "context_decision": "allow_with_web_supplement",
+            "context_report_path": str(context_report_path),
+            "evidence_map_path": str(evidence_map_path),
+        }
+
+    async def task_planning(state: dict) -> dict:
+        calls.append("task_planning")
+        return {
+            "task_spec_path": str(task_spec_path),
+            "simulation_scope": ["geant4"],
+            "task_planning_status": "needs_user_input",
+            "task_spec_errors": [],
+            "clarification_request": {"reason": "ambiguous_device_tid"},
+            "termination_reason": "",
+        }
+
+    async def requirements_review(state: dict) -> dict:
+        calls.append("requirements_review")
+        return {
+            "requirements_review_status": "needs_user_input",
+            "requirements_review_request_path": str(task_dir / "requirements_review_request.json"),
+            "confirmation_status": "pending",
+            "human_confirmation_required": True,
+        }
+
+    service._subgraph_nodes = {
+        "context": context,
+        "task_planning": task_planning,
+        "requirements_review": requirements_review,
+    }
+
+    status = await service.run_until_blocked()
+
+    assert calls == ["context", "task_planning", "requirements_review"]
+    assert status.status == "paused"
+    assert status.current_phase == "requirements_review"
+    assert status.needs_confirmation is True
+    assert service.state["context_decision"] == "allow_with_web_supplement"
+    assert service.state["requirements_review_status"] == "needs_user_input"
 
 
 def test_status_exposes_runtime_active_for_background_continue(tmp_path, monkeypatch) -> None:
@@ -383,6 +1604,49 @@ def test_read_artifact_reports_invalid_json_without_blocking_text_view(tmp_path)
     assert content.json_data is None
     assert content.errors
     assert content.errors[0].startswith("Invalid JSON:")
+
+
+def test_package_generated_source_files_creates_downloadable_zip(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_id = "job_source_package"
+    project_dir = tmp_path / "jobs" / job_id / "06_patch" / "geant4_project"
+    (project_dir / "src").mkdir(parents=True)
+    (project_dir / "include").mkdir()
+    (project_dir / "build").mkdir()
+    (project_dir / "CMakeLists.txt").write_text(
+        "cmake_minimum_required(VERSION 3.16)\n",
+        encoding="utf-8",
+    )
+    (project_dir / "src" / "DetectorConstruction.cc").write_text(
+        "// detector\n",
+        encoding="utf-8",
+    )
+    (project_dir / "include" / "DetectorConstruction.hh").write_text(
+        "// header\n",
+        encoding="utf-8",
+    )
+    (project_dir / "run.mac").write_text("/run/beamOn 10\n", encoding="utf-8")
+    (project_dir / "build" / "radagent").write_text("binary", encoding="utf-8")
+    service.state = {
+        "job_id": job_id,
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "generated_code_dir": str(project_dir),
+    }
+
+    package = service.package_generated_source_files()
+
+    assert package["success"] is True
+    assert package["content_type"] == "application/zip"
+    assert package["filename"] == f"{job_id}_geant4_source.zip"
+    archive_path = Path(package["path"])
+    assert archive_path.is_file()
+    with zipfile.ZipFile(archive_path) as archive:
+        names = set(archive.namelist())
+        assert "CMakeLists.txt" in names
+        assert "src/DetectorConstruction.cc" in names
+        assert "include/DetectorConstruction.hh" in names
+        assert "run.mac" in names
+        assert "build/radagent" not in names
 
 
 @pytest.mark.asyncio
@@ -549,7 +1813,7 @@ async def test_submit_confirmation_does_not_advance_when_modeling_failed(
         "termination_reason": "g4_modeling status is failed",
         "errors": ["world volume does not contain daughter layers"],
     }
-    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
 
     async def fail_if_called(_: str) -> None:
         raise AssertionError("failed modeling should not rerun human confirmation")
@@ -562,8 +1826,8 @@ async def test_submit_confirmation_does_not_advance_when_modeling_failed(
     )
 
     assert status.status == "failed"
-    assert status.current_phase == "human_confirmation"
-    assert service.current_phase_idx == PIPELINE_PHASES.index("human_confirmation")
+    assert status.current_phase == "requirements_review"
+    assert service.current_phase_idx == PIPELINE_PHASES.index("requirements_review")
     assert any(
         event.event_type == "human_confirmation_blocked_by_modeling_failure"
         for event in service.recent_events()
@@ -613,7 +1877,7 @@ async def test_submit_confirmation_rejects_legacy_codegen_physics_confirmation(
         "confirmation_summary": "确认 tracker material。",
         "errors": [],
     }
-    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
 
     async def fail_if_called(_: str) -> None:
         raise AssertionError("legacy codegen confirmation must not run HC subgraph")
@@ -626,7 +1890,7 @@ async def test_submit_confirmation_rejects_legacy_codegen_physics_confirmation(
     )
 
     assert status.status == "failed"
-    assert status.current_phase == "human_confirmation"
+    assert status.current_phase == "g4_codegen"
     assert service.state["confirmation_status"] == "rejected"
     assert service.state["human_confirmation_required"] is False
     assert service.state["g4_codegen_status"] == "failed"
@@ -669,7 +1933,7 @@ def test_modeling_failure_does_not_surface_empty_actionable_confirmation(tmp_pat
         "termination_reason": "g4_modeling status is failed",
         "errors": ["g4_modeling status is failed"],
     }
-    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
 
     status = service.get_status()
     review = service.get_confirmation_review()
@@ -708,7 +1972,7 @@ def test_legacy_codegen_physics_confirmation_is_not_actionable(tmp_path) -> None
         "confirmation_request_path": str(request_path),
         "errors": [],
     }
-    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+    service.current_phase_idx = PIPELINE_PHASES.index("g4_codegen")
 
     status = service.get_status()
     review = service.get_confirmation_review()
@@ -764,13 +2028,14 @@ def test_confirmation_review_loads_selected_job_without_state_snapshot(tmp_path)
         user_query="build water phantom",
         status="paused",
         current_phase="human_confirmation",
-        current_phase_idx=PIPELINE_PHASES.index("human_confirmation"),
+        current_phase_idx=PIPELINE_PHASES.index("g4_codegen"),
         job_workspace=str(job_dir),
     )
     service.state = {"job_id": "different_active_job"}
 
     review = service.get_confirmation_review("job_confirmation_only")
 
+    assert review["job_id"] == "job_confirmation_only"
     assert review["request_path"] == str(request_path)
     assert review["summary"] == "请确认水层厚度。"
     assert review["questions"] == [
@@ -816,7 +2081,7 @@ async def test_workflow_diagnosis_uses_lite_model_without_overriding_hard_action
         "termination_reason": "g4_modeling status is failed",
         "errors": ["g4_modeling status is failed"],
     }
-    service.current_phase_idx = PIPELINE_PHASES.index("human_confirmation")
+    service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
 
     class FakeGateway:
         async def call(self, *args, **kwargs):
@@ -938,6 +2203,11 @@ async def test_workflow_diagnosis_identifies_pending_requirements_review(tmp_pat
         "errors": [],
     }
     service.current_phase_idx = PIPELINE_PHASES.index("requirements_review")
+    real_workspace_job = Path("simulation_workspace") / "jobs" / "job_requirements_review"
+    if real_workspace_job.exists():
+        import shutil
+
+        shutil.rmtree(real_workspace_job)
 
     diagnosis = await service.get_workflow_diagnosis()
     review = service.get_confirmation_review()
@@ -953,6 +2223,7 @@ async def test_workflow_diagnosis_identifies_pending_requirements_review(tmp_pat
     assert diagnosis["artifacts"] == [str(request_path)]
     assert review["type"] == "requirements_review"
     assert review["questions"][0]["field_path"] == "scoring.depth_dose.bin_width"
+    assert not real_workspace_job.exists()
 
 
 @pytest.mark.asyncio
@@ -1197,6 +2468,56 @@ def test_service_background_continue_reports_failed_status(tmp_path, monkeypatch
     assert not any(event.event_type == "workflow_continue_finished" for event in events)
 
 
+def test_completed_passed_termination_reason_keeps_completed_status(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {
+        "job_id": "job-completed",
+        "user_query": "simulate",
+        "termination_reason": "completed_passed",
+        "errors": [],
+    }
+    service.current_phase_idx = len(PIPELINE_PHASES)
+    service.completed_phases = list(PIPELINE_PHASES)
+
+    status = service.get_status()
+
+    assert status.status == "completed"
+    assert status.current_phase == ""
+    assert status.key_statuses["termination_reason"] == "completed_passed"
+
+
+def test_background_continue_completed_passed_reports_finished(tmp_path, monkeypatch) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    service.state = {
+        "job_id": "job-completed",
+        "user_query": "simulate",
+        "errors": [],
+    }
+    service.store.upsert_job(job_id="job-completed", user_query="simulate")
+
+    async def fake_run_until_blocked() -> object:
+        service.state["termination_reason"] = "completed_passed"
+        service.current_phase_idx = len(PIPELINE_PHASES)
+        service.completed_phases = list(PIPELINE_PHASES)
+        return service.get_status()
+
+    monkeypatch.setattr(service, "run_until_blocked", fake_run_until_blocked)
+
+    assert service.continue_in_background(reason="requirements_review_approved") is True
+    thread = service._background_continue_thread
+    assert thread is not None
+    thread.join(timeout=5)
+
+    events = service.recent_events()
+    assert events[-1].event_type == "workflow_continue_finished"
+    assert events[-1].payload["reason"] == "requirements_review_approved"
+    assert not any(
+        event.event_type == "workflow_continue_failed"
+        and event.payload.get("reason") == "completed_passed"
+        for event in events
+    )
+
+
 def test_resume_job_normalizes_progress_and_can_clear_previous_failure(tmp_path) -> None:
     service = RadAgentAppService(workspace_root=tmp_path)
     job_id = "resume-progress"
@@ -1243,6 +2564,46 @@ def test_resume_job_normalizes_progress_and_can_clear_previous_failure(tmp_path)
     assert status.state.get("errors") == []
     assert status.key_statuses["g4_codegen_status"] == "passed"
     assert status.key_statuses["patch_status"] == "applied"
+
+
+def test_resume_job_maps_legacy_human_confirmation_progress_to_codegen(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    job_id = "legacy-human-confirmation-progress"
+    state = {
+        "job_id": job_id,
+        "user_query": "simulate",
+        "execution_mode": "strict",
+        "run_mode": "strict",
+        "job_workspace": str(tmp_path / "jobs" / job_id),
+        "confirmation_status": "approved",
+        "human_confirmation_required": False,
+        "current_node": "human_confirmation_subgraph",
+        "errors": [],
+    }
+    service.store.upsert_job(job_id=job_id, user_query="simulate")
+    service.store.save_state_snapshot(
+        job_id=job_id,
+        state=state,
+        completed_phases=[
+            "prepare_workspace",
+            "context",
+            "task_planning",
+            "requirements_review",
+            "g4_modeling",
+            "human_confirmation",
+        ],
+        phase="human_confirmation",
+        current_phase_idx=6,
+        status="running",
+    )
+
+    status = service.resume_job(job_id)
+
+    assert status.current_phase == "g4_codegen"
+    assert status.current_phase_idx == PIPELINE_PHASES.index("g4_codegen")
+    assert "human_confirmation" not in status.completed_phases
+    assert "requirements_review" in status.completed_phases
+    assert status.state["current_node"] == "g4_codegen_subgraph"
 
 
 @pytest.mark.asyncio
@@ -1570,20 +2931,11 @@ async def test_preapproved_job_does_not_block_after_g4_modeling_requires_confirm
     async def g4_modeling(state: dict) -> dict:
         return {"human_confirmation_required": True}
 
-    async def human_confirmation(state: dict) -> dict:
-        assert state["raw_human_response"]["user_decision"] == "approve"
-        return {
-            "confirmation_status": "approved",
-            "human_confirmation_required": False,
-            "unconfirmed_assumptions_count": 0,
-        }
-
     async def no_op(state: dict) -> dict:
         return {}
 
     service._subgraph_nodes = {
         "g4_modeling": g4_modeling,
-        "human_confirmation": human_confirmation,
         "g4_codegen": no_op,
         "patch": no_op,
         "gate": no_op,
@@ -1594,7 +2946,7 @@ async def test_preapproved_job_does_not_block_after_g4_modeling_requires_confirm
     status = await service.run_until_blocked()
 
     assert status.status == "completed"
-    assert "human_confirmation" in status.completed_phases
+    assert "human_confirmation" not in status.completed_phases
     assert "g4_codegen" in status.completed_phases
     assert [
         event.event_type
@@ -1676,6 +3028,280 @@ async def test_patch_phase_auto_builds_and_runs_visual_simulation_before_gate(
     assert service.state["auto_visualization_status"] == "ready"
     assert Path(service.state["visual_particle_tracks_path"]).is_file()
     assert service.current_phase_idx == PIPELINE_PHASES.index("gate")
+
+
+def test_get_visualization_payload_ignores_stale_visual_run_after_model_regeneration(
+    tmp_path: Path,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_stale_visual"
+    job_dir = tmp_path / "jobs" / job_id
+    visual_dir = job_dir / "07_gate_validation" / "g4_output_package" / "visual_100"
+    visual_dir.mkdir(parents=True)
+    (visual_dir / "geometry_view.json").write_text(
+        json.dumps(
+            {
+                "components": [
+                    {
+                        "id": "old_geometry",
+                        "shape": "box",
+                        "material": "G4_WATER",
+                        "size_mm": [1, 1, 1],
+                        "position_mm": [0, 0, 0],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (visual_dir / "particle_tracks.json").write_text(
+        json.dumps(
+            {
+                "tracks": [
+                    {
+                        "event_id": 0,
+                        "track_id": 1,
+                        "particle": "gamma",
+                        "points_mm": [[0, 0, -1], [0, 0, 1]],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (visual_dir / "energy_deposits.json").write_text(
+        json.dumps(
+            {
+                "deposits": [
+                    {
+                        "event_id": 0,
+                        "track_id": 1,
+                        "volume": "old_geometry",
+                        "position_mm": [0, 0, 0],
+                        "edep_MeV": 0.1,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    for path in visual_dir.iterdir():
+        os.utime(path, (1000, 1000))
+    os.utime(visual_dir, (1000, 1000))
+
+    model_ir_path = job_dir / "03_model_ir" / "g4_model_ir.json"
+    model_ir_path.parent.mkdir(parents=True)
+    model_ir_path.write_text(
+        json.dumps(
+            {
+                "global_units": {"length": "mm"},
+                "components": [
+                    {
+                        "component_id": "one_loop_robot",
+                        "display_name": "One-loop inspection robot",
+                        "geometry_type": "box",
+                        "material_id": "G4_Fe",
+                        "dimensions": {"x": 100, "y": 100, "z": 200},
+                        "placement": {"position": [0, 0, 0]},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.utime(model_ir_path, (2000, 2000))
+
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "workspace_root": str(tmp_path),
+        "job_workspace": str(job_dir),
+        "_visual_output_dir": str(visual_dir),
+        "visual_geometry_view_path": str(visual_dir / "geometry_view.json"),
+        "visual_particle_tracks_path": str(visual_dir / "particle_tracks.json"),
+        "visual_energy_deposits_path": str(visual_dir / "energy_deposits.json"),
+        "auto_visualization_status": "ready",
+        "g4_model_ir_path": str(model_ir_path),
+    }
+
+    payload = service.get_visualization_payload(job_id)
+
+    assert payload["status"] == "partial"
+    assert payload["source"]["output_dir"] == ""
+    assert payload["source"]["stale_output_dir"] == str(visual_dir)
+    assert payload["geometry"]["components"][0]["id"] == "one_loop_robot"
+    assert payload["tracks"] == []
+    assert payload["deposits"] == []
+    assert any("stale" in warning for warning in payload["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_patch_phase_reruns_auto_visualization_when_previous_visual_output_is_stale(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_patch_rerun_stale_visual"
+    job_dir = tmp_path / "jobs" / job_id
+    project_dir = job_dir / "06_patch" / "geant4_project"
+    project_dir.mkdir(parents=True)
+    proposed_patch = job_dir / "05_codegen" / "proposed_patch.json"
+    proposed_patch.parent.mkdir(parents=True)
+    proposed_patch.write_text("{}", encoding="utf-8")
+    visual_dir = job_dir / "07_gate_validation" / "g4_output_package" / "visual_100"
+    visual_dir.mkdir(parents=True)
+    (visual_dir / "geometry_view.json").write_text('{"components": []}', encoding="utf-8")
+    os.utime(visual_dir / "geometry_view.json", (1000, 1000))
+    os.utime(visual_dir, (1000, 1000))
+    os.utime(proposed_patch, (2000, 2000))
+    os.utime(project_dir, (2000, 2000))
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "build detector",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "generated_code_dir": str(project_dir),
+        "proposed_patch_path": str(proposed_patch),
+        "_visual_output_dir": str(visual_dir),
+        "auto_visualization_status": "ready",
+        "execution_mode": "test",
+        "run_mode": "test",
+        "errors": [],
+    }
+    service.store.upsert_job(
+        job_id=job_id,
+        user_query="build detector",
+        job_workspace=str(job_dir),
+    )
+    service.current_phase_idx = PIPELINE_PHASES.index("patch")
+
+    async def patch_node(state: dict) -> dict:
+        return {"patch_status": "applied"}
+
+    service._subgraph_nodes = {"patch": patch_node}
+    calls: list[str] = []
+
+    async def fake_build_generated_code(*, threads: int = 4):
+        calls.append(f"build:{threads}")
+        executable = project_dir / "build" / "sim"
+        executable.parent.mkdir(parents=True)
+        executable.write_text("", encoding="utf-8")
+        executable.chmod(0o755)
+        service.state["_executable_path"] = str(executable)
+        from agent_core.app.schemas import BuildResult
+
+        return BuildResult(success=True, executable_path=str(executable))
+
+    async def fake_run_simulation(*, events: int = 1000):
+        calls.append(f"simulate:{events}")
+        next_visual_dir = job_dir / "output" / "visual_100"
+        next_visual_dir.mkdir(parents=True)
+        tracks = next_visual_dir / "particle_tracks.json"
+        tracks.write_text('{"tracks": []}', encoding="utf-8")
+        service.state["_visual_output_dir"] = str(next_visual_dir)
+        service.state["visual_particle_tracks_path"] = str(tracks)
+        from agent_core.app.schemas import SimulationResult
+
+        return SimulationResult(
+            success=True,
+            events=events,
+            visual_events=100,
+            visual_success=True,
+            visual_output_dir=str(next_visual_dir),
+        )
+
+    monkeypatch.setattr(service, "build_generated_code", fake_build_generated_code)
+    monkeypatch.setattr(service, "run_simulation", fake_run_simulation)
+
+    result = await service.run_phase("patch")
+
+    assert result.success is True
+    assert calls == ["build:4", "simulate:1000"]
+    assert service.state["auto_visualization_status"] == "ready"
+    assert service.state["_visual_output_dir"] == str(job_dir / "output" / "visual_100")
+
+
+@pytest.mark.asyncio
+async def test_run_until_blocked_routes_patch_rejection_back_to_codegen(tmp_path) -> None:
+    service = RadAgentAppService(workspace_root=tmp_path)
+    project = service.current_project()
+    job_id = "job_patch_repair_route"
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    service.state = {
+        "job_id": job_id,
+        "project_id": str(project["id"]),
+        "user_query": "build detector",
+        "job_workspace": str(job_dir),
+        "workspace_root": str(tmp_path),
+        "execution_mode": "test",
+        "run_mode": "test",
+        "g4_codegen_status": "passed",
+        "auto_visualization_status": "ready",
+        "errors": [],
+    }
+    service.current_phase_idx = PIPELINE_PHASES.index("patch")
+    service.completed_phases = [
+        "prepare_workspace",
+        "context",
+        "task_planning",
+        "requirements_review",
+        "g4_modeling",
+        "g4_codegen",
+    ]
+
+    patch_calls = 0
+    codegen_contexts: list[dict] = []
+
+    async def patch(state: dict) -> dict:
+        nonlocal patch_calls
+        patch_calls += 1
+        if patch_calls == 1:
+            return {
+                "patch_status": "rejected",
+                "patch_retry_count": 1,
+                "runtime_failure_context": {
+                    "source": "patch_review_retry",
+                    "errors": ["REJECT (red zone): include/main.cc"],
+                },
+            }
+        return {"patch_status": "applied"}
+
+    async def g4_codegen(state: dict) -> dict:
+        codegen_contexts.append(dict(state.get("runtime_failure_context", {})))
+        return {
+            "g4_codegen_status": "passed",
+            "proposed_patch_path": str(job_dir / "05_codegen" / "proposed_patch.json"),
+            "generated_code_dir": str(job_dir / "06_patch" / "geant4_project"),
+        }
+
+    async def gate(state: dict) -> dict:
+        return {"validation_status": "passed", "failed_gates": []}
+
+    async def artifact(state: dict) -> dict:
+        return {"artifact_status": "collected"}
+
+    async def report(state: dict) -> dict:
+        return {}
+
+    service._subgraph_nodes = {
+        "g4_codegen": g4_codegen,
+        "patch": patch,
+        "gate": gate,
+        "artifact": artifact,
+        "report": report,
+    }
+
+    status = await service.run_until_blocked()
+
+    assert status.status == "completed"
+    assert patch_calls == 2
+    assert codegen_contexts
+    assert codegen_contexts[0]["source"] == "patch_review_retry"
+    assert "include/main.cc" in codegen_contexts[0]["errors"][0]
 
 
 @pytest.mark.asyncio

@@ -224,6 +224,21 @@ def write_failure_bundle(
         return None
 
 
+def clear_failure_bundle(*, job_id: str | None) -> bool:
+    """Remove a stale failure bundle after a later successful retry."""
+    if not job_id:
+        return False
+    try:
+        path = _job_log_dir(job_id) / "failure_bundle.json"
+        if not path.exists():
+            return False
+        path.unlink()
+        return True
+    except Exception as exc:
+        logger.warning("Failed to clear failure bundle for job %s: %s", job_id, exc)
+        return False
+
+
 def _append_trace_event(log_dir: Path, event: dict[str, Any]) -> None:
     trace_path = log_dir / "trace.json"
     if trace_path.exists():

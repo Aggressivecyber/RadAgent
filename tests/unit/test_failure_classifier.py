@@ -28,7 +28,7 @@ def test_classify_failed_gates_accepts_dicts_and_full_names() -> None:
         "g4_codegen_subgraph"
     )
     assert classify_failed_gates(["Task Spec Schema"]) == "task_planning_subgraph"
-    assert classify_failed_gates(["G4-H Human Confirmation"]) == "human_confirmation_subgraph"
+    assert classify_failed_gates(["G4-H Human Confirmation"]) == "requirements_review"
 
 
 def test_retired_visual_review_gate_id_has_no_retry_target() -> None:

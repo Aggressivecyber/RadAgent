@@ -34,16 +34,23 @@ def _mock_result(parsed_json: dict) -> ModelCallResult:
 
 
 class TestFallbackIntent:
-    """Fallback must not infer intent from keywords."""
+    """Fallback keeps chat safe while explicit simulation requests enter the pipeline."""
 
-    def test_fallback_defaults_to_chat_for_any_text(self) -> None:
-        result = fallback_intent("建立一个 Geant4 仿真")
+    def test_fallback_defaults_to_chat_for_non_simulation_text(self) -> None:
+        result = fallback_intent("你好")
         assert result.intent == "chat"
         assert result.intent_detail == "unknown"
         assert result.requires_job is False
         assert result.requires_simulation_pipeline is False
 
-    def test_fallback_defaults_to_chat_without_rule_based_guessing(self) -> None:
+    def test_fallback_routes_explicit_simulation_to_pipeline(self) -> None:
+        result = fallback_intent("做一个mosfet的g4辐照仿真")
+        assert result.intent == "simulation_work"
+        assert result.intent_detail == "simulation_request"
+        assert result.requires_job is True
+        assert result.requires_simulation_pipeline is True
+
+    def test_fallback_defaults_to_chat_for_ambiguous_continue(self) -> None:
         result = fallback_intent("继续")
         assert result.intent == "chat"
         assert result.requires_simulation_pipeline is False
@@ -185,7 +192,7 @@ class TestClassifyIntentWithLiteModel:
         mock_call.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_llm_failure_defaults_to_chat(self) -> None:
+    async def test_llm_failure_routes_explicit_simulation_to_pipeline(self) -> None:
         mock_result = ModelCallResult(
             task=ModelTask.INTENT_ROUTING,
             tier=ModelTier.LITE,
@@ -200,8 +207,8 @@ class TestClassifyIntentWithLiteModel:
         ):
             result = await classify_intent_with_lite_model("建立 Geant4 仿真")
 
-        assert result.intent == "chat"
-        assert result.requires_simulation_pipeline is False
+        assert result.intent == "simulation_work"
+        assert result.requires_simulation_pipeline is True
         assert "lite model failed" in result.routing_reason
 
     @pytest.mark.asyncio

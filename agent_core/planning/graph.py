@@ -12,6 +12,10 @@ _MAX_RETRIES = 3
 
 def _route_after_validation(state: TaskPlanningState) -> str:
     """Retry parsing on validation errors, then persist the latest task spec."""
+    if state.get("task_planning_status") == "needs_user_input" or state.get(
+        "clarification_request"
+    ):
+        return "save_task_spec"
     errors = state.get("task_spec_errors", [])
     retry_count = state.get("_parse_retry_count", 0)
     if errors and retry_count < _MAX_RETRIES:

@@ -29,6 +29,29 @@ class ModelGateway:
     def __init__(self):
         self.profiles = load_model_profiles()
 
+    @staticmethod
+    def _start_summary(req: ModelCallRequest, profile: Any) -> str:
+        """Build an informative summary for a model_call_start event."""
+        base = f"{req.task} via {profile.provider}"
+        if not (req.system_prompt or req.user_prompt) and req.messages:
+            base = f"{req.task} via {profile.provider} (messages: {len(req.messages)})"
+        return base
+
+    @staticmethod
+    def _call_summary(req: ModelCallRequest, result: ModelCallResult) -> str:
+        """Build an informative summary for a model_call completion event."""
+        base = f"{req.task} via {result.provider}"
+        if result.tool_calls:
+            names = [str(tc.get("name", "")) for tc in result.tool_calls if tc.get("name")]
+            if names:
+                base += f" → tools: {', '.join(names[:3])}"
+                if len(names) > 3:
+                    base += f" +{len(names)-3}"
+        elif result.content:
+            snippet = result.content[:50].replace("\n", " ")
+            base += f" ({len(result.content)} chars)"
+        return base
+
     async def call(
         self,
         task: ModelTask,
@@ -219,17 +242,29 @@ class ModelGateway:
             from agent_core.observability.redaction import artifact_ref
 
             job_id = req.metadata.get("job_id")
+            # When agent_loop uses messages instead of system/user prompt,
+            # count total characters across all messages so the debug panel
+            # shows non-zero prompt size.
+            system_chars = len(req.system_prompt or "")
+            user_chars = len(req.user_prompt or "")
+            if (system_chars + user_chars == 0) and req.messages:
+                total = sum(
+                    len(str(m.get("content", "") or ""))
+                    for m in req.messages
+                    if isinstance(m, dict)
+                )
+                system_chars = total
             record_event(
                 job_id=job_id,
                 event_type="model_call_start",
                 status="running",
                 phase=str(req.task),
                 module_name=str(req.metadata.get("module_name", "")),
-                summary=f"{req.task} via {profile.provider}",
+                summary=self._start_summary(req, profile),
                 artifacts=[artifact_ref(transcript_path)] if transcript_path else [],
                 metrics={
-                    "system_prompt_chars": len(req.system_prompt or ""),
-                    "user_prompt_chars": len(req.user_prompt or ""),
+                    "system_prompt_chars": system_chars,
+                    "user_prompt_chars": user_chars,
                 },
                 details={
                     "tier": str(req.tier),
@@ -286,12 +321,14 @@ class ModelGateway:
                 status="failed" if result.error else "passed",
                 phase=str(req.task),
                 module_name=str(req.metadata.get("module_name", "")),
-                summary=f"{req.task} via {result.provider}",
+                summary=self._call_summary(req, result),
                 duration_ms=result.latency_ms,
                 artifacts=[artifact_ref(transcript_path)] if transcript_path else [],
                 metrics={
-                    "content_length": len(result.content or ""),
+                    "content_length": len(result.content or "")
+                    or (len(str(result.tool_calls)) if result.tool_calls else 0),
                     "parsed_json": result.parsed_json is not None,
+                    "tool_call_count": len(result.tool_calls or []),
                 },
                 errors=[result.error] if result.error else [],
                 details={

@@ -9,7 +9,7 @@ Maps failed gate IDs to the subgraph that should handle the retry:
 - Gate 7-11 → g4_codegen_subgraph for runtime/code contract repair
 - G4-A to G4-E (12-16) → g4_modeling_subgraph
 - G4-F to G4-G (17-18) → g4_codegen_subgraph
-- G4-H (19) → human_confirmation_subgraph
+- G4-H (19) → requirements_review
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ _GATE_RETRY_MAP: dict[int, str] = {
     16: "g4_modeling_subgraph",
     17: "g4_codegen_subgraph",
     18: "g4_codegen_subgraph",
-    19: "human_confirmation_subgraph",
+    19: "requirements_review",
 }
 
 

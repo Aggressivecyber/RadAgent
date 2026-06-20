@@ -38,32 +38,22 @@ def route_after_context(state: RadAgentMainState) -> str:
 def route_after_task_planning(state: RadAgentMainState) -> str:
     """Route after Task Planning Subgraph.
 
-    Only "geant4" scope proceeds to G4 Modeling.
-    TCAD/SPICE/full_chain scopes are BLOCKED — routed to report_subgraph
-    with a clear message that these scopes are reserved for future phases.
+    RadAgent currently executes the Geant4 pipeline only. Non-Geant4 domain
+    terms are kept as requirements-review context instead of routing into
+    separate TCAD/SPICE branches.
     """
     status = state.get("task_planning_status", "failed")
 
-    # Reserved scope (TCAD/SPICE/full_chain) → report immediately
     if status == "reserved":
         return "report_subgraph"
 
     if status == "failed":
         return "report_subgraph"
 
-    scope = state.get("simulation_scope", [])
-
-    # HARD BLOCK: any non-geant4 scope → report_subgraph
-    reserved_scopes = {"tcad", "spice", "geant4_to_tcad", "tcad_to_spice", "full_chain"}
-    if any(s in reserved_scopes for s in scope):
-        # Do NOT enter g4_modeling or g4_codegen
-        return "report_subgraph"
-
-    # Only pure geant4 scope proceeds
-    if scope == ["geant4"]:
+    scope = state.get("simulation_scope", []) or ["geant4"]
+    if status in {"passed", "needs_user_input", "completed"} and scope:
         return "requirements_review"
 
-    # Unknown/empty scope → report
     return "report_subgraph"
 
 
@@ -80,14 +70,12 @@ def route_after_requirements_review(state: RadAgentMainState) -> str:
 def route_after_g4_modeling(state: RadAgentMainState) -> str:
     """Route after G4 Modeling Subgraph.
 
-    Check if human confirmation is required before proceeding to codegen.
+    Requirements review is the only normal human alignment gate. Legacy
+    human_confirmation fields may remain in old state snapshots, but they do
+    not route successful modeling back into a post-modeling approval step.
     """
     status = state.get("g4_modeling_status", "failed")
     if status == "passed":
-        # Check if human confirmation is required
-        hc_required = state.get("human_confirmation_required", False)
-        if hc_required:
-            return "human_confirmation_subgraph"
         return "g4_codegen_subgraph"
     if status == "needs_user_input":
         return "report_subgraph"
@@ -140,6 +128,12 @@ def route_after_patch(state: RadAgentMainState) -> str:
     status = state.get("patch_status", "failed")
     if status == "applied":
         return "gate_subgraph"
+    try:
+        retry_count = int(state.get("patch_retry_count", 0) or 0)
+    except (TypeError, ValueError):
+        retry_count = 0
+    if retry_count < 4:
+        return "g4_codegen_subgraph"
     return "report_subgraph"
 
 

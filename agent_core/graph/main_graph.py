@@ -13,7 +13,6 @@ Flow:
         → task_planning_subgraph
         → requirements_review
         → g4_modeling_subgraph
-        → human_confirmation_subgraph
         → g4_codegen_subgraph
         → patch_subgraph
         → gate_subgraph
@@ -272,7 +271,17 @@ def _make_g4_codegen_subgraph_node() -> Any:
     subgraph = build_g4_codegen_subgraph().compile()
 
     async def _run(state: RadAgentMainState) -> dict[str, Any]:
-        runtime_failure_context = _load_runtime_failure_context(state)
+        state_failure_context = (
+            dict(state.get("runtime_failure_context") or {})
+            if isinstance(state.get("runtime_failure_context"), dict)
+            else {}
+        )
+        if state_failure_context.get("source") == "patch_review_retry":
+            runtime_failure_context = state_failure_context
+        else:
+            runtime_failure_context = _load_runtime_failure_context(state)
+            if not runtime_failure_context:
+                runtime_failure_context = state_failure_context
         result = await subgraph.ainvoke(
             {
                 "job_id": state.get("job_id", ""),
@@ -499,15 +508,81 @@ def _make_patch_subgraph_node() -> Any:
                 "generated_code_dir": state.get("generated_code_dir", ""),
             }
         )
-        return {
+        update = {
             "patch_review_path": result.get("patch_review_path", ""),
             "applied_patch_path": result.get("applied_patch_path", ""),
             "patch_applied_at": result.get("patch_applied_at", ""),
             "patch_status": result.get("patch_status", "failed"),
             "current_node": "patch_subgraph",
         }
+        if update["patch_status"] != "applied":
+            retry_count = _next_patch_retry_count(state)
+            update["patch_retry_count"] = retry_count
+            update["runtime_failure_context"] = _patch_failure_context(
+                state,
+                result,
+                retry_count=retry_count,
+            )
+            update["g4_codegen_status"] = "failed"
+        return update
 
     return _run
+
+
+def _next_patch_retry_count(state: RadAgentMainState) -> int:
+    try:
+        return int(state.get("patch_retry_count", 0) or 0) + 1
+    except (TypeError, ValueError):
+        return 1
+
+
+def _patch_failure_context(
+    state: RadAgentMainState,
+    patch_result: dict[str, Any],
+    *,
+    retry_count: int,
+) -> dict[str, Any]:
+    review_path = str(patch_result.get("patch_review_path") or "")
+    review = _read_json_dict(review_path)
+    review_errors = [
+        str(item)
+        for item in review.get("errors", [])
+        if str(item).strip()
+    ]
+    result_errors = [
+        str(item)
+        for item in patch_result.get("errors", [])
+        if str(item).strip()
+    ]
+    errors = review_errors or result_errors or [f"patch status is {patch_result.get('patch_status', 'failed')}"]
+    context: dict[str, Any] = {
+        "source": "patch_review_retry",
+        "retry_count": retry_count,
+        "patch_status": patch_result.get("patch_status", "failed"),
+        "patch_review_path": review_path,
+        "proposed_patch_path": state.get("proposed_patch_path", ""),
+        "generated_code_dir": state.get("generated_code_dir", ""),
+        "errors": errors,
+        "patch_review": {
+            "format_valid": review.get("format_valid"),
+            "permission_valid": review.get("permission_valid"),
+            "errors": review_errors[:20],
+        },
+    }
+    previous = state.get("runtime_failure_context")
+    if isinstance(previous, dict) and previous:
+        context["history"] = [previous]
+    return context
+
+
+def _read_json_dict(path: str) -> dict[str, Any]:
+    if not path:
+        return {}
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _make_gate_subgraph_node() -> Any:
@@ -710,12 +785,11 @@ def build_main_graph() -> StateGraph:
         },
     )
 
-    # Conditional: g4_modeling → human_confirmation or g4_codegen or report
+    # Conditional: g4_modeling → g4_codegen or report
     graph.add_conditional_edges(
         "g4_modeling_subgraph",
         route_after_g4_modeling,
         {
-            "human_confirmation_subgraph": "human_confirmation_subgraph",
             "g4_codegen_subgraph": "g4_codegen_subgraph",
             "report_subgraph": "report_subgraph",
         },
@@ -738,7 +812,6 @@ def build_main_graph() -> StateGraph:
         route_after_g4_codegen,
         {
             "patch_subgraph": "patch_subgraph",
-            "human_confirmation_subgraph": "human_confirmation_subgraph",
             "report_subgraph": "report_subgraph",
         },
     )
@@ -749,6 +822,7 @@ def build_main_graph() -> StateGraph:
         route_after_patch,
         {
             "gate_subgraph": "gate_subgraph",
+            "g4_codegen_subgraph": "g4_codegen_subgraph",
             "report_subgraph": "report_subgraph",
         },
     )
@@ -761,8 +835,8 @@ def build_main_graph() -> StateGraph:
             "artifact_subgraph": "artifact_subgraph",
             "context_subgraph": "context_subgraph",
             "task_planning_subgraph": "task_planning_subgraph",
+            "requirements_review": "requirements_review",
             "g4_modeling_subgraph": "g4_modeling_subgraph",
-            "human_confirmation_subgraph": "human_confirmation_subgraph",
             "g4_codegen_subgraph": "g4_codegen_subgraph",
             "patch_subgraph": "patch_subgraph",
             "report_subgraph": "report_subgraph",

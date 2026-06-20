@@ -140,10 +140,13 @@ def parse_command(text: str) -> Command:
                 "Usage: /mode <ask, run, cmd, inspect, artifact, config>"
             )
     if name == "simulate" and args:
+        parts = args.split()
         try:
-            events = int(args)
+            events = int(parts[0])
         except ValueError as exc:
-            raise CommandParseError("Usage: /simulate [positive event count]") from exc
+            if len(parts) == 1:
+                return Command(name=name, args=args, raw=text)
+            raise CommandParseError("Usage: /simulate [positive event count] [job_id]") from exc
         if events <= 0:
             raise CommandParseError("Simulation event count must be positive.")
     return Command(name=name, args=args, raw=text)

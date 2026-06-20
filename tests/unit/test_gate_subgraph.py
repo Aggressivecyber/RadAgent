@@ -8,7 +8,39 @@ import pytest
 from agent_core.gates.base_gates import gate_name as _gate_name
 from agent_core.gates.base_gates import run_base_gates
 from agent_core.gates.g4_modeling_gates import run_g4_modeling_gates
+from agent_core.gates.gate_runner import finalize_gate_results
+from agent_core.observability import write_failure_bundle
 from agent_core.workspace.paths import STAGE_GATE_VALIDATION
+
+
+def test_task_spec_schema_accepts_requirements_review_intermediate_shape() -> None:
+    """Gate 1 must not reject task specs that were intentionally sent through review."""
+    from agent_core.validators.schema_validator import SchemaValidator
+
+    valid, errors = SchemaValidator().validate_task_spec(
+        {
+            "simulation_scope": ["geant4"],
+            "particle": {},
+            "energy": {"value": 10.0, "unit": "MeV"},
+            "modeling_mode": "realistic",
+            "metadata": {
+                "source_particle_missing": "true",
+                "requirements_review_required": "true",
+            },
+            "requirements_review_hints": {
+                "questions": [
+                    {
+                        "field_path": "source.particle",
+                        "question": "请确认辐照粒子类型。",
+                        "recommended_value": "gamma",
+                    }
+                ]
+            },
+        }
+    )
+
+    assert valid
+    assert errors == []
 
 
 class TestGateNames:
@@ -90,6 +122,44 @@ class TestRunBaseGates:
         for g in gate_results:
             if g["gate_id"] in (7, 9):
                 assert g["status"] != "pass", f"Gate {g['gate_id']} auto-passed in acceptance mode"
+
+    async def test_finalize_pass_clears_stale_failure_bundle(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A successful retry must not leave an old failure bundle behind."""
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(workspace))
+        stale = write_failure_bundle(
+            job_id="retry_job",
+            status="failed",
+            phase="gate_validation",
+            errors=["old static check failure"],
+        )
+        assert stale is not None
+        assert stale.is_file()
+
+        result = await finalize_gate_results(
+            {
+                "job_id": "retry_job",
+                "run_mode": "strict",
+                "gate_results": [
+                    {
+                        "gate_id": 5,
+                        "name": "Static Check",
+                        "status": "pass",
+                        "critical": True,
+                        "failed_items": [],
+                        "warnings": [],
+                    }
+                ],
+            }
+        )
+
+        assert result["validation_status"] == "passed"
+        assert not stale.exists()
 
     async def test_gate1_validates_external_source_artifacts(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -9,14 +9,14 @@ from agent_core.graph.main_routes import (
 class TestRouteAfterG4Modeling:
     """Test route_after_g4_modeling function."""
 
-    def test_route_after_g4_modeling_phase1_requires_confirmation(self):
-        """Test routing to human_confirmation when required."""
+    def test_route_after_g4_modeling_ignores_legacy_confirmation_flag(self):
+        """Requirements review is the only normal confirmation gate before modeling."""
         state = {
             "g4_modeling_status": "passed",
             "human_confirmation_required": True,
         }
         result = route_after_g4_modeling(state)
-        assert result == "human_confirmation_subgraph"
+        assert result == "g4_codegen_subgraph"
 
     def test_route_after_g4_modeling_no_confirmation(self):
         """Test routing to phase2/codegen when no confirmation needed."""

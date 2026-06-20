@@ -10,7 +10,6 @@ PipelinePhase = Literal[
     "task_planning",
     "requirements_review",
     "g4_modeling",
-    "human_confirmation",
     "g4_codegen",
     "patch",
     "gate",
@@ -24,6 +23,19 @@ PIPELINE_PHASES: tuple[PipelinePhase, ...] = (
     "task_planning",
     "requirements_review",
     "g4_modeling",
+    "g4_codegen",
+    "patch",
+    "gate",
+    "artifact",
+    "report",
+)
+
+LEGACY_PIPELINE_PHASES: tuple[str, ...] = (
+    "prepare_workspace",
+    "context",
+    "task_planning",
+    "requirements_review",
+    "g4_modeling",
     "human_confirmation",
     "g4_codegen",
     "patch",
@@ -32,7 +44,7 @@ PIPELINE_PHASES: tuple[PipelinePhase, ...] = (
     "report",
 )
 
-INTERACTIVE_PHASES: frozenset[PipelinePhase] = frozenset({"human_confirmation"})
+INTERACTIVE_PHASES: frozenset[PipelinePhase] = frozenset()
 AUTO_PHASES: frozenset[PipelinePhase] = frozenset(
     phase for phase in PIPELINE_PHASES if phase not in INTERACTIVE_PHASES
 )

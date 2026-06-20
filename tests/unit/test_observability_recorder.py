@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agent_core.observability import record_event, write_failure_bundle
+from agent_core.observability import clear_failure_bundle, record_event, write_failure_bundle
 from agent_core.observability.redaction import sanitize
 
 
@@ -57,6 +57,22 @@ def test_failure_bundle_includes_recent_events(tmp_path: Path, monkeypatch) -> N
     bundle = json.loads(path.read_text())
     assert bundle["status"] == "failed"
     assert bundle["recent_events"]
+
+
+def test_clear_failure_bundle_removes_stale_failure_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    path = write_failure_bundle(
+        job_id="bundle_job",
+        status="failed",
+        phase="gate_validation",
+        errors=["old gate failure"],
+    )
+    assert path is not None
+    assert path.is_file()
+
+    assert clear_failure_bundle(job_id="bundle_job") is True
+
+    assert not path.exists()
 
 
 def test_sanitize_truncates_large_strings() -> None:
