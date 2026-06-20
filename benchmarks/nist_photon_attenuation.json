@@ -1,0 +1,199 @@
+{
+  "benchmark_id": "nist-photon-attenuation-v1",
+  "description": "Reference-only photon attenuation benchmark for RadAgent-generated Geant4 projects. The benchmark uses NIST mass attenuation coefficients and evaluates observed transmission when RadAgent simulation or laboratory measurements are added.",
+  "sources": [
+    {
+      "name": "NIST XCOM Photon Cross Sections Database",
+      "url": "https://www.nist.gov/pml/xcom-photon-cross-sections-database"
+    },
+    {
+      "name": "NIST X-Ray Mass Attenuation Coefficients - Lead",
+      "url": "https://physics.nist.gov/PhysRefData/XrayMassCoef/ElemTab/z82.html"
+    },
+    {
+      "name": "NIST X-Ray Mass Attenuation Coefficients - Aluminum",
+      "url": "https://physics.nist.gov/PhysRefData/XrayMassCoef/ElemTab/z13.html"
+    },
+    {
+      "name": "NIST X-Ray Mass Attenuation Coefficients - Water, Liquid",
+      "url": "https://physics.nist.gov/PhysRefData/XrayMassCoef/ComTab/water.html"
+    }
+  ],
+  "acceptance": {
+    "max_relative_error": 0.05,
+    "max_cv": 0.02,
+    "notes": "A case passes when the observed fitted attenuation coefficient is within 5% of the NIST reference and repeated-run coefficient of variation is at most 2%."
+  },
+  "simulation_protocol": {
+    "observable": "photon_transmission",
+    "recommended_histories_per_case": 1000000,
+    "recommended_repeats": 3,
+    "random_seed_policy": "fixed seed per repeat, recorded in the case output",
+    "geometry": "monoenergetic pencil or broad parallel photon beam incident on a homogeneous slab; score transmitted primaries behind the slab",
+    "fit": "mu_observed = -ln(T_observed) / thickness_cm"
+  },
+  "cases": [
+    {
+      "case_id": "pb-0p5mev-0p5cm",
+      "observable": "photon_transmission",
+      "material": "Pb",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 11.34,
+      "mass_attenuation_cm2_g": 0.1614,
+      "thickness_cm": 0.5
+    },
+    {
+      "case_id": "pb-0p5mev-1cm",
+      "observable": "photon_transmission",
+      "material": "Pb",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 11.34,
+      "mass_attenuation_cm2_g": 0.1614,
+      "thickness_cm": 1.0
+    },
+    {
+      "case_id": "pb-0p5mev-2cm",
+      "observable": "photon_transmission",
+      "material": "Pb",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 11.34,
+      "mass_attenuation_cm2_g": 0.1614,
+      "thickness_cm": 2.0
+    },
+    {
+      "case_id": "pb-1mev-0p5cm",
+      "observable": "photon_transmission",
+      "material": "Pb",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 11.34,
+      "mass_attenuation_cm2_g": 0.07102,
+      "thickness_cm": 0.5
+    },
+    {
+      "case_id": "pb-1mev-1cm",
+      "observable": "photon_transmission",
+      "material": "Pb",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 11.34,
+      "mass_attenuation_cm2_g": 0.07102,
+      "thickness_cm": 1.0
+    },
+    {
+      "case_id": "pb-1mev-2cm",
+      "observable": "photon_transmission",
+      "material": "Pb",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 11.34,
+      "mass_attenuation_cm2_g": 0.07102,
+      "thickness_cm": 2.0
+    },
+    {
+      "case_id": "al-0p5mev-1cm",
+      "observable": "photon_transmission",
+      "material": "Al",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 2.699,
+      "mass_attenuation_cm2_g": 0.08445,
+      "thickness_cm": 1.0
+    },
+    {
+      "case_id": "al-0p5mev-3cm",
+      "observable": "photon_transmission",
+      "material": "Al",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 2.699,
+      "mass_attenuation_cm2_g": 0.08445,
+      "thickness_cm": 3.0
+    },
+    {
+      "case_id": "al-0p5mev-6cm",
+      "observable": "photon_transmission",
+      "material": "Al",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 2.699,
+      "mass_attenuation_cm2_g": 0.08445,
+      "thickness_cm": 6.0
+    },
+    {
+      "case_id": "al-1mev-1cm",
+      "observable": "photon_transmission",
+      "material": "Al",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 2.699,
+      "mass_attenuation_cm2_g": 0.06146,
+      "thickness_cm": 1.0
+    },
+    {
+      "case_id": "al-1mev-3cm",
+      "observable": "photon_transmission",
+      "material": "Al",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 2.699,
+      "mass_attenuation_cm2_g": 0.06146,
+      "thickness_cm": 3.0
+    },
+    {
+      "case_id": "al-1mev-6cm",
+      "observable": "photon_transmission",
+      "material": "Al",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 2.699,
+      "mass_attenuation_cm2_g": 0.06146,
+      "thickness_cm": 6.0
+    },
+    {
+      "case_id": "water-0p5mev-5cm",
+      "observable": "photon_transmission",
+      "material": "Water",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 1.0,
+      "mass_attenuation_cm2_g": 0.09687,
+      "thickness_cm": 5.0
+    },
+    {
+      "case_id": "water-0p5mev-10cm",
+      "observable": "photon_transmission",
+      "material": "Water",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 1.0,
+      "mass_attenuation_cm2_g": 0.09687,
+      "thickness_cm": 10.0
+    },
+    {
+      "case_id": "water-0p5mev-20cm",
+      "observable": "photon_transmission",
+      "material": "Water",
+      "energy_MeV": 0.5,
+      "density_g_cm3": 1.0,
+      "mass_attenuation_cm2_g": 0.09687,
+      "thickness_cm": 20.0
+    },
+    {
+      "case_id": "water-1mev-5cm",
+      "observable": "photon_transmission",
+      "material": "Water",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 1.0,
+      "mass_attenuation_cm2_g": 0.07072,
+      "thickness_cm": 5.0
+    },
+    {
+      "case_id": "water-1mev-10cm",
+      "observable": "photon_transmission",
+      "material": "Water",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 1.0,
+      "mass_attenuation_cm2_g": 0.07072,
+      "thickness_cm": 10.0
+    },
+    {
+      "case_id": "water-1mev-20cm",
+      "observable": "photon_transmission",
+      "material": "Water",
+      "energy_MeV": 1.0,
+      "density_g_cm3": 1.0,
+      "mass_attenuation_cm2_g": 0.07072,
+      "thickness_cm": 20.0
+    }
+  ]
+}

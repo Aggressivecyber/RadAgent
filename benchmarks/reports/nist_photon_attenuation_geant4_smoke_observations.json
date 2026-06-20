@@ -1,0 +1,36 @@
+{
+  "benchmark_id": "nist-photon-attenuation-v1",
+  "backend": "geant4",
+  "generated_at": "2026-06-17T17:31:20.451999+00:00",
+  "manifest": "benchmarks/nist_photon_attenuation.json",
+  "events": 1000,
+  "repeats": 1,
+  "seed": 12345,
+  "case_count": 1,
+  "observations": [
+    {
+      "case_id": "pb-0p5mev-0p5cm",
+      "observed_transmission": 0.412,
+      "observed_cv": 0.037778,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        1000
+      ],
+      "transmitted_per_repeat": [
+        412
+      ],
+      "raw_repeats": [
+        {
+          "material": "Pb",
+          "density_g_cm3": 11.34,
+          "energy_MeV": 0.5,
+          "thickness_cm": 0.5,
+          "events": 1000,
+          "transmitted": 412,
+          "transmission": 0.412,
+          "seed": 12345
+        }
+      ]
+    }
+  ]
+}

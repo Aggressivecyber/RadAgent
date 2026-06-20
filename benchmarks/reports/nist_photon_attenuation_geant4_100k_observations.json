@@ -1,0 +1,444 @@
+{
+  "benchmark_id": "nist-photon-attenuation-v1",
+  "backend": "geant4",
+  "generated_at": "2026-06-17T17:31:34.560563+00:00",
+  "manifest": "benchmarks/nist_photon_attenuation.json",
+  "events": 100000,
+  "repeats": 1,
+  "seed": 12345,
+  "case_count": 18,
+  "observations": [
+    {
+      "case_id": "pb-0p5mev-0p5cm",
+      "observed_transmission": 0.4004,
+      "observed_cv": 0.00387,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        40040
+      ],
+      "raw_repeats": [
+        {
+          "material": "Pb",
+          "density_g_cm3": 11.34,
+          "energy_MeV": 0.5,
+          "thickness_cm": 0.5,
+          "events": 100000,
+          "transmitted": 40040,
+          "transmission": 0.4004,
+          "seed": 12345
+        }
+      ]
+    },
+    {
+      "case_id": "pb-0p5mev-1cm",
+      "observed_transmission": 0.1603,
+      "observed_cv": 0.007238,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        16030
+      ],
+      "raw_repeats": [
+        {
+          "material": "Pb",
+          "density_g_cm3": 11.34,
+          "energy_MeV": 0.5,
+          "thickness_cm": 1,
+          "events": 100000,
+          "transmitted": 16030,
+          "transmission": 0.1603,
+          "seed": 13345
+        }
+      ]
+    },
+    {
+      "case_id": "pb-0p5mev-2cm",
+      "observed_transmission": 0.02529,
+      "observed_cv": 0.019632,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        2529
+      ],
+      "raw_repeats": [
+        {
+          "material": "Pb",
+          "density_g_cm3": 11.34,
+          "energy_MeV": 0.5,
+          "thickness_cm": 2,
+          "events": 100000,
+          "transmitted": 2529,
+          "transmission": 0.02529,
+          "seed": 14345
+        }
+      ]
+    },
+    {
+      "case_id": "pb-1mev-0p5cm",
+      "observed_transmission": 0.66686,
+      "observed_cv": 0.002235,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        66686
+      ],
+      "raw_repeats": [
+        {
+          "material": "Pb",
+          "density_g_cm3": 11.34,
+          "energy_MeV": 1,
+          "thickness_cm": 0.5,
+          "events": 100000,
+          "transmitted": 66686,
+          "transmission": 0.66686,
+          "seed": 15345
+        }
+      ]
+    },
+    {
+      "case_id": "pb-1mev-1cm",
+      "observed_transmission": 0.44494,
+      "observed_cv": 0.003532,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        44494
+      ],
+      "raw_repeats": [
+        {
+          "material": "Pb",
+          "density_g_cm3": 11.34,
+          "energy_MeV": 1,
+          "thickness_cm": 1,
+          "events": 100000,
+          "transmitted": 44494,
+          "transmission": 0.44494,
+          "seed": 16345
+        }
+      ]
+    },
+    {
+      "case_id": "pb-1mev-2cm",
+      "observed_transmission": 0.19604,
+      "observed_cv": 0.006404,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        19604
+      ],
+      "raw_repeats": [
+        {
+          "material": "Pb",
+          "density_g_cm3": 11.34,
+          "energy_MeV": 1,
+          "thickness_cm": 2,
+          "events": 100000,
+          "transmitted": 19604,
+          "transmission": 0.19604,
+          "seed": 17345
+        }
+      ]
+    },
+    {
+      "case_id": "al-0p5mev-1cm",
+      "observed_transmission": 0.79514,
+      "observed_cv": 0.001605,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        79514
+      ],
+      "raw_repeats": [
+        {
+          "material": "Al",
+          "density_g_cm3": 2.699,
+          "energy_MeV": 0.5,
+          "thickness_cm": 1,
+          "events": 100000,
+          "transmitted": 79514,
+          "transmission": 0.79514,
+          "seed": 18345
+        }
+      ]
+    },
+    {
+      "case_id": "al-0p5mev-3cm",
+      "observed_transmission": 0.50341,
+      "observed_cv": 0.003141,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        50341
+      ],
+      "raw_repeats": [
+        {
+          "material": "Al",
+          "density_g_cm3": 2.699,
+          "energy_MeV": 0.5,
+          "thickness_cm": 3,
+          "events": 100000,
+          "transmitted": 50341,
+          "transmission": 0.50341,
+          "seed": 19345
+        }
+      ]
+    },
+    {
+      "case_id": "al-0p5mev-6cm",
+      "observed_transmission": 0.25291,
+      "observed_cv": 0.005435,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        25291
+      ],
+      "raw_repeats": [
+        {
+          "material": "Al",
+          "density_g_cm3": 2.699,
+          "energy_MeV": 0.5,
+          "thickness_cm": 6,
+          "events": 100000,
+          "transmitted": 25291,
+          "transmission": 0.25291,
+          "seed": 20345
+        }
+      ]
+    },
+    {
+      "case_id": "al-1mev-1cm",
+      "observed_transmission": 0.84718,
+      "observed_cv": 0.001343,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        84718
+      ],
+      "raw_repeats": [
+        {
+          "material": "Al",
+          "density_g_cm3": 2.699,
+          "energy_MeV": 1,
+          "thickness_cm": 1,
+          "events": 100000,
+          "transmitted": 84718,
+          "transmission": 0.84718,
+          "seed": 21345
+        }
+      ]
+    },
+    {
+      "case_id": "al-1mev-3cm",
+      "observed_transmission": 0.60444,
+      "observed_cv": 0.002558,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        60444
+      ],
+      "raw_repeats": [
+        {
+          "material": "Al",
+          "density_g_cm3": 2.699,
+          "energy_MeV": 1,
+          "thickness_cm": 3,
+          "events": 100000,
+          "transmitted": 60444,
+          "transmission": 0.60444,
+          "seed": 22345
+        }
+      ]
+    },
+    {
+      "case_id": "al-1mev-6cm",
+      "observed_transmission": 0.36656,
+      "observed_cv": 0.004157,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        36656
+      ],
+      "raw_repeats": [
+        {
+          "material": "Al",
+          "density_g_cm3": 2.699,
+          "energy_MeV": 1,
+          "thickness_cm": 6,
+          "events": 100000,
+          "transmitted": 36656,
+          "transmission": 0.36656,
+          "seed": 23345
+        }
+      ]
+    },
+    {
+      "case_id": "water-0p5mev-5cm",
+      "observed_transmission": 0.61631,
+      "observed_cv": 0.002495,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        61631
+      ],
+      "raw_repeats": [
+        {
+          "material": "Water",
+          "density_g_cm3": 1,
+          "energy_MeV": 0.5,
+          "thickness_cm": 5,
+          "events": 100000,
+          "transmitted": 61631,
+          "transmission": 0.61631,
+          "seed": 24345
+        }
+      ]
+    },
+    {
+      "case_id": "water-0p5mev-10cm",
+      "observed_transmission": 0.37793,
+      "observed_cv": 0.004057,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        37793
+      ],
+      "raw_repeats": [
+        {
+          "material": "Water",
+          "density_g_cm3": 1,
+          "energy_MeV": 0.5,
+          "thickness_cm": 10,
+          "events": 100000,
+          "transmitted": 37793,
+          "transmission": 0.37793,
+          "seed": 25345
+        }
+      ]
+    },
+    {
+      "case_id": "water-0p5mev-20cm",
+      "observed_transmission": 0.14327,
+      "observed_cv": 0.007733,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        14327
+      ],
+      "raw_repeats": [
+        {
+          "material": "Water",
+          "density_g_cm3": 1,
+          "energy_MeV": 0.5,
+          "thickness_cm": 20,
+          "events": 100000,
+          "transmitted": 14327,
+          "transmission": 0.14327,
+          "seed": 26345
+        }
+      ]
+    },
+    {
+      "case_id": "water-1mev-5cm",
+      "observed_transmission": 0.7026,
+      "observed_cv": 0.002057,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        70260
+      ],
+      "raw_repeats": [
+        {
+          "material": "Water",
+          "density_g_cm3": 1,
+          "energy_MeV": 1,
+          "thickness_cm": 5,
+          "events": 100000,
+          "transmitted": 70260,
+          "transmission": 0.7026,
+          "seed": 27345
+        }
+      ]
+    },
+    {
+      "case_id": "water-1mev-10cm",
+      "observed_transmission": 0.49151,
+      "observed_cv": 0.003216,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        49151
+      ],
+      "raw_repeats": [
+        {
+          "material": "Water",
+          "density_g_cm3": 1,
+          "energy_MeV": 1,
+          "thickness_cm": 10,
+          "events": 100000,
+          "transmitted": 49151,
+          "transmission": 0.49151,
+          "seed": 28345
+        }
+      ]
+    },
+    {
+      "case_id": "water-1mev-20cm",
+      "observed_transmission": 0.24079,
+      "observed_cv": 0.005615,
+      "repeat_count": 1,
+      "events_per_repeat": [
+        100000
+      ],
+      "transmitted_per_repeat": [
+        24079
+      ],
+      "raw_repeats": [
+        {
+          "material": "Water",
+          "density_g_cm3": 1,
+          "energy_MeV": 1,
+          "thickness_cm": 20,
+          "events": 100000,
+          "transmitted": 24079,
+          "transmission": 0.24079,
+          "seed": 29345
+        }
+      ]
+    }
+  ]
+}
