@@ -1,13 +1,13 @@
 {
   "schema_version": "v3",
   "artifact_type": "g4_complex_model",
-  "job_id": "job_5574e228__20260616_070817",
+  "job_id": "job_87aa0262__20260620_151324",
   "validation_status": "passed",
-  "generated_at": "2026-06-15T23:23:55.079924+00:00",
+  "generated_at": "2026-06-20T07:25:23.724378+00:00",
   "is_stub": false,
   "run_type": "strict",
-  "source_commit": "e875104",
-  "source_job_id": "job_5574e228__20260616_070817",
+  "source_commit": "f838e80",
+  "source_job_id": "job_87aa0262__20260620_151324",
   "files": [
     {
       "name": "code_module_plan.json",
@@ -16,23 +16,23 @@
     },
     {
       "name": "component_specs_summary.json",
-      "size_bytes": 212,
-      "sha256": "aaa6459a1eecb74e92bc816dddcb624fab3713fee925e5c30e1e1c4429edf368"
+      "size_bytes": 235,
+      "sha256": "88af6a5d72f873c6a6d3c012400d4b6fe6e34d8811731de7b7f41dbbd010d8ec"
     },
     {
       "name": "confirmation_record.json",
-      "size_bytes": 16607,
-      "sha256": "43d40a49f07a50e359a9d53a10400d03a4aad3f5d38dc3befc2bb543c5ae87c6"
+      "size_bytes": 14615,
+      "sha256": "9cf63b1579823335295258e65970b01f3e8cf45b36f8d754710754cb383e9ae5"
     },
     {
       "name": "confirmed_model_plan.json",
-      "size_bytes": 99334,
-      "sha256": "7ce047a9fc3fafc906b3d7483251327030f790674c3943020089ca16e5f44024"
+      "size_bytes": 77075,
+      "sha256": "7d9ed62a6497f6c8be7d6faed93ac878025e3305c98b6ff6210b23a7ad6497ab"
     },
     {
       "name": "construction_ledger.json",
-      "size_bytes": 5329,
-      "sha256": "db9fd2a36fdaf838360ed39a018cde9449e55ac3a08c3626d25215f086de47c1"
+      "size_bytes": 5156,
+      "sha256": "b09f645c3ae25cf83e20a45706dfffdf1625903b6f7a11e61b56079efc81ca0d"
     },
     {
       "name": "evidence_traceability_report.json",
@@ -41,28 +41,28 @@
     },
     {
       "name": "g4_model_ir.json",
-      "size_bytes": 28159,
-      "sha256": "007763904839c0f84c99a1858874cca911b362ecca2ff2b2e10b6c72a3338027"
+      "size_bytes": 26574,
+      "sha256": "9efc7480cd87b65b217c0fce7bdbb050007a5364b168f2200c7f83f67661cbef"
     },
     {
       "name": "gate_results.json",
-      "size_bytes": 37781,
-      "sha256": "a6ab787e1a2bea8da337f09a1d93067584a29b2e9cdf3b456bfc012a3bd24ced"
+      "size_bytes": 30933,
+      "sha256": "7f2c23ecab68542962b4f0584e366662380b9f5208014d1f05717fdae83fb15f"
     },
     {
       "name": "geometry_interface_report.json",
-      "size_bytes": 701,
-      "sha256": "04ce466fb79d51688e5a5c506b27fdb2287005dca3c8f7b54b14309adc3fb6c1"
+      "size_bytes": 893,
+      "sha256": "bb8f1239782e91be2562fb79ad02067056b1593e1f119a648bdb50f97d5635e2"
     },
     {
       "name": "human_confirmation_report.md",
-      "size_bytes": 20457,
-      "sha256": "fab73472de02424c22d5d71970e96ebc7114d23cd8517fe83a0c9a860589d1cd"
+      "size_bytes": 15681,
+      "sha256": "10197d2d76e7e4672a8b32abaca98f751535262c92e6f8c132a8f8374b009fd5"
     },
     {
       "name": "model_review_report.md",
-      "size_bytes": 3778,
-      "sha256": "dfb0a490c0330e559a4534529f372a4bdc61ea0f3cbc7ffa1ab3b0761e4bfc18"
+      "size_bytes": 3290,
+      "sha256": "2bf1e902d42f49a28690df38554fe7c22c74622fc2d29dc36ec9b829c7f775d7"
     },
     {
       "name": "no_simplification_report.json",
@@ -76,68 +76,73 @@
     },
     {
       "name": "proposed_patch_summary.json",
-      "size_bytes": 1073,
-      "sha256": "30d313214c633fcaf1e075a90d7423b1af7b875f428bd494b1af95d57d6e4fc8"
+      "size_bytes": 1070,
+      "sha256": "0e91011e82e1e568edadbf552bd9933840a9ca0aa400a0a196bcc93bd23af552"
     }
   ],
   "sha256": {
     "output/code_module_plan.json": "f44f1bc7f56c3cf5b1c058ad01c6ee266e21acf186c61a1efc7409d5df7925c8",
-    "output/component_specs_summary.json": "aaa6459a1eecb74e92bc816dddcb624fab3713fee925e5c30e1e1c4429edf368",
-    "output/confirmation_record.json": "43d40a49f07a50e359a9d53a10400d03a4aad3f5d38dc3befc2bb543c5ae87c6",
-    "output/confirmed_model_plan.json": "7ce047a9fc3fafc906b3d7483251327030f790674c3943020089ca16e5f44024",
-    "output/construction_ledger.json": "db9fd2a36fdaf838360ed39a018cde9449e55ac3a08c3626d25215f086de47c1",
+    "output/component_specs_summary.json": "88af6a5d72f873c6a6d3c012400d4b6fe6e34d8811731de7b7f41dbbd010d8ec",
+    "output/confirmation_record.json": "9cf63b1579823335295258e65970b01f3e8cf45b36f8d754710754cb383e9ae5",
+    "output/confirmed_model_plan.json": "7d9ed62a6497f6c8be7d6faed93ac878025e3305c98b6ff6210b23a7ad6497ab",
+    "output/construction_ledger.json": "b09f645c3ae25cf83e20a45706dfffdf1625903b6f7a11e61b56079efc81ca0d",
     "output/evidence_traceability_report.json": "250d4ada6dfb7f21c1c74f6b67c22becf64e94cbb4bf50e1154404f99851354d",
-    "output/g4_model_ir.json": "007763904839c0f84c99a1858874cca911b362ecca2ff2b2e10b6c72a3338027",
-    "output/gate_results.json": "a6ab787e1a2bea8da337f09a1d93067584a29b2e9cdf3b456bfc012a3bd24ced",
-    "output/geometry_interface_report.json": "04ce466fb79d51688e5a5c506b27fdb2287005dca3c8f7b54b14309adc3fb6c1",
-    "output/human_confirmation_report.md": "fab73472de02424c22d5d71970e96ebc7114d23cd8517fe83a0c9a860589d1cd",
-    "output/model_review_report.md": "dfb0a490c0330e559a4534529f372a4bdc61ea0f3cbc7ffa1ab3b0761e4bfc18",
+    "output/g4_model_ir.json": "9efc7480cd87b65b217c0fce7bdbb050007a5364b168f2200c7f83f67661cbef",
+    "output/gate_results.json": "7f2c23ecab68542962b4f0584e366662380b9f5208014d1f05717fdae83fb15f",
+    "output/geometry_interface_report.json": "bb8f1239782e91be2562fb79ad02067056b1593e1f119a648bdb50f97d5635e2",
+    "output/human_confirmation_report.md": "10197d2d76e7e4672a8b32abaca98f751535262c92e6f8c132a8f8374b009fd5",
+    "output/model_review_report.md": "2bf1e902d42f49a28690df38554fe7c22c74622fc2d29dc36ec9b829c7f775d7",
     "output/no_simplification_report.json": "c5d671c9c31b350cf11a9adc6048645e97fbc54a1ee520cb42f39732d1717b7e",
     "output/output_manager_contract.json": "edeb4ff3433e141ef52e915d116429c4ae192aa43afdb54c8c9be57f6ed78af4",
-    "output/proposed_patch_summary.json": "30d313214c633fcaf1e075a90d7423b1af7b875f428bd494b1af95d57d6e4fc8"
+    "output/proposed_patch_summary.json": "0e91011e82e1e568edadbf552bd9933840a9ca0aa400a0a196bcc93bd23af552"
   },
   "size_bytes": {
     "output/code_module_plan.json": 1968,
-    "output/component_specs_summary.json": 212,
-    "output/confirmation_record.json": 16607,
-    "output/confirmed_model_plan.json": 99334,
-    "output/construction_ledger.json": 5329,
+    "output/component_specs_summary.json": 235,
+    "output/confirmation_record.json": 14615,
+    "output/confirmed_model_plan.json": 77075,
+    "output/construction_ledger.json": 5156,
     "output/evidence_traceability_report.json": 101,
-    "output/g4_model_ir.json": 28159,
-    "output/gate_results.json": 37781,
-    "output/geometry_interface_report.json": 701,
-    "output/human_confirmation_report.md": 20457,
-    "output/model_review_report.md": 3778,
+    "output/g4_model_ir.json": 26574,
+    "output/gate_results.json": 30933,
+    "output/geometry_interface_report.json": 893,
+    "output/human_confirmation_report.md": 15681,
+    "output/model_review_report.md": 3290,
     "output/no_simplification_report.json": 102,
     "output/output_manager_contract.json": 1693,
-    "output/proposed_patch_summary.json": 1073
+    "output/proposed_patch_summary.json": 1070
   },
   "total_files": 14,
   "model_ir_summary": {
     "components": [
       {
-        "component_id": "world_001",
+        "component_id": "world",
         "component_type": "world",
-        "geometry_type": "box"
+        "geometry_type": "cylinder"
       },
       {
-        "component_id": "layer_water_001",
+        "component_id": "polyethylene_layer",
         "component_type": "layer",
-        "geometry_type": "box"
+        "geometry_type": "cylinder"
       },
       {
-        "component_id": "layer_aluminum_001",
+        "component_id": "borated_polyethylene_layer",
         "component_type": "layer",
-        "geometry_type": "box"
+        "geometry_type": "cylinder"
       },
       {
-        "component_id": "layer_silicon_001",
+        "component_id": "lead_layer",
         "component_type": "layer",
-        "geometry_type": "box"
+        "geometry_type": "cylinder"
+      },
+      {
+        "component_id": "silicon_detector",
+        "component_type": "volume",
+        "geometry_type": "cylinder"
       }
     ],
-    "materials_count": 4,
-    "scoring_count": 10
+    "materials_count": 5,
+    "scoring_count": 4
   },
   "skipped_gates": [],
   "known_limitations": []

@@ -1,12 +1,13 @@
 {
-  "total_components": 4,
+  "total_components": 5,
   "component_ids": [
-    "world_001",
-    "layer_water_001",
-    "layer_aluminum_001",
-    "layer_silicon_001"
+    "world",
+    "polyethylene_layer",
+    "borated_polyethylene_layer",
+    "lead_layer",
+    "silicon_detector"
   ],
-  "materials_count": 4,
+  "materials_count": 5,
   "sources_count": 1,
-  "scoring_count": 10
+  "scoring_count": 4
 }

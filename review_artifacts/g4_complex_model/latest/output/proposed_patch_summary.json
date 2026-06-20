@@ -18,7 +18,7 @@
     "macros/gui.mac",
     "macros/init_vis.mac",
     "macros/radagent_self_check_100.mac",
-    "macros/radagent_self_check_1000.mac",
+    "macros/radagent_self_check_5.mac",
     "macros/run.mac",
     "macros/vis.mac",
     "main.cc",

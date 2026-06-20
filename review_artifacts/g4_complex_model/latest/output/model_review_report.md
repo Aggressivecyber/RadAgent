@@ -1,68 +1,57 @@
-# G4 Model Review: mir_job_5574e228__20260616_070817
-- **Job ID**: job_5574e228__20260616_070817
+# G4 Model Review: mir_job_87aa0262__20260620_151324
+- **Job ID**: job_87aa0262__20260620_151324
 - **Mode**: realistic
-- **Target**: Proton depth-dose benchmark through layered materials
+- **Target**: Geant4 shielding study for 14 MeV neutrons through polyethylene, borated polyethylene, lead, and a downstream silicon detector.
 
 ## ✅ Validation Status: PASSED
 
 ## Geometry Components
 | ID | Type | Material | Parent | Sensitive |
 |----|------|----------|--------|-----------|
-| world_001 | box | G4_Galactic | — |  |
-| layer_water_001 | box | G4_WATER | world_001 | ✓ |
-| layer_aluminum_001 | box | G4_Al | world_001 | ✓ |
-| layer_silicon_001 | box | G4_Si | world_001 | ✓ |
+| world | cylinder | G4_AIR | — |  |
+| polyethylene_layer | cylinder | G4_POLYETHYLENE | world |  |
+| borated_polyethylene_layer | cylinder | G4_BORATED_POLYETHYLENE_5Percent | world |  |
+| lead_layer | cylinder | G4_Pb | world |  |
+| silicon_detector | cylinder | G4_Si | world | ✓ |
 
 ## Materials
 | ID | Name | Type | Density (g/cm³) |
 |----|------|------|-----------------|
-| G4_Al | G4_Al (NIST) | nist | 2.699 |
-| G4_Galactic | G4_Galactic (NIST) | nist | 1e-25 |
+| G4_AIR | G4_AIR (NIST) | nist | 0.001225 |
+| G4_BORATED_POLYETHYLENE_5Percent | Material pending user selection: G4_BORATED_POLYETHYLENE_5Percent | custom | 2.33 |
+| G4_POLYETHYLENE | Polyethylene | custom | 0.94 |
+| G4_Pb | G4_Pb (NIST) | nist | 11.35 |
 | G4_Si | G4_Si (NIST) | nist | 2.33 |
-| G4_WATER | G4_WATER (NIST) | nist | 1.0 |
 
 ## Particle Source
-- **Particle**: proton
-- **Energy**: 150.0 MeV (mono)
+- **Particle**: neutron
+- **Energy**: 14.0 MeV (mono)
 - **Events**: 1000
-- **Position**: [0.0, 0.0, -400500.0] → direction [0.0, 0.0, 1.0]
+- **Position**: [0.0, 0.0, -180950.0] → direction [0.0, 0.0, 1.0]
 
 ## Physics
-- **List**: FTFP_BERT
-- **Reasoning**: FTFP_BERT is recommended for proton therapy simulations up to 10 GeV, providing good accuracy for electromagnetic and hadronic interactions in the requested energy range.
+- **List**: Shielding
+- **Reasoning**: The 'Shielding' physics list is specifically designed for neutron shielding studies, including low-energy neutron transport and secondary particle production, which matches the user's request for a shielding study with neutron leakage and secondary gamma scoring.
 
 ## Sensitive Detectors
-- **LayerWater001SdSensitiveDetector**: linked to ['layer_water_001'], collection=layer_water_001_Hits
-- **LayerAluminum001SdSensitiveDetector**: linked to ['layer_aluminum_001'], collection=layer_aluminum_001_Hits
-- **LayerSilicon001SdSensitiveDetector**: linked to ['layer_silicon_001'], collection=layer_silicon_001_Hits
+- **SiliconDetectorSdSensitiveDetector**: linked to ['silicon_detector'], collection=silicon_detector_Hits
 
 ## Scoring
-- **layer_water_001_edep** (region): edep_MeV
-- **layer_water_001_dose** (region): dose_Gy
-- **layer_aluminum_001_edep** (region): edep_MeV
-- **layer_aluminum_001_dose** (region): dose_Gy
-- **layer_silicon_001_edep** (region): edep_MeV
-- **layer_silicon_001_dose** (region): dose_Gy
-- **layer_water_001_voxel_dose** (voxel): dose_Gy
-- **layer_aluminum_001_voxel_dose** (voxel): dose_Gy
-- **layer_silicon_001_voxel_dose** (voxel): dose_Gy
+- **silicon_detector_edep** (region): edep_MeV
+- **silicon_detector_dose** (region): dose_Gy
+- **silicon_detector_voxel_dose** (voxel): dose_Gy
 - **event_table** (region): edep_MeV, event_id, track_id
 
 ## Construction Audit Trail
 Total steps: 12
-- [evidence_retrieval_node] modify → mir_job_5574e228__20260616_070817: Organized evidence: geometry=1, materials=1, source=1, physics=2, scoring=1
-- [model_scope_guard_node] validate → mir_job_5574e228__20260616_070817: Scope guard result: proceed_with_warnings
-- [geometry_decomposition_node] create → mir_job_5574e228__20260616_070817: Normalized draft components, 4 components, 3 interfaces
-- [coordinate_system_node] modify → mir_job_5574e228__20260616_070817: Set coordinate system: cartesian, origin=world_center
-- [material_definition_node] create → mir_job_5574e228__20260616_070817: Defined 4 materials: ['G4_Al', 'G4_Galactic', 'G4_Si', 'G4_WATER']
-- [source_definition_node] create → sources: Configured 1 source(s): primary_source:proton 150.0 MeV mono/gun
-- [physics_list_node] validate → physics: Preserved drafted physics list: FTFP_BERT
-- [sensitive_detector_node] create → sensitive_detectors: Created 3 sensitive detectors for: ['layer_water_001', 'layer_aluminum_001', 'layer_silicon_001']
-- [scoring_design_node] create → scoring: Created 10 scoring configurations: ['layer_water_001_edep', 'layer_water_001_dose', 'layer_aluminum_001_edep', 'layer_aluminum_001_dose', 'layer_silicon_001_edep', 'layer_silicon_001_dose', 'layer_water_001_voxel_dose', 'layer_aluminum_001_voxel_dose', 'layer_silicon_001_voxel_dose', 'event_table']
-- [model_ir_validation_node] validate → mir_job_5574e228__20260616_070817: Ran 7 validators: 7 passed, 0 errors
+- [evidence_retrieval_node] modify → mir_job_87aa0262__20260620_151324: Organized evidence: geometry=1, materials=1, source=2, physics=2, scoring=2
+- [model_scope_guard_node] validate → mir_job_87aa0262__20260620_151324: Scope guard result: proceed_with_warnings
+- [geometry_decomposition_node] create → mir_job_87aa0262__20260620_151324: Normalized draft components, 5 components, 4 interfaces
+- [coordinate_system_node] modify → mir_job_87aa0262__20260620_151324: Set coordinate system: cartesian, origin=world_center
+- [material_definition_node] create → mir_job_87aa0262__20260620_151324: Defined 5 materials: ['G4_AIR', 'G4_BORATED_POLYETHYLENE_5Percent', 'G4_POLYETHYLENE', 'G4_Pb', 'G4_Si']
+- [source_definition_node] create → sources: Configured 1 source(s): primary_source:neutron 14.0 MeV mono/gun
+- [physics_list_node] validate → physics: Preserved drafted physics list: Shielding
+- [sensitive_detector_node] create → sensitive_detectors: Created 1 sensitive detectors for: ['silicon_detector']
+- [scoring_design_node] create → scoring: Created 4 scoring configurations: ['silicon_detector_edep', 'silicon_detector_dose', 'silicon_detector_voxel_dose', 'event_table']
+- [model_ir_validation_node] validate → mir_job_87aa0262__20260620_151324: Ran 7 validators: 7 passed, 0 errors
 - ... and 2 more entries
-
-## Open Issues
-- ⚠️ Material thicknesses need confirmation for 150 MeV proton range
-- ⚠️ Scoring bin size not specified
-- ⚠️ Step limiter settings not specified

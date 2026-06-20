@@ -1,24 +1,31 @@
 {
-  "total_interfaces": 3,
+  "total_interfaces": 4,
   "interfaces": [
     {
-      "interface_id": "iface_layer_water_001_world_001",
-      "component_a": "world_001",
-      "component_b": "layer_water_001",
+      "interface_id": "iface_polyethylene_layer_world",
+      "component_a": "world",
+      "component_b": "polyethylene_layer",
       "relationship": "contains",
       "overlap_check_enabled": true
     },
     {
-      "interface_id": "iface_layer_aluminum_001_world_001",
-      "component_a": "world_001",
-      "component_b": "layer_aluminum_001",
+      "interface_id": "iface_borated_polyethylene_layer_world",
+      "component_a": "world",
+      "component_b": "borated_polyethylene_layer",
       "relationship": "contains",
       "overlap_check_enabled": true
     },
     {
-      "interface_id": "iface_layer_silicon_001_world_001",
-      "component_a": "world_001",
-      "component_b": "layer_silicon_001",
+      "interface_id": "iface_lead_layer_world",
+      "component_a": "world",
+      "component_b": "lead_layer",
+      "relationship": "contains",
+      "overlap_check_enabled": true
+    },
+    {
+      "interface_id": "iface_silicon_detector_world",
+      "component_a": "world",
+      "component_b": "silicon_detector",
       "relationship": "contains",
       "overlap_check_enabled": true
     }
