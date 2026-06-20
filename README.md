@@ -383,6 +383,12 @@ or retrieval behavior changes.
 
 ## Development
 
+One-click local setup:
+
+```bash
+./scripts/setup_radagent_env.sh
+```
+
 Runtime install:
 
 ```bash
@@ -427,6 +433,17 @@ Some integration and real full-graph tests require external tools such as
 Geant4, TCAD Sentaurus, ngspice, or a configured model API. Those tests are
 marked in `pyproject.toml` and should not be treated as ordinary local smoke
 tests.
+
+Environment and NIST benchmark reproduction details are documented in
+`docs/environment-and-nist-validation.md`.
+
+NIST photon attenuation benchmark shortcuts:
+
+```bash
+make nist-reference
+make nist-geant4-smoke
+make nist-reproduce
+```
 
 ## Environment Notes
 

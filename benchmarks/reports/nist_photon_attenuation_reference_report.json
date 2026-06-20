@@ -24,6 +24,7 @@
     "max_cv": 0.02,
     "notes": "A case passes when the observed fitted attenuation coefficient is within 5% of the NIST reference and repeated-run coefficient of variation is at most 2%."
   },
+  "observations": "",
   "aggregate": {
     "case_count": 18,
     "observed_case_count": 0,

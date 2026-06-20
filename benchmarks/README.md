@@ -41,3 +41,14 @@ python3 scripts/physics_benchmark.py \
 
 The checked-in manifest is reference-only until RadAgent or laboratory
 measurements add `observed_transmission` and `observed_cv` to each case.
+
+One-command reproduction is available from the repository root:
+
+```bash
+./scripts/reproduce_nist_benchmark.sh --reference-only --output-dir benchmarks/reports
+./scripts/reproduce_nist_benchmark.sh --events 100000 --repeats 1 --output-dir benchmarks/reports
+```
+
+Use `--geant4-required` when a missing Geant4 installation should fail the run
+instead of producing only reference reports. Full environment and metric details
+are documented in `docs/environment-and-nist-validation.md`.

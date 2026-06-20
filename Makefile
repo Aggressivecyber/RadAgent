@@ -1,4 +1,4 @@
-.PHONY: lint typecheck test test-all test-real-full-graph format clean
+.PHONY: lint typecheck test test-all test-real-full-graph format clean setup-env nist-reference nist-geant4-smoke nist-reproduce
 
 lint:
 	ruff check .
@@ -14,6 +14,18 @@ test-all:
 
 test-real-full-graph:
 	python scripts/run_real_full_graph_test.py
+
+setup-env:
+	./scripts/setup_radagent_env.sh
+
+nist-reference:
+	./scripts/reproduce_nist_benchmark.sh --reference-only --output-dir benchmarks/reports
+
+nist-geant4-smoke:
+	./scripts/reproduce_nist_benchmark.sh --events 1000 --case-limit 2 --output-dir benchmarks/reports/nist_smoke
+
+nist-reproduce:
+	./scripts/reproduce_nist_benchmark.sh --output-dir benchmarks/reports
 
 format:
 	ruff format agent_core/ tests/ scripts/
