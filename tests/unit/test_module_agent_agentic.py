@@ -73,6 +73,10 @@ def test_runtime_geometry_size_uses_radius_for_cylinders_with_dz() -> None:
         {"r": 40000.0, "dz": 60000.0},
         0.001,
     ) == [80.0, 80.0, 60.0]
+    assert runtime_app_agent._geometry_size_mm(
+        {"r_inner": 32500.0, "r_outer": 57500.0, "dz": 80000.0},
+        0.001,
+    ) == [115.0, 115.0, 80.0]
 
 
 def test_module_prompts_prevent_common_geant4_repair_failures() -> None:
@@ -3339,3 +3343,65 @@ def test_runtime_geometry_view_hardening_replaces_existing_helper_without_geomet
     assert "fGeometryComponents" not in content
     assert "_RadAgentIrGeometryComponents" in content
     assert 'ofs << "{\\n  \\"components\\": [\\n";' in content
+
+
+def test_runtime_geometry_view_hardening_replaces_inline_writer_from_write_all() -> None:
+    files = {
+        "include/OutputManager.hh": GeneratedModuleFile(
+            path="include/OutputManager.hh",
+            new_content="#pragma once\nclass OutputManager { void WriteAll() const; };\n",
+            generated_by="test",
+            module_name="runtime_app",
+            rationale="test",
+        ),
+        "src/OutputManager.cc": GeneratedModuleFile(
+            path="src/OutputManager.cc",
+            new_content=(
+                '#include "OutputManager.hh"\n'
+                "#include <fstream>\n"
+                "void OutputManager::WriteAll() const\n"
+                "{\n"
+                "  {\n"
+                "    std::ofstream out(pathJoin(fOutputDirectory, \"g4_summary.json\"));\n"
+                "    out << \"{}\\n\";\n"
+                "  }\n"
+                "  {\n"
+                "    std::ofstream out(pathJoin(fOutputDirectory, \"geometry_view.json\"));\n"
+                "    out << \"{\\n  \\\"components\\\": [\\n\";\n"
+                "    out << \"    {\\\"id\\\": \\\"hpge_crystal\\\", \\\"shape\\\": \\\"box\\\"}\";\n"
+                "    out << \"\\n  ]\\n}\\n\";\n"
+                "  }\n"
+                "}\n"
+            ),
+            generated_by="test",
+            module_name="runtime_app",
+            rationale="test",
+        ),
+    }
+
+    runtime_app_agent._harden_runtime_geometry_view(
+        files,
+        {
+            "g4_model_ir_subset": {
+                "global_units": {"length": "um"},
+                "components": [
+                    {
+                        "component_id": "hpge_crystal",
+                        "display_name": "HPGe Coaxial Crystal",
+                        "component_type": "volume",
+                        "geometry_type": "cylinder",
+                        "dimensions": {"r": 30000.0, "dz": 50000.0},
+                        "material_id": "G4_Ge",
+                        "placement": {"position": [0.0, 0.0, 0.0]},
+                    }
+                ],
+            }
+        },
+    )
+
+    content = files["src/OutputManager.cc"].new_content
+    assert "_RadAgentIrGeometryComponents" in content
+    assert '"hpge_crystal"' in content
+    assert '"shape": "cylinder"' in content
+    assert '"size_mm": [60.0, 60.0, 50.0]' in content
+    assert '\\"shape\\": \\"box\\"' not in content

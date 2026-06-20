@@ -123,7 +123,15 @@ Rules:
    wiring later, so focus on components and physics here.
 5. Component dimensions must be numeric full lengths in micrometers (um). Convert
    cm, mm, and nm to um before writing JSON.
-6. Return valid JSON only.
+6. If task_spec.confirmed_requirement_plan exists, it is user-approved source of
+   truth. Reflect every confirmed geometry/material/source/scoring/physics field
+   in components, physics, required_outputs, open_issues, or assumptions; do not
+   ask again for the same confirmed field.
+7. If task_spec.particles, task_spec.outputs, target, or physics_options were
+   derived from confirmed requirements, keep them consistent with the draft. Do
+   not invent a different source particle, energy, direction, material, or
+   physics list.
+8. Return valid JSON only.
 """
 
 GEOMETRY_DECOMPOSITION_PROMPT = """You are a Geant4 geometry decomposition specialist.

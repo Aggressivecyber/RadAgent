@@ -89,6 +89,9 @@ async def model_scope_guard_node(state: RadiationAgentState) -> dict[str, Any]:
             f"Scope guard: {action}. Missing dimensions: {missing_dimensions}. Warnings: {warnings}"
         ),
     }
+    model_ir_errors: list[str] = []
+    if action == "block":
+        model_ir_errors.append(guard_result["message"])
 
     # Record ledger
     model_ir.ledger.add_entry(
@@ -109,5 +112,6 @@ async def model_scope_guard_node(state: RadiationAgentState) -> dict[str, Any]:
     return {
         "g4_model_ir": model_ir.model_dump(mode="json"),
         "model_scope_guard_result": guard_result,
+        "model_ir_errors": model_ir_errors,
         "current_node": "model_scope_guard_node",
     }

@@ -30,6 +30,7 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
     web_context: list[dict[str, Any]] = state.get("web_context", [])  # type: ignore[assignment]
     raw_decision = state.get("context_decision", "block_no_context")
     job_id = state.get("job_id", "")
+    task_spec = state.get("task_spec", {})
 
     from agent_core.g4_modeling.schemas.g4_model_ir import EvidencePack, G4ModelIR
 
@@ -112,6 +113,13 @@ async def evidence_retrieval_node(state: RadiationAgentState) -> dict[str, Any]:
                 _user_requirement_item("scoring", requirements["required_outputs"])
             )
 
+    task_spec_evidence = _task_spec_evidence_items(task_spec)
+    geometry_evidence.extend(task_spec_evidence["geometry"])
+    material_evidence.extend(task_spec_evidence["materials"])
+    source_evidence.extend(task_spec_evidence["source"])
+    physics_evidence.extend(task_spec_evidence["physics"])
+    scoring_evidence.extend(task_spec_evidence["scoring"])
+
     evidence_pack = EvidencePack(
         evidence_decision=cast(
             Literal["allow_rag", "allow_with_web_supplement", "block_no_context"],
@@ -171,13 +179,79 @@ def _load_requirements(job_id: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _user_requirement_item(dimension: str, value: Any) -> dict[str, Any]:
+def _user_requirement_item(
+    dimension: str,
+    value: Any,
+    *,
+    source: str = "requirements.json",
+) -> dict[str, Any]:
     return {
         "source_type": "user_requirement",
-        "source": "requirements.json",
+        "source": source,
         "dimension": dimension,
         "text": json.dumps(value, ensure_ascii=False),
     }
+
+
+def _task_spec_evidence_items(task_spec: Any) -> dict[str, list[dict[str, Any]]]:
+    """Project confirmed task_spec fields into evidence dimensions."""
+    items: dict[str, list[dict[str, Any]]] = {
+        "geometry": [],
+        "materials": [],
+        "source": [],
+        "physics": [],
+        "scoring": [],
+    }
+    if not isinstance(task_spec, dict):
+        return items
+
+    source_spec = _task_spec_source_spec(task_spec)
+    if source_spec:
+        items["source"].append(_user_requirement_item("source", source_spec, source="task_spec"))
+
+    target_spec = task_spec.get("target")
+    if isinstance(target_spec, dict):
+        geometry_fields = {
+            key: target_spec[key]
+            for key in ("geometry_type", "size_um", "layers", "dimensions")
+            if key in target_spec
+        }
+        if geometry_fields:
+            items["geometry"].append(
+                _user_requirement_item("geometry", geometry_fields, source="task_spec")
+            )
+        material = target_spec.get("material")
+        if material:
+            items["materials"].append(
+                _user_requirement_item("materials", {"material": material}, source="task_spec")
+            )
+
+    outputs = task_spec.get("outputs")
+    if isinstance(outputs, list) and outputs:
+        items["scoring"].append(_user_requirement_item("scoring", outputs, source="task_spec"))
+
+    physics_options = task_spec.get("physics_options")
+    if isinstance(physics_options, dict) and physics_options:
+        items["physics"].append(
+            _user_requirement_item("physics", physics_options, source="task_spec")
+        )
+
+    return items
+
+
+def _task_spec_source_spec(task_spec: dict[str, Any]) -> Any:
+    particles = task_spec.get("particles")
+    if isinstance(particles, list) and particles:
+        return particles
+
+    particle = task_spec.get("particle")
+    if isinstance(particle, dict) and particle:
+        return particle
+
+    source = task_spec.get("source")
+    if isinstance(source, dict) and source:
+        return source
+    return None
 
 
 def _local_geant4_reference_items(dimension: str) -> list[dict[str, Any]]:

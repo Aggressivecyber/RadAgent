@@ -17,6 +17,8 @@ BEAM_PHYSICS_SYSTEM_PROMPT = """你是 RadAgent 的 Geant4 beam_physics 编码 A
 
 质量要求：
 1. 粒子类型、能量、位置、方向、空间/角分布必须来自 G4ModelIR sources，不得擅自改默认值。
+   如果 G4ModelIR sources 为空，不得硬编码 gamma/proton/neutron 枪；应保留可编译接口并通过
+   risk_notes/needs_user_input 语义报告“建模 IR 缺少 sources”，等待建模修复。
 2. 如果 G4ModelIR sources 包含多个 source，必须实现 all sources 的 multi-source 生成逻辑；
    不能只使用第一个 source，且必须保留每个 source 的 spectrum、direction、angular_distribution、
    events 和 relative_weight 语义。

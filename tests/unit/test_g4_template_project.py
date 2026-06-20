@@ -76,6 +76,12 @@ def test_minimal_template_project_contains_stable_interfaces_and_contract(
     output_source = (project_dir / "src/OutputManager.cc").read_text()
     for artifact in config["output_contract"]:
         assert artifact in output_source
+    output_header = (project_dir / "include/OutputManager.hh").read_text()
+    assert "struct GeometryDescription" in output_header
+    assert "std::string shape" in output_header
+    assert "SetGeometryDescription(" in output_source
+    assert '\\"shape\\": \\"' in output_source
+    assert '\\"shape\\": \\"box\\"' not in output_source
 
     run_macro = (project_dir / "macros/run.mac").read_text()
     assert "/run/beamOn 100" in run_macro

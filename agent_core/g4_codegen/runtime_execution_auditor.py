@@ -16,7 +16,7 @@ from agent_core.gates.output_quality import (
 from agent_core.models.gateway import _safe_parse_json, get_model_gateway
 from agent_core.models.schemas import ModelTask, ModelTier
 from agent_core.workspace.io import get_job_dir
-from agent_core.workspace.paths import GEANT4_PROJECT_DIRNAME, STAGE_CODEGEN
+from agent_core.workspace.paths import GEANT4_PROJECT_DIRNAME, STAGE_CODEGEN, STAGE_MODEL_IR
 
 MAX_AUDIT_CONTEXT_CHARS = 45_000
 RUNTIME_EXECUTION_AUDIT_PATH = f"{STAGE_CODEGEN}/runtime_execution_audit.json"
@@ -158,8 +158,15 @@ def collect_runtime_execution_facts(
     smoke = _read_json(output_dir / "smoke_simulation_result.json")
     summary = _read_json(output_dir / "g4_summary.json")
     provenance = _read_json(output_dir / "provenance.json")
+    model_ir_path = get_job_dir(job_id) / STAGE_MODEL_IR / "g4_model_ir.json"
+    model_ir = _read_json(model_ir_path)
+    geometry_view = _read_json(output_dir / "geometry_view.json")
     expected_events = _positive_int(latest_gate.get("expected_events"))
     output_quality = inspect_g4_output_quality(output_dir, smoke_result=smoke)
+    geometry_consistency_errors = _geometry_view_consistency_errors(
+        model_ir=model_ir,
+        geometry_view=geometry_view,
+    )
     output_event_stats = _inspect_event_table(output_dir / "event_table.csv")
     build_event_stats = _inspect_event_table(project_dir / "build" / "event_table.csv")
 
@@ -212,6 +219,7 @@ def collect_runtime_execution_facts(
             + ", ".join(misplaced_outputs)
         )
     blocking_errors.extend(output_quality.errors)
+    blocking_errors.extend(geometry_consistency_errors)
     blocking_errors.extend(output_event_stats["errors"])
     if build_event_stats["exists"]:
         warnings.extend(
@@ -283,6 +291,7 @@ def collect_runtime_execution_facts(
         and not build_event_stats["errors"]
         and not misplaced_outputs
         and not event_count_errors
+        and not geometry_consistency_errors
     )
 
     artifact_paths = [
@@ -327,6 +336,10 @@ def collect_runtime_execution_facts(
             "errors": output_quality.errors,
             "warnings": output_quality.warnings,
             "metrics": output_quality.metrics,
+        },
+        "geometry_view_consistency": {
+            "model_ir_path": str(model_ir_path),
+            "errors": geometry_consistency_errors,
         },
         "event_table": output_event_stats,
         "build_event_table": build_event_stats,
@@ -486,6 +499,74 @@ def _macro_beam_on_events(path: Path) -> int | None:
     return _positive_int(matches[-1])
 
 
+def _geometry_view_consistency_errors(
+    *,
+    model_ir: dict[str, Any],
+    geometry_view: dict[str, Any],
+) -> list[str]:
+    ir_components = {
+        str(component.get("component_id") or component.get("id") or "").strip(): component
+        for component in _as_list(model_ir.get("components"))
+        if isinstance(component, dict)
+        and str(component.get("component_id") or component.get("id") or "").strip()
+    }
+    if not ir_components:
+        return []
+    view_components = {
+        str(component.get("id") or component.get("component_id") or "").strip(): component
+        for component in _as_list(geometry_view.get("components"))
+        if isinstance(component, dict)
+        and str(component.get("id") or component.get("component_id") or "").strip()
+    }
+    if not view_components:
+        return []
+
+    errors: list[str] = []
+    for component_id, ir_component in ir_components.items():
+        view_component = view_components.get(component_id)
+        if view_component is None:
+            errors.append(
+                f"geometry_view.json missing component from Model IR: {component_id}"
+            )
+            continue
+        expected_shape = _canonical_geometry_shape(
+            ir_component.get("geometry_type") or ir_component.get("shape")
+        )
+        if not expected_shape:
+            continue
+        actual_shape = _canonical_geometry_shape(
+            view_component.get("shape") or view_component.get("geometry_type")
+        )
+        if not actual_shape:
+            errors.append(
+                f"geometry_view.json missing shape for {component_id}; "
+                f"Model IR requires {expected_shape}"
+            )
+            continue
+        if actual_shape != expected_shape:
+            errors.append(
+                "geometry_view.json shape mismatch for "
+                f"{component_id}: Model IR requires {expected_shape}, "
+                f"output reports {actual_shape}"
+            )
+    return errors
+
+
+def _canonical_geometry_shape(value: Any) -> str:
+    shape = str(value or "").strip().lower()
+    if not shape:
+        return ""
+    if any(token in shape for token in ("cylinder", "cylindrical", "tube", "tubs")):
+        return "cylinder"
+    if "box" in shape or "cube" in shape or "cuboid" in shape:
+        return "box"
+    if "sphere" in shape:
+        return "sphere"
+    if "cone" in shape or "cons" in shape:
+        return "cone"
+    return shape
+
+
 def _inspect_event_table(path: Path) -> dict[str, Any]:
     stats: dict[str, Any] = {
         "path": str(path),
@@ -557,6 +638,10 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
 
 
 def _positive_int(value: Any) -> int | None:

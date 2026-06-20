@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import types
 
 
@@ -199,6 +200,144 @@ async def test_g4_modeling_loads_confirmed_requirement_plan(tmp_path, monkeypatc
     assert result["confirmed_requirement_plan"]["user_response"]["feedback"] == "Use 1 mm bins."
     assert result["task_spec"]["confirmed_requirement_plan"]["user_response"]["feedback"] == "Use 1 mm bins."
     assert result["task_spec"]["metadata"]["confirmed_requirement_plan_path"] == str(confirmed_path)
+
+
+async def test_g4_modeling_applies_confirmed_requirement_plan_to_task_spec(tmp_path) -> None:
+    """Approved review choices must become structured modeling inputs."""
+    from agent_core.g4_modeling.subgraph_io import load_task_spec
+
+    task_spec_path = tmp_path / "task_spec.json"
+    confirmed_path = tmp_path / "confirmed_requirement_plan.json"
+    task_spec_path.write_text(
+        json.dumps(
+            {
+                "simulation_scope": ["geant4"],
+                "particle": {},
+                "energy": {"value": 10.0, "unit": "MeV"},
+                "requirements_review_hints": {"questions": []},
+                "metadata": {"requirements_review_required": "true"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    confirmed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "confirmed_requirement_plan_v1",
+                "approval_status": "approved",
+                "review": {
+                    "proposed_parameters": [
+                        {
+                            "field_path": "source.particle_mixture",
+                            "proposed_value": (
+                                "中子+gamma混合场（例如14.1 MeV中子 "
+                                "+ 2.5 MeV gamma）"
+                            ),
+                            "source_type": "user_confirmed",
+                        },
+                        {
+                            "field_path": "source.position_direction",
+                            "proposed_value": (
+                                "从机器人正上方1米处，沿-Z方向垂直入射的"
+                                "平行束，束半径5 cm"
+                            ),
+                            "source_type": "user_confirmed",
+                        },
+                        {
+                            "field_path": "run.event_count",
+                            "proposed_value": "100000",
+                            "source_type": "user_confirmed",
+                        },
+                        {
+                            "field_path": "scoring.objective",
+                            "proposed_value": "机器人体内各层的能量沉积（MeV）和吸收剂量（Gy）",
+                            "source_type": "user_confirmed",
+                        },
+                        {
+                            "field_path": "physics_list",
+                            "proposed_value": (
+                                "QGSP_BIC_HP（适用于中子-质子输运）或 "
+                                "QGSP_BERT（适用于gamma主导）"
+                            ),
+                            "source_type": "user_confirmed",
+                        },
+                    ]
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = await load_task_spec(
+        {
+            "task_spec_path": str(task_spec_path),
+            "confirmed_requirement_plan_path": str(confirmed_path),
+        }
+    )
+
+    task_spec = result["task_spec"]
+    assert "particle" not in task_spec
+    assert task_spec["events"] == 100000
+    assert task_spec["outputs"] == ["energy_deposition", "dose_distribution", "event_data"]
+    assert task_spec["physics_options"]["physics_list"] == "QGSP_BIC_HP"
+    assert [particle["type"] for particle in task_spec["particles"]] == ["neutron", "gamma"]
+    assert [particle["energy_MeV"] for particle in task_spec["particles"]] == [14.1, 2.5]
+    assert task_spec["particles"][0]["direction"] == [0.0, 0.0, -1.0]
+    assert task_spec["particles"][0]["position"] == [0.0, 0.0, 1000000.0]
+    assert task_spec["particles"][0]["surface_shape"] == "circle"
+    assert task_spec["particles"][0]["surface_size"] == [50000.0]
+
+
+async def test_g4_modeling_does_not_upgrade_single_particle_optional_text_to_mixture(
+    tmp_path,
+) -> None:
+    """Optional alternatives in a single source answer are not confirmed sources."""
+    from agent_core.g4_modeling.subgraph_io import load_task_spec
+
+    task_spec_path = tmp_path / "task_spec.json"
+    confirmed_path = tmp_path / "confirmed_requirement_plan.json"
+    task_spec_path.write_text(
+        json.dumps({"simulation_scope": ["geant4"], "particle": {}}),
+        encoding="utf-8",
+    )
+    confirmed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "confirmed_requirement_plan_v1",
+                "approval_status": "approved",
+                "review": {
+                    "proposed_parameters": [
+                        {
+                            "field_path": "source.particle",
+                            "proposed_value": (
+                                "gamma（若需更真实可选中子+gamma混合场，如"
+                                "14.1 MeV中子 + 2.5 MeV gamma）"
+                            ),
+                        },
+                        {
+                            "field_path": "source.energy",
+                            "proposed_value": "10 MeV 单能",
+                        },
+                    ]
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = await load_task_spec(
+        {
+            "task_spec_path": str(task_spec_path),
+            "confirmed_requirement_plan_path": str(confirmed_path),
+        }
+    )
+
+    particles = result["task_spec"]["particles"]
+    assert len(particles) == 1
+    assert particles[0]["type"] == "gamma"
+    assert particles[0]["energy_MeV"] == 10.0
 
 
 def test_main_state_has_path_fields() -> None:

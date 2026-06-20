@@ -12,7 +12,6 @@ class CodeStructureValidator:
     # Minimum required Geant4 class names (substring match in source files)
     _G4_REQUIRED_CLASSES = (
         "DetectorConstruction",
-        "PhysicsList",
         "PrimaryGeneratorAction",
         "SteppingAction",
     )
@@ -39,12 +38,40 @@ class CodeStructureValidator:
         if not list(root.glob("include/*.hh")):
             errors.append("No .hh files in include/")
 
-        all_source = " ".join(p.read_text(errors="replace") for p in root.glob("src/*.cc"))
+        source_files = [*root.glob("src/*.cc")]
+        main_file = root / "main.cc"
+        all_source = " ".join(p.read_text(errors="replace") for p in source_files)
+        all_project_source = " ".join(
+            [
+                all_source,
+                main_file.read_text(errors="replace") if main_file.is_file() else "",
+            ]
+        )
         for cls in self._G4_REQUIRED_CLASSES:
             if cls not in all_source:
                 errors.append(f"Missing required class: {cls}")
+        if not self._has_geant4_physics_initialization(all_project_source):
+            errors.append(
+                "Missing Geant4 physics initialization "
+                "(custom PhysicsList, PhysicsListFactoryWrapper, or reference physics list)"
+            )
 
         return (len(errors) == 0, errors)
+
+    def _has_geant4_physics_initialization(self, source: str) -> bool:
+        """Return whether project source installs a Geant4 physics list."""
+        if "PhysicsList" in source or "PhysicsListFactoryWrapper" in source:
+            return True
+        reference_lists = (
+            "FTFP_BERT",
+            "QGSP_BIC",
+            "QGSP_BIC_HP",
+            "QGSP_BERT",
+            "Shielding",
+        )
+        if any(name in source for name in reference_lists):
+            return True
+        return bool(re.search(r"SetUserInitialization\s*\([^;]*physics", source, re.IGNORECASE))
 
     def validate_geant4_cmakelists(self, content: str) -> tuple[bool, list[str]]:
         """Check CMakeLists.txt for essential Geant4 cmake directives."""

@@ -242,6 +242,61 @@ def test_runtime_facts_reject_build_dir_event_table_and_identical_values(
     assert any("materialized by Geant4Runner" in error for error in facts["blocking_errors"])
 
 
+def test_runtime_facts_reject_geometry_view_shape_that_conflicts_with_model_ir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+    _, project_dir, output_dir = _attempt_dirs(tmp_path)
+    (project_dir / "macros").mkdir()
+    (project_dir / "macros" / "run.mac").write_text("/run/beamOn 2\n", encoding="utf-8")
+
+    model_ir_path = tmp_path / "jobs" / "runtime_audit" / "03_model_ir" / "g4_model_ir.json"
+    _write_json(
+        model_ir_path,
+        {
+            "global_units": {"length": "mm"},
+            "components": [
+                {
+                    "component_id": "detector",
+                    "display_name": "HPGe crystal",
+                    "geometry_type": "cylinder",
+                    "dimensions": {"r": 30.0, "dz": 50.0},
+                    "material_id": "G4_Ge",
+                    "placement": {"position": [0.0, 0.0, 0.0]},
+                }
+            ],
+        },
+    )
+    _write_json(output_dir / "smoke_simulation_result.json", {"success": True, "errors": ""})
+    _write_json(output_dir / "g4_summary.json", {"job_id": "runtime_audit", "events_requested": 2})
+    _write_json(output_dir / "provenance.json", {"job_id": "runtime_audit", "source": "program"})
+    (output_dir / "event_table.csv").write_text(
+        "EventID,edep_MeV,dose_Gy\n0,1.0,0.01\n1,0.5,0.005\n",
+        encoding="utf-8",
+    )
+    (output_dir / "edep_3d.csv").write_text(
+        "x,y,z,edep_MeV\n0,0,0,1.0\n1,0,0,0.5\n",
+        encoding="utf-8",
+    )
+    (output_dir / "dose_3d.csv").write_text(
+        "x,y,z,dose_Gy\n0,0,0,0.01\n1,0,0,0.005\n",
+        encoding="utf-8",
+    )
+    _write_visual_artifacts(output_dir)
+
+    facts = collect_runtime_execution_facts(
+        job_id="runtime_audit",
+        global_integration_report=_global_report(project_dir, output_dir, expected_events=2),
+    )
+
+    assert facts["data_trustworthy"] is False
+    assert any(
+        "geometry_view.json shape mismatch for detector" in error
+        for error in facts["blocking_errors"]
+    )
+
+
 def test_event_table_reports_non_numeric_values(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

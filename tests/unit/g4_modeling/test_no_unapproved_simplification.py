@@ -91,6 +91,30 @@ class TestNoSimplificationValidator:
         passed, errors = validator.validate(ir)
         assert not passed
 
+    def test_confirmed_placeholder_dimension_field_path_is_evidence(self):
+        """Confirmed review field paths must not be treated as TODO placeholders."""
+        motor = ComponentSpec(
+            component_id="motor_placeholder",
+            display_name="Motor surrogate volume",
+            component_type="volume",
+            geometry_type="box",
+            dimensions={"dx": 30000.0, "dy": 30000.0, "dz": 40000.0},
+            material_id="copper",
+            mother_volume="world",
+            source_evidence=["geometry.robot.motor_placeholder_dimensions"],
+        )
+        ir = G4ModelIR(
+            model_ir_id="test",
+            job_id="job",
+            target_system="one-loop robot model",
+            components=[_world(), motor],
+            materials=[_mat("air"), _mat("copper")],
+        )
+
+        passed, errors = NoSimplificationValidator().validate(ir)
+
+        assert passed, errors
+
     def test_simplification_allowed_with_approval(self):
         ir = G4ModelIR(
             model_ir_id="test",

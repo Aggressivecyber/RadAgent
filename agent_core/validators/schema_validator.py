@@ -33,7 +33,7 @@ class SchemaValidator:
         """
         self._reset()
         try:
-            TaskSpec.model_validate(data)
+            TaskSpec.model_validate(_normalize_task_spec_for_schema(data))
         except Exception as exc:
             self.errors = self._format_errors(exc)
         return (len(self.errors) == 0, list(self.errors))
@@ -91,3 +91,15 @@ class SchemaValidator:
         if hasattr(exc, "errors"):
             return [f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()]
         return [str(exc)]
+
+
+def _normalize_task_spec_for_schema(data: dict) -> dict:
+    """Normalize pipeline intermediate shapes before strict TaskSpec validation."""
+    if not isinstance(data, dict):
+        return data
+    normalized = dict(data)
+    if normalized.get("particle") == {}:
+        normalized.pop("particle")
+    if normalized.get("particles") == []:
+        normalized.pop("particles")
+    return normalized

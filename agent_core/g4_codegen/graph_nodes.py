@@ -1086,6 +1086,7 @@ async def persist_codegen_output_node(
                 "radagent",
             ),
         )
+        _remove_non_auto_apply_project_files(geant4_dir)
         template_manifest = _project_agent_workspace_manifest(
             project_agent_dir,
             source="geant4_project_agent_workspace",
@@ -1209,6 +1210,29 @@ def _is_build_artifact_path(path: Path) -> bool:
     if path.parts[0] == "build":
         return True
     return path.name in {"CMakeCache.txt"} or "CMakeFiles" in path.parts
+
+
+def _remove_non_auto_apply_project_files(project_dir: Path) -> list[str]:
+    from agent_core.validators.file_permission_validator import FilePermissionValidator
+
+    validator = FilePermissionValidator()
+    removed: list[str] = []
+    for path in sorted(p for p in project_dir.rglob("*") if p.is_file()):
+        rel = path.relative_to(project_dir).as_posix()
+        if validator.can_auto_apply(rel):
+            continue
+        path.unlink()
+        removed.append(rel)
+    for directory in sorted(
+        (p for p in project_dir.rglob("*") if p.is_dir()),
+        key=lambda p: len(p.parts),
+        reverse=True,
+    ):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+    return removed
 
 
 def _overlay_patch_changed_files(project_dir: Path, patch: dict[str, Any]) -> None:

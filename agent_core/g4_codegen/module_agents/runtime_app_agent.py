@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import json
 import re
+from copy import deepcopy
 from typing import Any
 
 from agent_core.g4_codegen.cmake_template import RADAGENT_CMAKE_TEMPLATE
@@ -40,7 +40,9 @@ G4 自带交互 UI/Qt 可视化页面；传入宏脚本路径时进入 batch 模
 5. 浏览器 3D 工作台 artifact 契约必须在输出目录中写出固定文件名：
    geometry_view.json、particle_tracks.json、energy_deposits.json。
    - geometry_view.json 必须包含前端可直接渲染的组件列表：id/name/shape/material/size_mm/
-     position_mm/rotation_deg/opacity，不得只写空数组；
+     position_mm/rotation_deg/opacity，不得只写空数组；shape 必须保留 G4ModelIR 中的
+     geometry_type（例如 cylinder/tube 必须输出 cylinder，不能因为 size_mm 是三元数组就
+     硬编码成 box）；
      不要引用不存在的数据成员。只有 OutputManager.hh 明确声明
      std::vector<GeometryComponent> fGeometryComponents 时，OutputManager.cc 才能访问
      fGeometryComponents；否则必须直接从 G4ModelIR 组件写 geometry_view.json，避免
@@ -69,6 +71,9 @@ G4 自带交互 UI/Qt 可视化页面；传入宏脚本路径时进入 batch 模
 10. main.cc 不得重新定义 geometry/source/physics；只负责 RunManager wiring、宏执行和初始化。
     创建输出目录必须用 std::filesystem::create_directories(outDir)，不得调用
     std::system("mkdir -p ...") 或其它 shell 命令。
+    如果上游 G4ModelIR 与已确认需求给出的 source/material/scoring 不一致，不得在
+    main.cc 临时硬编码一个“能跑”的替代物理模型；应使用上游模块真实接口并让
+    repair/modeling 修正 IR。
 11. main.cc 必须使用 G4UIExecutive、G4VisExecutive 和 G4UImanager，参考 Geant4 B1/B2：
    argc == 1 时创建 UIExecutive，初始化 visualization，执行 macros/init_vis.mac，
    如果 ui->IsGUI() 则执行 macros/gui.mac，然后启动 session；
@@ -238,7 +243,10 @@ def _harden_runtime_geometry_view(
     output_header = generated_by_path.get("include/OutputManager.hh")
     if not output_source:
         return
-    if "WriteGeometryViewJson" not in output_source.new_content:
+    if (
+        "WriteGeometryViewJson" not in output_source.new_content
+        and "geometry_view.json" not in output_source.new_content
+    ):
         return
     components = _ir_geometry_components_for_output(
         module_context.get("g4_model_ir_subset") or {}
@@ -262,8 +270,10 @@ def _harden_runtime_geometry_view(
     )
     if has_geometry_collection:
         content = _insert_ir_geometry_fallback_in_writer(content)
-    else:
+    elif "WriteGeometryViewJson" in content:
         content = _replace_geometry_writer_with_ir_output(content, has_output_dir=has_output_dir)
+    else:
+        content = _replace_inline_geometry_writer_with_ir_output(content)
     _replace_generated_content(
         output_source,
         content,
@@ -518,6 +528,120 @@ def _replace_geometry_writer_with_ir_output(content: str, *, has_output_dir: boo
     return content[:open_brace] + replacement + content[close_brace + 1 :]
 
 
+def _replace_inline_geometry_writer_with_ir_output(content: str) -> str:
+    geometry_pos = content.find('"geometry_view.json"')
+    if geometry_pos < 0:
+        return content
+
+    lines = content.splitlines(keepends=True)
+    line_starts: list[int] = []
+    offset = 0
+    for line in lines:
+        line_starts.append(offset)
+        offset += len(line)
+
+    geometry_line = 0
+    for index, start in enumerate(line_starts):
+        end = start + len(lines[index])
+        if start <= geometry_pos < end:
+            geometry_line = index
+            break
+
+    open_line = -1
+    for index in range(geometry_line, -1, -1):
+        if lines[index].strip() == "{":
+            open_line = index
+            break
+    if open_line < 0:
+        return content
+
+    close_line = _find_cpp_block_end_line(lines, open_line)
+    if close_line < 0:
+        return content
+
+    block_lines = lines[open_line : close_line + 1]
+    if not any('"geometry_view.json"' in line for line in block_lines):
+        return content
+
+    stream_line = ""
+    stream_name = ""
+    for line in block_lines:
+        match = re.search(
+            r"(?P<indent>[ \t]*)std::ofstream\s+(?P<stream>[A-Za-z_]\w*)\s*\([^;]*\"geometry_view\.json\"[^;]*\);\s*",
+            line,
+        )
+        if match:
+            stream_line = line
+            stream_name = match.group("stream")
+            break
+    if not stream_line or not stream_name:
+        return content
+
+    block_indent = re.match(r"[ \t]*", lines[open_line]).group(0)
+    body_indent = re.match(r"[ \t]*", stream_line).group(0)
+    replacement = [
+        lines[open_line],
+        stream_line,
+        f"{body_indent}if ({stream_name}.is_open()) {{\n",
+        f"{body_indent}  {stream_name} << \"{{\\n  \\\"components\\\": [\\n\";\n",
+        f"{body_indent}  {stream_name} << _RadAgentIrGeometryComponents();\n",
+        f"{body_indent}  {stream_name} << \"  ]\\n}}\\n\";\n",
+        f"{body_indent}}}\n",
+        f"{block_indent}}}\n",
+    ]
+    return "".join(lines[:open_line] + replacement + lines[close_line + 1 :])
+
+
+def _find_cpp_block_end_line(lines: list[str], open_line: int) -> int:
+    depth = 0
+    for index in range(open_line, len(lines)):
+        depth += _brace_delta_outside_strings(lines[index])
+        if index > open_line and depth == 0:
+            return index
+    return -1
+
+
+def _brace_delta_outside_strings(line: str) -> int:
+    depth = 0
+    in_string = False
+    in_char = False
+    escaped = False
+    index = 0
+    while index < len(line):
+        char = line[index]
+        next_char = line[index + 1] if index + 1 < len(line) else ""
+        if escaped:
+            escaped = False
+            index += 1
+            continue
+        if in_string:
+            if char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if in_char:
+            if char == "\\":
+                escaped = True
+            elif char == "'":
+                in_char = False
+            index += 1
+            continue
+        if char == "/" and next_char == "/":
+            break
+        if char == '"':
+            in_string = True
+        elif char == "'":
+            in_char = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+        index += 1
+    return depth
+
+
 def _insert_after_include_block(content: str, insertion: str) -> str:
     lines = content.splitlines()
     insert_at = 0
@@ -600,11 +724,7 @@ def _ir_geometry_components_for_output(g4_model_ir_subset: dict[str, Any]) -> li
 
 
 def _geometry_size_mm(dimensions: dict[str, Any], factor: float) -> list[float]:
-    radius = _float_or_none(
-        dimensions.get("rmax")
-        if dimensions.get("rmax") is not None
-        else dimensions.get("radius", dimensions.get("r"))
-    )
+    radius = _dimension_radius(dimensions)
     if radius is not None:
         diameter = radius * 2.0 * factor
         return [
@@ -623,6 +743,14 @@ def _geometry_size_mm(dimensions: dict[str, Any], factor: float) -> list[float]:
         _scaled_float(dimensions.get("y"), factor, 1.0),
         _scaled_float(dimensions.get("z"), factor, 1.0),
     ]
+
+
+def _dimension_radius(dimensions: dict[str, Any]) -> float | None:
+    for key in ("r_outer", "rmax", "r_max", "radius", "r"):
+        value = _float_or_none(dimensions.get(key))
+        if value is not None:
+            return value
+    return None
 
 
 def _geometry_opacity(

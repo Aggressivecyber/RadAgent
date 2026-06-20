@@ -300,8 +300,8 @@ G4VPhysicalVolume* DetectorConstruction::Construct()
   fDetectorLogical->SetVisAttributes(detectorVis);
 
   if (fOutputManager) {
-    fOutputManager->SetGeometryDescription("world", "G4_AIR", {1000.0, 1000.0, 1000.0});
-    fOutputManager->SetGeometryDescription("silicon_detector", "G4_Si", {100.0, 100.0, 10.0});
+    fOutputManager->SetGeometryDescription("world", "G4_AIR", {1000.0, 1000.0, 1000.0}, "box");
+    fOutputManager->SetGeometryDescription("silicon_detector", "G4_Si", {100.0, 100.0, 10.0}, "box");
   }
   return worldPhysical;
 }
@@ -442,6 +442,13 @@ struct EventSummary
   double edep_MeV = 0.0;
 };
 
+struct GeometryDescription
+{
+  std::string material;
+  std::string shape = "box";
+  std::array<double, 3> sizeMm = {1.0, 1.0, 1.0};
+};
+
 class OutputManager
 {
 public:
@@ -464,7 +471,8 @@ public:
   void SetGeometryDescription(
     const std::string& componentId,
     const std::string& material,
-    const std::array<double, 3>& sizeMm);
+    const std::array<double, 3>& sizeMm,
+    const std::string& shape = "box");
   void WriteAll(const G4Run* run = nullptr) const;
 
 private:
@@ -474,7 +482,7 @@ private:
   std::vector<TrackPoint> fTrackPoints;
   std::vector<EnergyDeposit> fDeposits;
   std::vector<EventSummary> fEvents;
-  std::map<std::string, std::pair<std::string, std::array<double, 3>>> fGeometry;
+  std::map<std::string, GeometryDescription> fGeometry;
 };
 
 #endif
@@ -567,9 +575,10 @@ void OutputManager::EndEvent(int eventId)
 void OutputManager::SetGeometryDescription(
   const std::string& componentId,
   const std::string& material,
-  const std::array<double, 3>& sizeMm)
+  const std::array<double, 3>& sizeMm,
+  const std::string& shape)
 {
-  fGeometry[componentId] = {material, sizeMm};
+  fGeometry[componentId] = {material, shape, sizeMm};
 }
 
 void OutputManager::WriteAll(const G4Run* run) const
@@ -629,9 +638,11 @@ void OutputManager::WriteAll(const G4Run* run) const
         out << ",\n";
       }
       first = false;
-      const auto& size = item.second.second;
+      const auto& geometry = item.second;
+      const auto& size = geometry.sizeMm;
       out << "    {\"id\": \"" << item.first << "\", \"material\": \""
-          << item.second.first << "\", \"size_mm\": ["
+          << geometry.material << "\", \"shape\": \"" << geometry.shape
+          << "\", \"size_mm\": ["
           << size[0] << ", " << size[1] << ", " << size[2] << "]}";
     }
     out << "\n  ]\n}\n";

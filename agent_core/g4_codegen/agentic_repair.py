@@ -11,6 +11,7 @@ Public entry point: :func:`run_agentic_repair`.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from copy import deepcopy
 from pathlib import Path
@@ -21,6 +22,8 @@ from agent_core.dev_tools import DevToolkit
 from agent_core.models.schemas import ModelTask, ModelTier
 from agent_core.workspace.io import get_job_dir
 from agent_core.workspace.paths import STAGE_CODEGEN
+
+logger = logging.getLogger(__name__)
 
 GEANT4_PROJECT_DIRNAME = "geant4_project"
 DEFAULT_AGENTIC_REPAIR_MAX_TURNS = 48
@@ -393,6 +396,7 @@ def _reconstruct_patch_from_project(
 ) -> dict[str, Any]:
     """Read back every file the model may have edited into a fresh patch."""
     from agent_core.g4_codegen.module_agents.base import _postprocess_generated_module_content
+    from agent_core.validators.file_permission_validator import FilePermissionValidator
 
     # Never carry build/runtime artifacts between attempts: a stale
     # build/CMakeCache.txt records the PREVIOUS attempt's absolute source
@@ -400,10 +404,17 @@ def _reconstruct_patch_from_project(
     # is different than the directory where it was created"). That breaks
     # the repair loop's ability to iterate. Only source files travel onward.
     artifact_segments = {"build", "smoke_output", "CMakeFiles", ".cache"}
+    permission_validator = FilePermissionValidator()
     changed: list[dict[str, Any]] = []
     for path in sorted(p for p in project_dir.rglob("*") if p.is_file()):
         rel = path.relative_to(project_dir).as_posix()
         if any(part in artifact_segments for part in rel.split("/")):
+            continue
+        if not permission_validator.can_auto_apply(rel):
+            logger.warning(
+                "Skipping generated project file outside auto-apply policy: %s",
+                rel,
+            )
             continue
         try:
             content = path.read_text(encoding="utf-8")

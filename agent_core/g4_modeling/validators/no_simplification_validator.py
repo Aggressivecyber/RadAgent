@@ -205,7 +205,10 @@ class NoSimplificationValidator:
                 errors.append(msg + " — no evidence traceability")
             return
         for ref in evidence:
-            if not ref.strip() or _PLACEHOLDER_PATTERNS.search(ref):
+            if not ref.strip() or (
+                _PLACEHOLDER_PATTERNS.search(ref)
+                and not _is_confirmed_placeholder_dimension_field_path(ref)
+            ):
                 msg = f"{spec_type} '{target_id}' has placeholder evidence: '{ref}'"
                 if msg not in approved:
                     errors.append(msg)
@@ -308,5 +311,15 @@ def _requires_multi_component_model(target_lower: str) -> bool:
             "pixel",
             "strip",
             "rad-hard",
+        )
+    )
+
+
+def _is_confirmed_placeholder_dimension_field_path(value: str) -> bool:
+    """Allow review field paths for approved surrogate component dimensions."""
+    return bool(
+        re.fullmatch(
+            r"geometry\.[A-Za-z0-9_.-]+_placeholder_dimensions",
+            value.strip(),
         )
     )

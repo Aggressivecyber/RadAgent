@@ -65,6 +65,9 @@ async def geometry_decomposition_node(
             )
 
         model_ir.components = components
+        _normalize_child_positions_to_mother_frame(model_ir.components)
+        _resolve_sibling_box_overlaps(model_ir.components)
+        _ensure_box_mothers_contain_children(model_ir.components)
         _resolve_sibling_box_overlaps(model_ir.components)
         _ensure_box_mothers_contain_children(model_ir.components)
         interfaces = _generate_interfaces(components)
@@ -172,6 +175,9 @@ async def geometry_decomposition_node(
 
     # Update model IR
     model_ir.components = components
+    _normalize_child_positions_to_mother_frame(model_ir.components)
+    _resolve_sibling_box_overlaps(model_ir.components)
+    _ensure_box_mothers_contain_children(model_ir.components)
     _resolve_sibling_box_overlaps(model_ir.components)
     _ensure_box_mothers_contain_children(model_ir.components)
 
@@ -537,6 +543,46 @@ def _ensure_box_mothers_contain_children(
                 clearance_um=clearance_um,
             ):
                 changed = True
+
+
+def _normalize_child_positions_to_mother_frame(components: list[ComponentSpec]) -> None:
+    by_id = {comp.component_id: comp for comp in components}
+    for child in components:
+        mother_id = child.mother_volume
+        if not mother_id:
+            continue
+        mother = by_id.get(mother_id)
+        if mother is None or child.geometry_type != "box" or mother.geometry_type != "box":
+            continue
+        child_pos = _component_position(child)
+        mother_pos = _component_position(mother)
+        child_half = _component_half_lengths(child)
+        mother_half = _component_half_lengths(mother)
+        if _box_inside_bounds(child_pos, child_half, mother_half):
+            continue
+        relative_pos = [child_pos[index] - mother_pos[index] for index in range(3)]
+        if not _box_inside_bounds(relative_pos, child_half, mother_half):
+            continue
+        placement = child.placement
+        placement.position = relative_pos
+        child.placement = placement
+        evidence = (
+            "geometry_decomposition:converted child placement from world to "
+            f"{mother_id} local coordinates"
+        )
+        if evidence not in child.source_evidence:
+            child.source_evidence.append(evidence)
+
+
+def _box_inside_bounds(
+    position: list[float],
+    half_lengths: list[float],
+    container_half_lengths: list[float],
+) -> bool:
+    return all(
+        abs(pos) + half <= container_half + 1e-9
+        for pos, half, container_half in zip(position, half_lengths, container_half_lengths)
+    )
 
 
 def _expand_box_mother_for_children(

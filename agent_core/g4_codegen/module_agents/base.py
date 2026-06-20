@@ -12,10 +12,10 @@ accumulates files across file-groups, modules, and layers.
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import os
 import re
-import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -94,6 +94,12 @@ OutputManager、ActionInitialization 等），不要把任务当成 fill keyword
 12. 若 ModuleContext.human_confirmation_context.confirmed_constraints 非空，这些是用户已确认硬约束；
     它们优先于默认推断、示例代码、RAG 摘要和你自己的猜测。生成几何、source、scoring、
     output artifact 时必须逐项落实 confirmed_constraints，不得静默改写或忽略。
+13. G4ModelIR 是代码生成的唯一物理事实来源。不得为了让工程能跑而硬编码 IR 中不存在的
+    source/material/scoring/geometry；如果当前模块需要的 IR 字段为空或互相矛盾，先把问题写入
+    risk_notes/needs_user_input 语义并保持接口可编译，不能静默发明粒子、能量、材料或 scoring。
+14. 若 task_spec.confirmed_requirement_plan 或 human_confirmation_context 给出了已确认字段，
+    生成代码必须与其一致；若它和 G4ModelIR 不一致，优先保留可追踪的确认值并在
+    注释/risk_notes 中说明差异。
 
 流程：
 - 先 read_file 你依赖的其他模块上游头文件（若已存在于 include/）；同模块 prior_files 可直接用。

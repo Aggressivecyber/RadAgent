@@ -194,6 +194,74 @@ class TestG4ModelingNodes:
         guard = result.get("model_scope_guard_result", {})
         assert guard.get("action") == "proceed"
 
+    async def test_scope_guard_block_marks_modeling_failed(self) -> None:
+        """A blocked scope guard must not let a half-built Model IR pass."""
+        from agent_core.g4_modeling.nodes.model_scope_guard_node import (
+            model_scope_guard_node,
+        )
+
+        model_ir = self._minimal_model_ir()
+        model_ir["evidence"]["evidence_decision"] = "block_no_context"
+        model_ir["evidence"]["source"] = []
+
+        result = await model_scope_guard_node(
+            {
+                "simulation_scope": ["geant4"],
+                "job_id": "test",
+                "g4_model_ir": model_ir,
+            }
+        )
+
+        assert result["model_scope_guard_result"]["action"] == "block"
+        assert result["model_ir_errors"]
+        assert "Scope guard: block" in result["model_ir_errors"][0]
+
+    async def test_evidence_retrieval_uses_task_spec_particles_as_source_evidence(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Confirmed task particles should survive even without requirements.json."""
+        from agent_core.g4_modeling.nodes.evidence_retrieval_node import (
+            evidence_retrieval_node,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        job_id = "job_task_spec_source_evidence"
+        task_spec = {
+            "particles": [
+                {
+                    "source_id": "primary_gamma",
+                    "type": "gamma",
+                    "energy_MeV": 10.0,
+                    "direction": [0.0, 0.0, -1.0],
+                }
+            ],
+        }
+        model_ir = G4ModelIR(
+            model_ir_id="mir_test",
+            job_id=job_id,
+            modeling_mode="realistic",
+            target_system="confirmed gamma source",
+        ).model_dump(mode="json")
+
+        result = await evidence_retrieval_node(
+            {
+                "job_id": job_id,
+                "g4_model_ir": model_ir,
+                "task_spec": task_spec,
+                "g4_context": [],
+                "web_context": [],
+                "context_decision": "block_no_context",
+            }
+        )
+
+        source_evidence = result["g4_model_ir"]["evidence"]["source"]
+        assert source_evidence
+        assert source_evidence[0]["source"] == "task_spec"
+        assert "primary_gamma" in source_evidence[0]["text"]
+
     async def test_requirement_capture_fills_core_modeling_draft_with_one_lite_call(
         self,
         tmp_path: Path,
@@ -485,6 +553,104 @@ class TestG4ModelingNodes:
             "G4_Si",
         }
         assert evidenced["g4_model_ir"]["evidence"]["materials"]
+        assert guarded["model_scope_guard_result"]["action"] == "proceed_with_warnings"
+
+    async def test_confirmed_task_sources_keep_scope_guard_unblocked(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Human-confirmed task particles should count as source evidence."""
+        from agent_core.g4_modeling.nodes.evidence_retrieval_node import (
+            evidence_retrieval_node,
+        )
+        from agent_core.g4_modeling.nodes.model_scope_guard_node import (
+            model_scope_guard_node,
+        )
+        from agent_core.g4_modeling.nodes.requirement_capture_node import (
+            _requirements_from_draft,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+        from agent_core.workspace.io import get_stage_dir
+        from agent_core.workspace.paths import STAGE_MODEL_IR
+
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        job_id = "job_confirmed_source_scope_guard"
+        model_ir_dir = get_stage_dir(job_id, STAGE_MODEL_IR)
+        model_ir_dir.mkdir(parents=True, exist_ok=True)
+        task_spec = {
+            "particles": [
+                {
+                    "source_id": "primary_neutron",
+                    "type": "neutron",
+                    "energy_MeV": 14.1,
+                    "direction": [0.0, 0.0, -1.0],
+                },
+                {
+                    "source_id": "primary_gamma",
+                    "type": "gamma",
+                    "energy_MeV": 2.5,
+                    "direction": [0.0, 0.0, -1.0],
+                },
+            ],
+            "outputs": ["energy_deposition", "dose_distribution"],
+        }
+        requirements = _requirements_from_draft(
+            {
+                "target_system": "一回路机器人辐射仿真模型",
+                "components": [
+                    {
+                        "component_id": "world",
+                        "display_name": "World",
+                        "component_type": "world",
+                        "geometry_type": "box",
+                        "material_id": "G4_AIR",
+                        "source_evidence": ["geometry.world_volume"],
+                    },
+                    {
+                        "component_id": "robot_shell",
+                        "display_name": "Robot shell",
+                        "component_type": "volume",
+                        "geometry_type": "box",
+                        "material_id": "G4_Fe",
+                        "roles": ["edep_region", "dose_scoring_region"],
+                        "source_evidence": ["geometry.robot_dimensions"],
+                    },
+                ],
+                "required_outputs": ["edep", "dose_3d", "event_table"],
+            },
+            "仿真一回路机器人",
+            task_spec,
+        )
+        (model_ir_dir / "requirements.json").write_text(
+            json.dumps(requirements, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        model_ir = G4ModelIR(
+            model_ir_id="mir_test",
+            job_id=job_id,
+            modeling_mode="realistic",
+            target_system="一回路机器人辐射仿真模型",
+        ).model_dump(mode="json")
+
+        evidenced = await evidence_retrieval_node(
+            {
+                "job_id": job_id,
+                "g4_model_ir": model_ir,
+                "task_spec": task_spec,
+                "g4_context": [],
+                "web_context": [],
+                "context_decision": "block_no_context",
+            }
+        )
+        guarded = await model_scope_guard_node(
+            {
+                "job_id": job_id,
+                "g4_model_ir": evidenced["g4_model_ir"],
+            }
+        )
+
+        assert evidenced["g4_model_ir"]["evidence"]["source"]
         assert guarded["model_scope_guard_result"]["action"] == "proceed_with_warnings"
 
     async def test_material_definition_accepts_canonical_nist_names_with_evidence(
@@ -1313,6 +1479,84 @@ class TestG4ModelingNodes:
             comp for comp in result["g4_model_ir"]["components"] if comp["component_id"] == "silicon_detector"
         )
         assert detector["placement"]["position"][2] >= 50500.0
+
+    async def test_geometry_rechecks_detector_overlap_after_expanding_stack_assembly(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Expanding an assembly mother must not newly overlap a downstream detector."""
+        from agent_core.g4_modeling.nodes.geometry_decomposition_node import (
+            geometry_decomposition_node,
+        )
+        from agent_core.g4_modeling.schemas.g4_model_ir import G4ModelIR
+        from agent_core.g4_modeling.validators.overlap_policy_validator import (
+            OverlapPolicyValidator,
+        )
+
+        monkeypatch.setenv("RADAGENT_WORKSPACE_ROOT", str(tmp_path))
+        model_ir = self._minimal_model_ir()
+        model_ir["target_system"] = "shielding stack with downstream silicon detector"
+        model_ir["components"] = [
+            {
+                "component_id": "world",
+                "display_name": "World Volume",
+                "component_type": "world",
+                "geometry_type": "box",
+                "dimensions": {"dx": 1000000.0, "dy": 1000000.0, "dz": 2000000.0},
+                "material_id": "G4_AIR",
+                "placement": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": None,
+                "source_evidence": ["standard Geant4 world volume"],
+            },
+            {
+                "component_id": "shielding_stack",
+                "display_name": "Shielding Stack Assembly",
+                "component_type": "assembly",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 100000.0},
+                "material_id": "G4_AIR",
+                "placement": {"position": [0.0, 0.0, -500000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world",
+                "source_evidence": ["user request for material stack"],
+            },
+            {
+                "component_id": "lead_layer",
+                "display_name": "Lead Shielding Layer",
+                "component_type": "shielding",
+                "geometry_type": "box",
+                "dimensions": {"dx": 500000.0, "dy": 500000.0, "dz": 50000.0},
+                "material_id": "G4_Pb",
+                "placement": {"position": [0.0, 0.0, -475000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "shielding_stack",
+                "source_evidence": ["user request for lead"],
+            },
+            {
+                "component_id": "silicon_detector",
+                "display_name": "Silicon Detector",
+                "component_type": "substrate",
+                "geometry_type": "box",
+                "dimensions": {"dx": 100000.0, "dy": 100000.0, "dz": 500.0},
+                "material_id": "G4_Si",
+                "placement": {"position": [0.0, 0.0, -300000.0], "rotation": [0.0, 0.0, 0.0]},
+                "mother_volume": "world",
+                "sensitive": True,
+                "roles": ["edep_region", "dose_scoring_region"],
+                "source_evidence": ["user request for downstream silicon detector"],
+            },
+        ]
+
+        result = await geometry_decomposition_node(
+            {
+                "job_id": "test",
+                "g4_model_ir": model_ir,
+                "task_spec": {},
+            }
+        )
+
+        fixed_ir = G4ModelIR.model_validate(result["g4_model_ir"])
+        passed, errors = OverlapPolicyValidator().validate(fixed_ir)
+        assert passed, errors
 
     async def test_geometry_expands_world_for_bragg_depth_dose_stack(
         self,
